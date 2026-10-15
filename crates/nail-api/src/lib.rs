@@ -153,6 +153,7 @@ pub mod mail_actions;
 pub mod mapi;
 pub mod mcp;
 pub mod menus;
+pub mod message_source;
 pub mod ops;
 pub mod palette;
 pub mod pim;
@@ -237,6 +238,7 @@ pub use mail_actions::{
 pub use mapi::{MapiMessage, MapiResult};
 pub use mcp::{McpClient, McpGrant, McpRateLimits, McpScope, McpSettings};
 pub use menus::{ResolvedMenu, ResolvedMenuEntry};
+pub use message_source::{MessageSource, SourceChunk};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
 pub use pim::{
     Calendar, CalendarEvent, Contact, PimSource, PimSourceConfig, PimTime, Reminder, Task,

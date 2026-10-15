@@ -40,6 +40,7 @@ import { TOOLBAR_CUSTOMIZER_SKIN_CSS } from "../features/toolbar-editor/skin";
 import { APPEARANCE_SKIN_CSS } from "../features/appearance/skin";
 import { MAIL_ACTIONS_SKIN_CSS } from "../features/mail-actions/skin";
 import { CONNLOG_SKIN_CSS } from "../features/connlog/skin";
+import { SOURCE_SKIN_CSS } from "../features/message-source/skin";
 import { RESPONSIVE_SKIN_CSS } from "./skinResponsive";
 import { POPOUT_BASE_CSS } from "../features/popout/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
@@ -363,6 +364,8 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
       MAIL_ACTIONS_SKIN_CSS,
       // ADR 0190: the connection log viewer and error details.
       CONNLOG_SKIN_CSS,
+      // ADR 0194: the message source window.
+      SOURCE_SKIN_CSS,
       RESPONSIVE_SKIN_CSS,
     ].filter((css) => css !== ""),
     ...tokenRules(theme, warnings),

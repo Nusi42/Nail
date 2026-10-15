@@ -75,8 +75,23 @@ async fn attachment(
     id: MessageId,
     index: u32,
 ) -> Result<nail_mime::AttachmentContent> {
+    let raw = downloaded_raw(service, id.clone()).await?;
+    let service = service.clone();
+    tokio::task::spawn_blocking(move || -> Result<nail_mime::AttachmentContent> {
+        let (raw, _) = service.readable_raw(raw);
+        nail_mime::attachment_content(&raw, index).ok_or_else(|| {
+            CoreError::from(ApiError::not_found(format!(
+                "message {id} has no attachment {index}"
+            )))
+        })
+    })
+    .await?
+}
+
+/// A message's raw bytes as stored (encrypted mail stays encrypted). A
+/// body synced headers-only is fetched first (like `GetMessage`).
+pub(crate) async fn downloaded_raw(service: &Service, id: MessageId) -> Result<Vec<u8>> {
     service.inner.vault.check()?;
-    // A body synced headers-only is fetched first (like `GetMessage`).
     let state = {
         let id = id.clone();
         service.store().call(move |s| s.body_state(&id)).await
@@ -85,7 +100,7 @@ async fn attachment(
         service.fetch_bodies(vec![id.clone()]).await?;
     }
     let service = service.clone();
-    tokio::task::spawn_blocking(move || -> Result<nail_mime::AttachmentContent> {
+    tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
         let stored = service.store().get_message(&id)?;
         let hash = stored.blob_hash.ok_or_else(|| {
             CoreError::from(ApiError::new(
@@ -93,12 +108,7 @@ async fn attachment(
                 format!("the body of message {id} is not downloaded yet"),
             ))
         })?;
-        let (raw, _) = service.readable_raw(service.blobs().get(&hash)?);
-        nail_mime::attachment_content(&raw, index).ok_or_else(|| {
-            CoreError::from(ApiError::not_found(format!(
-                "message {id} has no attachment {index}"
-            )))
-        })
+        Ok(service.blobs().get(&hash)?)
     })
     .await?
 }

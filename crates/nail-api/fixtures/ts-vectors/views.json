@@ -761,6 +761,13 @@
                 "type": "action"
               },
               {
+                "action": "source.message",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
+              },
+              {
                 "type": "separator"
               },
               {

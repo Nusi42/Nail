@@ -19,6 +19,7 @@ layout "custom" extends="default" {
             item "exchange.classify"
             item "security.autocrypt.import"
             item "print.message"
+            item "source.message"
             separator
             header "@toolbar.group.turn-into"
             item "calendar.event-from-message"

@@ -50,6 +50,7 @@ pub mod logs;
 mod mail;
 mod mail_actions;
 mod mcp;
+mod message_source;
 mod notify;
 mod oauth;
 mod outbox;

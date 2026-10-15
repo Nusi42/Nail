@@ -340,6 +340,8 @@ layout "default" {
         action "print.event"      label="@print.action.event" icon="printer"
         action "print.agenda"     label="@print.action.agenda" icon="printer"
         action "print.save-pdf"   label="@print.action.save-pdf" icon="file-down"
+        // "Show source" (ADR 0194).
+        action "source.message"   label="@source.action.message" icon="file-code"
         action "import.open"      label="@portability.action.import" icon="import"
         action "export.open"      label="@portability.action.export" icon="upload"
         action "backup.create"    label="@portability.action.backup" icon="hard-drive-download"
@@ -490,6 +492,7 @@ layout "default" {
         bind "enter" "conversation.open-in-reader"
         bind "o" "conversation.open-in-reader"
         bind "ctrl+p" "print.message"
+        bind "ctrl+u" "source.message"
     }
 
     // The reader's card feed (P2): j / k move between the cards (and
@@ -510,6 +513,7 @@ layout "default" {
         bind "shift+n" "scheduling.decline"
         bind "shift+o" "exchange.classify"
         bind "ctrl+p" "print.message"
+        bind "ctrl+u" "source.message"
     }
 
     keys context="composer" {
@@ -633,6 +637,7 @@ layout "default" {
             item "exchange.classify"
             item "security.autocrypt.import"
             item "print.message"
+            item "source.message"
             separator
             header "@toolbar.group.turn-into"
             item "calendar.event-from-message"
@@ -689,6 +694,7 @@ layout "default" {
         item "exchange.classify"
         item "print.message"
         item "print.thread"
+        item "source.message"
         separator
         header "@toolbar.group.turn-into"
         item "calendar.event-from-message"
@@ -711,6 +717,8 @@ layout "default" {
         item "mail.move" label="@mail-actions.card-move"
         item "mail.delete" label="@mail-actions.card-delete"
         item "junk.mark" label="@mail-actions.card-junk"
+        separator
+        item "source.message"
     }
 
     menu "context:message-view" {
@@ -735,6 +743,7 @@ layout "default" {
         item "security.autocrypt.import"
         item "print.message"
         item "print.save-pdf"
+        item "source.message"
         separator
         header "@toolbar.group.turn-into"
         item "calendar.event-from-message"

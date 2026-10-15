@@ -1425,6 +1425,12 @@
       "alias_of": null,
       "args": []
     },
+    "source.message": {
+      "label": "@source.action.message",
+      "icon": "file-code",
+      "alias_of": null,
+      "args": []
+    },
     "import.open": {
       "label": "@portability.action.import",
       "icon": "import",
@@ -1612,6 +1618,12 @@
       "args": []
     },
     {
+      "context": "list",
+      "key": "ctrl+u",
+      "action": "source.message",
+      "args": []
+    },
+    {
       "context": "reader",
       "key": "j",
       "action": "conversation.next-card",
@@ -1681,6 +1693,12 @@
       "context": "reader",
       "key": "ctrl+p",
       "action": "print.message",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "ctrl+u",
+      "action": "source.message",
       "args": []
     },
     {
@@ -2253,6 +2271,13 @@
             "icon": null
           },
           {
+            "type": "action",
+            "action": "source.message",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
             "type": "separator"
           },
           {
@@ -2523,6 +2548,13 @@
         "icon": null
       },
       {
+        "type": "action",
+        "action": "source.message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
         "type": "separator"
       },
       {
@@ -2626,6 +2658,16 @@
         "action": "junk.mark",
         "args": [],
         "label": "@mail-actions.card-junk",
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "source.message",
+        "args": [],
+        "label": null,
         "icon": null
       }
     ],
@@ -2762,6 +2804,13 @@
       {
         "type": "action",
         "action": "print.save-pdf",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "source.message",
         "args": [],
         "label": null,
         "icon": null

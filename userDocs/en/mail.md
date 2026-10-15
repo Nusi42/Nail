@@ -263,9 +263,32 @@ After you archive, move or delete a conversation, the next one is selected.
 | `l` | Labels (Gmail accounts) |
 | `Shift+F10`, menu key | The context menu of the selected row or focused folder |
 | `Ctrl+P` | Print the selected message (see [Printing](printing.md)) |
+| `Ctrl+U` | Show the selected message's source (see below) |
 | `Ctrl+K` | The command palette: every action, searchable (see [Command palette](command-palette.md)) |
 
 Opening a message marks it as read.
+
+## Show source
+
+**Show source** (in **More**, a message's own **…** menu, the right-click
+menus, or `Ctrl+U`) opens a window with the complete message as text, to
+read, select and copy:
+
+- **Original** — the message exactly as it was received: every header
+  (including `Received`, `Authentication-Results` and `DKIM-Signature`),
+  the MIME structure and the content as it was sent (often quoted-printable
+  or base64).
+- **Decoded** — the same, readable: header fields with their encoded words
+  decoded, and each text or HTML part decoded to its characters (the HTML as
+  the sender wrote it). Attachments and other parts that are not text are
+  named in one line instead. An end-to-end encrypted message shows here as
+  it is decrypted.
+
+**Wrap lines** breaks long lines at the window's edge; **Copy all** copies
+the view you are looking at. Nothing is loaded from the internet to show
+the source, and a message larger than 4 MB shows only its beginning. Each
+message gets its own window; showing the source again brings it to the
+front.
 
 ## Snooze
 

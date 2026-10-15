@@ -64,6 +64,7 @@ pub const BUNDLED_ICONS: &[&str] = &[
     "eye",
     "eye-off",
     "file",
+    "file-code",
     "file-down",
     "file-pen-line",
     "file-text",

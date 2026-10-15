@@ -22,6 +22,7 @@ import { errorMessageId } from "../api/client";
 import * as agentsMessages from "../features/agents/messages";
 import * as composerMessages from "../features/composer/messages";
 import * as connlogMessages from "../features/connlog/messages";
+import * as messageSourceMessages from "../features/message-source/messages";
 import * as customizationMessages from "../features/customization/messages";
 import * as exchangeMessages from "../features/exchange/messages";
 import * as gmailMessages from "../features/gmail/messages";
@@ -79,6 +80,7 @@ const FEATURE_MESSAGES = [
   popoutMessages,
   layoutEditorMessages,
   connlogMessages,
+  messageSourceMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

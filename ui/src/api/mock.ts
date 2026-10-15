@@ -36,6 +36,7 @@ import { answerWindowState, isWindowStateRequest } from "./windowStateMock";
 import { answerEditHistory, isEditHistoryRequest } from "./editHistoryMock";
 import { answerThemeEdit, isThemeEditRequest } from "../features/appearance/themeEditMock";
 import { answerPrint, isPrintRequest } from "../features/print/mock";
+import { answerSource, isSourceRequest } from "../features/message-source/mock";
 import { answerConnlog, isConnlogRequest, recordMockSync } from "../features/connlog/mock";
 import { answerVault, isVaultRequest } from "../features/security/vaultMock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
@@ -150,6 +151,8 @@ export class MockTransport extends ClosableTransport implements MockCore {
     if (isEditHistoryRequest(request)) return answerEditHistory(this, request);
     if (isThemeEditRequest(request)) return answerThemeEdit(this, request);
     if (isAttachmentRequest(request)) return answerAttachment(this, request);
+    // ADR 0194: "Show source".
+    if (isSourceRequest(request)) return answerSource(this, request);
     // P3 (ADR 0164): Gmail-like actions on conversations with one undo.
     if (isMailActionRequest(request)) return answerMailAction(this, request);
     if (isVaultRequest(request)) return answerVault(this, request);

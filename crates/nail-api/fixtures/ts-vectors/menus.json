@@ -324,6 +324,14 @@
             "type": "action"
           },
           {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -511,6 +519,14 @@
             "icon": "printer",
             "label": "@print.action.thread",
             "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": "ctrl+u",
             "type": "action"
           },
           {
@@ -704,6 +720,14 @@
             "type": "action"
           },
           {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": "ctrl+u",
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -894,6 +918,14 @@
             "type": "action"
           },
           {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -1080,6 +1112,14 @@
             "args": [],
             "icon": "printer",
             "label": "@print.action.thread",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
             "shortcut": null,
             "type": "action"
           },
@@ -1212,6 +1252,17 @@
             "label": "@mail-actions.card-junk",
             "shortcut": "shift+j",
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:thread-view.message"
@@ -1310,6 +1361,17 @@
             "icon": "shield-alert",
             "label": "@mail-actions.card-junk",
             "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": "ctrl+u",
             "type": "action"
           }
         ],
@@ -1410,6 +1472,17 @@
             "label": "@mail-actions.card-junk",
             "shortcut": "shift+j",
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": "ctrl+u",
+            "type": "action"
           }
         ],
         "name": "context:thread-view.message"
@@ -1509,6 +1582,17 @@
             "label": "@mail-actions.card-junk",
             "shortcut": "shift+j",
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:thread-view.message"
@@ -1607,6 +1691,17 @@
             "icon": "shield-alert",
             "label": "@mail-actions.card-junk",
             "shortcut": "shift+j",
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": null,
             "type": "action"
           }
         ],
@@ -1773,6 +1868,14 @@
             "args": [],
             "icon": "file-down",
             "label": "@print.action.save-pdf",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
             "shortcut": null,
             "type": "action"
           },
@@ -1972,6 +2075,14 @@
             "icon": "file-down",
             "label": "@print.action.save-pdf",
             "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": "ctrl+u",
             "type": "action"
           },
           {
@@ -2173,6 +2284,14 @@
             "type": "action"
           },
           {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": "ctrl+u",
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -2371,6 +2490,14 @@
             "type": "action"
           },
           {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -2565,6 +2692,14 @@
             "args": [],
             "icon": "file-down",
             "label": "@print.action.save-pdf",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "source.message",
+            "args": [],
+            "icon": "file-code",
+            "label": "@source.action.message",
             "shortcut": null,
             "type": "action"
           },
@@ -4245,6 +4380,36 @@
     {
       "args": [
         "default-layout",
+        "source.message",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "source.message",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "source.message",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+u"
+    },
+    {
+      "args": [
+        "default-layout",
         "conversation.next-card",
         [],
         "global"
@@ -4601,6 +4766,36 @@
       ],
       "fn": "shortcut",
       "out": "ctrl+p"
+    },
+    {
+      "args": [
+        "default-layout",
+        "source.message",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "source.message",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "source.message",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+u"
     },
     {
       "args": [

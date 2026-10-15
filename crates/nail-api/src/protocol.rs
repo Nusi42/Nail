@@ -2839,6 +2839,14 @@ pub enum Request {
         /// The attachment's index ([`crate::AttachmentInfo::index`]).
         index: u32,
     },
+    /// The message's source for "Show source" (ADR 0194): as received and
+    /// decoded. Answered with [`Response::MessageSource`]; `not_found` for
+    /// an unknown message, `unavailable` while its body cannot be
+    /// downloaded.
+    GetMessageSource {
+        /// The message.
+        message_id: MessageId,
+    },
     /// Save attachment `index` of a message to a file (desktop only: the UI
     /// asks for the path with [`Request::PickPath`] first). Answered with
     /// [`Response::Done`]; `not_found` for an unknown message or index; an
@@ -3311,6 +3319,11 @@ pub enum Response {
         mime: String,
         /// The content, base64 (standard alphabet, padded).
         data: String,
+    },
+    /// Answer to [`Request::GetMessageSource`].
+    MessageSource {
+        /// The source.
+        source: Box<crate::message_source::MessageSource>,
     },
     /// Answer to [`Request::ListDrafts`].
     Drafts {

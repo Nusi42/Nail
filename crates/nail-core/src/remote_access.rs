@@ -305,8 +305,10 @@ impl Service {
             // data).
             | Request::GetEditHistory { .. }
             | Request::GetThemeDetails { .. } => Ok(()),
-            // M5a WP155: the attachment's message must be readable.
-            Request::GetMessageAttachment { message_id, .. } => {
+            // M5a WP155, ADR 0194: the attachment's or source's message must be
+            // readable.
+            Request::GetMessageAttachment { message_id, .. }
+            | Request::GetMessageSource { message_id } => {
                 self.check_readable(access, message_id).await
             }
 

@@ -2245,7 +2245,11 @@ message_id: MessageId,
 /**
  * The attachment's index ([`crate::AttachmentInfo::index`]).
  */
-index: number, } | { "type": "SaveAttachment", 
+index: number, } | { "type": "GetMessageSource", 
+/**
+ * The message.
+ */
+message_id: MessageId, } | { "type": "SaveAttachment", 
 /**
  * The message.
  */

@@ -146,21 +146,21 @@ ${p("settings-page.card")} :is(${inlineRows}) > ${p("form.check")} { padding: 0;
 
 /**
  * View switchers made of pressed buttons (the confirmation center's
- * Waiting / History, the rule editor's Editor / Text) look like the shared
- * segmented control.
+ * Waiting / History, the rule editor's Editor / Text, a message source's
+ * Original / Decoded) look like the shared segmented control.
  */
-const SWITCHERS = `:is(${ps("confirmation-center.views", "rules.views")}) {
+const SWITCHERS = `:is(${ps("confirmation-center.views", "rules.views", "message-source.views")}) {
   display: inline-flex; align-self: flex-start; gap: ${T.xxs}; padding: ${T.xxs};
   border: 1px solid ${T.border}; border-radius: var(--nail-radius-md); background-color: var(--nail-color-bg-subtle);
 }
-:is(${ps("confirmation-center.view", "rules.view")}) {
+:is(${ps("confirmation-center.view", "rules.view", "message-source.view")}) {
   display: inline-flex; align-items: center; min-height: calc(${T.control} - ${T.sm}); padding: 0 ${T.md};
   border: none; border-radius: var(--nail-radius-sm); font-size: var(--nail-font-size-small);
   color: var(--nail-color-fg-muted); background-color: transparent;
 }
-:is(${ps("confirmation-center.view", "rules.view")}):hover { color: var(--nail-color-fg); }
-:is(${ps("confirmation-center.view", "rules.view")}):focus-visible { outline: 2px solid var(--nail-color-focus-ring); outline-offset: 1px; }
-:is(${ps("confirmation-center.view", "rules.view")})[aria-pressed="true"] {
+:is(${ps("confirmation-center.view", "rules.view", "message-source.view")}):hover { color: var(--nail-color-fg); }
+:is(${ps("confirmation-center.view", "rules.view", "message-source.view")}):focus-visible { outline: 2px solid var(--nail-color-focus-ring); outline-offset: 1px; }
+:is(${ps("confirmation-center.view", "rules.view", "message-source.view")})[aria-pressed="true"] {
   opacity: 1; color: var(--nail-color-fg); background-color: ${T.bg};
   font-weight: var(--nail-font-weight-semibold); box-shadow: var(--nail-shadow-raised);
 }`;

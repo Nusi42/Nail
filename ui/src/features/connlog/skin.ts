@@ -19,7 +19,7 @@
  * - `connection-log-settings` (Settings → Diagnostics): `.heading`, `.path`;
  * - `application-log`: `.path`, `.empty`, `.lines`, `.actions`.
  */
-import { ACCENT_BAR, FIELD_BASIS } from "../../theme/declarations";
+import { ACCENT_BAR, FIELD_BASIS, SCROLL_BOX } from "../../theme/declarations";
 import { p } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
 import { ACCOUNT_PART, APP_LOG_PART, DETAILS_PART, SETTINGS_PART, VIEWER_PART } from "./names";
@@ -41,10 +41,7 @@ ${v("note")}, ${v("status")}, ${v("empty")} { margin: 0; color: ${T.muted}; font
 ${v("status")}[data-tone="error"], ${v("error")} { margin: 0; color: ${T.danger}; }
 ${v("controls")} { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: ${T.sm}; }
 ${v("filters")}, ${v("actions")} { display: flex; flex-wrap: wrap; align-items: flex-end; gap: ${T.sm}; }
-${v("list")} {
-  flex: 1 1 auto; min-height: 8em; overflow: auto; margin: 0; padding: 0; list-style: none;
-  border: 1px solid ${T.border}; border-radius: ${T.rMd}; background-color: ${T.subtle};
-}
+${v("list")} { ${SCROLL_BOX} padding: 0; list-style: none; }
 ${v("list")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 1px; }
 ${v("entry")} {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 ${T.sm};
@@ -72,9 +69,6 @@ ${a("empty")}, ${p(`${SETTINGS_PART}.path`)}, ${l("path")}, ${l("empty")} { marg
 ${a("problems")} { display: flex; flex-direction: column; gap: ${T.xs}; align-self: stretch; margin: 0; padding: 0; list-style: none; }
 ${a("problem")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; }
 ${a("problem.text")} { flex: 1 1 ${FIELD_BASIS}; min-width: 0; overflow-wrap: anywhere; }
-${l("lines")} {
-  flex: 1 1 auto; min-height: 8em; overflow: auto; margin: 0; padding: ${T.xs};
-  border: 1px solid ${T.border}; border-radius: ${T.rMd}; background-color: ${T.subtle}; ${CODE}
-}
+${l("lines")} { ${SCROLL_BOX} padding: ${T.xs}; ${CODE} }
 ${l("lines")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 1px; }
 `;

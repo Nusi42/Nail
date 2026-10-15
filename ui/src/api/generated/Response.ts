@@ -75,6 +75,7 @@ import type { McpServerInfo } from "./McpServerInfo";
 import type { McpSettings } from "./McpSettings";
 import type { MessageBody } from "./MessageBody";
 import type { MessageId } from "./MessageId";
+import type { MessageSource } from "./MessageSource";
 import type { MessageSummary } from "./MessageSummary";
 import type { NotificationSettings } from "./NotificationSettings";
 import type { OAuthFlowId } from "./OAuthFlowId";
@@ -345,7 +346,11 @@ mime: string,
 /**
  * The content, base64 (standard alphabet, padded).
  */
-data: string, } | { "type": "Drafts", 
+data: string, } | { "type": "MessageSource", 
+/**
+ * The source.
+ */
+source: MessageSource, } | { "type": "Drafts", 
 /**
  * The drafts, each with its id.
  */

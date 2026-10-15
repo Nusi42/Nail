@@ -1317,3 +1317,8 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - HTML mail fills the reader (ADR 0193): a message column with an HTML body and the card feed have no maximum width,
   so the frame follows the window; the reading width (`READER_MEASURE`, the theme's `message max-width`) applies only
   to plain text and, inside the frame, to mail without its own design.
+- Show source (ADR 0194): `GetMessageSource` (`nail_api::message_source`; core `message_source.rs` over
+  `attachments::downloaded_raw`, MIME in `nail_mime::{original_source, decoded_source}`) answers the original text and
+  a decoded view (header fields decoded, text parts decoded, other parts as `Omitted` chunks), each cut at 4 MiB;
+  remote sessions need `raw-source`. UI slot `ui/src/features/message-source/` (action `source.message`, Ctrl+U,
+  window `message-source:<n>` sized by the connection log's `LOG_WINDOW`).

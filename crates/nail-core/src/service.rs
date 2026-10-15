@@ -1395,6 +1395,10 @@ impl Service {
             request @ (Request::GetMessageAttachment { .. } | Request::SaveAttachment { .. }) => {
                 crate::attachments::handle(self, request).await?
             }
+            // ADR 0194: "Show source".
+            Request::GetMessageSource { message_id } => {
+                crate::message_source::handle(self, message_id).await?
+            }
             // M5b (ADR 0109): UI state kept across restarts.
             request @ (Request::GetUiState | Request::SetUiState { .. }) => {
                 crate::ui_state::handle(self, request).await?

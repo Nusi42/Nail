@@ -27,6 +27,7 @@ import * as layoutEditor from "./layout-editor";
 import * as mailActions from "./mail-actions";
 import * as mcp from "./mcp";
 import * as menus from "./menus";
+import * as messageSource from "./message-source";
 import * as palette from "./palette";
 import * as pim from "./pim";
 import * as plugins from "./plugins";
@@ -91,6 +92,8 @@ export const features: Readonly<Record<string, Feature>> = {
   mailActions,
   // ADR 0190: the connection log, error details, the application log.
   connlog,
+  // ADR 0194: "Show source".
+  messageSource,
 };
 
 /** The merged registries. */

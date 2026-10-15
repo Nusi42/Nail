@@ -24,6 +24,7 @@ mod markdown;
 pub mod message_file;
 pub mod remote_content;
 mod sanitize;
+mod source;
 mod text;
 
 use std::collections::BTreeSet;
@@ -31,7 +32,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use mail_parser::decoders::html::html_to_text;
 use mail_parser::{
-    Address as MpAddress, HeaderValue, Message, MessageParser, MessagePart, MimeHeaders, PartType,
+    Address as MpAddress, Header, HeaderValue, Message, MessageParser, MessagePart, MimeHeaders,
+    PartType,
 };
 use nail_api::{
     AccountId, Address, AttachmentInfo, Flags, FolderId, MessageBody, MessageHeaders, MessageId,
@@ -48,6 +50,7 @@ pub use sanitize::{
     InlineImages, SanitizedHtml, sanitize_html, sanitize_html_with, sanitize_mail_html,
     sanitize_mail_html_portable,
 };
+pub use source::{decoded_source, original_source};
 pub use text::{PREVIEW_CHARS, preview_text};
 
 /// The largest inline (`cid:`) image the reader shows, in decoded bytes;
@@ -206,20 +209,28 @@ pub fn header_fields(raw: &[u8]) -> Vec<(String, String)> {
         message
             .headers()
             .iter()
-            .map(|h| {
-                let value = if let Some(text) = h.value.as_text() {
-                    text.to_owned()
-                } else {
-                    let start = usize::try_from(h.offset_start).unwrap_or(0);
-                    let end = usize::try_from(h.offset_end).unwrap_or(0);
-                    let raw = bytes.get(start..end.max(start)).unwrap_or_default();
-                    unfold(&String::from_utf8_lossy(raw))
-                };
-                (h.name.as_str().to_owned(), value)
-            })
+            .map(|h| (h.name.as_str().to_owned(), field_value(h, bytes)))
             .collect()
     })
     .unwrap_or_default()
+}
+
+/// A header field's value as [`header_fields`] gives it; `raw` is the
+/// whole message (header offsets count from its start).
+fn field_value(header: &Header<'_>, raw: &[u8]) -> String {
+    match header.value.as_text() {
+        Some(text) => text.to_owned(),
+        None => written_value(header, raw),
+    }
+}
+
+/// A header field's value as written, unfolded; `raw` is the whole message.
+fn written_value(header: &Header<'_>, raw: &[u8]) -> String {
+    let start = usize::try_from(header.offset_start).unwrap_or(0);
+    let end = usize::try_from(header.offset_end).unwrap_or(0);
+    unfold(&String::from_utf8_lossy(
+        raw.get(start..end.max(start)).unwrap_or_default(),
+    ))
 }
 
 /// Joins folded header lines and trims the value.
@@ -616,9 +627,10 @@ fn body_html(message: &Message<'_>) -> Option<String> {
 
 /// The metadata of attachment `index`; `shown` = the normalized
 /// Content-IDs of the inline images the HTML body shows.
-fn attachment_info(index: u32, part: &MessagePart<'_>, shown: &BTreeSet<String>) -> AttachmentInfo {
-    let mime = part
-        .content_type()
+/// A part's MIME type, lower case (from its body kind when it has no
+/// `Content-Type`).
+fn part_mime(part: &MessagePart<'_>) -> String {
+    part.content_type()
         .map(|ct| match &ct.c_subtype {
             Some(sub) => format!("{}/{}", ct.c_type, sub),
             None => ct.c_type.to_string(),
@@ -634,7 +646,18 @@ fn attachment_info(index: u32, part: &MessagePart<'_>, shown: &BTreeSet<String>)
                 .to_owned()
             },
             |m| m.to_ascii_lowercase(),
-        );
+        )
+}
+
+/// A part's file name, trimmed; `None` when it has none.
+fn part_filename(part: &MessagePart<'_>) -> Option<String> {
+    part.attachment_name()
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty())
+}
+
+fn attachment_info(index: u32, part: &MessagePart<'_>, shown: &BTreeSet<String>) -> AttachmentInfo {
+    let mime = part_mime(part);
     let disposition = part
         .content_disposition()
         .map(|d| d.c_type.to_ascii_lowercase());
@@ -645,10 +668,7 @@ fn attachment_info(index: u32, part: &MessagePart<'_>, shown: &BTreeSet<String>)
     };
     AttachmentInfo {
         index,
-        filename: part
-            .attachment_name()
-            .map(|n| n.trim().to_owned())
-            .filter(|n| !n.is_empty()),
+        filename: part_filename(part),
         mime,
         size: part.len() as u64,
         inline,

@@ -1,7 +1,8 @@
 //! M5a integration (WP155): the appearance requests through
 //! `Service::handle`, Follow Windows from the service's OS source,
 //! `ReportSystemAppearance`, density, the resync events, and attachments of
-//! received mail (`GetMessageAttachment`, `SaveAttachment`).
+//! received mail (`GetMessageAttachment`, `SaveAttachment`) and "Show
+//! source" (`GetMessageSource`, ADR 0194).
 
 #![cfg(test)]
 
@@ -16,7 +17,7 @@ use nail_api::appearance::{
     Appearance, Density, ManualSystemAppearance, SystemAppearance, ThemePreferences,
 };
 use nail_api::config::theme::ThemeMode;
-use nail_api::{AccountId, ErrorCode, Event, MessageId, Request, Response};
+use nail_api::{AccountId, ErrorCode, Event, MessageId, Request, Response, SourceChunk};
 use nail_core::demo::{DEMO_ACCOUNT_ID, seed_demo};
 use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
@@ -298,6 +299,54 @@ async fn attachments_download_as_base64() {
         .handle(Request::GetMessageAttachment {
             message_id: id,
             index: 7,
+        })
+        .await
+    {
+        Response::Error { code, .. } => assert_eq!(code, ErrorCode::NotFound),
+        other => panic!("expected not_found, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn the_source_is_the_message_as_received_and_decoded() {
+    let f = open();
+    let id = receipt(&f.service).await;
+    let Response::MessageSource { source } = f
+        .service
+        .handle(Request::GetMessageSource {
+            message_id: id.clone(),
+        })
+        .await
+    else {
+        panic!("expected the source");
+    };
+    assert!(
+        source
+            .original
+            .contains("Message-ID: <receipt-88213@corner-books.example>")
+    );
+    assert!(source.original.contains("--r-b--"));
+    assert_eq!(source.size, source.original.len() as u64);
+    assert!(!source.original_truncated && !source.decoded_truncated && !source.encrypted);
+    let decoded: String = source
+        .decoded
+        .iter()
+        .map(|chunk| match chunk {
+            SourceChunk::Text { text } => text.as_str(),
+            SourceChunk::Omitted { .. } => panic!("the receipt has only text parts"),
+        })
+        .collect();
+    assert!(decoded.starts_with(
+        "From: Corner Bookshop <shop@corner-books.example>
+"
+    ));
+    assert!(decoded.contains("Thanks for your purchase!"));
+    assert!(decoded.contains(RECEIPT_TEXT));
+
+    match f
+        .service
+        .handle(Request::GetMessageSource {
+            message_id: MessageId::new("no-such-message"),
         })
         .await
     {

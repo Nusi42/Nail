@@ -100,6 +100,13 @@ export function noticeStack(side: "left" | "right"): string {
   return `position: fixed; ${side}: ${FLOAT_INSET}; bottom: ${FLOAT_INSET}; max-width: ${floatingWidth("420px")};`;
 }
 
+/**
+ * A framed box that fills its window's free height and scrolls (the
+ * connection log, the application log, a message's source).
+ */
+export const SCROLL_BOX =
+  "flex: 1 1 auto; min-height: 8em; overflow: auto; margin: 0; border: 1px solid var(--nail-color-border); border-radius: var(--nail-radius-md); background-color: var(--nail-color-bg-subtle);";
+
 /** The reader's measure: plain-text mail and the conversation strip never get wider. */
 export const READER_MEASURE = "68ch";
 

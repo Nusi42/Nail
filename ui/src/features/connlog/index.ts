@@ -23,6 +23,7 @@
  * The central registry (`../registry.ts`) merges these exports into the
  * app; see `../README.md`.
  */
+import type { WindowRegistration } from "../../state/windows";
 import type { Feature } from "../types";
 import { ConnectionLogWindow } from "./ConnectionLogWindow";
 import { ErrorDetailsWindow } from "./ErrorDetails";
@@ -49,15 +50,21 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
   [APP_LOG_KIND]: AppLogWindow,
 };
 
+/**
+ * A non-modal tool window of long monospace lines, several at a time: the
+ * viewer (also a message's source, ADR 0194).
+ */
+export const LOG_WINDOW: WindowRegistration = {
+  modal: false,
+  size: { width: 900, height: 640 },
+  min_size: { width: 420, height: 360 },
+  instances: "multiple",
+  pop_out: false,
+};
+
 /** The window model: non-modal tool windows, one viewer per scope. */
 export const windows: NonNullable<Feature["windows"]> = {
-  [CONNECTION_LOG_KIND]: {
-    modal: false,
-    size: { width: 900, height: 640 },
-    min_size: { width: 420, height: 360 },
-    instances: "multiple",
-    pop_out: false,
-  },
+  [CONNECTION_LOG_KIND]: LOG_WINDOW,
   [ERROR_DETAILS_KIND]: {
     modal: false,
     size: { width: 620, height: 520 },
