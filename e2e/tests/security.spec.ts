@@ -242,6 +242,40 @@ test("the sender check badge and a look-alike link warning", async ({ page }) =>
   await expect(badge(page)).toHaveCount(0);
 });
 
+test("a sender with a look-alike domain and a full-width name is flagged (ADR 0195)", async ({
+  page,
+}) => {
+  await openApp(page);
+  // "Kundenservice ＮＯＶＡＢＡＮＫ" <noreply@ńovabank.ċom>, as phishing mail writes it.
+  const name = Buffer.from("Kundenservice ＮＯＶＡＢＡＮＫ").toString("base64");
+  const raw = [
+    `From: =?UTF-8?B?${name}?= <noreply@xn--ovabank-2jb.xn--om-6la>`,
+    "To: ada@work.example",
+    "Subject: Your certificate expires",
+    "Date: Tue, 29 Sep 2026 09:00:00 +0000",
+    "Message-ID: <lookalike-sender@example.org>",
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    "Renew now.",
+    "",
+  ].join("\r\n");
+  await control(server, "imap-deliver", { raw });
+  await refreshList(page);
+  const row = messageRows(page).filter({ hasText: "Your certificate expires" });
+  await expect(row).toHaveCount(1, { timeout: 20_000 });
+  await row.click();
+
+  const item = page.locator(
+    '[data-part="security-warnings"] [data-part="security-warnings.item"][data-kind="lookalike-sender"]',
+  );
+  await expect(item).toContainText(
+    "noreply@xn--ovabank-2jb.xn--om-6la uses look-alike characters: ńovabank.ċom imitates novabank.com.",
+  );
+  await expect(item).toContainText('it reads "Kundenservice NOVABANK"');
+  await expect(item).toContainText("Do not trust who this message claims to be from.");
+});
+
 test("sender checks count only for a receiving server the user configured", async ({ page }) => {
   await openApp(page);
   const openAccountSettings = async () => {

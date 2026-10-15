@@ -167,6 +167,13 @@ under **Settings → Accounts → Sender checks** (see
 
 Nail lists what to be careful about above the message:
 
+- a **disguised sender**: an address whose domain is made of look-alike
+  characters (for example `ńovabank.ċom` imitating `novabank.com`, even the
+  ending `.ċom` is fake), or a sender name written in look-alike letters
+  (full-width `ＢＡＮＫ` instead of `BANK`) or with invisible characters. Nail
+  shows the address as it really is and what it imitates. Full-width
+  letters next to Chinese, Japanese or Korean text are normal there and
+  not flagged,
 - a link whose text shows one address but goes to another,
 - a link to a **look-alike domain** (for example with a Cyrillic "о"
   imitating a Latin "o"), shown with its real, encoded name,

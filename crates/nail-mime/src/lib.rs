@@ -24,6 +24,7 @@ mod markdown;
 pub mod message_file;
 pub mod remote_content;
 mod sanitize;
+pub mod sender;
 mod source;
 mod text;
 

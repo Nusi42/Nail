@@ -1322,3 +1322,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   a decoded view (header fields decoded, text parts decoded, other parts as `Omitted` chunks), each cut at 4 MiB;
   remote sessions need `raw-source`. UI slot `ui/src/features/message-source/` (action `source.message`, Ctrl+U,
   window `message-source:<n>` sized by the connection log's `LOG_WINDOW`).
+- Disguised senders (ADR 0195): `nail_mime::sender::sender_warnings` (look-alike domain via the link check's
+  `lookalike` plus internationalized top-level domains that fold to ASCII; display names with full-width /
+  mathematical letters or invisible characters) yields `MessageWarning::LookalikeSender`, first in
+  `links::message_warnings`; the reader banner (`features/security/Warnings.tsx`) lists it first.

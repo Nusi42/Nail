@@ -950,6 +950,7 @@ fn message_warning_kinds() -> Result<Vec<String>, serde_json::Error> {
             W::LinkMismatch { .. }
             | W::LookalikeDomain { .. }
             | W::SuspiciousLink { .. }
+            | W::LookalikeSender { .. }
             | W::DangerousAttachment { .. } => {}
         }
     }
@@ -970,6 +971,12 @@ fn message_warning_kinds() -> Result<Vec<String>, serde_json::Error> {
         W::SuspiciousLink {
             link: 0,
             href: String::new(),
+        },
+        W::LookalikeSender {
+            address: String::new(),
+            unicode_domain: None,
+            resembles: None,
+            name: None,
         },
         W::DangerousAttachment {
             index: 0,

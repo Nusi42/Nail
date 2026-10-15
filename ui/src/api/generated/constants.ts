@@ -762,7 +762,7 @@ export const EXCHANGE_ONLINE_DOMAINS = ["office365.com","outlook.office.com","ou
 export const MICROSOFT_DOMAIN = "microsoft.com" as const;
 
 /** Every `MessageWarning` kind, in the contract's order. */
-export const MESSAGE_WARNING_KINDS = ["link-mismatch","lookalike-domain","suspicious-link","dangerous-attachment"] as const satisfies readonly MessageWarning["kind"][];
+export const MESSAGE_WARNING_KINDS = ["link-mismatch","lookalike-domain","suspicious-link","lookalike-sender","dangerous-attachment"] as const satisfies readonly MessageWarning["kind"][];
 
 /** Every `AuthVerdict`, in the contract's order. */
 export const AUTH_VERDICT_VALUES = ["pass","fail","softfail","neutral","none","temperror","permerror","policy","unknown"] as const satisfies readonly AuthVerdict[];

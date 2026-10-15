@@ -200,7 +200,7 @@
   "GMAIL_DOMAINS": ["gmail.com","googlemail.com"],
   "EXCHANGE_ONLINE_DOMAINS": ["office365.com","outlook.office.com","outlook.com"],
   "MICROSOFT_DOMAIN": "microsoft.com",
-  "MESSAGE_WARNING_KINDS": ["link-mismatch","lookalike-domain","suspicious-link","dangerous-attachment"],
+  "MESSAGE_WARNING_KINDS": ["link-mismatch","lookalike-domain","suspicious-link","lookalike-sender","dangerous-attachment"],
   "AUTH_VERDICT_VALUES": ["pass","fail","softfail","neutral","none","temperror","permerror","policy","unknown"],
   "ATTACHMENT_RISK_VALUES": ["executable","macro","disguised-name","container","shortcut","type-mismatch"],
   "VAULT_PHASE_VALUES": ["database","blobs","index"],

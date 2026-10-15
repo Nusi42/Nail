@@ -153,6 +153,10 @@ security-warnings-title = { $count ->
     [one] Nail found 1 thing to be careful about in this message.
    *[other] Nail found { $count } things to be careful about in this message.
 }
+security-warning-sender-domain = The sender's address { $address } uses look-alike characters: { $domain }.
+security-warning-sender-domain-resembles = The sender's address { $address } uses look-alike characters: { $domain } imitates { $resembles }.
+security-warning-sender-name = The sender's name is written with look-alike or invisible characters; it reads "{ $name }".
+security-warning-sender-hint = Do not trust who this message claims to be from.
 security-warning-link-mismatch = A link shows { $shown } but goes to { $target }.
 security-warning-lookalike = A link goes to { $host } ({ $ascii }), a name made of look-alike characters.
 security-warning-lookalike-resembles = A link goes to { $host } ({ $ascii }), which imitates { $resembles }.

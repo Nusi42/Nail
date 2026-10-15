@@ -1,7 +1,8 @@
 /**
- * Link and attachment warnings in the reader (`MessageBody.warnings`,
- * ADR 0029): a banner that lists every flagged link with its real target
- * and every risky attachment, plus a per-attachment marker the reader's
+ * Sender, link and attachment warnings in the reader (`MessageBody.warnings`,
+ * ADRs 0029, 0195): a banner that lists a disguised sender (look-alike
+ * domain or display name), every flagged link with its real target and
+ * every risky attachment, plus a per-attachment marker the reader's
  * attachment list can mount (`AttachmentWarningMark`).
  */
 import type { MessageBody, MessageWarning } from "../../api/generated";
@@ -9,11 +10,32 @@ import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useMessage } from "../../state/queries";
 import { useUi } from "../../state/uiStore";
-import { attachmentWarning, attachmentWarnings, linkWarnings } from "./model";
+import { attachmentWarning, attachmentWarnings, linkWarnings, senderWarnings } from "./model";
+
+/** The sentences explaining a disguised sender. */
+function senderText(
+  t: ReturnType<typeof useT>,
+  w: Extract<MessageWarning, { kind: "lookalike-sender" }>,
+): string[] {
+  const lines: string[] = [];
+  if (w.unicode_domain !== null) {
+    lines.push(
+      w.resembles !== null
+        ? t("security-warning-sender-domain-resembles", {
+            address: w.address,
+            domain: w.unicode_domain,
+            resembles: w.resembles,
+          })
+        : t("security-warning-sender-domain", { address: w.address, domain: w.unicode_domain }),
+    );
+  }
+  if (w.name !== null) lines.push(t("security-warning-sender-name", { name: w.name }));
+  return lines;
+}
 
 function linkText(
   t: ReturnType<typeof useT>,
-  w: Exclude<MessageWarning, { kind: "dangerous-attachment" }>,
+  w: Exclude<MessageWarning, { kind: "dangerous-attachment" | "lookalike-sender" }>,
 ) {
   switch (w.kind) {
     case "link-mismatch":
@@ -39,6 +61,7 @@ export function MessageWarnings({ message }: { message: MessageBody }) {
   const t = useT();
   const warnings = message.warnings ?? [];
   if (warnings.length === 0) return null;
+  const senders = senderWarnings(warnings);
   const links = linkWarnings(warnings);
   const files = attachmentWarnings(warnings);
   return (
@@ -51,6 +74,16 @@ export function MessageWarnings({ message }: { message: MessageBody }) {
         {t("security-warnings-title", { count: warnings.length })}
       </p>
       <ul data-part="security-warnings.list">
+        {senders.map((w) => (
+          <li key={`sender-${w.address}`} data-part="security-warnings.item" data-kind={w.kind}>
+            {senderText(t, w).map((line) => (
+              <span key={line} data-part="security-warnings.text">
+                {line}
+              </span>
+            ))}
+            <span data-part="security-warnings.target">{t("security-warning-sender-hint")}</span>
+          </li>
+        ))}
         {links.map((w, i) => (
           <li
             key={`link-${String(w.link)}-${w.kind}-${String(i)}`}

@@ -4709,6 +4709,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tracing",
+ "unicode-normalization",
  "unicode-security",
  "url",
 ]

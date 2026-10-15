@@ -241,7 +241,7 @@ fn shown_host(text: &str) -> Option<String> {
 
 /// A look-alike check of an ASCII (punycode) host: `Some((unicode,
 /// resembles))` when it should be flagged.
-fn lookalike(ascii_host: &str) -> Option<(String, Option<String>)> {
+pub(crate) fn lookalike(ascii_host: &str) -> Option<(String, Option<String>)> {
     if !ascii_host
         .split('.')
         .any(|l| l.to_ascii_lowercase().starts_with("xn--"))
@@ -534,10 +534,11 @@ pub fn attachment_warnings(attachments: &[AttachmentInfo]) -> Vec<MessageWarning
         .collect()
 }
 
-/// All warnings of a reader body: links first (in link order), then
-/// attachments.
+/// All warnings of a reader body: a disguised sender first (ADR 0195),
+/// then links (in link order), then attachments.
 pub fn message_warnings(body: &MessageBody) -> Vec<MessageWarning> {
-    let mut out = link_warnings(body.sanitized_html.as_deref(), &body.text);
+    let mut out = crate::sender::sender_warnings(&body.headers.from);
+    out.extend(link_warnings(body.sanitized_html.as_deref(), &body.text));
     out.extend(attachment_warnings(&body.attachments));
     out
 }

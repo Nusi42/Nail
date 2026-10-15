@@ -267,6 +267,9 @@ chacha20poly1305 = "0.10.1"
 # Link safety in nail-mime: IDNA / punycode and UTS #39 confusables.
 idna = "1.1.0"
 unicode-security = "0.1.2"
+# ADR 0195: look-alike senders (NFKC / NFD folding); already in the lock
+# through unicode-security.
+unicode-normalization = "0.1.25"
 
 # M2b (ADR 0036). Licences: MIT / Apache-2.0 / BSD / ISC only; no OpenSSL,
 # no aws-lc (ring everywhere). webauthn-rs (the plan's choice) needs OpenSSL,

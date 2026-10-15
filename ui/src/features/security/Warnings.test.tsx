@@ -71,6 +71,74 @@ describe("reader warnings", () => {
     ).toBeInTheDocument();
   });
 
+  it("puts a disguised sender first: its look-alike domain and name", () => {
+    renderWithProviders(
+      <MessageWarnings
+        message={body({
+          warnings: [
+            { kind: "suspicious-link", link: 0, href: "http://192.0.2.1/" },
+            {
+              kind: "lookalike-sender",
+              address: "noreply@xn--ovabank-2jb.xn--om-6la",
+              unicode_domain: "ńovabank.ċom",
+              resembles: "novabank.com",
+              name: "Kundenservice NOVABANK",
+            },
+          ],
+        })}
+      />,
+      createEnv(),
+    );
+    const items = screen.getAllByRole("listitem");
+    expect(items.map((i) => i.getAttribute("data-kind"))).toEqual([
+      "lookalike-sender",
+      "suspicious-link",
+    ]);
+    const sender = must(items[0]);
+    expect(
+      within(sender).getByText(
+        "The sender's address noreply@xn--ovabank-2jb.xn--om-6la uses look-alike characters: ńovabank.ċom imitates novabank.com.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(sender).getByText(
+        `The sender's name is written with look-alike or invisible characters; it reads "Kundenservice NOVABANK".`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(sender).getByText("Do not trust who this message claims to be from."),
+    ).toBeInTheDocument();
+  });
+
+  it("names a disguised sender's domain without a known original, or only its name", () => {
+    renderWithProviders(
+      <MessageWarnings
+        message={body({
+          warnings: [
+            {
+              kind: "lookalike-sender",
+              address: "a@xn--80ak6aa92e.com",
+              unicode_domain: "аррӏе.com",
+              resembles: null,
+              name: null,
+            },
+            {
+              kind: "lookalike-sender",
+              address: "news@shop.example",
+              unicode_domain: null,
+              resembles: null,
+              name: "PayPal",
+            },
+          ],
+        })}
+      />,
+      createEnv(),
+    );
+    expect(screen.getByText(/uses look-alike characters: аррӏе\.com\.$/)).toBeInTheDocument();
+    expect(screen.getByText(/it reads "PayPal"/)).toBeInTheDocument();
+    expect(screen.queryByText(/news@shop\.example uses/)).toBeNull();
+  });
+
   it("renders nothing without warnings", () => {
     const { container } = renderWithProviders(
       <MessageWarnings message={body({ warnings: [] })} />,

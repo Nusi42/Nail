@@ -21,6 +21,7 @@ comrak.workspace = true
 # M2a WP33 (ADR 0029): link safety (punycode, confusables).
 idna.workspace = true
 unicode-security.workspace = true
+unicode-normalization.workspace = true
 url.workspace = true
 
 [dev-dependencies]

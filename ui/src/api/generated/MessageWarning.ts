@@ -51,7 +51,25 @@ link: number,
 /**
  * The real target.
  */
-href: string, } | { "kind": "dangerous-attachment", 
+href: string, } | { "kind": "lookalike-sender", 
+/**
+ * The sender's address as sent.
+ */
+address: string, 
+/**
+ * The address's domain as displayed (Unicode), when the domain is
+ * disguised.
+ */
+unicode_domain: string | null, 
+/**
+ * The ASCII domain it imitates, when known.
+ */
+resembles: string | null, 
+/**
+ * The display name as it reads (`NOVABANK`, invisible characters
+ * removed), when the name is disguised.
+ */
+name: string | null, } | { "kind": "dangerous-attachment", 
 /**
  * Index into [`crate::MessageBody::attachments`].
  */

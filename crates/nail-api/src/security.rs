@@ -521,6 +521,24 @@ pub enum MessageWarning {
         /// The real target.
         href: String,
     },
+    /// The sender (`From`) is disguised (ADR 0195): its domain is made of
+    /// look-alike characters, or its display name of look-alike (`ＮＯＶＡＢＡＮＫ`)
+    /// or invisible characters.
+    LookalikeSender {
+        /// The sender's address as sent.
+        address: String,
+        /// The address's domain as displayed (Unicode), when the domain is
+        /// disguised.
+        #[serde(default)]
+        unicode_domain: Option<String>,
+        /// The ASCII domain it imitates, when known.
+        #[serde(default)]
+        resembles: Option<String>,
+        /// The display name as it reads (`NOVABANK`, invisible characters
+        /// removed), when the name is disguised.
+        #[serde(default)]
+        name: Option<String>,
+    },
     /// A dangerous attachment.
     DangerousAttachment {
         /// Index into [`crate::MessageBody::attachments`].

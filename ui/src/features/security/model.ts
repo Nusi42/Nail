@@ -206,14 +206,22 @@ export const WARNING_KINDS: readonly MessageWarning["kind"][] = MESSAGE_WARNING_
 export const ATTACHMENT_RISKS: readonly AttachmentRisk[] = ATTACHMENT_RISK_VALUES;
 
 type AttachmentWarning = Extract<MessageWarning, { kind: "dangerous-attachment" }>;
-type LinkWarning = Exclude<MessageWarning, { kind: "dangerous-attachment" }>;
+type SenderWarning = Extract<MessageWarning, { kind: "lookalike-sender" }>;
+type LinkWarning = Exclude<MessageWarning, { kind: "dangerous-attachment" | "lookalike-sender" }>;
 
 export function attachmentWarnings(warnings: readonly MessageWarning[]): AttachmentWarning[] {
   return warnings.filter((w): w is AttachmentWarning => w.kind === "dangerous-attachment");
 }
 
 export function linkWarnings(warnings: readonly MessageWarning[]): LinkWarning[] {
-  return warnings.filter((w): w is LinkWarning => w.kind !== "dangerous-attachment");
+  return warnings.filter(
+    (w): w is LinkWarning => w.kind !== "dangerous-attachment" && w.kind !== "lookalike-sender",
+  );
+}
+
+/** Disguised senders (ADR 0195). */
+export function senderWarnings(warnings: readonly MessageWarning[]): SenderWarning[] {
+  return warnings.filter((w): w is SenderWarning => w.kind === "lookalike-sender");
 }
 
 /** The warning of one attachment, if any. */
