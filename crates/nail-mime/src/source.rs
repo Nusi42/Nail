@@ -5,6 +5,7 @@
 //! not text are named, not shown.
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 
 use mail_parser::{Message, MimeHeaders, PartType};
 use nail_api::message_source::{MAX_SOURCE_NESTING, SourceChunk};
@@ -52,12 +53,12 @@ fn write_part(out: &mut Chunks, raw: &[u8], message: &Message<'_>, id: u32, dept
     let Some(part) = message.part(id) else {
         return;
     };
-    let header: String = part
-        .headers
-        .iter()
-        .map(|h| format!("{}: {}\n", h.name.as_str(), decoded_value(h, raw)))
-        .collect();
-    out.text(&format!("{header}\n"));
+    let mut header = String::new();
+    for h in &part.headers {
+        let _ = writeln!(header, "{}: {}", h.name.as_str(), decoded_value(h, raw));
+    }
+    header.push('\n');
+    out.text(&header);
     let size = u64::from(part.offset_end.saturating_sub(part.offset_body));
     match &part.body {
         PartType::Text(text) | PartType::Html(text) => {
