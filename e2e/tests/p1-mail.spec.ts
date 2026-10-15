@@ -276,6 +276,25 @@ test.describe("HTML mail from the demo corpus", () => {
     expect(await frameStyle(frame, "p:has-text('Overlay')", "position")).not.toBe("fixed");
   });
 
+  test("an HTML mail's frame follows the window's width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.goto(server.url);
+    await showView(page, "Mail");
+    await openMessage(page, "Your weekly garden digest 🌱");
+    const frame = page.locator('iframe[data-part="message-view.body"]');
+    const reader = page.locator('[data-part="thread-view"]');
+    await expect(readerFrame(page).getByRole("heading", { name: "Autumn is here" })).toBeVisible();
+    const width = async (locator: typeof frame) => (await locator.boundingBox())?.width ?? 0;
+    const narrow = await width(frame);
+    // Wider window, wider frame: the frame fills the reader (apart from its padding).
+    await page.setViewportSize({ width: 2400, height: 1000 });
+    await expect.poll(() => width(frame)).toBeGreaterThan(narrow + 300);
+    expect((await width(reader)) - (await width(frame))).toBeLessThan(200);
+    // And back.
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await expect.poll(() => width(frame)).toBeCloseTo(narrow, 0);
+  });
+
   test("the remote UI renders the same mail from its sandbox origin", async ({ page }) => {
     const { remote, context, phone } = await pairedRemoteMail(page, server);
 

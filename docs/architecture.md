@@ -1314,3 +1314,6 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - Resilient IMAP sync (ADR 0191): one refused / unreadable / withheld / oversized message is skipped and recorded
   (`sync_skipped`, schema v19) in the store call that moves the checkpoint past it, and retried by later passes
   (`retry_skipped`); only mailbox-level refusals or more than five failures fail a batch.
+- HTML mail fills the reader (ADR 0193): a message column with an HTML body and the card feed have no maximum width,
+  so the frame follows the window; the reading width (`READER_MEASURE`, the theme's `message max-width`) applies only
+  to plain text and, inside the frame, to mail without its own design.

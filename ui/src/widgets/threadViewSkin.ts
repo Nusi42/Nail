@@ -93,8 +93,9 @@ const inCard = (part: string) => `${p("thread-view.card.body")} ${p(part)}`;
 
 /**
  * The card feed (P2 Design A, `thread-view mode="cards"`, WP203): the
- * reader pane scrolls as a whole; the subject header and the cards share one
- * centred column; cards are bordered boxes without indentation, a
+ * reader pane scrolls as a whole; the subject header and the cards fill the
+ * pane's width (an HTML mail's frame follows the window, plain text keeps the
+ * reading width); cards are bordered boxes without indentation, a
  * collapsed card one line, each card as tall as its content (the quote
  * toggle sits right under the text); a fold "N older messages" is a line of
  * its own between cards (`thread-view.fold-row`). Inside a card the
@@ -112,7 +113,7 @@ ${p("thread-view")}[data-mode] {
 ${p("thread-view")}[data-mode="single"] { padding: 0; }
 ${p("thread-view")}[data-mode="single"] > ${p("message-view")} { flex: 1 1 auto; }
 ${p("thread-view")}[data-mode="cards"] > ${p("thread-view.header")}, ${p("thread-view.feed")} {
-  box-sizing: border-box; width: 100%; max-width: calc(${READER_MEASURE} + 2 * ${T.xl}); margin-inline: auto;
+  box-sizing: border-box; width: 100%; margin-inline: auto;
 }
 ${p("thread-view")}[data-mode="cards"] > ${p("thread-view.header")} {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: ${T.xs} ${T.md}; padding: 0 0 ${T.md};

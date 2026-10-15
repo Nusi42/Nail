@@ -39,8 +39,10 @@
  *
  * P1 (WP190), P3 (WP-card-height, ADR 0164): the HTML body's frame is as
  * tall as its mail (a geometry rule from the measured height; until then a
- * placeholder height) and the reader scrolls as a whole; designed mail (`message-view.body[data-state~=
- * "designed"]`) widens the column to a newsletter's usual 600–700 px. The
+ * placeholder height) and the reader scrolls as a whole. A column with an
+ * HTML body fills the reader (the frame follows the window; mail without its
+ * own design keeps the reading width inside the frame, `reader.ts`); plain
+ * text keeps `READER_MEASURE`. The
  * reader's stack is a size container (`nail-reader`): below 640 px the column
  * and the banners above it use the pane's padding instead of the wide margins,
  * and header values wrap in their own column next to the labels.
@@ -406,7 +408,7 @@ ${p("message-view.header.label")} { min-width: 0; }
 ${p("message-view.header.value")} { min-width: 0; overflow-wrap: anywhere; }
 ${p("message-view.text")} { max-width: ${READER_MEASURE}; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
 ${p("message-view.body")} { display: block; flex: 0 0 auto; box-sizing: border-box; width: 100%; height: calc(12 * ${T.lg}); border: none; background-color: ${T.bg}; }
-${p("message-view.column")}:has(> ${p("message-view.body")}[data-state~="designed"]) { max-width: calc(45 * ${T.lg} + 2 * ${T.xxl}); }
+${p("message-view.column")}:has(> ${p("message-view.body")}) { max-width: none; }
 @container nail-reader (max-width: ${READER_NARROW}) {
   ${p("message-view.column")} { padding: ${T.lg} ${T.pane} 0; }
   ${ps(...READER_SLOTS)} { width: calc(100% - 2 * ${T.pane}); }
