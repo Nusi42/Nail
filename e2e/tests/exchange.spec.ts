@@ -34,6 +34,14 @@ import { expectSentThrough, newMessage } from "../support/compose";
  */
 const FIXTURE_NOW = Date.UTC(2026, 9, 1, 8, 0) / 1000;
 
+/**
+ * The page's date for tests that answer a meeting in the calendar: the
+ * fixtures' meetings are on 2026-10-07 (EWS) and 2026-10-08 (Graph) and the
+ * calendar opens on the browser's today, so the agenda shows them whatever
+ * day the suite runs on.
+ */
+const PAGE_NOW = new Date("2026-10-07T08:00:00Z");
+
 const server = nailPerTest({ seed: "demo-multi" }, async (s) => {
   await control(s, "clock-set", { at: FIXTURE_NOW });
 });
@@ -310,6 +318,7 @@ test("a Nail rule is placed as an Exchange inbox rule", async ({ page }) => {
 });
 
 test("a room is booked, a meeting answered and a To Do task synced", async ({ page }) => {
+  await page.clock.setFixedTime(PAGE_NOW);
   await page.goto(server.url);
   await enableContoso(page);
   // To Do: a task in the account's list is created on Graph.
@@ -371,10 +380,7 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
 test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic replies and answers a meeting", async ({
   page,
 }) => {
-  // The meeting answered at the end is on 2026-10-07 and the calendar opens
-  // on the browser's today: the page's date is the fixture's day, so the
-  // agenda shows it whatever day the suite runs on.
-  await page.clock.setFixedTime(new Date("2026-10-07T08:00:00Z"));
+  await page.clock.setFixedTime(PAGE_NOW);
   await page.goto(server.url);
   await enableAccount(page, "Corp", 3);
 
