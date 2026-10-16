@@ -248,6 +248,10 @@ proptest! {
         // dateutil (and so calcard) ANDs plain and ordinal BYDAY entries;
         // RFC 5545 lists any match. Compare only rules where both agree.
         prop_assume!(rule.by_day.iter().all(|d| d.ordinal.is_some()) || rule.by_day.iter().all(|d| d.ordinal.is_none()));
+        // A week that spans New Year (week 1, the last weeks): dateutil and
+        // Nail count its days in the neighbouring year too, rust-rrule
+        // keeps each year's days inside the year. Compare other weeks only.
+        prop_assume!(!rule.by_week_no.iter().any(|w| [1, 52, 53, -1, -52, -53].contains(w)));
         let ics = format!(
             "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//EN\r\nBEGIN:VEVENT\r\nUID:p\r\nDTSTAMP:20260101T000000Z\r\nDTSTART:{}\r\nRRULE:{}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
             time::ical_local(start),
