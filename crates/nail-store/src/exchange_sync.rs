@@ -116,12 +116,7 @@ impl Store {
                                    WHERE l.scope = ?1 AND l.remote_id = m.remote_id)
                  ORDER BY m.id",
             )?;
-            let rows = stmt.query_map([folder.as_str()], |r| r.get::<_, String>(0))?;
-            Ok(rows
-                .collect::<rusqlite::Result<Vec<_>>>()?
-                .into_iter()
-                .map(MessageId)
-                .collect())
+            crate::util::collect_ids(&mut stmt, [folder.as_str()])
         })
     }
 

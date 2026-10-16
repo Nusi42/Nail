@@ -168,7 +168,7 @@ async fn replay(service: &Service, account: &AccountConfig, conns: &Conns<'_>) -
         let id = account.id.clone();
         service
             .store()
-            .call(move |s| Ok(s.accounts_with_pending_ops()?.contains(&id)))
+            .call(move |s| s.has_pending_writes(&id))
             .await?
     };
     if !pending {

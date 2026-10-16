@@ -30,6 +30,30 @@ pub(crate) fn folder_id(account: &AccountId, path: &str) -> FolderId {
     ))
 }
 
+/// The id for a new folder at `path`: [`folder_id`], unless a folder
+/// renamed away from that path still has it (ids stay on rename, ADR 0196);
+/// then the first free variant.
+pub(crate) fn unique_folder_id(
+    store: &nail_store::Store,
+    account: &AccountId,
+    path: &str,
+) -> nail_store::Result<FolderId> {
+    let mut n = 0u32;
+    loop {
+        let id = if n == 0 {
+            folder_id(account, path)
+        } else {
+            folder_id(account, &format!("{path}\u{1}{n}"))
+        };
+        match store.get_folder(&id) {
+            Err(err) if err.is_not_found() => return Ok(id),
+            Ok(existing) if existing.path == path => return Ok(id),
+            Ok(_) => n = n.saturating_add(1),
+            Err(err) => return Err(err),
+        }
+    }
+}
+
 /// The id of the message with `uid` in the folder at `path`, valid for one
 /// `UIDVALIDITY` of that folder.
 pub(crate) fn message_id(

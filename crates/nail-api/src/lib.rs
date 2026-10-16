@@ -143,6 +143,7 @@ pub mod editing;
 pub mod engine;
 pub mod error;
 pub mod exchange;
+pub mod folders;
 pub mod gmail;
 pub mod hosts;
 pub mod icons;

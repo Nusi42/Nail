@@ -1326,3 +1326,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `lookalike` plus internationalized top-level domains that fold to ASCII; display names with full-width /
   mathematical letters or invisible characters) yields `MessageWarning::LookalikeSender`, first in
   `links::message_warnings`; the reader banner (`features/security/Warnings.tsx`) lists it first.
+- Folder management (ADR 0196): `CreateFolder` / `RenameFolder` / `MoveFolder` / `DeleteFolder`
+  (`nail_api::folders`, core `folders.rs`) queue `FolderOp`s in `folder_ops` (schema v20, `nail-store/folder_ops.rs`),
+  replayed first in `replay::replay_account` through `OpExecutor::folder_change` (IMAP / local in `replay.rs`,
+  Exchange via `ExchangeMailEngine::folder_write`); the store changes only after the server confirmed. Renames re-path
+  in place (`Store::move_folder_tree`), IMAP mirroring matches by path (`ids::unique_folder_id`, `folders.delimiter`),
+  config paths follow (`folders::rewrite_config`). UI slot `ui/src/features/folders/`, `state/queuedOps.ts`.

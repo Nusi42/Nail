@@ -1395,6 +1395,11 @@ impl Service {
             request @ (Request::GetMessageAttachment { .. } | Request::SaveAttachment { .. }) => {
                 crate::attachments::handle(self, request).await?
             }
+            // ADR 0196: folder management.
+            request @ (Request::CreateFolder { .. }
+            | Request::RenameFolder { .. }
+            | Request::MoveFolder { .. }
+            | Request::DeleteFolder { .. }) => crate::folders::handle(self, request).await?,
             // ADR 0194: "Show source".
             Request::GetMessageSource { message_id } => {
                 crate::message_source::handle(self, message_id).await?

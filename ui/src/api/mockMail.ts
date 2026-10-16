@@ -239,7 +239,7 @@ export function queue(
   const accounts = [...new Set(targets.map((m) => m.account_id))];
   const ops = accounts.map((accountId) => ({ accountId, opId: core.nextId("op-") }));
   core.emit({ type: "MailChanged", folder_ids: folders });
-  for (const { accountId, opId } of ops) replay(core, opId, accountId);
+  for (const { accountId, opId } of ops) replayOp(core, opId, accountId);
   return { type: "Queued", op_ids: ops.map((op) => op.opId) };
 }
 
@@ -252,12 +252,12 @@ export function retryOp(core: MockCore, opId: string): Response {
   queueMicrotask(() => {
     core.emit({ type: "OpStatus", status: { ...base, state: "pending" } });
   });
-  replay(core, opId, accountId);
+  replayOp(core, opId, accountId);
   return { type: "Queued", op_ids: [opId] };
 }
 
 /** Replays one queued write asynchronously with `OpStatus` events. */
-function replay(core: MockCore, op_id: string, accountId: string): void {
+export function replayOp(core: MockCore, op_id: string, accountId: string): void {
   const base = { op_id, account_id: accountId, error: null, message: null };
   core.later(() => {
     core.emit({ type: "OpStatus", status: { ...base, state: "in-flight" } });

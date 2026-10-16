@@ -268,6 +268,28 @@ After you archive, move or delete a conversation, the next one is selected.
 
 Opening a message marks it as read.
 
+## Folders
+
+Right-click a folder in the folder pane for **New subfolder…**, **Rename
+folder…**, **Move folder to…** and **Delete folder**; right-click an
+account's heading for **New folder…** at the top of the account. The
+change is made on the mail server (IMAP and Exchange Online accounts) or
+in Nail (POP3 and local accounts):
+
+- Renaming or moving keeps the folder's messages and settings; rules that
+  file mail into it follow the new name.
+- **Delete folder** moves the folder with its subfolders into the
+  account's Trash. Deleting a folder that is in Trash asks first and then
+  deletes it with all its messages, on the server too.
+- Inbox, Sent, Drafts, Trash and the other special folders cannot be
+  renamed, moved or deleted. Gmail accounts have labels instead (**New
+  label** in the same menu). Exchange accounts on your own server (EWS)
+  cannot change folders from Nail yet.
+
+The window stays open until the server has made the change. When the
+server cannot be reached, Nail says so and makes the change as soon as it
+can.
+
 ## Show source
 
 **Show source** (in **More**, a message's own **…** menu, the right-click

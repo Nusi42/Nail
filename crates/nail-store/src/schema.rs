@@ -384,6 +384,8 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(crate::thread::activity::MAINTENANCE_SQL),
     // Schema v19 (ADRs 0190 / 0191): stored sync errors and skipped messages.
     Migration::sql(crate::sync_errors::V19),
+    // Schema v20 (ADR 0196): queued folder changes, the IMAP delimiter.
+    Migration::sql(crate::folder_ops::V20),
 ];
 
 /// The schema version this build creates and understands.
@@ -546,6 +548,7 @@ mod tests {
                 "exchange_rules",
                 "exchange_sync",
                 "folder_marks",
+                "folder_ops",
                 "folders",
                 "gmail_label_ops",
                 "gmail_labels",

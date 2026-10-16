@@ -109,6 +109,19 @@ pub fn required_access(request: &Request) -> RequestAccess {
             }),
         ),
 
+        // --- Folder management (ADR 0196) ---
+        Request::CreateFolder { .. } => ("CreateFolder", Scope(S::Organize)),
+        Request::RenameFolder { .. } => ("RenameFolder", Scope(S::Organize)),
+        Request::MoveFolder { .. } => ("MoveFolder", Scope(S::Organize)),
+        Request::DeleteFolder { permanent, .. } => (
+            "DeleteFolder",
+            Scope(if *permanent {
+                S::PermanentDelete
+            } else {
+                S::Organize
+            }),
+        ),
+
         // --- Mail actions on conversations (P3) ---
         Request::ApplyMailAction { action, .. } => (
             "ApplyMailAction",

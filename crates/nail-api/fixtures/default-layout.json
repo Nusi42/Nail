@@ -1425,6 +1425,30 @@
       "alias_of": null,
       "args": []
     },
+    "folder.new": {
+      "label": "@folders.action.new",
+      "icon": "folder-plus",
+      "alias_of": null,
+      "args": []
+    },
+    "folder.rename": {
+      "label": "@folders.action.rename",
+      "icon": "pencil",
+      "alias_of": null,
+      "args": []
+    },
+    "folder.move": {
+      "label": "@folders.action.move",
+      "icon": "folder-input",
+      "alias_of": null,
+      "args": []
+    },
+    "folder.delete": {
+      "label": "@folders.action.delete",
+      "icon": "trash",
+      "alias_of": null,
+      "args": []
+    },
     "source.message": {
       "label": "@source.action.message",
       "icon": "file-code",
@@ -2879,12 +2903,50 @@
         "args": [],
         "label": null,
         "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "folder.new",
+        "args": [],
+        "label": "@folders.action.new-subfolder",
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "folder.rename",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "folder.move",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "folder.delete",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ],
     "context:folder-tree.account": [
       {
         "type": "action",
         "action": "sync.now",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "folder.new",
         "args": [],
         "label": null,
         "icon": null

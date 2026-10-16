@@ -15,7 +15,8 @@ use nail_api::engine::{
     SyncDelta, WriteOutcome,
 };
 use nail_api::exchange::engine::{
-    ExchangeFolder, ExchangeFolderClass, ExchangeServerInfo, HierarchyDelta, HierarchyOutcome,
+    ExchangeFolder, ExchangeFolderClass, ExchangeServerInfo, FolderWrite, HierarchyDelta,
+    HierarchyOutcome,
 };
 use nail_api::exchange::{ExchangeMessageInfo, ExchangeWellKnownFolder, InferenceClassification};
 use nail_api::ops::FlagChange;
@@ -734,6 +735,57 @@ impl GraphEngine {
             )
             .await
             .map(drop)
+    }
+
+    /// Moves a mail folder (with its subfolders) below `parent` (`None` =
+    /// the top of the mailbox, `msgfolderroot`).
+    pub async fn move_folder(
+        &self,
+        mailbox: Option<&str>,
+        id: &str,
+        parent: Option<&str>,
+    ) -> Result<(), GraphError> {
+        self.client
+            .send_json(
+                Method::POST,
+                &format!(
+                    "{}/mailFolders/{}/move",
+                    mailbox_path(mailbox),
+                    path_segment(id)
+                ),
+                Some(&json!({ "destinationId": parent.unwrap_or("msgfolderroot") })),
+                &[],
+                false,
+                "POST mailFolders/move",
+            )
+            .await
+            .map(drop)
+    }
+
+    /// Creates, renames, moves or deletes a folder (ADR 0196); a create
+    /// answers the new folder's id.
+    pub async fn folder_write(
+        &self,
+        mailbox: Option<&str>,
+        write: &FolderWrite,
+    ) -> Result<Option<String>, GraphError> {
+        match write {
+            FolderWrite::Create { parent, name } => self
+                .create_folder(mailbox, parent.as_deref(), name)
+                .await
+                .map(Some),
+            FolderWrite::Rename { folder, name } => self
+                .rename_folder(mailbox, folder, name)
+                .await
+                .map(|()| None),
+            FolderWrite::Move { folder, parent } => self
+                .move_folder(mailbox, folder, parent.as_deref())
+                .await
+                .map(|()| None),
+            FolderWrite::Delete { folder } => {
+                self.delete_folder(mailbox, folder).await.map(|()| None)
+            }
+        }
     }
 
     /// Deletes a mail folder (a missing one is not an error).

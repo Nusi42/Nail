@@ -32,6 +32,19 @@ where
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// The ids (message, folder, …) the statement's first column holds.
+pub(crate) fn collect_ids<T: From<String>>(
+    stmt: &mut rusqlite::Statement<'_>,
+    params: impl rusqlite::Params,
+) -> crate::Result<Vec<T>> {
+    let rows = stmt.query_map(params, |r| r.get::<_, String>(0))?;
+    Ok(rows
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .map(T::from)
+        .collect())
+}
+
 /// The blob hashes the statement's first column holds.
 pub(crate) fn blob_hashes(
     stmt: &mut rusqlite::Statement<'_>,

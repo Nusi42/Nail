@@ -560,17 +560,32 @@ async fn mirror_folders(
         .call(move |s| {
             let paths: HashSet<&str> = remote.iter().map(|f| f.path.as_str()).collect();
             let existing = s.list_folders(&account)?;
-            let known: HashSet<String> = existing.iter().map(|f| f.path.clone()).collect();
+            // A folder keeps its id while its path stays, also after Nail
+            // renamed it (ADR 0196); a new path gets a free id.
+            let mut ids_by_path: HashMap<String, FolderId> = existing
+                .iter()
+                .map(|f| (f.path.clone(), f.id.clone()))
+                .collect();
             let mut changed = Vec::new();
+            for rf in &remote {
+                if !ids_by_path.contains_key(&rf.path) {
+                    let id = ids::unique_folder_id(s, &account, &rf.path)?;
+                    changed.push(id.clone());
+                    ids_by_path.insert(rf.path.clone(), id);
+                }
+            }
             let mut by_path = HashMap::new();
             for rf in &remote {
                 let parent_id = rf
                     .parent_path
                     .as_deref()
                     .filter(|p| paths.contains(p))
-                    .map(|p| ids::folder_id(&account, p));
+                    .and_then(|p| ids_by_path.get(p).cloned());
                 let folder = Folder {
-                    id: ids::folder_id(&account, &rf.path),
+                    id: ids_by_path
+                        .get(&rf.path)
+                        .cloned()
+                        .unwrap_or_else(|| ids::folder_id(&account, &rf.path)),
                     account_id: account.clone(),
                     parent_id,
                     name: rf.name.clone(),
@@ -580,9 +595,7 @@ async fn mirror_folders(
                     total: 0,
                 };
                 s.upsert_folder(&folder)?;
-                if !known.contains(&rf.path) {
-                    changed.push(folder.id.clone());
-                }
+                s.set_folder_delimiter(&folder.id, rf.delimiter.as_deref())?;
                 by_path.insert(rf.path.clone(), folder);
             }
             // Children before parents, so no parent is deleted under a
@@ -597,26 +610,34 @@ async fn mirror_folders(
                 if crate::junk::is_snoozed_folder(s, folder) && folder.total > 0 {
                     continue;
                 }
-                let hashes = s.folder_blob_hashes(&folder.id)?;
-                let gone: Vec<_> = s
-                    .folder_uids(&folder.id)?
-                    .into_iter()
-                    .map(|(_, id)| id)
-                    .collect();
-                if s.delete_folder(&folder.id)? {
+                if remove_local_folder(s, &blobs, &index, &folder.id)? {
                     changed.push(folder.id.clone());
                     removed += 1;
                 }
-                if let Err(err) = index.remove(&gone) {
-                    tracing::warn!(%err, "cannot remove messages from the search index");
-                }
-                // The raw mail of the deleted messages goes too.
-                s.remove_unreferenced_blobs(&blobs, &hashes)?;
             }
             Ok((by_path, changed, removed))
         })
         .await?;
     Ok(result)
+}
+
+/// Deletes a folder with its messages, their search-index entries and the
+/// raw mail no other message uses (blocking). Subfolders become top-level;
+/// delete them first. Returns whether the folder existed.
+pub(crate) fn remove_local_folder(
+    s: &Store,
+    blobs: &BlobStore,
+    index: &nail_search::SearchIndex,
+    folder: &FolderId,
+) -> nail_store::Result<bool> {
+    let hashes = s.folder_blob_hashes(folder)?;
+    let gone = s.folder_message_ids(folder)?;
+    let existed = s.delete_folder(folder)?;
+    if let Err(err) = index.remove(&gone) {
+        tracing::warn!(%err, "cannot remove messages from the search index");
+    }
+    s.remove_unreferenced_blobs(blobs, &hashes)?;
+    Ok(existed)
 }
 
 /// Fetches what is new in one folder (storing and checkpointing batch by

@@ -43,6 +43,39 @@ use crate::engine::{
 };
 use crate::scheduling::InvitationResponse;
 
+/// A folder change for [`ExchangeMailEngine::folder_write`] (ADR 0196).
+/// Folders are named by their remote ids; `None` as a parent is the top of
+/// the mailbox.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FolderWrite {
+    /// Create a folder.
+    Create {
+        /// The parent folder.
+        parent: Option<String>,
+        /// The display name.
+        name: String,
+    },
+    /// Rename a folder.
+    Rename {
+        /// The folder.
+        folder: String,
+        /// The new display name.
+        name: String,
+    },
+    /// Move a folder (with its subfolders).
+    Move {
+        /// The folder.
+        folder: String,
+        /// The new parent.
+        parent: Option<String>,
+    },
+    /// Delete a folder with its subfolders and messages.
+    Delete {
+        /// The folder.
+        folder: String,
+    },
+}
+
 /// What the server says about itself and the signed-in mailbox.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ExchangeServerInfo {
@@ -181,6 +214,22 @@ pub trait ExchangeMailEngine: Send + Sync + fmt::Debug {
         folders: &'a [String],
         timeout_secs: u32,
     ) -> BoxFuture<'a, Result<Option<Vec<String>>, EngineError>>;
+
+    /// Creates, renames, moves or deletes a folder (ADR 0196); a create
+    /// answers the new folder's remote id. Default: `unsupported` (EWS).
+    fn folder_write<'a>(
+        &'a self,
+        mailbox: Option<&'a str>,
+        write: &'a FolderWrite,
+    ) -> BoxFuture<'a, Result<Option<String>, EngineError>> {
+        let _ = (mailbox, write);
+        Box::pin(async {
+            Err(EngineError::permanent(
+                crate::ErrorCode::Unsupported,
+                "this Exchange engine cannot change folders",
+            ))
+        })
+    }
 
     /// Only the header section of a message (folder sync policies "headers
     /// only" / "recent N days", M4c). Default: the whole MIME, cut after the

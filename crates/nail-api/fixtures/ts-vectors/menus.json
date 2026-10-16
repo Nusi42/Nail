@@ -2786,6 +2786,41 @@
             "label": "@exchange.action.new-category",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new-subfolder",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.rename",
+            "args": [],
+            "icon": "pencil",
+            "label": "@folders.action.rename",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@folders.action.move",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@folders.action.delete",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:folder-tree.folder"
@@ -2837,6 +2872,41 @@
             "args": [],
             "icon": "plus",
             "label": "@exchange.action.new-category",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new-subfolder",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.rename",
+            "args": [],
+            "icon": "pencil",
+            "label": "@folders.action.rename",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@folders.action.move",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@folders.action.delete",
             "shortcut": null,
             "type": "action"
           }
@@ -2892,6 +2962,41 @@
             "label": "@exchange.action.new-category",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new-subfolder",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.rename",
+            "args": [],
+            "icon": "pencil",
+            "label": "@folders.action.rename",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@folders.action.move",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@folders.action.delete",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:folder-tree.folder"
@@ -2945,6 +3050,41 @@
             "label": "@exchange.action.new-category",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new-subfolder",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.rename",
+            "args": [],
+            "icon": "pencil",
+            "label": "@folders.action.rename",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@folders.action.move",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@folders.action.delete",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:folder-tree.folder"
@@ -2996,6 +3136,41 @@
             "args": [],
             "icon": "plus",
             "label": "@exchange.action.new-category",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new-subfolder",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.rename",
+            "args": [],
+            "icon": "pencil",
+            "label": "@folders.action.rename",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.move",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@folders.action.move",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "folder.delete",
+            "args": [],
+            "icon": "trash",
+            "label": "@folders.action.delete",
             "shortcut": null,
             "type": "action"
           }
@@ -3021,6 +3196,14 @@
             "type": "action"
           },
           {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "action": "exchange.automatic-replies",
             "args": [],
             "icon": "plane",
@@ -3076,6 +3259,14 @@
             "icon": "refresh-cw",
             "label": "@sync.action.now",
             "shortcut": "ctrl+r",
+            "type": "action"
+          },
+          {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new",
+            "shortcut": null,
             "type": "action"
           },
           {
@@ -3137,6 +3328,14 @@
             "type": "action"
           },
           {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "action": "exchange.automatic-replies",
             "args": [],
             "icon": "plane",
@@ -3195,6 +3394,14 @@
             "type": "action"
           },
           {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "action": "exchange.automatic-replies",
             "args": [],
             "icon": "plane",
@@ -3250,6 +3457,14 @@
             "icon": "refresh-cw",
             "label": "@sync.action.now",
             "shortcut": "ctrl+r",
+            "type": "action"
+          },
+          {
+            "action": "folder.new",
+            "args": [],
+            "icon": "folder-plus",
+            "label": "@folders.action.new",
+            "shortcut": null,
             "type": "action"
           },
           {

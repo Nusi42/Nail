@@ -1873,3 +1873,88 @@ async fn an_ews_undo_queued_before_the_move_replayed_uses_the_new_item_id() {
         "and locally"
     );
 }
+
+/// ADR 0196: folders of a Graph account are created, renamed, moved and
+/// deleted on the server; ids stay (they come from the server's ids).
+#[tokio::test]
+async fn graph_folders_are_created_renamed_moved_and_deleted() {
+    let env = setup(false, "").await;
+    graph_synced(&env.service).await;
+    let path_of = |name: &str| {
+        env.graph
+            .with_mailbox(None, |m, _| m.folders.values().any(|f| f.name == name))
+    };
+    ok(
+        &env.service,
+        Request::CreateFolder {
+            account_id: AccountId::new(GRAPH),
+            parent_id: None,
+            name: "Clients".into(),
+        },
+    )
+    .await;
+    eventually("the new folder", || async {
+        folder_at(&env.service, GRAPH, "Clients").await.is_some()
+    })
+    .await;
+    assert!(path_of("Clients"));
+    let clients = folder_at(&env.service, GRAPH, "Clients").await.unwrap();
+    ok(
+        &env.service,
+        Request::RenameFolder {
+            folder_id: clients.id.clone(),
+            name: "Customers".into(),
+        },
+    )
+    .await;
+    eventually("renamed", || async {
+        folder_at(&env.service, GRAPH, "Customers")
+            .await
+            .is_some_and(|f| f.id == clients.id)
+    })
+    .await;
+    let inbox = folder_at(&env.service, GRAPH, "Inbox").await.unwrap();
+    ok(
+        &env.service,
+        Request::MoveFolder {
+            folder_id: clients.id.clone(),
+            parent_id: Some(inbox.id.clone()),
+        },
+    )
+    .await;
+    eventually("moved below the inbox", || async {
+        folder_at(&env.service, GRAPH, "Inbox/Customers")
+            .await
+            .is_some_and(|f| f.id == clients.id)
+    })
+    .await;
+    ok(
+        &env.service,
+        Request::DeleteFolder {
+            folder_id: clients.id.clone(),
+            permanent: true,
+        },
+    )
+    .await;
+    eventually("deleted", || async {
+        !folders(&env.service, GRAPH)
+            .await
+            .iter()
+            .any(|f| f.id == clients.id)
+    })
+    .await;
+    assert!(!path_of("Customers"));
+    // Well-known folders stay as they are.
+    let refused = env
+        .service
+        .handle(Request::RenameFolder {
+            folder_id: inbox.id.clone(),
+            name: "Post".into(),
+        })
+        .await;
+    assert!(
+        matches!(&refused, Response::Error { localized: Some(l), .. }
+            if l.id == "folder-issue-system-folder"),
+        "{refused:?}"
+    );
+}

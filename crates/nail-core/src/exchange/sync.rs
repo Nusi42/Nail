@@ -1884,6 +1884,125 @@ fn grouped(
 const EXCHANGE_GROUP: usize = 200;
 
 impl ExchangeExecutor<'_> {
+    /// The mailbox and remote id of a local folder; a mailbox root
+    /// (`@<address>`, no remote folder) answers `None` as the id.
+    async fn remote_folder(
+        &self,
+        folder: &Folder,
+    ) -> Result<(Option<String>, Option<String>), EngineError> {
+        let id = folder.id.clone();
+        let record = self
+            .service
+            .store()
+            .call(move |s| s.exchange_folder(&id))
+            .await
+            .map_err(|e| EngineError::from(CoreError::from(e)))?;
+        match record {
+            Some(r) => Ok((r.mailbox, Some(r.remote_id))),
+            None => match folder.path.strip_prefix('@') {
+                Some(address) if !address.contains('/') => Ok((Some(address.to_lowercase()), None)),
+                _ => Err(EngineError::permanent(
+                    ErrorCode::NotFound,
+                    format!("folder {} has no Exchange folder", folder.id),
+                )),
+            },
+        }
+    }
+
+    /// Creates, renames, moves or deletes a folder (ADR 0196), then reads
+    /// the mailbox's folder tree again.
+    async fn change_folder(
+        &self,
+        change: &crate::folders::FolderChange,
+    ) -> Result<crate::folders::FolderApplied, EngineError> {
+        use crate::folders::FolderChange;
+        use nail_api::exchange::engine::FolderWrite;
+        let (account, mailbox, writes) = match change {
+            FolderChange::Create {
+                account,
+                parent,
+                name,
+            } => {
+                let (mailbox, parent) = match parent {
+                    Some(p) => self.remote_folder(p).await?,
+                    None => (None, None),
+                };
+                let write = FolderWrite::Create {
+                    parent,
+                    name: name.clone(),
+                };
+                (account.clone(), mailbox, vec![write])
+            }
+            FolderChange::Update {
+                folder,
+                parent,
+                name,
+            } => {
+                let (mailbox, remote) = self.remote_folder(folder).await?;
+                let remote = remote.ok_or_else(|| {
+                    EngineError::permanent(
+                        ErrorCode::InvalidRequest,
+                        "a mailbox root cannot change",
+                    )
+                })?;
+                let mut writes = Vec::new();
+                if name != &folder.name {
+                    writes.push(FolderWrite::Rename {
+                        folder: remote.clone(),
+                        name: name.clone(),
+                    });
+                }
+                if parent.as_ref().map(|p| &p.id) != folder.parent_id.as_ref() {
+                    let (target_mailbox, target) = match parent {
+                        Some(p) => self.remote_folder(p).await?,
+                        None => (mailbox.clone(), None),
+                    };
+                    if target_mailbox != mailbox {
+                        return Err(EngineError::permanent(
+                            ErrorCode::InvalidRequest,
+                            "a folder cannot move into another mailbox",
+                        ));
+                    }
+                    writes.push(FolderWrite::Move {
+                        folder: remote,
+                        parent: target,
+                    });
+                }
+                (folder.account_id.clone(), mailbox, writes)
+            }
+            FolderChange::Delete { folder, .. } => {
+                let (mailbox, remote) = self.remote_folder(folder).await?;
+                let remote = remote.ok_or_else(|| {
+                    EngineError::permanent(
+                        ErrorCode::InvalidRequest,
+                        "a mailbox root cannot change",
+                    )
+                })?;
+                (
+                    folder.account_id.clone(),
+                    mailbox,
+                    vec![FolderWrite::Delete { folder: remote }],
+                )
+            }
+        };
+        for write in &writes {
+            self.engine.folder_write(mailbox.as_deref(), write).await?;
+        }
+        let config = self
+            .service
+            .account_config(&account)
+            .map_err(EngineError::from)?;
+        sync_hierarchy(
+            self.service,
+            &config,
+            self.engine.as_ref(),
+            mailbox.as_deref(),
+        )
+        .await
+        .map_err(EngineError::from)?;
+        Ok(crate::folders::FolderApplied::Synced)
+    }
+
     async fn remote_of(
         &self,
         message: &MessageId,
@@ -2312,6 +2431,13 @@ impl ExchangeExecutor<'_> {
 impl OpExecutor for ExchangeExecutor<'_> {
     fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
         Box::pin(self.run(op))
+    }
+
+    fn folder_change<'a>(
+        &'a self,
+        change: &'a crate::folders::FolderChange,
+    ) -> BoxFuture<'a, Result<crate::folders::FolderApplied, EngineError>> {
+        Box::pin(self.change_folder(change))
     }
 
     fn max_group(&self) -> usize {

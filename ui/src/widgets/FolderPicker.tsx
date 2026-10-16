@@ -8,7 +8,7 @@ import { moveToFolder } from "../features/mail-actions/move";
 import { useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { flattenFolders } from "./FolderTree";
-import { Icon } from "./Icon";
+import { FolderList } from "./FolderList";
 
 /** Name of the layout window that holds the move picker. */
 export const MOVE_WINDOW = "move";
@@ -90,26 +90,11 @@ export function FolderPicker({ node }: WidgetProps) {
           {t(errorMessageIdOf(folders.error))}
         </div>
       )}
-      <ul data-part="folder-picker.list" aria-label={t("common-folders")}>
-        {visible.map(({ folder, depth }) => (
-          <li key={folder.id} data-part="folder-picker.item" data-depth={depth}>
-            <button
-              type="button"
-              data-part="folder-picker.button"
-              data-role={folder.role}
-              data-folder={folder.id}
-              disabled={selectedId === null}
-              onClick={() => void move(folder)}
-            >
-              <Icon
-                name={folder.role === "other" ? "folder" : folder.role}
-                part="folder-picker.button.icon"
-              />
-              <span data-part="folder-picker.button.name">{folder.name}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <FolderList
+        rows={visible}
+        disabled={selectedId === null}
+        onPick={(folder) => void move(folder)}
+      />
       {folders.isSuccess && visible.length === 0 && (
         <div data-part="folder-picker.empty">{t("folder-picker-no-match")}</div>
       )}

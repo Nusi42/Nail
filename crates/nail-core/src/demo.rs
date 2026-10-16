@@ -1203,6 +1203,8 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
     ///   flags of the first message whose subject contains `subject`
     /// * `imap-messages {account?, mailbox?}` → `[{uid, subject, flags}]`
     /// * `imap-mailboxes {account?}` → `[{name, count}]`
+    /// * `imap-create-mailbox {account?, mailbox}` → `{created}`: as another
+    ///   mail program would (ADR 0196)
     /// * `imap-offline {account?, offline}`
     /// * `imap-deny {account?, mailboxes}`: `SELECT` / `EXAMINE` of these
     ///   mailboxes is refused with `NO [NOPERM]` (`[]` allows all again;
@@ -1305,6 +1307,13 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
                     .map(|m| json!({ "name": m.name, "count": m.messages.len() }))
                     .collect(),
             )),
+            "imap-create-mailbox" => {
+                let created = self
+                    .imap(account)?
+                    .store()
+                    .add_mailbox(mailbox, FolderRole::Other);
+                Ok(json!({ "created": created }))
+            }
             "imap-offline" => {
                 let offline = args
                     .get("offline")

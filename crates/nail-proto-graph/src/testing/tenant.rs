@@ -514,6 +514,34 @@ impl Mailbox {
         Ok(())
     }
 
+    /// Moves a folder (with its subfolders) below `parent` (an id or a
+    /// well-known name such as `msgfolderroot`).
+    pub fn move_folder(&mut self, id: &str, parent: &str) -> MockResult<()> {
+        let id = self.folder_id(id).ok_or_else(|| MockError::not_found(id))?;
+        let parent = self
+            .folder_id(parent)
+            .ok_or_else(|| MockError::not_found(parent))?;
+        let name = self
+            .folders
+            .get(&id)
+            .map(|f| f.name.clone())
+            .unwrap_or_default();
+        if self.folders.values().any(|f| {
+            f.id != id && f.parent.as_deref() == Some(&parent) && f.name.eq_ignore_ascii_case(&name)
+        }) {
+            return Err(MockError::new(
+                409,
+                "ErrorFolderExists",
+                "A folder with the specified name already exists.",
+            ));
+        }
+        if let Some(folder) = self.folders.get_mut(&id) {
+            folder.parent = Some(parent);
+        }
+        self.touch("folders", &id);
+        Ok(())
+    }
+
     /// Deletes a folder with its subfolders and messages.
     pub fn remove_folder(&mut self, id: &str) -> MockResult<()> {
         let id = self.folder_id(id).ok_or_else(|| MockError::not_found(id))?;

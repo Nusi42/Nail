@@ -340,6 +340,11 @@ layout "default" {
         action "print.event"      label="@print.action.event" icon="printer"
         action "print.agenda"     label="@print.action.agenda" icon="printer"
         action "print.save-pdf"   label="@print.action.save-pdf" icon="file-down"
+        // Folder management (ADR 0196).
+        action "folder.new"       label="@folders.action.new" icon="folder-plus"
+        action "folder.rename"    label="@folders.action.rename" icon="pencil"
+        action "folder.move"      label="@folders.action.move" icon="folder-input"
+        action "folder.delete"    label="@folders.action.delete" icon="trash"
         // "Show source" (ADR 0194).
         action "source.message"   label="@source.action.message" icon="file-code"
         action "import.open"      label="@portability.action.import" icon="import"
@@ -757,11 +762,17 @@ layout "default" {
         item "gmail.new-label"
         item "exchange.add-mailbox"
         item "exchange.new-category"
+        separator
+        item "folder.new" label="@folders.action.new-subfolder"
+        item "folder.rename"
+        item "folder.move"
+        item "folder.delete"
     }
 
     // An account's heading in the folder pane (M5b).
     menu "context:folder-tree.account" {
         item "sync.now"
+        item "folder.new"
         item "exchange.automatic-replies"
         item "exchange.add-mailbox"
         item "gmail.new-label"

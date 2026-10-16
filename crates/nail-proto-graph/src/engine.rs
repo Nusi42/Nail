@@ -240,6 +240,14 @@ nail_exchange::exchange_mail_engine!(
         Box::pin(async move { engine(self.server_info_graph().await) })
     }
 
+    fn folder_write<'a>(
+        &'a self,
+        mailbox: Option<&'a str>,
+        write: &'a nail_api::exchange::engine::FolderWrite,
+    ) -> BoxFuture<'a, Result<Option<String>, EngineError>> {
+        Box::pin(async move { engine(GraphEngine::folder_write(self, mailbox, write).await) })
+    }
+
     fn wait_for_changes<'a>(
         &'a self,
         _mailbox: Option<&'a str>,

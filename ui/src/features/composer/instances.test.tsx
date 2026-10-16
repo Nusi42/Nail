@@ -561,6 +561,7 @@ describe("window model", () => {
     "composer-discard",
     "exchange-mailbox-remove",
     "exchange-category-delete",
+    "folder-delete",
     "gmail-label-delete",
     "mail-delete-permanently",
     "theme-delete",

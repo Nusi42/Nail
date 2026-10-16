@@ -477,6 +477,16 @@ struct OpenRun {
 }
 
 impl Service {
+    /// Writes a changed rule back where it is (ADR 0196: folder paths
+    /// after a rename).
+    pub(crate) fn save_rule_in_place(&self, rule: Rule) -> Result<()> {
+        self.edit_rules(move |doc| {
+            doc.upsert_rule(rule, None)
+                .map(drop)
+                .map_err(|errors| rule_error(&errors))
+        })
+    }
+
     fn edit_rules<R>(&self, edit: impl FnOnce(&mut RulesDocument) -> Result<R>) -> Result<R> {
         let out = self.inner.rules.edit(edit)?;
         self.broadcast(Event::RulesChanged);

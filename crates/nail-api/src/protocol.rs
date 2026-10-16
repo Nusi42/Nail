@@ -2839,6 +2839,48 @@ pub enum Request {
         /// The attachment's index ([`crate::AttachmentInfo::index`]).
         index: u32,
     },
+    // --- Folder management (ADR 0196) ---
+    /// Create a folder below `parent_id` (`null` = at the top of the
+    /// account). Queued; answered with [`Response::Queued`]; refused with
+    /// `invalid_request` and a [`crate::folders::FolderIssue`] id.
+    CreateFolder {
+        /// The account.
+        account_id: AccountId,
+        /// The parent folder, `null` for the top level.
+        #[serde(default)]
+        parent_id: Option<FolderId>,
+        /// The display name.
+        name: String,
+    },
+    /// Rename a folder (its messages and subfolders stay). Queued; answered
+    /// with [`Response::Queued`].
+    RenameFolder {
+        /// The folder.
+        folder_id: FolderId,
+        /// The new display name.
+        name: String,
+    },
+    /// Move a folder (with its subfolders) below `parent_id` (`null` = to
+    /// the top of its account). Queued; answered with [`Response::Queued`].
+    MoveFolder {
+        /// The folder.
+        folder_id: FolderId,
+        /// The new parent, `null` for the top level.
+        #[serde(default)]
+        parent_id: Option<FolderId>,
+    },
+    /// Delete a folder with its subfolders: into the account's Trash, or
+    /// for good with every message when `permanent` (the UI confirms
+    /// first). Without a Trash, or for a folder in Trash, only `permanent`
+    /// is accepted ([`crate::folders::FolderIssue::NoTrash`]). Queued;
+    /// answered with [`Response::Queued`].
+    DeleteFolder {
+        /// The folder.
+        folder_id: FolderId,
+        /// Delete for good instead of moving into Trash.
+        #[serde(default)]
+        permanent: bool,
+    },
     /// The message's source for "Show source" (ADR 0194): as received and
     /// decoded. Answered with [`Response::MessageSource`]; `not_found` for
     /// an unknown message, `unavailable` while its body cannot be

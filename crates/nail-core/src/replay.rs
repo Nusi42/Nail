@@ -34,6 +34,7 @@ use nail_store::{
 };
 
 use crate::error::{CoreError, Result};
+use crate::folders::{FolderApplied, FolderChange, server_path};
 use crate::ids;
 use crate::service::Service;
 use crate::sync::{ImapSettings, connect};
@@ -47,6 +48,21 @@ pub(crate) trait OpExecutor: Send + Sync {
     /// (the default) executes every operation on its own.
     fn max_group(&self) -> usize {
         1
+    }
+
+    /// Changes a folder on the server (ADR 0196). Default: `unsupported`
+    /// (Gmail, whose folders are labels; nothing queues one there).
+    fn folder_change<'a>(
+        &'a self,
+        change: &'a FolderChange,
+    ) -> BoxFuture<'a, Result<FolderApplied, EngineError>> {
+        let _ = change;
+        Box::pin(async {
+            Err(EngineError::permanent(
+                ErrorCode::Unsupported,
+                "this account cannot change folders",
+            ))
+        })
     }
 
     /// Executes consecutive operations of one account with the same
@@ -163,6 +179,9 @@ pub(crate) async fn replay_account(
     account: &AccountId,
     executor: &dyn OpExecutor,
 ) -> Result<ReplayReport> {
+    // Folder changes first: a move may go into a folder created just now
+    // (ADR 0196).
+    crate::folders::replay_folder_ops(service, account, executor).await?;
     let replayer = EventReplayer {
         service,
         executor,
@@ -192,7 +211,7 @@ pub(crate) async fn replay_with_connection(
         let account = account.clone();
         service
             .store()
-            .call(move |s| Ok(s.accounts_with_pending_ops()?.contains(&account)))
+            .call(move |s| s.has_pending_writes(&account))
             .await
     };
     if !matches!(pending, Ok(true)) {
@@ -999,9 +1018,92 @@ impl ImapExecutor<'_> {
     }
 }
 
+impl ImapExecutor<'_> {
+    /// The hierarchy separator below `parent`: the stored one, else the
+    /// one the server lists.
+    async fn delimiter(
+        &self,
+        account: &AccountId,
+        parent: Option<&Folder>,
+    ) -> Result<Option<String>, EngineError> {
+        let stored = {
+            let (account, parent) = (account.clone(), parent.map(|p| p.id.clone()));
+            self.service
+                .store()
+                .call(move |s| s.folder_delimiter(&account, parent.as_ref()))
+                .await
+                .map_err(store_error)?
+        };
+        if stored.is_some() {
+            return Ok(stored);
+        }
+        let listed = self.client.lock().await.list_folders().await?;
+        Ok(listed.into_iter().find_map(|f| f.delimiter))
+    }
+
+    /// Creates, renames / moves or deletes a mailbox (ADR 0196).
+    async fn change_folder(&self, change: &FolderChange) -> Result<FolderApplied, EngineError> {
+        match change {
+            FolderChange::Create {
+                account,
+                parent,
+                name,
+            } => {
+                let delimiter = self.delimiter(account, parent.as_ref()).await?;
+                let path = server_path(true, parent.as_ref(), delimiter.as_deref(), name)?;
+                let mut client = self.client.lock().await;
+                client.create_folder(&path).await?;
+                // Other mail programs often list subscribed folders only.
+                if let Err(err) = client.set_subscribed(&path, true).await {
+                    tracing::debug!(%err, "cannot subscribe to a new folder");
+                }
+                Ok(FolderApplied::Path { path, delimiter })
+            }
+            FolderChange::Update {
+                folder,
+                parent,
+                name,
+            } => {
+                let delimiter = self.delimiter(&folder.account_id, Some(folder)).await?;
+                let path = server_path(true, parent.as_ref(), delimiter.as_deref(), name)?;
+                if path != folder.path {
+                    let mut client = self.client.lock().await;
+                    client.rename_folder(&folder.path, &path).await?;
+                    if let Err(err) = client.set_subscribed(&path, true).await {
+                        tracing::debug!(%err, "cannot subscribe to a renamed folder");
+                    }
+                }
+                Ok(FolderApplied::Path { path, delimiter })
+            }
+            FolderChange::Delete { folder, subfolders } => {
+                let mut client = self.client.lock().await;
+                for f in subfolders.iter().chain(std::iter::once(folder)) {
+                    match client.delete_folder(&f.path).await {
+                        Ok(()) => {}
+                        // Gone already (deleted elsewhere, or with its parent).
+                        Err(err) if err.code() == ErrorCode::NotFound => {}
+                        Err(err) => return Err(err.into()),
+                    }
+                    if let Err(err) = client.set_subscribed(&f.path, false).await {
+                        tracing::debug!(%err, "cannot unsubscribe from a deleted folder");
+                    }
+                }
+                Ok(FolderApplied::Deleted)
+            }
+        }
+    }
+}
+
 impl OpExecutor for ImapExecutor<'_> {
     fn max_group(&self) -> usize {
         IMAP_GROUP
+    }
+
+    fn folder_change<'a>(
+        &'a self,
+        change: &'a FolderChange,
+    ) -> BoxFuture<'a, Result<FolderApplied, EngineError>> {
+        Box::pin(self.change_folder(change))
     }
 
     fn execute_group<'a>(
@@ -1072,6 +1174,23 @@ pub(crate) struct LocalExecutor<'a> {
 }
 
 impl OpExecutor for LocalExecutor<'_> {
+    fn folder_change<'a>(
+        &'a self,
+        change: &'a FolderChange,
+    ) -> BoxFuture<'a, Result<FolderApplied, EngineError>> {
+        Box::pin(async move {
+            // Nothing on a server: the store follows at once.
+            match change {
+                FolderChange::Create { parent, name, .. }
+                | FolderChange::Update { parent, name, .. } => Ok(FolderApplied::Path {
+                    path: server_path(false, parent.as_ref(), None, name)?,
+                    delimiter: Some(crate::folders::LOCAL_DELIMITER.to_owned()),
+                }),
+                FolderChange::Delete { .. } => Ok(FolderApplied::Deleted),
+            }
+        })
+    }
+
     fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
         Box::pin(async move {
             match &op.operation {

@@ -39,6 +39,7 @@ mod editing;
 mod engine;
 mod error;
 mod exchange;
+mod folders;
 mod gmail;
 mod ids;
 mod imap_engine;

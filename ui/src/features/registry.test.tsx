@@ -68,6 +68,7 @@ describe("feature registry", () => {
       "mailActions",
       "connlog",
       "messageSource",
+      "folders",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);

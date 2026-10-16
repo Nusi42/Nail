@@ -193,12 +193,22 @@ fn resolve_id(
         store.set_message_uid(&moved, Some(uid))?;
         return Ok(moved);
     }
-    Ok(ids::message_id(
-        &folder.account_id,
-        &folder.path,
-        uid_validity,
-        uid,
-    ))
+    // Messages keep their ids when Nail renames their folder (ADR 0196),
+    // so a new folder at the old path could derive a taken id: then the
+    // first free variant.
+    let mut n = 0u32;
+    loop {
+        let id = if n == 0 {
+            ids::message_id(&folder.account_id, &folder.path, uid_validity, uid)
+        } else {
+            let path = format!("{}\u{1}{n}", folder.path);
+            ids::message_id(&folder.account_id, &path, uid_validity, uid)
+        };
+        if !store.message_exists(&id)? {
+            return Ok(id);
+        }
+        n = n.saturating_add(1);
+    }
 }
 
 /// Stores the raw bytes of `messages` in the blob store and merges their

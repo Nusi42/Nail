@@ -305,6 +305,31 @@ impl Service {
             // data).
             | Request::GetEditHistory { .. }
             | Request::GetThemeDetails { .. } => Ok(()),
+            // ADR 0196: folders of granted accounts only.
+            Request::CreateFolder {
+                account_id,
+                parent_id,
+                ..
+            } => {
+                check_account(access, account_id)?;
+                match parent_id {
+                    Some(parent) => self.check_folder(access, parent).await,
+                    None => Ok(()),
+                }
+            }
+            Request::RenameFolder { folder_id, .. } | Request::DeleteFolder { folder_id, .. } => {
+                self.check_folder(access, folder_id).await
+            }
+            Request::MoveFolder {
+                folder_id,
+                parent_id,
+            } => {
+                self.check_folder(access, folder_id).await?;
+                match parent_id {
+                    Some(parent) => self.check_folder(access, parent).await,
+                    None => Ok(()),
+                }
+            }
             // M5a WP155, ADR 0194: the attachment's or source's message must be
             // readable.
             Request::GetMessageAttachment { message_id, .. }

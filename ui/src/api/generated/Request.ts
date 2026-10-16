@@ -2245,7 +2245,43 @@ message_id: MessageId,
 /**
  * The attachment's index ([`crate::AttachmentInfo::index`]).
  */
-index: number, } | { "type": "GetMessageSource", 
+index: number, } | { "type": "CreateFolder", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * The parent folder, `null` for the top level.
+ */
+parent_id: FolderId | null, 
+/**
+ * The display name.
+ */
+name: string, } | { "type": "RenameFolder", 
+/**
+ * The folder.
+ */
+folder_id: FolderId, 
+/**
+ * The new display name.
+ */
+name: string, } | { "type": "MoveFolder", 
+/**
+ * The folder.
+ */
+folder_id: FolderId, 
+/**
+ * The new parent, `null` for the top level.
+ */
+parent_id: FolderId | null, } | { "type": "DeleteFolder", 
+/**
+ * The folder.
+ */
+folder_id: FolderId, 
+/**
+ * Delete for good instead of moving into Trash.
+ */
+permanent: boolean, } | { "type": "GetMessageSource", 
 /**
  * The message.
  */

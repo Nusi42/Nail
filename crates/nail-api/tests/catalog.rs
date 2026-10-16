@@ -378,6 +378,8 @@ fn contract_message_ids_exist_in_english() {
         nail_api::mail_actions::MailActionKind,
         nail_api::mail_actions::MailActionIssue,
     );
+    // ADR 0196: folder management (core-folders.ftl).
+    labels!(nail_api::folders::FolderIssue);
     // ADR 0190: the connection log and error details (core-connlog.ftl).
     labels!(
         nail_api::connlog::WireProtocol,

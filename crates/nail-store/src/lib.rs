@@ -101,6 +101,7 @@ mod error;
 pub mod exchange;
 pub mod exchange_sync;
 mod filter;
+mod folder_ops;
 pub mod gmail;
 pub mod lock;
 mod mail;
@@ -140,6 +141,7 @@ pub use crypto::{
 pub use dbfile::{DatabaseKey, FileEncryption, file_encryption};
 pub use error::{Error, Result};
 pub use filter::{MessageFilter, SizeCmp};
+pub use folder_ops::{FolderOp, FolderOpOutcome, QueuedFolderOp, folder_op_id};
 pub use lock::{DataDirLock, LOCK_FILE, LockError, LockHolder};
 pub use mail::{
     FolderCounts, FolderSyncState, MergeReport, MessageMeta, MessagePage, StoredMessage,

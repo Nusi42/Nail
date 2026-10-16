@@ -26,6 +26,7 @@ import * as launch from "./launch";
 import * as layoutEditor from "./layout-editor";
 import * as mailActions from "./mail-actions";
 import * as mcp from "./mcp";
+import * as folders from "./folders";
 import * as menus from "./menus";
 import * as messageSource from "./message-source";
 import * as palette from "./palette";
@@ -94,6 +95,8 @@ export const features: Readonly<Record<string, Feature>> = {
   connlog,
   // ADR 0194: "Show source".
   messageSource,
+  // ADR 0196: folder management.
+  folders,
 };
 
 /** The merged registries. */

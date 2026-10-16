@@ -490,6 +490,12 @@ fn mailbox_route(
             let id = mailbox.folder_id(folder).unwrap_or_default();
             Ok(Reply::ok(&mailbox.folder_json(&mailbox.folders[&id])))
         }
+        ("POST", ["mailFolders", folder, "move"]) => {
+            let body = req.json()?;
+            mailbox.move_folder(folder, body["destinationId"].as_str().unwrap_or_default())?;
+            let id = mailbox.folder_id(folder).unwrap_or_default();
+            Ok(Reply::ok(&mailbox.folder_json(&mailbox.folders[&id])))
+        }
         ("DELETE", ["mailFolders", folder]) => {
             mailbox.remove_folder(folder)?;
             Ok(Reply::empty(204))
