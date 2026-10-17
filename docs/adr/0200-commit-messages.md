@@ -7,8 +7,8 @@ Status: accepted (2026-10-17)
 Before the repository goes public the maintainer reviewed its history: most
 commit messages ended with a `Claude-Session:` line, several documents
 linked to private claude.ai pages, and the subjects were written in the
-project's internal vocabulary: work-folder logistics ("Merge q2-ui (work-4)
-into work-1"), process terms (waves, work packages, milestone codes such as
+project's internal vocabulary: work-folder logistics (merges of numbered
+work branches into the lead's branch), process terms (waves, work packages, milestone codes such as
 M1a or Q2), "Memory:" commits, and the acronyms SSOT / ODR / DRY. To a
 reader of a public repository this reads as noise, and the session lines
 and links point to private pages.

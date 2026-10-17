@@ -23,8 +23,8 @@ into their own OneDrive could not run an npm script or commit.
   the refusing rustc wrapper. Without that setting, a clone is a work folder
   and nothing is refused. `assertWorkFolder`, the post-edit hook and
   `work-folders.mjs create` use the role; `isInOneDrive` is gone.
-- **Names are settings.** `NAIL_WORK_FOLDER_PREFIX` (default `nail.win`) and
-  `NAIL_WORK_BRANCH_PREFIX` (default `WIN`) name the work folders and their
+- **Names are settings.** `NAIL_WORK_FOLDER_PREFIX` (default `nail-work-`) and
+  `NAIL_WORK_BRANCH_PREFIX` (default `work-`) name the work folders and their
   branches; `create` reads them from the master's settings.
 - **The `nail-wave` workflow takes its places as arguments:** `master`,
   `masterSh`, `workRoot`, `workRootSh`, `trailer` (required), and

@@ -39,8 +39,8 @@ Settings come from the environment or from a checkout's gitignored
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `NAIL_CHECKOUT_ROLE` | (none) | `master` marks the master checkout |
-| `NAIL_WORK_FOLDER_PREFIX` | `nail.win` | work folder `n` is `<prefix><n>`, next to the folder that creates it |
-| `NAIL_WORK_BRANCH_PREFIX` | `WIN` | its branch is `<prefix><n>` |
+| `NAIL_WORK_FOLDER_PREFIX` | `nail-work-` | work folder `n` is `<prefix><n>`, next to the folder that creates it |
+| `NAIL_WORK_BRANCH_PREFIX` | `work-` | its branch is `<prefix><n>` |
 
 ```sh
 node scripts/work-folders.mjs guard-master    # once, from a work folder: mark origin as the master, Cargo refuses there

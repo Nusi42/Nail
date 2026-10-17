@@ -23,7 +23,7 @@ const A = args
 // args name it (the Workflow runtime has no Node APIs to read .env.local).
 //   master / masterSh: the master in prose (Windows) and Git Bash form
 //   workRoot / workRootSh: the folder that holds the work folders
-//   folderPrefix / branchPrefix: default nail.win / WIN (as scripts/lib/work-folder.mjs)
+//   folderPrefix / branchPrefix: default nail-work- / work- (as scripts/lib/work-folder.mjs)
 //   trailer: the Co-Authored-By line (never a session line, ADR 0200)
 for (const key of ['master', 'masterSh', 'workRoot', 'workRootSh', 'trailer']) {
   if (!A[key]) throw new Error(`nail-wave: args.${key} is required (see the comment above)`)
@@ -31,12 +31,12 @@ for (const key of ['master', 'masterSh', 'workRoot', 'workRootSh', 'trailer']) {
 const MASTER = A.master
 const MASTER_SH = A.masterSh
 const LEAD = A.lead || 1
-const FOLDER_PREFIX = A.folderPrefix || 'nail.win'
+const FOLDER_PREFIX = A.folderPrefix || 'nail-work-'
 const folder = n => `${A.workRoot}\\${FOLDER_PREFIX}${n}`
 const folderSh = n => `${A.workRootSh}/${FOLDER_PREFIX}${n}`
 const REPO = folder(LEAD)
 const REPO_SH = folderSh(LEAD)
-const branchOf = n => `${A.branchPrefix || 'WIN'}${n}`
+const branchOf = n => `${A.branchPrefix || 'work-'}${n}`
 const LEAD_BRANCH = branchOf(LEAD)
 const slotOf = (b, i) => b.folder || LEAD + 1 + i
 // The last step of every green lead stage that commits.

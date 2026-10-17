@@ -17,8 +17,12 @@ the development machine.
   (`scripts/readme-media.mjs` → `e2e/readme/playwright.readme.config.ts`)
   plays scripted scenes (`e2e/readme/media.readme.ts`) against a fresh
   `nail serve --seed demo-multi` per scene, with the visual harness's fixed
-  clock, and writes `docs/media/<scene>.gif` and stills (`hero.png`,
-  `hero-dark.png`, `calendar.png`). Only the demo personas and made-up
+  clock, and writes `docs/media/<scene>.gif` and the still `calendar.png`.
+  The hero (`hero.gif`) is the main window morphing through Frost, Sage,
+  Nocturne and Graphite: each theme holds about two seconds, then the next
+  one wipes in diagonally (`e2e/readme/lib/morph.ts`; a wipe changes only a
+  band per frame, so frame diffing keeps it small; High contrast stays in
+  the theme scene only). Only the demo personas and made-up
   domains appear (the phishing scene uses the made-up `ńovabank.ċom`).
   Not part of `npm run e2e`; the files are reviewed before they are
   committed. `NAIL_README_FRAMES=<dir>` also writes every frame as a PNG.
@@ -35,9 +39,9 @@ the development machine.
 - **An animated banner** (`docs/media/banner.svg`): a hammer drives the
   last nail into a coffin with an old envelope carved into it, in CSS
   animations, still under `prefers-reduced-motion`. No product logos.
-- **The README** uses HTML for the centred banner and the dark-mode hero
-  (`<picture>`), so it disables markdownlint's MD033 / MD041 in that file
-  only, with the reason in a comment.
+- **The README** uses HTML for the centred banner and the full-width
+  images, so it disables markdownlint's MD033 / MD041 in that file only,
+  with the reason in a comment.
 
 ## Consequences
 

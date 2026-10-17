@@ -43,7 +43,7 @@ integrator merges the branches into `work-1`.
 | `lead` | Work folder number of the lead stages (default 1) |
 | `master`, `masterSh` | The master checkout (prose / Git Bash form); required |
 | `workRoot`, `workRootSh` | The folder holding the work folders (prose / Git Bash form); required |
-| `folderPrefix`, `branchPrefix` | Work folder and branch names (default `nail.win`, `WIN`) |
+| `folderPrefix`, `branchPrefix` | Work folder and branch names (default `nail-work-`, `work-`) |
 | `trailer` | The `Co-Authored-By` line (never a session line, ADR 0200); required |
 | `integrate` | Task for the integration stage |
 | `reviews[]` | Review lenses (`key`, `lens`); one should always be quality or security |

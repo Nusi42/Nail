@@ -75,8 +75,8 @@ export function markedAsMaster(text) {
  */
 export function namingOf(settings = {}) {
   return {
-    folder: settings.NAIL_WORK_FOLDER_PREFIX ?? "nail.win",
-    branch: settings.NAIL_WORK_BRANCH_PREFIX ?? "WIN",
+    folder: settings.NAIL_WORK_FOLDER_PREFIX ?? "nail-work-",
+    branch: settings.NAIL_WORK_BRANCH_PREFIX ?? "work-",
   };
 }
 
