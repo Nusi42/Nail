@@ -296,6 +296,25 @@ the work commit, or `chore(notes): …`. The commit-msg hook checks it first
 (`node scripts/check-commit-msg.mjs <message file>`, rules in
 `scripts/lib/commit-message.mjs`), then the private-data guard.
 
+### Pull requests
+
+GitHub only squash-merges (no merge commits, no rebase merges) into a `main`
+with linear history; force pushes and deletion of `main` are blocked. The
+template (`.github/pull_request_template.md`) asks for a Conventional Commits
+title, tests and the acceptance of the contributor license agreement in
+`CONTRIBUTING.md`. There is no hosted CI (ADR 0201), so a pull request is
+verified locally before it is merged:
+
+```sh
+git fetch github pull/<n>/head:pr-<n>   # the pull request as a local branch
+git switch pr-<n>                       # then run the checks and the suites that cover it
+```
+
+Merge it on GitHub with "Squash and merge" (edit the message to a clean
+Conventional Commit if needed), or squash it locally into one commit whose
+message ends with `Closes #<n>`, and push. Check that the contributor
+accepted the agreement first.
+
 ### No private data in git
 
 None of the owner's private information may reach git (ADR 0192): addresses,

@@ -13,6 +13,9 @@ read and accept the contributor license agreement below.
 - Run the checks before you push: the pre-push hook runs `npm run check`;
   run the test suites that cover your change (see "Test" in the developer
   guide).
+- Pull requests are squash-merged: the pull request title becomes the commit
+  message, so write it as a Conventional Commit. The pull request template
+  lists what to check and asks you to accept the agreement below.
 
 ## Why there is an agreement
 
