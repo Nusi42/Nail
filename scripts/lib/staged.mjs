@@ -2,6 +2,8 @@
 // of wave Q2, ADR 0171): which fast checks run on which staged files. scripts/pre-commit.mjs runs them;
 // scripts/test/staged.test.mjs tests this module.
 
+import { NOTES } from "./notes.mjs";
+
 /**
  * @typedef {object} HookCheck
  * @property {string} id
@@ -80,6 +82,14 @@ export function hookChecks(files) {
       args: ["check", "--no-schema"],
       files: pick(TOML),
       install: "cargo install taplo-cli --locked",
+    },
+    {
+      // ADR 0200: no session data in the project notes.
+      id: "notes",
+      tool: "node",
+      args: ["scripts/check-notes.mjs"],
+      files: files.filter((f) => NOTES.test(f)),
+      install: "npm ci",
     },
     {
       id: "markdownlint",

@@ -1,6 +1,6 @@
 # ADR 0181: windows follow the app's size
 
-Status: accepted · 2026-10-08 · review finding (desktop test of 4290474); amends ADRs 0117, 0141
+Status: accepted · 2026-10-08 · maintainer finding (desktop test of 4290474); amends ADRs 0117, 0141
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR 0190: Connection log, error details and the application log — safe by default
 
-Status: accepted · 2026-10-08 · finding from real-account testing (a real IMAP account: "The folder INBOX could not be synchronized", no
+Status: accepted · 2026-10-08 · finding from real-account testing (an IMAP account: "The folder INBOX could not be synchronized", no
 log anywhere)
 
 ## Context

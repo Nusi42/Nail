@@ -1,6 +1,6 @@
 # ADR 0184: Nail's context menu or none — never the browser's
 
-Status: accepted · 2026-10-08 · review finding (desktop test of 4290474); amends ADR 0043
+Status: accepted · 2026-10-08 · maintainer finding (desktop test of 4290474); amends ADR 0043
 
 ## Context
 

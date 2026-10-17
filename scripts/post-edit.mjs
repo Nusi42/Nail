@@ -17,6 +17,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { parseJson } from "./lib/json.mjs";
+import { NOTES, hasSessionLine, withoutSessionLines } from "./lib/notes.mjs";
 import { isMain } from "./lib/program.mjs";
 import { isMaster } from "./lib/work-folder.mjs";
 
@@ -84,6 +85,12 @@ async function main() {
   const root = checkoutOf(file);
   const rel = root === undefined ? undefined : relativeTo(root, file);
   if (root === undefined || rel === undefined || isMaster(root)) return;
+  // Claude Code writes the session into every note it saves: take it out
+  // again at once (ADR 0200).
+  if (NOTES.test(rel)) {
+    const text = fs.readFileSync(file, "utf8");
+    if (hasSessionLine(text)) fs.writeFileSync(file, withoutSessionLines(text));
+  }
   // The work folder's own runner (its version may differ from this copy's).
   /** @type {unknown} */
   const loaded = await import(pathToFileURL(path.join(root, RUNNER)).href);

@@ -93,6 +93,14 @@ export function checkSteps(options = {}) {
       install: INSTALL.npm,
     },
     {
+      // ADR 0200: no session data in the project notes.
+      id: "notes",
+      title: "No session data in the project notes",
+      tool: "node",
+      args: ["scripts/check-notes.mjs"],
+      install: INSTALL.npm,
+    },
+    {
       id: "typos",
       title: "Spelling (typos)",
       tool: "typos",

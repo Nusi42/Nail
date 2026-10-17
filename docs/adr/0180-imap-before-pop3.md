@@ -1,6 +1,6 @@
 # ADR 0180: IMAP before POP3 in account setup
 
-Status: accepted · 2026-10-08 · review finding (desktop test of 4290474)
+Status: accepted · 2026-10-08 · maintainer finding (desktop test of 4290474)
 
 ## Context
 

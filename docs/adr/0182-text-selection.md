@@ -1,6 +1,6 @@
 # ADR 0182: only the user's data is selectable
 
-Status: accepted · 2026-10-08 · review finding (desktop test of 4290474)
+Status: accepted · 2026-10-08 · maintainer finding (desktop test of 4290474)
 
 ## Context
 
