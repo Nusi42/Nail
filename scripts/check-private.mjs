@@ -26,6 +26,7 @@ import {
   pushSections,
   scanText,
 } from "./lib/private-patterns.mjs";
+import { messageText } from "./lib/commit-message.mjs";
 import { STAGED_FILES_ARGS, parseStaged } from "./lib/staged.mjs";
 
 // The repository the hook or check runs in (its working directory).
@@ -88,13 +89,7 @@ switch (mode) {
   }
   case "--message": {
     if (modeArg === undefined) throw new Error("--message needs the message file");
-    const text = fs
-      .readFileSync(modeArg, "utf8")
-      .split(/^# -+ >8 -+$/m)[0]
-      ?.split("\n")
-      .map((line) => (line.startsWith("#") ? "" : line))
-      .join("\n");
-    check("commit message", text ?? "");
+    check("commit message", messageText(fs.readFileSync(modeArg, "utf8")));
     // The identity git records with this commit (user.name / user.email or
     // the GIT_AUTHOR_* / GIT_COMMITTER_* overrides), without the time stamp.
     for (const { who, variable } of [

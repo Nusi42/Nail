@@ -267,6 +267,21 @@ commit with TypeScript files, most of it type-aware ESLint starting up;
 0.2 s for Rust / Markdown / TOML only). It reads the
 working-tree copy of each staged file, so stage the whole file you fixed.
 
+### Commit messages
+
+Conventional Commits in plain English (ADR 0200): `<type>(<scope>): <subject>`
+with a type of feat, fix, perf, refactor, test, docs, build, ci, chore,
+style or revert, an imperative subject of at most 72 characters, and a body
+that says what changed and why; merges read `Merge <what it brought>`.
+Commits an agent wrote end with one `Co-Authored-By: Claude <model>
+<noreply@anthropic.com>` line. Never a `Claude-Session:` line or a claude.ai
+link, and none of the internal vocabulary (work-folder and branch names,
+waves / work packages, milestone codes, SSOT / ODR / DRY, "work in
+progress"): describe the change instead. Notes and memory updates go into
+the work commit, or `chore(notes): …`. The commit-msg hook checks it first
+(`node scripts/check-commit-msg.mjs <message file>`, rules in
+`scripts/lib/commit-message.mjs`), then the private-data guard.
+
 ### No private data in git
 
 None of the owner's private information may reach git (ADR 0192): addresses,

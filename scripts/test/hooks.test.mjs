@@ -37,6 +37,13 @@ test("the Git hooks run the private-data guard (ADR 0192)", () => {
   );
 });
 
+test("the commit-msg hook checks the message rules first (ADR 0200)", () => {
+  assert.match(
+    read(".githooks/commit-msg"),
+    /^node scripts\/check-commit-msg\.mjs "\$1" \|\| exit 1$/m,
+  );
+});
+
 test("the Claude Code post-edit hook runs scripts/post-edit.mjs of the session folder", () => {
   /** @typedef {{ type: string, command: string }} Hook */
   const settings = /** @type {{ hooks: { PostToolUse: { matcher: string, hooks: Hook[] }[] } }} */ (

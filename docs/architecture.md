@@ -1341,3 +1341,6 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (environment or gitignored `.env.local`, `scripts/lib/work-folder.mjs` `localSettings` / `isMaster`); work-folder
   names from `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`; `nail-wave` takes its folders as args; personal
   paths and remotes only in the untracked `CLAUDE.local.md`.
+- Commit messages (ADR 0200): Conventional Commits checked by the commit-msg hook (`scripts/check-commit-msg.mjs`, rules
+  in `scripts/lib/commit-message.mjs`, also used by `check-private.mjs` for the message text); no session lines,
+  claude.ai links or internal vocabulary.

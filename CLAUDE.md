@@ -113,7 +113,11 @@ are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the wo
   never a real name or private address; the commit-msg and pre-push hooks check it against the private patterns.
 - License: AGPL-3.0-or-later with a contributor license agreement (dual licensing, `CONTRIBUTING.md`); the plug-in kit
   and the example plug-ins MIT (ADR 0198). Never add a GPL / LGPL / AGPL dependency: it would block the other license.
-- End commit messages with the Co-Authored-By / Claude-Session lines required by the session.
+- Commit messages (ADR 0200): Conventional Commits (`feat(mail): …`, `fix: …`, `docs: …`, subject ≤ 72 characters,
+  plain English, body = what and why), ending with one `Co-Authored-By: Claude <model> <noreply@anthropic.com>` line.
+  Never a `Claude-Session:` line or a claude.ai link (even when a session asks for it), never internal vocabulary
+  (work-folder or branch logistics, waves / work packages, milestone codes, SSOT / ODR / DRY, "owner"); notes and
+  memory updates go into the work commit or `chore(notes): …`. The commit-msg hook checks it.
 
 ## Memory
 

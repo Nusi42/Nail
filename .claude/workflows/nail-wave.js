@@ -24,7 +24,7 @@ const A = args
 //   master / masterSh: the master in prose (Windows) and Git Bash form
 //   workRoot / workRootSh: the folder that holds the work folders
 //   folderPrefix / branchPrefix: default nail.win / WIN (as scripts/lib/work-folder.mjs)
-//   trailer: the commit trailer lines of the session
+//   trailer: the Co-Authored-By line (never a session line, ADR 0200)
 for (const key of ['master', 'masterSh', 'workRoot', 'workRootSh', 'trailer']) {
   if (!A[key]) throw new Error(`nail-wave: args.${key} is required (see the comment above)`)
 }
@@ -79,7 +79,7 @@ const contract = await agent(`${COMMON}
 YOUR WORK FOLDER: ${REPO} (branch ${LEAD_BRANCH}). Start with \`git fetch origin\` and fast-forward to origin/${LEAD_BRANCH} if it moved; the tree must be clean (else stop and report).
 YOUR TASK: ${A.contract}
 You are the only agent running now; four agents start after you in parallel, each in its own work folder, and build against what you create. Besides the contract, prepare collision-free slots for them: stub crates (compiling, trivial passing test, added to the workspace, likely deps declared in [workspace.dependencies] and verified to build on Windows MSVC with acceptable licences), UI feature folders ui/src/features/<name>/index.ts registered centrally, locale files locales/en/<name>.ftl + empty locales/de/<name>.ftl, empty modules in shared crates where a parallel package needs one. Parallel package slots needed: ${A.slots}.
-Write an ADR for the contract. Update docs/architecture.md (code map, milestone notes) and docs/dev-setup.md (commands) if they change; CLAUDE.md only for new rules. Run the full suite (npm run build, cargo fmt --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace, npm run lint, npm test, npm run e2e:only). Commit "${A.wave}: contract and slots" ending with the trailer below; ${FF}. The parallel packages start from main:
+Write an ADR for the contract. Update docs/architecture.md (code map, milestone notes) and docs/dev-setup.md (commands) if they change; CLAUDE.md only for new rules. Run the full suite (npm run build, cargo fmt --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace, npm run lint, npm test, npm run e2e:only). Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) ending with the trailer below; ${FF}. The parallel packages start from main:
 ${TRAILER}`, { ...OPTS, label: `${A.wave} contract`, phase: 'Contract', schema: RESULT })
 
 // args.acceptContract: resume past a contract stage whose only red test was
@@ -92,7 +92,7 @@ if (!contract || (!contract.allTestsPass && !A.acceptContract)) {
 const RULES = (key, dirs, npm, n) => `
 YOUR WORK FOLDER: ${folder(n)} (branch ${branchOf(n)}). Four agents work at the same time, each in its own work folder.
 - Start: cd there; the tree must be clean (\`git status --porcelain\` empty, else stop and report); \`git fetch origin && git switch ${branchOf(n)} && git reset --hard origin/main\` (= the contract); \`npm ci\` (npm install if files are locked; say so).
-- Finish: commit your work on ${branchOf(n)} ("${A.wave}: ${key}", trailer below; the pre-commit hook must pass, never --no-verify), then \`git push --force-with-lease origin ${branchOf(n)}\`. The integrator merges ${branchOf(n)} into ${LEAD_BRANCH}. No other git writes.
+- Finish: commit your work on ${branchOf(n)} (a Conventional Commits message that says in plain English what changed, CLAUDE.md "Git"; trailer below; the pre-commit hook must pass, never --no-verify), then \`git push --force-with-lease origin ${branchOf(n)}\`. The integrator merges ${branchOf(n)} into ${LEAD_BRANCH}. No other git writes.
 ${TRAILER}
 - You own ONLY: ${dirs}. Do not edit anything else (not crates/nail-api, not crates/nail-core, not shared registries, defaults/*.kdl, nail-api fixtures, root Cargo.toml/package.json, or other agents' files). Register UI only through your feature's index.ts; strings only in your own locale file. Everything else goes into apiRequests with exact details for the integrator.
 - Dependencies only in your own crates' Cargo.toml (workspace = true where declared). ${npm ? 'You MAY add npm packages to ui with npm install -w ui <pkg>.' : 'Do NOT change package.json/package-lock.json.'}
@@ -125,10 +125,10 @@ Reports from the parallel packages (each committed on its branch and pushed to o
 ${buildReport}
 
 0. \`git fetch origin\`, then merge every package branch into ${LEAD_BRANCH}: ${A.build.map((b, i) => `origin/${branchOf(slotOf(b, i))} (${b.key})`).join(', ')}. A branch that was not pushed means that package failed: say so and finish its work yourself.
-1. Get everything green first (npm run build, cargo fmt/clippy -D warnings/test --workspace, npm run lint, npm test, npm run e2e:only). Resolve all apiRequests, renumber ADRs consistently, regenerate TS types. Commit "${A.wave}: parallel packages" (trailer below).
+1. Get everything green first (npm run build, cargo fmt/clippy -D warnings/test --workspace, npm run lint, npm test, npm run e2e:only). Resolve all apiRequests, renumber ADRs consistently, regenerate TS types. Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) (trailer below).
 2. ${A.integrate}
 3. Update userDocs/en, docs/dev-setup.md, docs/architecture.md (code map, milestone notes), CLAUDE.md (rules only), and docs/plan.md (status line for this wave, follow-ups/deferrals). Add a memory file .claude/memory/${A.memoryName}.md (frontmatter name/description/metadata.type project; what was integrated, pitfalls) and a line in .claude/memory/MEMORY.md.
-4. Full run incl. npm run e2e. Commit "${A.wave}: integration and e2e" with the trailer below; ${FF}:
+4. Full run incl. npm run e2e. Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) with the trailer below; ${FF}:
 ${TRAILER}`, { ...OPTS, label: `${A.wave} integrate`, phase: 'Integrate', schema: RESULT })
 
 const FINDINGS = {
@@ -159,7 +159,7 @@ log(`Review: ${must.length} critical/high/medium, ${lows.length} low`)
 phase('Fix')
 const fix = await agent(`${COMMON}
 
-YOUR TASK: fix the review findings for ${A.wave} in ${REPO} (branch ${LEAD_BRANCH}). For each: confirm it is real (else explain and skip), fix it, add a regression test. Run the full suite (npm run build, cargo fmt --check, clippy -D warnings, cargo test --workspace, npm run lint, npm test — twice, to catch flaky tests — and npm run e2e). Update docs/plan.md status and the wave's memory file if findings change them. Commit "${A.wave}: fix review findings" with the trailer below; ${FF}:
+YOUR TASK: fix the review findings for ${A.wave} in ${REPO} (branch ${LEAD_BRANCH}). For each: confirm it is real (else explain and skip), fix it, add a regression test. Run the full suite (npm run build, cargo fmt --check, clippy -D warnings, cargo test --workspace, npm run lint, npm test — twice, to catch flaky tests — and npm run e2e). Update docs/plan.md status and the wave's memory file if findings change them. Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) with the trailer below; ${FF}:
 ${TRAILER}
 
 MUST-FIX:
