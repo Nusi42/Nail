@@ -1,5 +1,5 @@
 {
-  "$comment": "Performance budgets of the 100k-message benchmark (plan M4c WP123, ADR 0094). Read by crates/nail-bench (Rust metrics) and the Playwright perf scenarios in e2e/perf/ (UI metrics). ci-tolerance multiplies every max in the CI job (nail-bench --tolerant / NAIL_PERF_TOLERANT=1). Tighten, never loosen without an ADR.",
+  "$comment": "Performance budgets of the 100k-message benchmark (plan M4c WP123, ADR 0094). Read by crates/nail-bench (Rust metrics) and the Playwright perf scenarios in e2e/perf/ (UI metrics). ci-tolerance multiplies every max in a tolerant run (nail-bench --tolerant / NAIL_PERF_TOLERANT=1). Tighten, never loosen without an ADR.",
   "corpus": "standard",
   "ci-tolerance": 1.5,
   "budgets": [

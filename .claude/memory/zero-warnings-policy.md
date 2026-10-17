@@ -10,10 +10,10 @@ Requirement: linters and formatters for the code, 0 warnings and 0 errors, witho
 **Why:** the codebase should be clean and strict, not quiet because warnings are suppressed.
 **How to apply:**
 
-- Every file kind gets a formatter/linter: Rust (rustfmt, clippy incl. curated pedantic), TS (ESLint type-aware strict + Prettier everywhere incl. e2e/packages/scripts), TOML, Markdown, CI YAML, spelling.
+- Every file kind gets a formatter/linter: Rust (rustfmt, clippy incl. curated pedantic), TS (ESLint type-aware strict + Prettier everywhere incl. e2e/packages/scripts), TOML, Markdown, spelling.
 - Fix warnings instead of suppressing them.
 - An unavoidable exception uses `#[expect(lint, reason = "…")]` (Rust) or an `eslint-disable-next-line rule -- reason` comment, never a blanket allow.
 - Never relax a lint level or `-D warnings` to get green.
-- `npm run check` runs every formatter and linter (dev-setup 'Linters and formatters'); CI `quality` blocks.
+- `npm run check` runs every formatter and linter (dev-setup 'Linters and formatters'); the pre-push hook blocks.
 
 Related: [[ssot-odr-dry]]

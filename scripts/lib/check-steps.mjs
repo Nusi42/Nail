@@ -34,7 +34,7 @@ export const INSTALL = {
  *
  * @param {{ ci?: boolean, advisories?: boolean, jobs?: string }} [options]
  *   `advisories`: also run `cargo deny check advisories` (needs the RustSec
- *   database from the network; on by default in CI).
+ *   database from the network; on by default when the environment sets CI).
  * @returns {Step[]}
  */
 export function checkSteps(options = {}) {
@@ -85,7 +85,7 @@ export function checkSteps(options = {}) {
     },
     {
       // ADR 0192: patterns from %USERPROFILE%/.nail-private/patterns.txt
-      // (outside the repository); passes when the file is absent (CI).
+      // (outside the repository); passes when the file is absent (other machines).
       id: "private",
       title: "No private data (the owner's patterns, every tracked file)",
       tool: "node",
@@ -113,13 +113,6 @@ export function checkSteps(options = {}) {
       tool: "node",
       args: ["<bin:markdownlint-cli2>", "**/*.md"],
       install: INSTALL.npm,
-    },
-    {
-      id: "actionlint",
-      title: "GitHub workflows (actionlint)",
-      tool: "actionlint",
-      args: [],
-      install: INSTALL.python,
     },
     {
       id: "eslint",
@@ -168,7 +161,7 @@ export function checkSteps(options = {}) {
       id: "deny",
       title: advisories
         ? "cargo deny (licences, bans, sources, advisories)"
-        : "cargo deny (licences, bans, sources; advisories need --advisories / CI)",
+        : "cargo deny (licences, bans, sources; advisories need --advisories or CI=1)",
       tool: "cargo-deny",
       args: advisories
         ? ["--locked", "check"]
@@ -248,7 +241,7 @@ export function resolveArgs(args, env) {
 }
 
 /**
- * Directories pip installs console scripts into (typos, actionlint), which
+ * Directories pip installs console scripts into (typos), which
  * are often not on PATH on Windows.
  *
  * @returns {string[]}

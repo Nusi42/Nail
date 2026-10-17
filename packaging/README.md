@@ -21,7 +21,7 @@ The tools are in `scripts/` (tests in `scripts/test/`):
 | `update-server.mjs` | a loopback (127.0.0.1) static server for manifests and installers (smoke tests) |
 | `update-check.mjs` | what the app's updater does with a manifest: pick, download, verify |
 | `updater-key.mjs` | create / check the development update key |
-| `import-signing-cert.ps1`, `verify-signatures.ps1` | CI: Authenticode certificate from secrets, signature check |
+| `import-signing-cert.ps1`, `verify-signatures.ps1` | import a `.pfx` code-signing certificate (prints its thumbprint for `NAIL_SIGN_THUMBPRINT`), signature check |
 
 ## Update channels and manifests
 

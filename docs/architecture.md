@@ -820,8 +820,8 @@ Quality tooling (Q1, ADR 0123): eslint.config.base.js (shared flat config: types
                        stylisticTypeChecked, type-aware; react() = React / Hooks / jsx-a11y / Nail UI rules),
                        eslint.config.js (all but ui/), ui/eslint.config.js, tsconfig.json (root: types for the loose
                        Node scripts + prelude.js), clippy.toml, [workspace.lints] in Cargo.toml, taplo.toml,
-                       .markdownlint-cli2.jsonc, typos.toml, .editorconfig, requirements-dev.txt (typos,
-                       actionlint), .githooks/
+                       .markdownlint-cli2.jsonc, typos.toml, .editorconfig, requirements-dev.txt (typos),
+                       .githooks/
 ```
 
 ## Notes by milestone
@@ -1066,7 +1066,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   shell test variables: `NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` + `NAIL_UPDATE_PUBKEY` (loopback only),
   `NAIL_MAPI_PIPE`, `NAIL_TEST_BACKGROUND_WINDOWS` (docs/dev-setup.md) — honoured only by builds with the
   `test-overrides` features (`npm run build:desktop`), never by installer builds. The real MSI install runs only in
-  CI (`msi-smoke.ps1`, elevated).
+  `msi-smoke.ps1` (elevated, part of the full local verification run).
 - M4b review (ADR 0093): no machine-wide registration may name a user-writable file (the NSIS MAPI option copies
   the DLLs to `%ProgramFiles%\Nail MAPI` in one elevated `cmd.exe` and registers the copy); nothing elevated reads
   from `%TEMP%`; secrets go to the one step that needs them (the update key reaches only `tauri bundle`);
@@ -1166,7 +1166,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 ### Q1
 
 - Q1 integration (ADR 0129; packages ADRs 0124 q-rust-a, 0125 q-rust-b, 0126 q-rust-c, 0127 q-ts-rest, 0128 q-ts-ui):
-  `npm run check` is green with 0 warnings and blocks in CI (`quality`); `nail serve` without remote login answers
+  `npm run check` is green with 0 warnings and blocks in the pre-push hook; `nail serve` without remote login answers
   `POST /api/auth` with `204` (`nail_api::remote::NO_LOGIN_STATUS`); `SearchIndex::open_with` / `PimIndex::open_with`
   borrow the wrapper; the Vite build splits the initial code into `vendor`, `vendor-ui`, `catalogs`, `default-theme`
   and size-capped `app` chunks with `strictExecutionOrder` (the mock core loads only with `?mock=1`); rolldown's load-dependent plug-in timing
@@ -1281,7 +1281,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   Packages: WP-rust-core, WP-rust-engines (+ clones shared by core and engine crates), WP-ui, WP-mirrors-tooling (every
   Rust ↔ TS mirror, packages / examples / e2e / scripts); `scripts/lib/duplicates/owners.mjs` assigns each finding.
 - Q2 integration (ADR 0176; packages ADRs 0172 rust-core, 0173 rust-engines, 0174 UI, 0175 mirrors / tooling): 2,076
-  findings → 0, the baselines are deleted and the check blocks (`npm run check` `--strict`, hooks `--files`, CI through
+  findings → 0, the baselines are deleted and the check blocks (`npm run check` `--strict`, hooks `--files`, the pre-push hook through
   `npm run check`). Catalog tests use `nail_config::l10n::assert_message_ids_in_catalog`; nail-itip / nail-pgp render
   `itip.ftl` / `core-crypto.ftl` alone, so those keep their shared texts as definitions and `common.ftl` refers to them;
   Rust code that builds a bundle from one core catalog must add `common.ftl` (references). `Feature.windows` gives sizes
@@ -1344,3 +1344,6 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - Commit messages (ADR 0200): Conventional Commits checked by the commit-msg hook (`scripts/check-commit-msg.mjs`, rules
   in `scripts/lib/commit-message.mjs`, also used by `check-private.mjs` for the message text); no session lines,
   claude.ai links or internal vocabulary.
+- No hosted CI (ADR 0201): no `.github/workflows/`; the pre-push hook runs `npm run check`, merges and releases need the
+  full local run (`docs/dev-setup.md` "Verification (no hosted CI)"); releases are built, signed and published locally
+  (`docs/release.md`).

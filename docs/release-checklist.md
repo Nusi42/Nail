@@ -14,11 +14,11 @@ items: [`docs/backlog.md`](backlog.md).
 | # | Gate | Who | Done when | Notes |
 | --- | --- | --- | --- | --- |
 | 1 | **Security review sign-off** of the whole product | an independent reviewer | written sign-off, findings fixed or accepted | Scope: the core's request routing and remote access (`check_remote_request`, grants), the remote-UI login (passwords, TOTP, passkeys, pairing, sessions), the remote-content proxy (SSRF), plug-in sandbox and permissions, MCP writes and confirmations, crypto (OpenPGP, S/MIME, smartcards), encryption at rest (full-file database encryption, recovery key, `vault.json`), backups (Argon2id, STREAM), the diagnostics redaction, the installers (MSI policies, MAPI registration), the updater (signed manifests). ADRs 0029–0101 describe the decisions. |
-| 2 | **EV code-signing certificate and a signed build** | owner | `scripts/verify-signatures.ps1` passes on the release artefacts | Buy the EV certificate (hardware token or cloud HSM); configure `NAIL_SIGN_THUMBPRINT` (or the PFX secrets for a standard certificate); run `release.yml`. Unsigned builds work but SmartScreen warns. |
-| 3 | **Real-account tests** from `docs/backlog.md`, as far as wanted before 1.0 | owner + tester | each chosen item run once by hand and noted here | Google account (Gmail API, Google CalDAV / CardDAV), Outlook.com and a Microsoft 365 tenant (Graph: shared mailboxes, rooms, rules, out of office, large attachments over 4 MB, send as / on behalf), optionally grommunio (EWS) in the interop job and an Exchange Server lab (Windows sign-in). |
+| 2 | **EV code-signing certificate and a signed build** | owner | `scripts/verify-signatures.ps1` passes on the release artefacts | Buy the EV certificate (hardware token or cloud HSM); configure `NAIL_SIGN_THUMBPRINT` (or import a `.pfx` for a standard certificate); build locally (`docs/release.md` "Releasing"). Unsigned builds work but SmartScreen warns. |
+| 3 | **Real-account tests** from `docs/backlog.md`, as far as wanted before 1.0 | owner + tester | each chosen item run once by hand and noted here | Google account (Gmail API, Google CalDAV / CardDAV), Outlook.com and a Microsoft 365 tenant (Graph: shared mailboxes, rooms, rules, out of office, large attachments over 4 MB, send as / on behalf), optionally grommunio (EWS) in the interop run and an Exchange Server lab (Windows sign-in). |
 | 4 | **Smartcard test on real hardware** | tester | signing and decrypting with a real card (S/MIME and OpenPGP) noted here | The PKCS#11 code path is covered only by a soft token in the automated tests (ADR 0095): try a PIV card / YubiKey (OpenSC module) and an OpenPGP card. |
-| 5 | **First green GitHub CI run** | owner | the `ci.yml` jobs (build-test, desktop, mapi, installer incl. the elevated MSI smoke test, installer-arm64, deny, interop, perf) green on GitHub's runners | The GitHub remote exists (ADR 0198); pushing `main` starts the run. Until then every job ran locally only. Fix runner differences (paths, timeouts, the perf tolerance) in CI. |
-| 6 | **Release update key** | owner, on a trusted offline machine | `NAIL_UPDATER_PRIVATE_KEY` / `_PASSWORD` secrets and the `NAIL_UPDATER_PUBKEY` variable set; two offline backups of the key | `docs/release.md` "Update key handling". Losing the key means installed copies can never be updated again. |
+| 5 | **Full local verification run** | owner | on a clean checkout of the release commit, all green: `npm run check`, `cargo test --workspace`, `npm test`, `npm run e2e`, `npm run visual`, the desktop smoke tests (`NAIL_E2E_DESKTOP=1`), the MAPI tests, the installer build with `installer-smoke.ps1` and the elevated `msi-smoke.ps1`, the ARM64 installer build, `cargo deny check`, the perf run, and the interop run where Docker is available | There is no hosted CI (ADR 0201); the list is `docs/dev-setup.md` "Verification (no hosted CI)". |
+| 6 | **Release update key** | owner, on a trusted offline machine | the key pair generated, the private key and password kept outside every repository, the public half ready for `NAIL_UPDATER_PUBKEY`; two offline backups of the key | `docs/release.md` "Update key handling". Losing the key means installed copies can never be updated again. |
 | 7 | **External penetration test** | external tester | report, findings fixed | **Only if internet mode is to be unlocked** (`nail_api::remote::internet_mode_lock()`); not needed for 1.0 with internet mode locked. |
 | 8 | **Encryption at rest default** | owner | decision recorded in an ADR | Ships **off** by default (plan section 7); the UI recommends turning it on. Decide whether 1.0 turns it on for new installations. |
 
@@ -30,11 +30,12 @@ items: [`docs/backlog.md`](backlog.md).
 2. Move the `[Unreleased]` / candidate entries of `CHANGELOG.md` under the
    version and date; write `packaging/release-notes/1.0.0.md` and the user
    page `userDocs/en/release-notes.md`.
-3. Full local run (`docs/dev-setup.md` "Test"), then tag `v1.0.0`; `release.yml`
-   builds, signs and drafts the GitHub release with the update manifests.
-4. Publish the manifests at the update base URL (`stable/latest.json`,
-   `beta/latest.json`), the installers at the release URLs; submit the
-   winget manifests (`node scripts/winget-manifest.mjs`).
+3. Full local verification run (gate 5), then tag `v1.0.0`; build and sign
+   x64 and ARM64 locally and write the update and winget manifests
+   (`docs/release.md` "Releasing").
+4. Create the GitHub release by hand (web UI) with the installers attached;
+   publish the manifests at the update base URL (`stable/latest.json`,
+   `beta/latest.json`); submit the winget manifests.
 5. Smoke test the published installers (`scripts/installer-smoke.ps1`,
    update from the release candidate).
 

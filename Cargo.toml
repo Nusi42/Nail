@@ -430,10 +430,10 @@ tauri-plugin-single-instance = "2.5.1"
 tempfile = "3.27"
 pretty_assertions = "1.4"
 
-# Lints (quality baseline Q1, ADR 0123). Zero warnings: CI and `npm run check`
-# run clippy and rustdoc with `-D warnings`. Never relax a level here; an
-# unavoidable exception is `#[expect(lint, reason = "...")]` at the narrowest
-# scope (`allow` attributes are denied below).
+# Lints (quality baseline Q1, ADR 0123). Zero warnings: `npm run check` (also
+# the pre-push hook) runs clippy and rustdoc with `-D warnings`. Never relax a
+# level here; an unavoidable exception is `#[expect(lint, reason = "...")]`
+# at the narrowest scope (`allow` attributes are denied below).
 [workspace.lints.rust]
 unsafe_code = "deny"
 rust_2018_idioms = { level = "warn", priority = -1 }

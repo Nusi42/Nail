@@ -1,7 +1,4 @@
 # Python-packaged lint tools (quality baseline Q1, ADR 0123):
 #   pip install -r requirements-dev.txt
 # Binary wheels from PyPI only (no downloads from GitHub at install time).
-# actionlint-py: 1.6.25.2 is the newest release with a Windows binary wheel;
-# later versions are source-only and download actionlint from GitHub.
 typos==1.50.3
-actionlint-py==1.6.25.2

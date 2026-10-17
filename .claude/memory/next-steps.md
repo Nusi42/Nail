@@ -26,8 +26,8 @@ filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender war
 **Possible follow-ups:** the source of events / contacts (iCalendar / vCard) like Show source; EWS folder operations
 (CreateFolder / UpdateFolder / MoveFolder / DeleteFolder in the EWS client); MCP / plug-in folder tools.
 
-**Running:** the GitHub CI run of the latest push: check its jobs and fix runner differences
-(release checklist item 5).
+**Hosted CI is not used** (ADR 0201): the pre-push hook runs `npm run check`; before merging and before a release
+run the full local verification (`docs/dev-setup.md` "Verification (no hosted CI)").
 
 **Next steps in order:**
 
@@ -42,7 +42,7 @@ filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender war
 3. The maintainer's human gate on the real app (desktop + `nail serve`): conversation rows, the card feed (HTML mail with inline images), `threads="expandable"`, Settings → Appearance in High contrast, the P1 resize checks (resize windows, open HTML mail). Owner decisions taken: [[owner-ui-decisions]] (no fit-to-width for wide HTML mail; accent ignored in High contrast).
 4. Follow-ups if the maintainer wants them: the deferred items in the `docs/plan.md` status lines of Q2, P3 (ADR 0169) and P1 (ADR 0144: shared-helper checks from `p1-windows.spec.ts`, composer min height, free/busy column token).
 5. Release checklist (`docs/release-checklist.md`):
-   - first green GitHub CI run (see Running)
+   - full local verification run (item 5)
    - security review sign-off
    - EV certificate
    - update key

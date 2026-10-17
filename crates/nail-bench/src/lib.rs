@@ -94,7 +94,7 @@ impl CorpusSpec {
         }
     }
 
-    /// A quick corpus for CI smoke runs and tests (same shape, 2,000
+    /// A quick corpus for smoke runs and tests (same shape, 2,000
     /// messages).
     pub fn small() -> Self {
         Self {
@@ -231,8 +231,8 @@ pub struct Budget {
 pub struct Budgets {
     /// Which corpus the budgets are for (`standard` / `small`).
     pub corpus: String,
-    /// The factor CI applies to every `max` (shared runners are slower
-    /// and noisier than a developer machine; `--tolerant`). At least 1.
+    /// The factor `--tolerant` applies to every `max` (shared or busy
+    /// machines are slower and noisier than an idle one). At least 1.
     #[serde(default = "one")]
     pub ci_tolerance: f64,
     /// The budgets.
@@ -266,7 +266,7 @@ impl Budgets {
     }
 
     /// Checks measurements against the budgets with every `max` multiplied
-    /// by `factor` (at least 1; [`Self::ci_tolerance`] in CI). The results
+    /// by `factor` (at least 1; [`Self::ci_tolerance`] with `--tolerant`). The results
     /// name the effective maximum.
     pub fn check_with(&self, metrics: &[Metric], factor: f64) -> Vec<BudgetResult> {
         let factor = if factor.is_finite() {

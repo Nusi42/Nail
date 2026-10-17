@@ -1,13 +1,14 @@
 # cargo-deny configuration (plan M2b WP44; scope decisions of M2 in
-# docs/plan.md section 7). CI runs `cargo deny --locked check` on every push
-# (.github/workflows/ci.yml, job "deny"). Locally:
+# docs/plan.md section 7). `cargo deny check` is part of the full local
+# verification run (docs/dev-setup.md, "Verification (no hosted CI)"):
 #
 #   cargo install cargo-deny --locked
 #   cargo deny check                  # advisories need the RustSec database (network)
 #   cargo deny check licenses bans sources   # offline
 #
-# Rules: Nail is closed source for now, so no GPL / LGPL / AGPL dependency
-# (MPL-2.0 is fine: file-level copyleft, used unmodified). No OpenSSL and no
+# Rules: Nail is AGPL-3.0-or-later and also offered under other terms (dual
+# licensing, CONTRIBUTING.md), so no GPL / LGPL / AGPL dependency (MPL-2.0 is
+# fine: file-level copyleft, used unmodified). No OpenSSL and no
 # aws-lc: TLS uses rustls with ring (ADRs 0014, 0029, 0036).
 
 [graph]

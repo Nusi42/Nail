@@ -507,7 +507,7 @@ impl PipeTransport {
 /// Whether the DLL may start a program when nothing serves the pipe: never
 /// for an elevated caller (Nail would run elevated, from a folder the
 /// user's unelevated programs can write). Test builds starting the harness
-/// (`test-overrides` with a pipe override) are exempt: CI runners are
+/// (`test-overrides` with a pipe override) are exempt: test runs may be
 /// elevated.
 fn launch_allowed(elevated: bool, test_override: bool) -> bool {
     !elevated || (TEST_OVERRIDES && test_override)
@@ -722,7 +722,7 @@ mod tests {
         assert!(is_elevated(Some(false), None));
         assert!(launch_allowed(false, false));
         assert!(!launch_allowed(true, false));
-        // Only the harness in a test build (CI runs elevated).
+        // Only the harness in a test build (test runs may be elevated).
         assert_eq!(launch_allowed(true, true), TEST_OVERRIDES);
         // This process's facts are readable.
         let rid = integrity_rid().unwrap();

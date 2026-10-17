@@ -2,9 +2,9 @@
 //!
 //! The tests in `tests/servers.rs` and `tests/dav.rs` run only with
 //! `NAIL_INTEROP=1` (the checks against the mock servers always run); without
-//! it they return at once, so a plain `cargo test` passes anywhere. The CI
-//! job "interop" (`.github/workflows/ci.yml`) starts Dovecot, Stalwart and
-//! Radicale in containers and sets:
+//! it they return at once, so a plain `cargo test` passes anywhere. An
+//! interop run (`start-servers.sh` on a machine with Docker) starts Dovecot,
+//! Stalwart and Radicale in containers; then set:
 //!
 //! * `NAIL_INTEROP_SERVERS`: `name=host:base[:feature…]`, comma-separated,
 //!   e.g. `dovecot=localhost:10000,stalwart=localhost:20000:smtp`. A server
@@ -198,7 +198,7 @@ pub fn pem_certificates(pem: &str) -> Result<Vec<Vec<u8>>, String> {
 /// # Panics
 ///
 /// Panics when `NAIL_INTEROP=1` but the configuration is incomplete: a
-/// misconfigured CI job must fail, not pass silently.
+/// misconfigured interop run must fail, not pass silently.
 pub fn from_env() -> Option<Interop> {
     if std::env::var("NAIL_INTEROP").ok().as_deref() != Some("1") {
         return None;

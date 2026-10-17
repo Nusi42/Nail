@@ -7,7 +7,7 @@
 //   node scripts/check.mjs [--only a,b] [--skip a,b] [--advisories] [--fail-fast] [--list]
 //
 // Cargo runs with `-j $CARGO_BUILD_JOBS` (default 4; the machine is shared).
-// `cargo deny` checks advisories only with --advisories or in CI (it fetches
+// `cargo deny` checks advisories only with --advisories or with CI=1 (it fetches
 // the RustSec database).
 import { spawnSync } from "node:child_process";
 import path from "node:path";

@@ -3,10 +3,9 @@
 # one account ada@example.org / nail-interop in an in-memory directory.
 # Certificates from gen-certs.sh are mounted at /opt/stalwart/etc/certs.
 #
-# Written for the Stalwart 0.1x configuration format; the image tag is set
-# in .github/workflows/ci.yml (STALWART_IMAGE). Not verified locally (no
-# Docker on the development machine): check the job log after a Stalwart
-# upgrade.
+# Written for the Stalwart 0.1x configuration format; the image tag comes
+# from STALWART_IMAGE (start-servers.sh). Needs Docker, so it is checked only
+# on a machine that has it: run the interop tests after a Stalwart upgrade.
 
 [server]
 hostname = "localhost"

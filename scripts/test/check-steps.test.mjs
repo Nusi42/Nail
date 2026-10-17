@@ -42,7 +42,6 @@ test("check covers every formatter and linter the quality baseline names", () =>
     "private",
     "typos",
     "markdownlint",
-    "actionlint",
     "eslint",
     "tsc",
     "clippy",
@@ -72,7 +71,7 @@ test("cargo runs with a limited job count (shared machine)", () => {
   assert.deepEqual(two?.args.slice(0, 3), ["doc", "-j", "2"]);
 });
 
-test("cargo deny checks advisories only on request or in CI", () => {
+test("cargo deny checks advisories only on request or with CI=1", () => {
   const offline = step("deny").args;
   assert.deepEqual(offline, ["--locked", "check", "licenses", "bans", "sources"]);
   for (const options of [{ ci: true }, { advisories: true }]) {
@@ -140,7 +139,7 @@ test("resolveTool searches PATH and extra directories with Windows extensions", 
     }),
     path.join("/usr/bin", "taplo"),
   );
-  assert.equal(resolveTool("actionlint", { path: "", platform: "win32", exists }), null);
+  assert.equal(resolveTool("no-such-tool", { path: "", platform: "win32", exists }), null);
 });
 
 test("resolveArgs turns <bin:pkg> and <npm> into script paths", () => {

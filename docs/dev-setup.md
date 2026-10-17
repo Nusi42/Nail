@@ -13,7 +13,7 @@ is the primary platform. User-facing documentation lives in
 | Node.js / npm | 26 / 11 | npm workspaces (`ui`, `e2e`, `packages/*`); **not** pnpm (ADR 0001) |
 | WebView2 runtime | evergreen | Preinstalled on Windows 11; needed by the desktop app only |
 | Playwright Chromium | matches `@playwright/test` | `npx -w e2e playwright install chromium`, once per machine |
-| Lint tools (Q1, ADR 0123) | taplo-cli 0.10, cargo-machete 0.9, cargo-deny; typos 1.50, actionlint 1.6.25 | `cargo install taplo-cli cargo-machete cargo-deny --locked`; `pip install -r requirements-dev.txt` (Python 3; the scripts directory need not be on PATH, `npm run check` finds it). Everything else comes with `npm ci` |
+| Lint tools (Q1, ADR 0123) | taplo-cli 0.10, cargo-machete 0.9, cargo-deny; typos 1.50 | `cargo install taplo-cli cargo-machete cargo-deny --locked`; `pip install -r requirements-dev.txt` (Python 3; the scripts directory need not be on PATH, `npm run check` finds it). Everything else comes with `npm ci` |
 
 Docker is not needed. Integration tests use the in-process mock servers from
 `crates/nail-testkit` (IMAP) and `crates/nail-testkit-net` (SMTP, POP3,
@@ -120,7 +120,7 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Installer and release scripts (node:test) | `node --test "scripts/test/*.test.mjs"` |
 | The Simple MAPI DLL as x86 (32-bit Office) under WOW64 | `cargo test -p nail-mapi --target i686-pc-windows-msvc` (once: `rustup target add i686-pc-windows-msvc`) |
 | Licences, bans, sources, advisories | `cargo deny check` (advisories need the RustSec database from GitHub) |
-| The performance benchmark (M4c, budgets in `e2e/perf/budgets.json`) | `cargo run -p nail-bench --release -- --corpus small` (`standard` = 100k messages; `--tolerant` = CI tolerance 1.5, `--no-check`, `--in-process`, `--work-dir DIR`) |
+| The performance benchmark (M4c, budgets in `e2e/perf/budgets.json`) | `cargo run -p nail-bench --release -- --corpus small` (`standard` = 100k messages; `--tolerant` = shared-machine tolerance 1.5, `--no-check`, `--in-process`, `--work-dir DIR`) |
 | Merge benchmark reports and check the budgets | `nail-bench check --report A --report B [--tolerant] [--out F]` |
 | The whole performance job (Rust run → Playwright scroll / first render → check) | `node e2e/perf/run-perf.mjs [--corpus standard\|small] [--tolerant]` after `cargo build --release -p nail-cli -p nail-bench` and `npm run build`; reports in `.nail-build/perf/<corpus>` |
 | Only the UI perf scenario | `npx playwright test -c e2e/perf/playwright.perf.config.ts` (env `NAIL_PERF_CORPUS`, `NAIL_PERF_WORK`, `NAIL_PERF_TOLERANT`, `NAIL_PERF_FRESH`, `NAIL_BIN`, `NAIL_BENCH_BIN`) |
@@ -182,9 +182,9 @@ Builds and platforms (ADR 0130):
   listing it. Fix the cause (for example a barrel that pulls the mock core
   back in), and never raise `chunkSizeWarningLimit`.
 - rustc warnings are enforced through clippy `-D warnings`. Code under
-  `cfg(not(windows))` is linted by CI's `quality-linux` job (ubuntu), not on
-  Windows. A crate that gains such a branch belongs in that job's `-p` list
-  (`scripts/test/ci-workflow.test.mjs` checks it).
+  `cfg(not(windows))` is linted only on a Linux machine, with
+  `cargo clippy --workspace --all-targets -- -D warnings` there; Windows
+  never compiles it.
 - Clap help text is the doc comment, printed verbatim. Do not put backticks
   in it; name environment variables in an `about` / `help` attribute.
 
@@ -204,7 +204,6 @@ changes nothing.
 | TOML | taplo | `taplo.toml` | `taplo fmt` |
 | Markdown | markdownlint-cli2 (line length off for prose) | `.markdownlint-cli2.jsonc` | `npx markdownlint-cli2 --fix "**/*.md"` |
 | Everything | typos | `typos.toml` (add a legitimate word with its reason) | `typos --write-changes` |
-| Workflows | actionlint | — | — |
 | Every text file | EditorConfig check (`scripts/check-editorconfig.mjs`) | `.editorconfig` | your editor |
 | `Cargo.toml` dependencies | cargo machete; cargo deny | `deny.toml` | remove the dependency |
 | Code, CSS-in-TS, Fluent catalogs, constants | duplicate / SSOT check (jscpd + the checks of `scripts/lib/duplicates/`, ADR 0171) | `scripts/lib/duplicates/config.mjs`, `scripts/duplicates/` (`allow.json`, `mirrors.json`) | share the code or fact (SSOT / ODR / DRY) |
@@ -256,7 +255,8 @@ Where shared things live (Q2, ADRs 0172–0177):
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`
 select some, `--fail-fast` stops at the first failure. Cargo runs with
 `-j $CARGO_BUILD_JOBS` (default 4). `cargo deny` checks advisories only with
-`--advisories` or in CI (the RustSec database comes from the network).
+`--advisories` (the RustSec database comes from the network); the full
+verification run uses plain `cargo deny check`, which includes them.
 
 The **pre-commit hook** (`.githooks/pre-commit`, enabled by `npm install` /
 `npm ci` through the `prepare` script, which sets `core.hooksPath`) runs
@@ -309,7 +309,7 @@ repository** in `%USERPROFILE%\.nail-private\patterns.txt` (one regular
 expression per line, `#` comments, case-insensitive; `NAIL_PRIVATE_PATTERNS`
 names another file). Never commit that file or copy its values anywhere in a
 repository, a commit message, an ADR or memory. Without the file the guard
-prints "no private patterns configured" and passes (CI, other machines). For
+prints "no private patterns configured" and passes (other machines). For
 each literal pattern it also searches the base64 forms (three alignments).
 Findings name file and line with the match masked.
 
@@ -326,8 +326,8 @@ file, which makes the next `npm run check` scan the whole tree for them.
 
 ### Console output in UI tests
 
-Vitest hides console output when stdout is not a terminal (piped output, CI
-logs, coding agents), so warnings printed by a test were easy to miss.
+Vitest hides console output when stdout is not a terminal (piped output, logs
+of unattended runs, coding agents), so warnings printed by a test were easy to miss.
 `ui/src/test/setup.ts` turns them into failures: a test that logs
 `console.error` or `console.warn` fails — React's "An update to X inside a
 test was not wrapped in act(...)", `nail: missing message "…"`,
@@ -374,29 +374,6 @@ message; a plain-`string` value must be listed in `OPEN_TEMPLATES` with the
 (`data-key-context`), the default layout binds or a plug-in manifest accepts
 must be in `KEY_CONTEXTS` (`ui/src/features/customization/editorModel.ts`)
 with a `customize-keys-context-*` label.
-
-CI (`.github/workflows/ci.yml`) runs these jobs:
-
-| Job | Runner | What |
-| --- | --- | --- |
-| `quality` | `windows-latest` | `npm run check` (every formatter and linter, 0 warnings; tools from crates.io and PyPI); blocking (ADR 0123) |
-| `build-test` | `windows-latest` | build, `cargo test --workspace`, clippy, fmt, Vitest, lint, the Playwright web tests, the script tests |
-| `desktop` | `windows-latest` | `npm run build:desktop`, then the WebView2 smoke tests (`desktop.spec.ts`, `desktop-m4b.spec.ts`, `desktop-m4c.spec.ts`, `desktop-m5c.spec.ts`) with `NAIL_E2E_DESKTOP=1` |
-| `mapi` | `windows-latest` | `nail-mapi` tests as x86 under WOW64, release builds of `nail_mapi.dll` for x64 / x86 / ARM64, every export checked on the x64 and x86 DLLs (`nail-mapi-harness exports`) |
-| `installer` | `windows-latest` | `node scripts/build-installer.mjs --offline-webview …` (NSIS, MSI, offline-WebView2 NSIS, portable zip, SBOMs, update signatures with a throwaway key), the next patch version as the update, the loopback update server, `installer-smoke.ps1` (install → start → update → start → uninstall), `msi-smoke.ps1` (elevated silent MSI install with properties → start: the app reports msi-managed updates → upgrade → uninstall), winget manifests; uploads everything |
-| `installer-arm64` | `windows-latest` | the ARM64 installers, cross-built (not run: no ARM64 runner) |
-| `deny` | `ubuntu-latest` | `cargo deny check` |
-| `interop` | `ubuntu-latest` | clippy `-D warnings` on the interop crate, then the engines against real Dovecot and Stalwart (below) |
-| `perf` | `windows-latest` | the 100k-message benchmark (`node e2e/perf/run-perf.mjs --corpus standard --tolerant` after release builds of `nail-cli` / `nail-bench` and the UI); uploads `report*.json` and the scroll trace; 60 minutes at most (M4c, ADR 0097) |
-
-`.github/workflows/release.yml` (tags / manual) builds the signed x64 and
-ARM64 packages with the release update key, writes the per-channel update
-manifests and the winget manifests, and drafts a GitHub release (ADR 0089).
-Repository settings it reads: secrets `NAIL_SIGN_PFX_BASE64` /
-`NAIL_SIGN_PFX_PASSWORD` (optional; unsigned without), `NAIL_UPDATER_PRIVATE_KEY`
-/ `NAIL_UPDATER_KEY_PASSWORD`; variables `NAIL_UPDATER_PUBKEY`,
-`NAIL_UPDATE_BASE_URL`. Key handling, signing and the release steps:
-[`docs/release.md`](release.md).
 
 - Observe one query key (`useQuery({ queryKey, queryFn: skipToken })`), not
   `useSyncExternalStore` over the whole query cache: that re-renders every
@@ -491,7 +468,7 @@ node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,
                                                   # NSIS + MSI, portable zip, NailMapi.dll (own arch + x86), SBOMs, SHA256SUMS → <build dir>/dist
 powershell -File scripts/installer-smoke.ps1      # silent per-user install to a temp dir, start, [update,] uninstall
 powershell -File scripts/installer-payload-smoke.ps1   # beside an installed Nail: setup checks + its payload run seeded (ADR 0186)
-powershell -File scripts/msi-smoke.ps1            # elevated: silent MSI install with properties, start, upgrade, uninstall (CI)
+powershell -File scripts/msi-smoke.ps1            # elevated: silent MSI install with properties, start, upgrade, uninstall
 node scripts/update-manifest.mjs --version V --channel stable --artifacts DIR --download-base URL --out DIR   # <channel>/latest.json, signatures checked first
 node scripts/update-server.mjs --root DIR [--port N]   # loopback update server (127.0.0.1 only)
 node scripts/update-check.mjs …                   # checks an endpoint and a download like the app does
@@ -500,9 +477,10 @@ node scripts/winget-manifest.mjs --version V --artifacts DIR --installer-url-tem
 node scripts/sbom.mjs                             # CycloneDX SBOMs of the Rust and npm dependencies
 ```
 
-Signing runs only when `NAIL_SIGN_THUMBPRINT` is set (`scripts/lib/sign.mjs`;
-CI imports a `.pfx` from secrets with `scripts/import-signing-cert.ps1` and
-checks the result with `scripts/verify-signatures.ps1`). The MSI is Tauri's
+Signing runs only when `NAIL_SIGN_THUMBPRINT` is set (`scripts/lib/sign.mjs`):
+the thumbprint of a code-signing certificate in `Cert:\CurrentUser\My`
+(import a `.pfx` once with `scripts/import-signing-cert.ps1`, which prints
+it); check the result with `scripts/verify-signatures.ps1 -Folder <dist>`. The MSI is Tauri's
 WiX template plus one fragment (`app/src-tauri/windows/wix/nail.wxs`, added
 through `app/src-tauri/windows/bundle.json`, which also pins the upgrade
 code). Installers, updates and winget: ADR 0089, `packaging/README.md`;
@@ -516,11 +494,12 @@ Build an installer from a clean checkout of the commit (another work
 folder, reset to it) when work continues in the folder: the build compiles
 whatever is on disk.
 
-### Interop tests (real servers, CI job `interop`)
+### Interop tests (real servers, `NAIL_INTEROP=1`)
 
 `scripts/interop/` is its own Cargo workspace (copy the root `Cargo.lock`
 into it first); see `scripts/interop/README.md`. It needs Docker, so it runs
-in CI only; without `NAIL_INTEROP=1` the server tests return at once.
+only on a machine with Docker (`start-servers.sh`, then `NAIL_INTEROP=1`);
+without `NAIL_INTEROP=1` the server tests return at once.
 The servers are Dovecot and Stalwart (mail, ManageSieve) and, since M3a,
 **Radicale** on port 5232 over TLS for CalDAV / CardDAV
 (`NAIL_INTEROP_DAV=radicale=https://localhost:5232/`; `start-servers.sh`
@@ -530,7 +509,7 @@ Docker against the in-process mock (`MockDavServer` over TLS), and can be
 pointed at a Radicale installed from PyPI (see the interop README).
 
 **Owner-run checks (M3 human gate).** Microsoft and Google services cannot
-run in CI; the automated suite covers them with recorded-style fixtures
+run in an unattended run; the automated suite covers them with recorded-style fixtures
 and the mock servers (`MockGraphServer`, `MockEwsServer`,
 `MockAutodiscoverServer`, `MockGmailServer`). Before the M3 gate the owner
 runs, by hand:
@@ -558,7 +537,7 @@ runs, by hand:
 No GPL / LGPL / AGPL dependency, no OpenSSL and no aws-lc (TLS uses
 `ring`; ADRs 0029 and 0036). `deny.toml` enforces the licence allowlist,
 bans `openssl-sys` / `aws-lc-*` and allows only crates.io: run
-`cargo deny check` after adding a crate (CI runs it too). It records the
+`cargo deny check` after adding a crate (the full verification run does too). It records the
 RUSTSEC-2023-0071 exception (`rsa` 0.9, ADR 0034) and one licence
 exception: `sqlite3mc-src` carries `Unlicense` for its bundled miniz, which
 Nail's build does not compile (ADR 0095).
@@ -663,8 +642,8 @@ How it works:
   `windows`). Run with `NAIL_TEST_BACKGROUND_WINDOWS=0` to watch them.
   `NAIL_APP_BIN` selects another binary. A seeded app keeps its data,
   config and WebView2 profile in a temporary directory. The test always
-  runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`,
-  which the CI workflow sets after `npm run build:desktop` (ADR 0028).
+  runs locally on Windows; elsewhere it is skipped unless
+  `NAIL_E2E_DESKTOP=1` is set after `npm run build:desktop` (ADR 0028).
 - The global setup (`e2e/support/global-setup.ts`) builds the example
   plug-ins (`follow-up`, `attachment-check`, `csv-preview`) once (esbuild +
   `@nail/plugin-api/tools`' `packPlugin`, `buildExample` in
@@ -693,7 +672,7 @@ How it works:
   …"). Remembered geometry lives in the server's config dir
   (`window-state.json`), so scenarios that move windows start their own
   server (`startNail`).
-- Traces, screenshots and the CI HTML report go to the checkout's
+- Traces, screenshots and the HTML report go to the checkout's
   gitignored `.nail-build/e2e/` (`NAIL_BUILD_DIR` overrides the base), not
   into tracked files.
 
@@ -816,8 +795,9 @@ npm run visual:selftest    # end-to-end self-test of the harness with temporary 
   (default 2), `NAIL_VISUAL_MAX_DIFF_RATIO` (default 0.002 of the pixels),
   `NAIL_VISUAL_THRESHOLD` (default 0.15 per pixel), `NAIL_VISUAL_BASELINES`,
   `NAIL_VISUAL_RESULTS`. Details: `e2e/visual/README.md`.
-- CI job `visual` (non-blocking for now) uploads the review page as the
-  artifact `visual-review`.
+- `npm run visual` ends with the review page
+  (`<build dir>/visual/review/index.html`); open it before updating
+  baselines.
 
 - The default tolerance (0.2 % of the pixels) hides list-row changes:
   update intended screens with `NAIL_VISUAL_SCREENS=…
@@ -860,6 +840,32 @@ regenerate it with the matching command:
 | `crates/nail-compose/tests/golden/*.eml` (built MIME, CRLF, kept byte for byte by `.gitattributes`) | `NAIL_UPDATE_GOLDEN=1 cargo test -p nail-compose --test mime` |
 | `crates/nail-testkit/corpus/crypto/pgp/` (OpenPGP interop vectors made by GnuPG 2.4; Git for Windows ships it as `/usr/bin/gpg`) | `bash crates/nail-testkit/corpus/crypto/pgp/generate.sh` (random session keys: every file changes, the tests must still pass) |
 | `crates/nail-testkit/corpus/crypto/smime/` (S/MIME test CA, certificates incl. the demo-multi `ada-work` / `ada-home`, PKCS#12 files password `nail-test`, OpenSSL-made messages) | `bash crates/nail-testkit/corpus/crypto/smime/generate.sh` (needs OpenSSL 3.4+, Git for Windows ships `/mingw64/bin/openssl`; OpenSSL is a fixture tool only) |
+
+### Verification (no hosted CI)
+
+Nail has no hosted CI (ADR 0201). The pre-push hook runs `npm run check`
+(every formatter and linter, 0 warnings). Before merging a wave into `main`
+and before a release, run the full local suite on a clean checkout of the
+commit; everything must be green:
+
+```sh
+npm run build && cargo test --workspace -j 4     # incl. the Tauri shell
+npm test                                         # socket binds, Vitest, packages, script tests
+node --test "scripts/test/*.test.mjs"            # installer and release scripts
+npm run e2e                                      # Playwright web tests (builds UI, nail, the desktop app)
+npm run visual                                   # visual regression
+NAIL_E2E_DESKTOP=1 npm run e2e:only -- tests/desktop.spec.ts tests/desktop-m4b.spec.ts tests/desktop-m4c.spec.ts tests/desktop-m5c.spec.ts
+cargo test -p nail-mapi --target i686-pc-windows-msvc   # MAPI DLL as x86 under WOW64
+cargo build -p nail-mapi --release; target/release/nail-mapi-harness.exe exports --dll target/release/nail_mapi.dll
+node scripts/build-installer.mjs --offline-webview --dev-updater-key   # then installer-smoke.ps1 and, elevated, msi-smoke.ps1
+node scripts/build-installer.mjs --arch arm64                          # cross-built, not run
+cargo deny check
+node e2e/perf/run-perf.mjs --corpus standard     # after cargo build --release -p nail-cli -p nail-bench
+```
+
+The interop tests run where Docker is available ("Interop tests" above); `cfg(not(windows))`
+code is linted on a Linux machine. Key handling, signing and the release
+steps: [`docs/release.md`](release.md).
 
 ## Run
 

@@ -4,8 +4,8 @@ Nail's IMAP, POP3 and SMTP engines (`nail-proto-imap`, `-pop3`, `-smtp`)
 and the ManageSieve client (`nail-sieve`, M2c) against Dovecot 2.3 with
 Pigeonhole and Stalwart (plan M2b WP44, ADR 0040; ManageSieve ADR 0049),
 and the CalDAV / CardDAV client (`nail-dav`, M3a WP72, ADR 0060)
-against Radicale 3. CI runs them in the job "interop" on `ubuntu-latest`;
-the in-process mock servers of `nail-testkit` and `nail-testkit-net`
+against Radicale 3. They need Docker and run on a machine that has it
+(`NAIL_INTEROP=1`, below); the in-process mock servers of `nail-testkit` and `nail-testkit-net`
 remain the main test bed.
 
 This directory is its own Cargo workspace (so Linux does not build the

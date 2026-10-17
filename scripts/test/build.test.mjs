@@ -369,25 +369,3 @@ test("the update key reaches only tauri bundle", async () => {
   }
   assert.doesNotMatch(script, /test-overrides/, "no test-only feature in installer builds");
 });
-
-test("release.yml hands the update key to the build step only", async () => {
-  const { readFileSync } = await import("node:fs");
-  const workflow = readFileSync(
-    new URL("../../.github/workflows/release.yml", import.meta.url),
-    "utf8",
-  );
-  const lines = workflow.split(/\r?\n/);
-  const uses = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line }) => /^\s*TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)?:/.test(line));
-  assert.equal(uses.length, 2);
-  for (const { line, index } of uses) {
-    // Step-level env: indented below a step, and that step is the build.
-    assert.match(line, /^ {10}\S/, line);
-    const step = lines
-      .slice(0, index)
-      .reverse()
-      .find((l) => /^ {6}- name:/.test(l));
-    assert.equal(step?.trim(), "- name: Build installers");
-  }
-});
