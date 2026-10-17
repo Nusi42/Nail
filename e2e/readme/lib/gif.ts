@@ -11,12 +11,16 @@ import { decodePng, type Image } from "../../visual/lib/png.ts";
 // gifenc is CommonJS without detectable named exports: Node only offers the default.
 const { GIFEncoder, applyPalette, quantize } = gifenc;
 
-export interface Frame {
-  /** A PNG screenshot; every frame of a GIF has the same size. */
+/**
+ * A frame: a PNG screenshot or decoded pixels (e.g. a morph step); every
+ * frame of a GIF has the same size. `delay` is how long it shows, in
+ * milliseconds (GIFs count in 10 ms steps).
+ */
+export interface PngFrame {
   png: Uint8Array;
-  /** How long the frame shows, in milliseconds (GIFs count in 10 ms steps). */
   delay: number;
 }
+export type Frame = PngFrame | { image: Image; delay: number };
 
 /** The palette slot of "unchanged since the previous frame". */
 export const UNCHANGED = 255;
@@ -58,7 +62,7 @@ export function encodeGif(frames: readonly Frame[]): Uint8Array {
   const gif = GIFEncoder();
   let previous: Image | undefined;
   for (const frame of frames) {
-    const image = decodePng(frame.png);
+    const image = "png" in frame ? decodePng(frame.png) : frame.image;
     if (previous && (previous.width !== image.width || previous.height !== image.height)) {
       throw new Error("every frame of a GIF has the same size");
     }

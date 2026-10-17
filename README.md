@@ -1,4 +1,4 @@
-<!-- The GitHub front page centres its banner and swaps the screenshot for dark mode, which only HTML can do; the banner image is the title. -->
+<!-- The GitHub front page centres its banner and shows its images at full width, which only HTML can do; the banner image is the title. -->
 <!-- markdownlint-disable MD033 MD041 -->
 
 <p align="center">
@@ -21,10 +21,7 @@
 
 ---
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/hero-dark.png">
-  <img src="docs/media/hero.png" alt="Nail's mail view: folders of three accounts, the unified inbox with conversations, and a conversation as a feed of cards." width="100%">
-</picture>
+<img src="docs/media/hero.gif" alt="Nail's mail view (folders of three accounts, the unified inbox with conversations, a conversation as a feed of cards) morphing through the Frost, Sage, Nocturne and Graphite themes." width="100%">
 
 ## Why “Nail”?
 

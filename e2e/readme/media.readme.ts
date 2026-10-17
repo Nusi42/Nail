@@ -2,8 +2,10 @@
  * The README's animations and stills (ADR 0197), recorded against a fresh
  * `nail serve --seed demo-multi` per scene: made-up people, companies and
  * domains only (the phishing scene's brand "ＮＯＶＡＢＡＮＫ" included).
- * Output: `docs/media/<scene>.gif` / `.png`.
+ * Output: `docs/media/<scene>.gif` / `.png`; the hero morphs through
+ * four themes.
  */
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test as base, type Page } from "@playwright/test";
 import { control, repoRoot, startNail, type NailServer } from "../support/nail";
@@ -11,6 +13,9 @@ import { rpc } from "../support/remote";
 import { messageRows, readerToolbar, refreshList, showView } from "../support/views";
 import { CALENDAR_TIME, CONVERSATION, loadMainWindow, MAIN_TIME } from "../visual/screens.ts";
 import { preparePage, seedCalendar } from "../visual/support.ts";
+import { decodePng, type Image } from "../visual/lib/png.ts";
+import { encodeGif, type Frame } from "./lib/gif.ts";
+import { diagonalWipe, wipeSteps } from "./lib/morph.ts";
 import { HOLD_MS, Recorder } from "./recorder.ts";
 
 const MEDIA = path.join(repoRoot, "docs", "media");
@@ -55,16 +60,43 @@ function saved(recorder: Recorder, name: string): void {
   );
 }
 
-test("hero: the unified inbox with a conversation", async ({ page, nail }) => {
+/** The hero's themes, in morph order (High contrast stays out of the hero). */
+const HERO_THEMES = ["frost", "sage", "nocturne", "graphite"];
+/** How long each theme holds, and the wipe between two themes. */
+const HERO_HOLD_MS = 2200;
+const HERO_WIPE_STEPS = 12;
+const HERO_WIPE_STEP_MS = 40;
+
+test("hero: the unified inbox with a conversation, morphing through the themes", async ({
+  page,
+  nail,
+}) => {
   await preparePage(page, MAIN_TIME);
   await loadMainWindow(page, nail.url);
   await row(page, CONVERSATION).click();
   await expect(page.getByRole("feed")).toBeVisible();
-  await page.screenshot({ path: path.join(MEDIA, "hero.png") });
-  const before = await themeCss(page);
-  await rpc(nail, { type: "SetTheme", theme_id: "nocturne" });
-  await themeChanged(page, before);
-  await page.screenshot({ path: path.join(MEDIA, "hero-dark.png") });
+  const shots: Image[] = [];
+  for (const theme of HERO_THEMES) {
+    const before = await themeCss(page);
+    await rpc(nail, { type: "SetTheme", theme_id: theme });
+    // Frost is the demo's theme already: nothing changes for the first one.
+    if (theme !== HERO_THEMES[0]) await themeChanged(page, before);
+    shots.push(decodePng(await page.screenshot({ animations: "disabled" })));
+  }
+  // Each theme holds, then the next one wipes in; the last wipes back to the first.
+  const frames: Frame[] = [];
+  shots.forEach((shot, i) => {
+    const next = shots[(i + 1) % shots.length] ?? shot;
+    frames.push({ image: shot, delay: HERO_HOLD_MS });
+    for (const progress of wipeSteps(HERO_WIPE_STEPS)) {
+      frames.push({ image: diagonalWipe(shot, next, progress), delay: HERO_WIPE_STEP_MS });
+    }
+  });
+  const gif = encodeGif(frames);
+  writeFileSync(path.join(MEDIA, "hero.gif"), gif);
+  console.log(
+    `docs/media/hero.gif: ${String(frames.length)} frames, ${String(Math.round(gif.length / 1024))} KiB`,
+  );
 });
 
 test("conversations: rows, the card feed, older messages", async ({ page, nail }) => {

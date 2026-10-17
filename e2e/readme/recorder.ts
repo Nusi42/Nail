@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { encodeGif, type Frame } from "./lib/gif.ts";
+import { encodeGif, type PngFrame } from "./lib/gif.ts";
 
 /** Frames of a pointer move, and how long each shows. */
 const MOVE_STEPS = 9;
@@ -38,7 +38,7 @@ export function glide(
 }
 
 export class Recorder {
-  readonly frames: Frame[] = [];
+  readonly frames: PngFrame[] = [];
   private at = { x: 0, y: 0 };
 
   constructor(private readonly page: Page) {
