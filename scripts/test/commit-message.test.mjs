@@ -42,7 +42,8 @@ test("session lines, claude.ai links and internal vocabulary are refused", () =>
   /** @type {[string, RegExp][]} */
   const cases = [
     ["feat: x\n\nClaude-Session: https://example.org/s", /session trailer/],
-    ["docs: x\n\nSee a published page, not linked here", /claude\.ai/],
+    // Built at runtime: the repository itself never holds such a link.
+    [`docs: x\n\nSee https://${["claude", "ai"].join(".")}/code/artifact/1`, /claude\.ai/],
     ["chore: merge work-4 into the lead", /work-folder or branch/],
     ["chore: reset nail-work-2", /work-folder or branch/],
     ["build: set up work folders", /work-folder or branch/],
