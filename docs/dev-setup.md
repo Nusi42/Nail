@@ -267,6 +267,20 @@ commit with TypeScript files, most of it type-aware ESLint starting up;
 0.2 s for Rust / Markdown / TOML only). It reads the
 working-tree copy of each staged file, so stage the whole file you fixed.
 
+- `theme.kdl` accepts only allowlisted CSS properties (nail-config
+  `css.rs`; no `transform`, no `list-style`): structural CSS belongs in
+  `ui/src/theme/compile.ts` and the skins.
+- `typos` flags truncated words (a name with its accent stripped off):
+  rephrase or add a spellchecker marker. `prettier --write` run inside a
+  package ignores the root `.prettierignore` (`packages/plugin-api` and
+  `create-nail-plugin` have their own).
+- Merging a branch: `git ls-files` lists a conflicted file three times, so
+  run the duplicate check only after staging the resolutions. A branch that
+  predates the shared homes adds its behaviour there (one copy), then
+  regenerates `npm run gen:api` and the ts-vectors
+  (`NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test ts_vectors`; they
+  go stale when `defaults/layout.kdl` changes).
+
 ### Commit messages
 
 Conventional Commits in plain English (ADR 0200): `<type>(<scope>): <subject>`
@@ -384,6 +398,26 @@ Repository settings it reads: secrets `NAIL_SIGN_PFX_BASE64` /
 `NAIL_UPDATE_BASE_URL`. Key handling, signing and the release steps:
 [`docs/release.md`](release.md).
 
+- Observe one query key (`useQuery({ queryKey, queryFn: skipToken })`), not
+  `useSyncExternalStore` over the whole query cache: that re-renders every
+  rail / toolbar item on any query event (act(...) warnings).
+- An effect that opens a window and reacts to "window closed" in the same
+  commit reads `store.getState().windows`, not the render's `useUi` value
+  (it predates the opening and looks like an instant close).
+- Virtualized lists must not let TanStack Virtual round row heights (its
+  default `measureElement` does): fractional rows make scroll positions
+  timing-dependent (`exactRowSize`, `widgets/MessageList.tsx`).
+- With several windows open `getByRole("dialog")` is ambiguous and
+  `getAllByRole("dialog")` skips windows under an `aria-modal` one: select by
+  name or `[data-window]`. A test dialog needs a `window-<kind>` message.
+  Lazy windows: wait for their content, not only the frame.
+- axe on a main window with every view mounted takes more than 20 s in
+  jsdom (one view per case); axe never finishes on HTML mail frames (sweeps
+  use plain-text messages).
+- "Unsaved changes" flows: `setAutosaveDelay(10 * 60 * 1000)` in unit tests,
+  `__nailAutosaveMs` through `addInitScript` in Playwright; never rely on
+  typing faster than the autosave.
+
 ### Core tests and other pitfalls
 
 - Tests and demos never touch the OS keychain: pass `ServiceOptions::secrets`
@@ -396,6 +430,58 @@ Repository settings it reads: secrets `NAIL_SIGN_PFX_BASE64` /
   `nail-compose` golden `.eml` files are CRLF on purpose.
 - `tauri-build`'s static VC runtime is limited to release builds (ADR 0004),
   otherwise the workspace doctests fail to link.
+
+- Scripting edits from Git Bash: heredocs can mangle backslash escapes
+  (`\n`, `\\`, `\b`, `\N` arrive as real newlines or control characters) and
+  abort on apostrophes or typographic quotes. Write the script to a file and
+  run it by path (Python raw strings for escapes), or edit the file directly.
+  `open(p, "w").write(open(p).read() …)` truncates the file before it is read.
+- `cargo test --workspace` stops at the first failing test binary; add
+  `--no-fail-fast` for the full picture. Run it with `-j 4` (more jobs ran out
+  of paging file, os error 1455). Transient rustc errors ("crate required to
+  be available in rlib format", `STATUS_STACK_BUFFER_OVERRUN`) and Vitest
+  widget / axe time-outs appeared while cargo, `npm test` or `npm run lint`
+  ran at the same time: rerun alone before believing a failure. Measured
+  durations: `npm run check` about 3.5 min warm, `npm test` about 5 min,
+  workspace `cargo test` about 25 min at `-j 4`.
+- `cargo build -p A -p B --features A/feat` silently builds A without the
+  feature: build one package per call and name the feature plainly
+  (`e2e/scripts/build-desktop.mjs` does; `ci-workflow.test.mjs` checks it).
+- `target/debug/incremental` can grow to tens of GB and fill the disk
+  (linker error LNK1180): delete it, and run workspace tests with
+  `CARGO_INCREMENTAL=0` when space is short.
+- Never `git stash` (or switch branches) while a background build reads the
+  tree: the build compiles whatever is on disk.
+- Check the plan of every new per-message SQL query (`EXPLAIN QUERY PLAN`):
+  SQLite may prefer an index that serves the `ORDER BY` and scan a whole
+  folder per message; a unary `+` on a column keeps it off that index (see
+  the EXPLAIN tests in nail-store).
+- Profiling without a profiler: temporary `Instant` accumulators per phase
+  plus `nail-bench run --messages 20000 --no-check` (about a minute per run).
+  Run the benchmark with its own `CARGO_TARGET_DIR` and no other heavy build
+  in parallel.
+- Core tests: start-up must not broadcast unsolicited events (service tests
+  expect only config events); tests with `start_engines = false` that need
+  the local PIM defaults call `ensure_local_pim`; broadcast receivers lag
+  under bulk ingest, so count `NewMail` in a spawned task; the Graph engine
+  reads up to 5 pages per `folder_items` call (an interruption test needs
+  more than 500 messages); reqwest with `rustls-no-provider` needs the TLS
+  config even for plain `http:` clients.
+- Windows file names cannot contain `:` (it silently creates an NTFS
+  alternate data stream): Maildir fixtures use the `!2,FS` separator.
+- Files written by tools can end up CRLF; `include_str!` then embeds the CR
+  and golden tests fail. `git ls-files --eol | grep w/crlf` finds them.
+- Generated TypeScript (ts-rs): `#[ts(optional)]` on a `Vec` needs
+  `#[ts(as = "Option<Vec<_>>", optional)]`; `#[serde(try_from / into)]` makes
+  ts-rs warn (write `Serialize` / `Deserialize` by hand); a doc comment
+  containing `*/` (a cron step `*/15`) breaks the generated comment; type
+  names must be unique across the generated index. Generated tuples are
+  `as const`: use `readonly T[]` and typed helpers instead of
+  `includes(string)`. The workspace's `serde_json` has no `preserve_order`
+  (a map deserialized in Rust sorts its keys).
+- Packages verified in their own snapshot can still fail the workspace lints:
+  after a merge, rerun `cargo clippy --workspace --all-targets -- -D warnings`
+  on the merged checkout.
 
 ### Installer, portable zip and SBOMs (ADR 0040)
 
@@ -425,6 +511,10 @@ keys, signing and releasing: `docs/release.md`.
 Nothing is written into the repository. The installer's NSIS template is a
 copy of Tauri's (`app/src-tauri/windows/nsis/installer.nsi`); a test fails when
 the Tauri CLI version changes, so re-copy it on upgrades.
+
+Build an installer from a clean checkout of the commit (another work
+folder, reset to it) when work continues in the folder: the build compiles
+whatever is on disk.
 
 ### Interop tests (real servers, CI job `interop`)
 
@@ -509,6 +599,15 @@ Get-NetFirewallApplicationFilter | Where-Object { $_.Program -like "$env:LOCALAP
 ```
 
 Leave out `| Remove-NetFirewallRule` first to see what would go.
+
+To verify a change: `Get-NetFirewallApplicationFilter | ? Program -match
+'<target dir>'` lists no new rules, and `Get-NetUDPEndpoint` /
+`Get-NetTCPConnection -State Listen -OwningProcess <pid>` show loopback
+addresses only. `Get-NetTCPConnection` also lists a `Bound` row on `0.0.0.0`
+/ `::` for every outbound connection (same port as its `Established`
+127.0.0.1 row): an OS reporting artifact, not a listener, and it does not
+prompt. The bind check flags the literal `0.0.0.0` anywhere in Rust sources,
+test JSON included: use `192.0.2.1` (TEST-NET) for a "not loopback" fixture.
 
 ### End-to-end tests (Playwright)
 
@@ -639,6 +738,43 @@ How it works:
 
 **Responsive checks (P1, ADR 0139).** `e2e/support/responsive.ts` holds the standard sizes (`STANDARD_SIZES`: 1600 / 1280 / 1024 / 800 × 1000 / 700) and `expectResponsive(page, name, { prepare, scope, ignore, skip, aligned })`, which resizes the viewport to each size, runs `prepare`, fails on page overflow, page scroll, clipped text, text running out of a box that does not clip it (`overflowing`, ADR 0147), off-screen controls, overlaps (a text leaf counts with its sideways spill), misaligned label columns and text-like controls left at the browser's intrinsic width although their row has room (`undersized-control`, ADR 0160 — a control small on purpose carries `data-width="short" | "medium" | "content"`, which the skin sizes and the check skips) among visible `[data-part]` elements, and saves `<build dir>/screens/p1/<name>-<w>x<h>.png` for the screenshot review. `layoutIssues(page)` checks the current state; `resizeWindow(page, frame, size)` drags a window-manager window's south-east handle (`{ width: 1, height: 1 }` = its min-size).
 
+- Name matching is a substring match: `getByRole("dialog", { name: "Task" })`
+  also finds "Tasks", "Move Folders" finds "Remove Folders from the layout":
+  use `exact: true`. Row filters by subject can hit corpus text: use unique
+  titles.
+- Server-controlled checkboxes (saved through the core) fail `check()`
+  ("did not change its state"): `click()` and assert.
+- The core writes its files before it answers: after a file poll passes,
+  wait for the UI (a closed window, a select's value) before the next click.
+- Scope locators: the calendar view also holds the mini-month
+  (`role=grid`; use `[data-part="calendar.month"]`); settings-page sections
+  hold several widgets (scope to the widget part); a copied default window
+  has the narrow breakpoint too.
+- Card feed: opening a card marks it read; j / k focus the cards' header
+  buttons; count cards with `[data-part="thread-view.card"]` (the fold row
+  is an `article` too); `press("Shift+;")` sends ";", press ":" instead. The
+  undo toast hides after 8 s; Delete permanently works only in Trash / Junk.
+- Seeds: the `demo` seed has no sender identity (sending scenarios use
+  demo-multi or a config dir with an identity); adding an enabled account to
+  demo-multi changes every unified-inbox count; identity ids must be unique
+  (add accounts with other addresses of the demo domains). Specs that regex-edit
+  `accounts.kdl` identity lines keep their `{ crypto … }` block. Blob files are
+  zstd-compressed: check `SEALED_MAGIC`, do not scan for plain text.
+- Plug-ins: Nail's own attachment reminder (attach, attached, enclosed …)
+  fires before a plug-in's before-send hook (specs write "see the file"); a
+  test plug-in must declare every hook its code registers, or it fails to
+  activate.
+- The updater scenario serves a fixed "newer" version (`1.0.1` in
+  `desktop-m4b.spec.ts`): keep it above the app version.
+- After editing `defaults/*.kdl`, rebuild `nail-cli` before e2e (the
+  defaults are embedded) and regenerate the fixtures; a new root-stack child
+  in `defaults/layout.kdl` needs its `sizes` entry. Every layout write keeps a
+  backup in `<config>/backups/layout-<millis>.kdl`; the first `UpdateLayout`
+  creates `layout.kdl`, so undoing it deletes the file.
+- Do not run two Playwright runs at once in one checkout (they share
+  `.nail-build/e2e/`). `ERR_NO_BUFFER_SPACE` in a `goto` under full load is
+  an OS socket flake: rerun the spec alone.
+
 ### Visual regression (M5a, ADR 0106)
 
 Screenshots of 26 screens (the main window with the rail and a message,
@@ -682,6 +818,15 @@ npm run visual:selftest    # end-to-end self-test of the harness with temporary 
   `NAIL_VISUAL_RESULTS`. Details: `e2e/visual/README.md`.
 - CI job `visual` (non-blocking for now) uploads the review page as the
   artifact `visual-review`.
+
+- The default tolerance (0.2 % of the pixels) hides list-row changes:
+  update intended screens with `NAIL_VISUAL_SCREENS=…
+  NAIL_VISUAL_MAX_DIFF_RATIO=0.0004 node e2e/visual/run-visual.mjs --update`.
+  A baseline that fails identically on `HEAD` is stale, not flaky.
+- A worker's screens share UI state (read marks, the last view, the
+  settings page's last section): a screen resets what it relies on
+  (`markUnread` in `e2e/visual/support.ts`, an explicit section click). A
+  screen whose pane headers shift the list must not select a message.
 
 ### README media (ADR 0197)
 
