@@ -4,14 +4,24 @@ description: "Where the project stands and what to do next — read first when c
 metadata:
   node_type: memory
   type: project
-  modified: 2026-10-17T12:29:46.656Z
+  modified: 2026-10-17T19:47:28.693Z
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
 
 **State:** M0-M5, the polish waves P1-P3 and the quality waves Q1-Q2 are done and verified
 (status lines in `docs/plan.md`, notes by milestone in `docs/architecture.md`); later changes have their own ADRs
-(0180-0200). Version 0.8.0 (ADR 0198). `main` = `work-1`, pushed to GitHub.
+(0180-0201). Version 0.8.0. `main` = `work-1`, pushed to GitHub.
+
+**GitHub:** the repository is public (AGPL-3.0-or-later with the contributor license agreement in
+`CONTRIBUTING.md`, ADR 0198). Squash merges only (the pull request title becomes the commit message); the
+ruleset on `main` blocks deletion and force pushes and requires linear history, with the maintainer as the only
+bypass. Actions is switched off. Pull requests are verified locally before merging (`docs/dev-setup.md`, "Pull
+requests"). The remote and the push command are in `CLAUDE.local.md`.
+
+**Waiting for the maintainer:** a lawyer's review of the contributor license agreement before any commercial
+license is sold. The installer for 0.8.0 (the newest one in the installer folder predates the license, version and
+wording changes) is built on request.
 
 **History (ADRs 0192, 0198, 0200):** rewritten and reworded before the first push; commit ids in older notes and
 installer file names no longer exist. Old objects were not pruned everywhere (unreachable objects are never
