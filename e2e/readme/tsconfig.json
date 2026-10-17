@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "*.ts",
+    "lib/*.ts",
+    "../visual/lib/png.ts",
+    "../visual/screens.ts",
+    "../support/nail.ts",
+    "../support/remote.ts",
+    "../support/views.ts"
+  ]
+}

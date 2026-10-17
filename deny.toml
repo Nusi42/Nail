@@ -65,7 +65,7 @@ confidence-threshold = 0.93
 exceptions = [{ crate = "sqlite3mc-src", allow = ["Unlicense"] }]
 
 [licenses.private]
-# Nail's own crates (license = "LicenseRef-Proprietary", publish = false).
+# Nail's own crates (license = "AGPL-3.0-or-later", publish = false).
 ignore = true
 
 [bans]

@@ -8,8 +8,10 @@
 //
 //   node scripts/check-private.mjs              every tracked file (content + name), `npm run check`
 //   node scripts/check-private.mjs --staged     staged content + names (pre-commit hook)
-//   node scripts/check-private.mjs --message F  a commit message file (commit-msg hook)
-//   node scripts/check-private.mjs --push       the commits being pushed, messages + added lines
+//   node scripts/check-private.mjs --message F  a commit message file + the author and committer
+//                                               about to be recorded (commit-msg hook)
+//   node scripts/check-private.mjs --push       the commits being pushed: identities, messages,
+//                                               added lines
 //                                               (pre-push hook; reads git's ref lines on stdin)
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -20,6 +22,7 @@ import {
   loadMatchers,
   maskAll,
   patternsPath,
+  PUSH_LOG_FORMAT,
   pushSections,
   scanText,
 } from "./lib/private-patterns.mjs";
@@ -92,7 +95,15 @@ switch (mode) {
       .map((line) => (line.startsWith("#") ? "" : line))
       .join("\n");
     check("commit message", text ?? "");
-    scanned = "the commit message";
+    // The identity git records with this commit (user.name / user.email or
+    // the GIT_AUTHOR_* / GIT_COMMITTER_* overrides), without the time stamp.
+    for (const { who, variable } of [
+      { who: "author", variable: "GIT_AUTHOR_IDENT" },
+      { who: "committer", variable: "GIT_COMMITTER_IDENT" },
+    ]) {
+      check(`commit ${who}`, git(["var", variable]).toString("utf8").replace(/>.*$/s, ">"));
+    }
+    scanned = "the commit message and identity";
     break;
   }
   case "--push": {
@@ -109,7 +120,7 @@ switch (mode) {
         "--no-color",
         "--no-ext-diff",
         "-p",
-        "--format=%x00commit %H%n%B",
+        PUSH_LOG_FORMAT,
         ...range,
       ]).toString("utf8");
       for (const section of pushSections(log)) check(section.where, section.text);

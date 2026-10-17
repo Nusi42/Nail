@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Example Nail plug-in: CSV and TSV attachments as tables",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "nail-plugin build",

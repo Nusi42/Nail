@@ -95,14 +95,10 @@ describe("reader warnings", () => {
       "suspicious-link",
     ]);
     const sender = must(items[0]);
+    // One text: the two sentences with a space between them.
     expect(
       within(sender).getByText(
-        "The sender's address noreply@xn--ovabank-2jb.xn--om-6la uses look-alike characters: ńovabank.ċom imitates novabank.com.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(sender).getByText(
-        `The sender's name is written with look-alike or invisible characters; it reads "Kundenservice NOVABANK".`,
+        `The sender's address noreply@xn--ovabank-2jb.xn--om-6la uses look-alike characters: ńovabank.ċom imitates novabank.com. The sender's name is written with look-alike or invisible characters; it reads "Kundenservice NOVABANK".`,
       ),
     ).toBeInTheDocument();
     expect(

@@ -1,7 +1,7 @@
 # Release checklist — Nail 1.0
 
-What has to happen between the release candidate `1.0.0-rc.1` (plan M4,
-WP125) and the 1.0 release. The automated gate (every suite green, every
+What has to happen between the current version `0.8.0` (the plan M4 candidate,
+once numbered `1.0.0-rc.1`; WP125) and the 1.0 release. The automated gate (every suite green, every
 wave's Playwright scenarios, the installers, the performance budgets) is
 the integrators' job and recorded in `docs/plan.md` section 9; the gates
 below need people, accounts or keys, and are the maintainer's decisions.
@@ -17,7 +17,7 @@ items: [`docs/backlog.md`](backlog.md).
 | 2 | **EV code-signing certificate and a signed build** | owner | `scripts/verify-signatures.ps1` passes on the release artefacts | Buy the EV certificate (hardware token or cloud HSM); configure `NAIL_SIGN_THUMBPRINT` (or the PFX secrets for a standard certificate); run `release.yml`. Unsigned builds work but SmartScreen warns. |
 | 3 | **Real-account tests** from `docs/backlog.md`, as far as wanted before 1.0 | owner + tester | each chosen item run once by hand and noted here | Google account (Gmail API, Google CalDAV / CardDAV), Outlook.com and a Microsoft 365 tenant (Graph: shared mailboxes, rooms, rules, out of office, large attachments over 4 MB, send as / on behalf), optionally grommunio (EWS) in the interop job and an Exchange Server lab (Windows sign-in). |
 | 4 | **Smartcard test on real hardware** | tester | signing and decrypting with a real card (S/MIME and OpenPGP) noted here | The PKCS#11 code path is covered only by a soft token in the automated tests (ADR 0095): try a PIV card / YubiKey (OpenSC module) and an OpenPGP card. |
-| 5 | **First green GitHub CI run** | owner | the `ci.yml` jobs (build-test, desktop, mapi, installer incl. the elevated MSI smoke test, installer-arm64, deny, interop, perf) green on GitHub's runners | Never run on GitHub yet: every job ran locally only. Fix runner differences (paths, timeouts, the perf tolerance) in CI. |
+| 5 | **First green GitHub CI run** | owner | the `ci.yml` jobs (build-test, desktop, mapi, installer incl. the elevated MSI smoke test, installer-arm64, deny, interop, perf) green on GitHub's runners | The GitHub remote exists (ADR 0198); pushing `main` starts the run. Until then every job ran locally only. Fix runner differences (paths, timeouts, the perf tolerance) in CI. |
 | 6 | **Release update key** | owner, on a trusted offline machine | `NAIL_UPDATER_PRIVATE_KEY` / `_PASSWORD` secrets and the `NAIL_UPDATER_PUBKEY` variable set; two offline backups of the key | `docs/release.md` "Update key handling". Losing the key means installed copies can never be updated again. |
 | 7 | **External penetration test** | external tester | report, findings fixed | **Only if internet mode is to be unlocked** (`nail_api::remote::internet_mode_lock()`); not needed for 1.0 with internet mode locked. |
 | 8 | **Encryption at rest default** | owner | decision recorded in an ADR | Ships **off** by default (plan section 7); the UI recommends turning it on. Decide whether 1.0 turns it on for new installations. |

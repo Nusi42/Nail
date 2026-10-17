@@ -48,7 +48,7 @@ Guides and references for people using Nail.
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
 | [Accounts reference](accounts-reference.md) | `accounts.kdl`: accounts, servers and sign-in, identities (formats, signatures, mail style), what to synchronize, virtual accounts, OAuth2 providers, undo send |
 
-These pages describe Nail 1.0 (release candidate `1.0.0-rc.1`); what is new is in the [release notes](release-notes.md).
+These pages describe Nail 0.8 (`0.8.0`); what is new is in the [release notes](release-notes.md).
 
 Internal material (design, plan, decisions) lives in [`docs/`](../../docs/)
 instead. Translations go to `userDocs/<language>/`; a page without a

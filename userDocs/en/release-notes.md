@@ -1,11 +1,11 @@
 # Release notes
 
-## Nail 1.0 — release candidate 1 (`1.0.0-rc.1`)
+## Nail 0.8 (`0.8.0`)
 
-This is the first release candidate of Nail 1.0 for Windows: mail,
+This is a preview of Nail for Windows: mail,
 calendar, contacts and tasks with IMAP, POP3, Gmail and Microsoft Exchange,
 end-to-end encryption, a customizable look and layout, plug-ins, AI agents
-through MCP, and the remote UI. A release candidate is meant for testing:
+through MCP, and the remote UI. A preview is meant for testing:
 please keep a [backup](backup-restore.md) of your data.
 
 ### New in this version
@@ -90,7 +90,7 @@ please keep a [backup](backup-restore.md) of your data.
   only; new folders are created only in Local Folders.
 - Signed or encrypted messages over 4 MB cannot be sent through Microsoft
   Graph.
-- The installers of this release candidate are not code-signed yet:
+- The installers of this preview are not code-signed yet:
   Windows SmartScreen may warn when you start them.
 
 Earlier milestones (the preview versions) are summarized in the project's

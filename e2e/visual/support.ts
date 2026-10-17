@@ -71,7 +71,7 @@ export const test = base.extend<object, { nail: NailServer }>({
 export { expect };
 
 /** Puts the fixed events on the mock CalDAV server and waits until the core has them. */
-async function seedCalendar(server: NailServer): Promise<void> {
+export async function seedCalendar(server: NailServer): Promise<void> {
   for (const event of CALENDAR_EVENTS) {
     await control(server, "dav-put", {
       collection: "personal",

@@ -4,7 +4,7 @@ description = "Nail's mail and DAV engines against real servers (Dovecot, Stalwa
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
-license = "LicenseRef-Proprietary"
+license = "AGPL-3.0-or-later"
 publish = false
 
 # Not a member of the main workspace: the CI interop job runs it on Linux

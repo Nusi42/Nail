@@ -4315,7 +4315,7 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "nail-api"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "indexmap 2.14.2",
  "nail-util",
@@ -4330,7 +4330,7 @@ dependencies = [
 
 [[package]]
 name = "nail-app"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "axum",
  "clap",
@@ -4360,7 +4360,7 @@ dependencies = [
 
 [[package]]
 name = "nail-auth"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "keyring",
  "nail-api",
@@ -4379,7 +4379,7 @@ dependencies = [
 
 [[package]]
 name = "nail-bench"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4405,7 +4405,7 @@ dependencies = [
 
 [[package]]
 name = "nail-cli"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4429,7 +4429,7 @@ dependencies = [
 
 [[package]]
 name = "nail-compose"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "ammonia",
  "comrak",
@@ -4447,7 +4447,7 @@ dependencies = [
 
 [[package]]
 name = "nail-config"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "fluent-bundle",
  "indexmap 2.14.2",
@@ -4468,7 +4468,7 @@ dependencies = [
 
 [[package]]
 name = "nail-connlog"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "der",
@@ -4485,7 +4485,7 @@ dependencies = [
 
 [[package]]
 name = "nail-core"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4552,7 +4552,7 @@ dependencies = [
 
 [[package]]
 name = "nail-dav"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "nail-api",
  "nail-auth",
@@ -4572,7 +4572,7 @@ dependencies = [
 
 [[package]]
 name = "nail-discovery"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "hickory-resolver",
  "nail-api",
@@ -4591,7 +4591,7 @@ dependencies = [
 
 [[package]]
 name = "nail-exchange"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4618,7 +4618,7 @@ dependencies = [
 
 [[package]]
 name = "nail-ical"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "calcard",
@@ -4637,7 +4637,7 @@ dependencies = [
 
 [[package]]
 name = "nail-itip"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4654,7 +4654,7 @@ dependencies = [
 
 [[package]]
 name = "nail-mapi"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "nail-api",
  "nail-mapi",
@@ -4668,7 +4668,7 @@ dependencies = [
 
 [[package]]
 name = "nail-mcp"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -4694,7 +4694,7 @@ dependencies = [
 
 [[package]]
 name = "nail-mime"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "ammonia",
  "base64 0.23.1",
@@ -4716,7 +4716,7 @@ dependencies = [
 
 [[package]]
 name = "nail-net"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "async-compression",
  "base64 0.23.1",
@@ -4740,7 +4740,7 @@ dependencies = [
 
 [[package]]
 name = "nail-pgp"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4765,7 +4765,7 @@ dependencies = [
 
 [[package]]
 name = "nail-pkcs11"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "const-oid 0.9.6",
  "cryptoki",
@@ -4791,7 +4791,7 @@ dependencies = [
 
 [[package]]
 name = "nail-plugins"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4818,7 +4818,7 @@ dependencies = [
 
 [[package]]
 name = "nail-portability"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "argon2 0.6.0",
  "base64 0.23.1",
@@ -4846,7 +4846,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-ews"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -4871,7 +4871,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-gmail"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4896,7 +4896,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-graph"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4922,7 +4922,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-imap"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "futures",
@@ -4940,7 +4940,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-pop3"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "md-5 0.11.0",
@@ -4957,7 +4957,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proto-smtp"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "lettre",
@@ -4973,7 +4973,7 @@ dependencies = [
 
 [[package]]
 name = "nail-proxy"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "hmac 0.13.0",
@@ -4997,7 +4997,7 @@ dependencies = [
 
 [[package]]
 name = "nail-remote-auth"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "argon2 0.6.0",
  "axum",
@@ -5026,7 +5026,7 @@ dependencies = [
 
 [[package]]
 name = "nail-rules"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "nail-api",
  "nail-config",
@@ -5042,7 +5042,7 @@ dependencies = [
 
 [[package]]
 name = "nail-search"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "nail-api",
  "nail-mime",
@@ -5059,7 +5059,7 @@ dependencies = [
 
 [[package]]
 name = "nail-server"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -5095,7 +5095,7 @@ dependencies = [
 
 [[package]]
 name = "nail-sieve"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "hex",
@@ -5117,7 +5117,7 @@ dependencies = [
 
 [[package]]
 name = "nail-smime"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "aes 0.8.4",
  "aes-gcm",
@@ -5151,7 +5151,7 @@ dependencies = [
 
 [[package]]
 name = "nail-store"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -5177,7 +5177,7 @@ dependencies = [
 
 [[package]]
 name = "nail-testkit"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "base64 0.23.1",
  "mail-parser",
@@ -5193,7 +5193,7 @@ dependencies = [
 
 [[package]]
 name = "nail-testkit-net"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -5213,7 +5213,7 @@ dependencies = [
 
 [[package]]
 name = "nail-triage"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -5230,11 +5230,11 @@ dependencies = [
 
 [[package]]
 name = "nail-util"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 
 [[package]]
 name = "nail-vault"
-version = "1.0.0-rc.1"
+version = "0.8.0"
 dependencies = [
  "chacha20poly1305",
  "hex",

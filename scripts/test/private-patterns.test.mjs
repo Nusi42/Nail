@@ -129,9 +129,11 @@ test("the patterns file: environment override, absent file = nothing to check", 
   assert.equal(loadMatchers(path.join(os.tmpdir(), "nail-no-such-patterns.txt")), undefined);
 });
 
-test("push sections: messages, file names and added lines only", () => {
+test("push sections: identities, messages, file names and added lines only", () => {
   const log = [
     "\0commit 1111111111111111111111111111111111111111",
+    "Sam <sam@example.net>",
+    "Sam <sam@example.net>",
     "Fix: remove joanne's address",
     "",
     "diff --git a/docs/a.md b/docs/a.md",
@@ -141,6 +143,8 @@ test("push sections: messages, file names and added lines only", () => {
     "-old jo@corp.example.net",
     "+new sam@example.net",
     "\0commit 2222222222222222222222222222222222222222",
+    "Joanne <jo@corp.example.net>",
+    "Sam <sam@example.net>",
     "Second",
     "",
     "diff --git a/notes/joanne.txt b/notes/joanne.txt",
@@ -155,6 +159,9 @@ test("push sections: messages, file names and added lines only", () => {
   const hits = sections.flatMap((s) => scanText(s.text, matchers).map(() => s.where));
   assert.deepEqual(hits, [
     "commit 111111111111 message",
+    "commit 222222222222 author",
+    "commit 222222222222 author",
+    "commit 222222222222 author",
     "commit 222222222222 notes/joanne.txt (file name)",
   ]);
 });
@@ -229,6 +236,16 @@ test("the command checks the tree, staged files, messages and pushes", () => {
     const bad = run(repo, ["--message", message], patterns);
     assert.equal(bad.status, 1);
     assert.match(bad.stderr, /^commit message:1:9: private pattern 2/m);
+    // The author and committer about to be recorded count too.
+    fs.writeFileSync(message, "Subject\n");
+    const author = spawnSync(process.execPath, [SCRIPT, "--message", message], {
+      cwd: repo,
+      encoding: "utf8",
+      env: { ...process.env, [PATTERNS_ENV]: patterns, GIT_AUTHOR_NAME: "Joanne" },
+    });
+    assert.equal(author.status, 1);
+    assert.match(author.stderr, /^commit author:1:1: private pattern 5/m);
+    assert.doesNotMatch(author.stderr, /commit committer/);
 
     // The tree check sees committed files.
     git(repo, ["commit", "-q", "-m", "b"]);
@@ -250,6 +267,18 @@ test("the command checks the tree, staged files, messages and pushes", () => {
     );
     assert.equal(push.status, 1);
     assert.match(push.stderr, /c\.txt \(added lines/);
+    assert.doesNotMatch(push.stderr, /author|committer/);
+    // A commit recorded with a private identity.
+    git(repo, ["-c", "user.name=joanne", "commit", "-q", "--allow-empty", "-m", "d"]);
+    const named = git(repo, ["rev-parse", "HEAD"]).trim();
+    const pushed = run(
+      repo,
+      ["--push"],
+      patterns,
+      `refs/heads/main ${named} refs/heads/main ${zero}\n`,
+    );
+    assert.match(pushed.stderr, /^commit [0-9a-f]{12} author:1:1: private pattern 5/m);
+    assert.match(pushed.stderr, /^commit [0-9a-f]{12} committer:1:1: private pattern 5/m);
     // A deleted ref pushes nothing.
     const deleted = run(repo, ["--push"], patterns, `(delete) ${zero} refs/heads/x ${head}\n`);
     assert.equal(deleted.status, 0);

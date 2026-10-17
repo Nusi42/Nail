@@ -90,10 +90,10 @@ default-members = [
 ]
 
 [workspace.package]
-version = "1.0.0-rc.1"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.97"
-license = "LicenseRef-Proprietary"
+license = "AGPL-3.0-or-later"
 publish = false
 repository = "https://example.invalid/nail"
 

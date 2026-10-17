@@ -1,9 +1,9 @@
 {
   "name": "@nail/plugin-api",
   "private": true,
-  "version": "1.0.0-rc.1",
+  "version": "0.8.0",
   "description": "Types, the nail API, the JSX runtime, the test host and packaging tools for Nail plug-ins",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "types": "./src/index.ts",
   "exports": {

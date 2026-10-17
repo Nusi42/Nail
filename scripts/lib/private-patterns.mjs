@@ -219,8 +219,14 @@ export function describe(where, finding) {
 }
 
 /**
- * The added lines of a `git log -p` / `git diff` text, grouped by file, plus
- * the commit messages and changed file names (`--format=%x00commit %H%n%B`).
+ * The `git log` format `pushSections` reads: the commit id, the author and
+ * the committer (name and address), then the message.
+ */
+export const PUSH_LOG_FORMAT = "--format=%x00commit %H%n%an <%ae>%n%cn <%ce>%n%B";
+
+/**
+ * The added lines of a `git log -p` text (`PUSH_LOG_FORMAT`), grouped by
+ * file, plus each commit's author, committer, message and changed file names.
  * Removed lines are skipped: a commit that deletes private text is a fix.
  *
  * @param {string} log
@@ -232,7 +238,12 @@ export function pushSections(log) {
   for (const chunk of log.split("\0commit ").filter((c) => c.trim() !== "")) {
     const newline = chunk.indexOf("\n");
     const id = (newline < 0 ? chunk : chunk.slice(0, newline)).trim().replace(/^commit /, "");
-    const rest = newline < 0 ? "" : chunk.slice(newline + 1);
+    const [author = "", committer = "", ...body] = (
+      newline < 0 ? "" : chunk.slice(newline + 1)
+    ).split("\n");
+    sections.push({ where: `commit ${id.slice(0, 12)} author`, text: author });
+    sections.push({ where: `commit ${id.slice(0, 12)} committer`, text: committer });
+    const rest = body.join("\n");
     const diffAt = rest.search(/^diff --git /m);
     const message = diffAt < 0 ? rest : rest.slice(0, diffAt);
     sections.push({ where: `commit ${id.slice(0, 12)} message`, text: message });

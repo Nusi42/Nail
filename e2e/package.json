@@ -1,13 +1,13 @@
 {
   "name": "@nail/e2e",
   "private": true,
-  "version": "1.0.0-rc.1",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "test": "playwright test",
     "lint": "eslint --max-warnings 0 . && npm run typecheck && prettier --check .",
     "install-browsers": "playwright install chromium",
-    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p perf && tsc --noEmit -p visual"
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p perf && tsc --noEmit -p visual && tsc --noEmit -p readme"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -15,6 +15,7 @@
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.3",
     "esbuild": "^0.28.2",
+    "gifenc": "^1.0.3",
     "prettier": "^3.9.9",
     "typescript": "~6.0.3"
   }

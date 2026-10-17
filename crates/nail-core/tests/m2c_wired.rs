@@ -54,6 +54,18 @@ async fn synced(f: &Fixture) {
     .await;
 }
 
+/// Whether the mock IMAP server has a message with `subject` in Junk.
+fn in_server_junk(f: &Fixture, subject: &str) -> bool {
+    let junk = f
+        .demo
+        .control("imap-messages", &json!({ "mailbox": "Junk" }))
+        .unwrap();
+    junk.as_array()
+        .unwrap()
+        .iter()
+        .any(|m| m["subject"] == subject)
+}
+
 fn deliver(f: &Fixture, subject: &str, body: &str) {
     let raw = format!(
         "From: Someone <someone@example.net>\r\nTo: ada@work.example\r\nSubject: {subject}\r\n\
@@ -414,14 +426,19 @@ async fn marking_junk_trains_and_similar_mail_lands_in_junk() {
     };
     assert_eq!((status.trained_junk, status.trained_ham), (1, 1));
     assert!(status.ready);
-    let Response::Message { message } = f.service.handle(Request::GetMessage { id: spam_id }).await
-    else {
-        panic!("no message")
+    let user_verdict = || async {
+        let Response::Message { message } = f
+            .service
+            .handle(Request::GetMessage {
+                id: spam_id.clone(),
+            })
+            .await
+        else {
+            panic!("no message")
+        };
+        message.junk.map(|v| (v.junk, v.source))
     };
-    assert_eq!(
-        message.junk.map(|v| (v.junk, v.source)),
-        Some((true, JunkSource::User))
-    );
+    assert_eq!(user_verdict().await, Some((true, JunkSource::User)));
 
     // Similar new mail is classified and filed as junk.
     deliver(&f, "Another lottery winner", spam);
@@ -432,16 +449,27 @@ async fn marking_junk_trains_and_similar_mail_lands_in_junk() {
     })
     .await;
     eventually("the server moved it too", || async {
-        let junk = f
-            .demo
-            .control("imap-messages", &json!({ "mailbox": "Junk" }))
-            .unwrap();
-        junk.as_array()
-            .unwrap()
-            .iter()
-            .any(|m| m["subject"] == "Another lottery winner")
+        in_server_junk(&f, "Another lottery winner")
     })
     .await;
+    // By now the sync has seen the marked mail again in Junk, with the
+    // server's $Junk: the user's verdict stays, it is not the server's.
+    eventually("the server filed the marked mail", || async {
+        in_server_junk(&f, "You are a lottery winner")
+    })
+    .await;
+    f.service
+        .handle(Request::SyncNow {
+            account_id: Some(MULTI_WORK_ID.into()),
+        })
+        .await;
+    eventually("the sync saw the marked mail in Junk", || async {
+        folder(&f.service, MULTI_WORK_ID, FolderRole::Junk)
+            .await
+            .is_some_and(|junk| junk.total >= 2)
+    })
+    .await;
+    assert_eq!(user_verdict().await, Some((true, JunkSource::User)));
     f.service.shutdown().await;
 }
 

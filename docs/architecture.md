@@ -769,6 +769,8 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        visual/ (M5a, ADR 0106: visual regression, built-in themes ×
                        densities × 9 screens; own Playwright config; baselines in visual/baselines/<platform>
                        (win32 = reference); review page from scripts/visual-review/)
+                       readme/ (ADR 0197: the README media, `npm run readme:media` → docs/media/; recorder.ts =
+                       frames + drawn pointer, lib/gif.ts = GIF encoding with gifenc)
 defaults/              shipped theme.kdl (base + token schema) + layout.kdl (Lucide icon names; M5b: main = nav-rail +
                        view-host, views mail / calendar / contacts / tasks / settings, the mail window, settings window =
                        settings-page, ranked reader bar with More, no main toolbar); themes/ = the built-in
@@ -1332,3 +1334,6 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   Exchange via `ExchangeMailEngine::folder_write`); the store changes only after the server confirmed. Renames re-path
   in place (`Store::move_folder_tree`), IMAP mirroring matches by path (`ids::unique_folder_id`, `folders.delimiter`),
   config paths follow (`folders::rewrite_config`). UI slot `ui/src/features/folders/`, `state/queuedOps.ts`.
+- README and repository (ADRs 0197, 0198): `README.md` with the animated banner and GIFs from `docs/media/`
+  (recorded by `e2e/readme/`); GitHub remote `github` in `nail-work-1`; public commit identity checked by
+  `scripts/check-private.mjs` (commit-msg and pre-push); license AGPL-3.0-or-later with a contributor license agreement (dual licensing), plug-in kit and examples MIT.

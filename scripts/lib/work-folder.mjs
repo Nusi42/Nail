@@ -91,6 +91,24 @@ export const HOOKS_DIR = ".githooks";
 /** The `git` arguments that point a checkout at {@link HOOKS_DIR}. */
 export const HOOKS_PATH_ARGS = ["config", "core.hooksPath", HOOKS_DIR];
 
+/** The commit identity a work folder copies from the master (ADR 0198). */
+export const IDENTITY_KEYS = ["user.name", "user.email"];
+
+/**
+ * The `git config` calls that give a new work folder the master's own
+ * commit identity (the public one, ADR 0198), never the machine's global
+ * name and address: one per key the master sets locally.
+ *
+ * @param {(key: string) => string | undefined} masterValue the master's local value of a key
+ * @returns {string[][]}
+ */
+export function identityConfig(masterValue) {
+  return IDENTITY_KEYS.flatMap((key) => {
+    const value = masterValue(key);
+    return value ? [["config", key, value]] : [];
+  });
+}
+
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /**

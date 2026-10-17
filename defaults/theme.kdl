@@ -1812,6 +1812,8 @@ theme "default" mode="system" {
         font-size "$font-size.sm"
         word-break "break-all"
     }
+    // The advice after a disguised sender (ADR 0195), on a line of its own.
+    part "security-warnings.hint" { display "block"; font-weight "$font-weight.medium"; }
     part "security-attachment-warning" { color "$color.danger"; font-size "$font-size.sm"; }
 
     part "security-compose.slot" {

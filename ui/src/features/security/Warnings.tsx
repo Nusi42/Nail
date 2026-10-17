@@ -76,12 +76,8 @@ export function MessageWarnings({ message }: { message: MessageBody }) {
       <ul data-part="security-warnings.list">
         {senders.map((w) => (
           <li key={`sender-${w.address}`} data-part="security-warnings.item" data-kind={w.kind}>
-            {senderText(t, w).map((line) => (
-              <span key={line} data-part="security-warnings.text">
-                {line}
-              </span>
-            ))}
-            <span data-part="security-warnings.target">{t("security-warning-sender-hint")}</span>
+            <span data-part="security-warnings.text">{senderText(t, w).join(" ")}</span>
+            <span data-part="security-warnings.hint">{t("security-warning-sender-hint")}</span>
           </li>
         ))}
         {links.map((w, i) => (

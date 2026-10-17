@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-labelledby="title desc">
+  <title id="title">Nail</title>
+  <desc id="desc">A hammer drives the last nail into a coffin with an old envelope carved into its side. Nail: the last nail in Outlook's coffin.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e2a44"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a4a26"/>
+      <stop offset="1" stop-color="#4a2a14"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9a6234"/>
+      <stop offset="1" stop-color="#6e4120"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#94a3b8"/>
+      <stop offset="0.45" stop-color="#e2e8f0"/>
+      <stop offset="1" stop-color="#475569"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+    <style>
+      .hammer { transform-box: view-box; transform-origin: 540px 116px; animation: swing 3.6s infinite; }
+      .nail { animation: drive 3.6s infinite; }
+      .spark { opacity: 0; transform-box: fill-box; transform-origin: center; }
+      .s1 { animation: spark1 3.6s infinite; }
+      .s2 { animation: spark2 3.6s infinite; }
+      .s3 { animation: spark3 3.6s infinite; }
+      .glow { animation: glow 3.6s infinite; }
+      @keyframes swing {
+        0% { transform: translateY(0) rotate(34deg); animation-timing-function: cubic-bezier(.55,0,1,.45); }
+        12% { transform: translateY(0) rotate(0deg); animation-timing-function: ease-out; }
+        24% { transform: translateY(13px) rotate(34deg); animation-timing-function: cubic-bezier(.55,0,1,.45); }
+        36% { transform: translateY(13px) rotate(0deg); animation-timing-function: ease-out; }
+        48% { transform: translateY(26px) rotate(34deg); animation-timing-function: cubic-bezier(.55,0,1,.45); }
+        60% { transform: translateY(26px) rotate(0deg); animation-timing-function: ease-out; }
+        74% { transform: translateY(20px) rotate(40deg); }
+        100% { transform: translateY(0) rotate(34deg); }
+      }
+      @keyframes drive {
+        0%, 12% { transform: translateY(0); opacity: 1; }
+        12.5%, 36% { transform: translateY(13px); }
+        36.5%, 60% { transform: translateY(26px); }
+        60.5%, 90% { transform: translateY(40px); opacity: 1; }
+        95% { transform: translateY(40px); opacity: 0; }
+        96% { transform: translateY(0); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes spark1 { 0%, 11.5% { opacity: 0; transform: scale(.4); } 12.5% { opacity: 1; transform: scale(1); } 17%, 100% { opacity: 0; transform: scale(1.5); } }
+      @keyframes spark2 { 0%, 35.5% { opacity: 0; transform: scale(.4); } 36.5% { opacity: 1; transform: scale(1); } 41%, 100% { opacity: 0; transform: scale(1.5); } }
+      @keyframes spark3 { 0%, 59.5% { opacity: 0; transform: scale(.4); } 60.5% { opacity: 1; transform: scale(1.2); } 67%, 100% { opacity: 0; transform: scale(1.8); } }
+      @keyframes glow { 0%, 60% { opacity: .55; } 64% { opacity: 1; } 85%, 100% { opacity: .55; } }
+      @media (prefers-reduced-motion: reduce) {
+        .hammer, .nail, .spark, .glow { animation: none; }
+        .nail { transform: translateY(40px); }
+        .hammer { transform: translateY(20px) rotate(34deg); }
+      }
+    </style>
+  </defs>
+
+  <rect width="960" height="300" rx="20" fill="url(#sky)"/>
+  <g fill="#cbd5e1" opacity=".5">
+    <circle cx="70" cy="40" r="1.4"/><circle cx="160" cy="80" r="1"/><circle cx="300" cy="30" r="1.2"/>
+    <circle cx="460" cy="60" r="1"/><circle cx="620" cy="28" r="1.3"/><circle cx="780" cy="52" r="1"/>
+    <circle cx="900" cy="36" r="1.4"/><circle cx="860" cy="250" r="1"/><circle cx="560" cy="270" r="1.2"/>
+  </g>
+  <ellipse cx="250" cy="268" rx="230" ry="12" fill="#020617" opacity=".55"/>
+
+  <!-- The nail being driven: drawn before the lid, which hides what went in. -->
+  <g class="nail">
+    <rect x="417" y="128" width="5" height="44" rx="1" fill="url(#steel)"/>
+    <ellipse cx="419.5" cy="128" rx="9" ry="3.2" fill="#cbd5e1" stroke="#64748b" stroke-width="1"/>
+  </g>
+
+  <!-- The coffin, from the side. -->
+  <path d="M70 186 L440 186 L424 258 L86 258 Z" fill="url(#wood)"/>
+  <rect x="58" y="168" width="396" height="21" rx="5" fill="url(#lid)"/>
+  <rect x="58" y="168" width="396" height="3" rx="1.5" fill="#c08454" opacity=".7"/>
+  <g fill="#c9a227">
+    <rect x="128" y="214" width="44" height="8" rx="4"/>
+    <rect x="334" y="214" width="44" height="8" rx="4"/>
+  </g>
+  <!-- An old envelope carved into the side. -->
+  <g class="glow" fill="none" stroke="#2b170a" stroke-width="3" stroke-linejoin="round">
+    <rect x="226" y="200" width="58" height="40" rx="3"/>
+    <path d="M226 203 L255 224 L284 203"/>
+  </g>
+  <!-- The nails already in. -->
+  <g fill="#cbd5e1" stroke="#64748b" stroke-width="1">
+    <ellipse cx="86" cy="168" rx="8" ry="2.8"/><ellipse cx="152" cy="168" rx="8" ry="2.8"/>
+    <ellipse cx="218" cy="168" rx="8" ry="2.8"/><ellipse cx="284" cy="168" rx="8" ry="2.8"/>
+    <ellipse cx="350" cy="168" rx="8" ry="2.8"/>
+  </g>
+
+  <!-- Sparks where the hammer strikes. -->
+  <g stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round">
+    <g class="spark s1"><path d="M396 122 L386 116 M443 122 L453 116 M405 110 L399 100 M434 110 L440 100"/></g>
+    <g class="spark s2"><path d="M396 135 L386 129 M443 135 L453 129 M405 123 L399 113 M434 123 L440 113"/></g>
+    <g class="spark s3"><path d="M393 162 L380 154 M446 162 L459 154 M404 150 L397 138 M435 150 L442 138 M419 146 L419 132"/></g>
+  </g>
+
+  <!-- The hammer, drawn striking; it swings around the end of its handle. -->
+  <g class="hammer">
+    <rect x="426" y="110" width="118" height="12" rx="6" fill="#b45309"/>
+    <rect x="426" y="110" width="118" height="4" rx="2" fill="#d97706" opacity=".8"/>
+    <rect x="401" y="98" width="38" height="30" rx="4" fill="url(#steel)"/>
+    <rect x="398" y="124" width="44" height="5" rx="2" fill="#334155"/>
+  </g>
+
+  <text x="600" y="142" font-family="Segoe UI, Inter, system-ui, -apple-system, sans-serif" font-size="96" font-weight="800" letter-spacing="-2" fill="url(#word)">Nail</text>
+  <text x="604" y="184" font-family="Segoe UI, Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="600" fill="#e2e8f0">The last nail in Outlook’s coffin.</text>
+  <text x="604" y="216" font-family="Segoe UI, Inter, system-ui, -apple-system, sans-serif" font-size="15" fill="#94a3b8">Mail · Calendar · Contacts · Tasks</text>
+  <text x="604" y="238" font-family="Segoe UI, Inter, system-ui, -apple-system, sans-serif" font-size="15" fill="#94a3b8">fast, private, yours to reshape</text>
+</svg>

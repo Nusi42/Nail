@@ -36,11 +36,17 @@ node scripts/work-folders.mjs create 6        # from a work folder: clone the ma
 git fetch origin && git reset --hard origin/main  # a package folder starts from main (clean tree first)
 git push --force-with-lease origin work-3       # a package is done (pre-push runs npm run check); the lead merges origin/work-3 into work-1
 git push origin work-1 && git -C <master> merge --ff-only work-1   # after each green lead stage: main = work-1
+git push github work-1:main                     # then publish main on GitHub (nail-work-1 only, ADR 0198)
 node scripts/work-folders.mjs guard-master    # once: Cargo in the master refuses every build
 ```
 
 `main` is always green: it only moves to a `work-1` commit whose full suite
-passed. Hooks in every work folder: pre-commit = the private-data guard on
+passed. GitHub (`<public remote>`, private for now) is the
+remote `github` of `nail-work-1` and receives `main` after each fast-forward
+(ADR 0198). Commits use the public identity in each folder's local config
+(`user.name` / `user.email`: the GitHub account's noreply address), never
+the machine's global name and address; `work-folders.mjs create` copies it
+from the master. Hooks in every work folder: pre-commit = the private-data guard on
 the staged content + the fast per-file checks, commit-msg = the private-data
 guard on the message, pre-push = the private-data guard on the pushed commits +
 `npm run check` (`.githooks/`), and Claude Code's post-edit hook
@@ -273,8 +279,8 @@ Findings name file and line with the match masked.
 ```bash
 node scripts/check-private.mjs              # every tracked file + name (step `private` of npm run check)
 node scripts/check-private.mjs --staged     # staged content + names (pre-commit hook)
-node scripts/check-private.mjs --message F  # a commit message (commit-msg hook)
-node scripts/check-private.mjs --push       # pushed commits: messages, names, added lines (pre-push; refs on stdin)
+node scripts/check-private.mjs --message F  # a commit message + the author / committer about to be recorded (commit-msg hook)
+node scripts/check-private.mjs --push       # pushed commits: author, committer, messages, names, added lines (pre-push; refs on stdin)
 ```
 
 A finding is fixed by replacing the value with neutral example data; never
@@ -653,6 +659,19 @@ npm run visual:selftest    # end-to-end self-test of the harness with temporary 
   `NAIL_VISUAL_RESULTS`. Details: `e2e/visual/README.md`.
 - CI job `visual` (non-blocking for now) uploads the review page as the
   artifact `visual-review`.
+
+### README media (ADR 0197)
+
+`npm run readme:media` re-records the README's GIFs and stills in
+`docs/media/` (`e2e/readme/media.readme.ts`, one fresh
+`nail serve --seed demo-multi` per scene, the visual harness's fixed clock,
+a drawn pointer from `e2e/readme/recorder.ts`, GIFs encoded with `gifenc` in
+`e2e/readme/lib/gif.ts`). Needs `npm run build -w ui` and `cargo build -p
+nail-cli`; `-- -g <scene>` records one scene, `NAIL_README_FRAMES=<dir>`
+also writes every frame as a PNG. Review the files before committing them;
+only demo personas and made-up domains may appear. The banner
+`docs/media/banner.svg` is drawn by hand (CSS animations, still under
+reduced motion).
 
 ### Generated files and snapshots
 

@@ -4710,6 +4710,17 @@
       "source": null
     },
     {
+      "selector": "security-warnings.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "block",
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
       "selector": "security-attachment-warning",
       "states": [],
       "conditions": [],

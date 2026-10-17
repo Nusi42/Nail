@@ -12,12 +12,31 @@ import {
   branchOf,
   claudeLocalSettings,
   folderOf,
+  identityConfig,
   isInOneDrive,
   masterCargoConfig,
   masterRefusal,
   parseFolderNumber,
 } from "../lib/work-folder.mjs";
 import { parseJson } from "../lib/json.mjs";
+
+test("a new work folder takes the master's own commit identity, nothing else", () => {
+  const master = new Map([
+    ["user.name", "Sam"],
+    ["user.email", "sam@example.net"],
+  ]);
+  assert.deepEqual(
+    identityConfig((key) => master.get(key)),
+    [
+      ["config", "user.name", "Sam"],
+      ["config", "user.email", "sam@example.net"],
+    ],
+  );
+  assert.deepEqual(
+    identityConfig(() => undefined),
+    [],
+  );
+});
 
 test("work folder n is nail-work-<N> on branch work-<N>", () => {
   assert.equal(folderOf(1), "nail-work-1");

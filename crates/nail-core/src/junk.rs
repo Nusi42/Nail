@@ -209,6 +209,15 @@ impl Service {
                 let mut trained: Vec<AccountId> = Vec::new();
                 let mut settings_of = HashMap::new();
                 for id in &ids {
+                    // The user's own verdict always stands: a message they
+                    // marked comes back as an "arrival" when the sync sees it
+                    // in its new folder, with the server's $Junk keyword.
+                    if store
+                        .junk_verdict(id)?
+                        .is_some_and(|v| v.source == JunkSource::User)
+                    {
+                        continue;
+                    }
                     let Some(input) = junk_input(store, service.blobs(), id) else {
                         continue;
                     };
@@ -443,5 +452,39 @@ mod tests {
             "{tokens:?}"
         );
         assert_eq!(tokens_of(b"").len(), 0);
+    }
+
+    /// A message the user marked as junk carries `$Junk`, which also is how
+    /// a server says "junk": classifying it as an arrival afterwards (late,
+    /// or when the sync sees it in its new folder) keeps the user's verdict.
+    #[tokio::test]
+    async fn the_users_verdict_outlives_a_later_arrival() {
+        let f = crate::testing::TempService::seeded();
+        let store = f.service.store();
+        let account = &store.list_accounts().unwrap()[0].id;
+        let inbox = store
+            .list_folders(account)
+            .unwrap()
+            .into_iter()
+            .find(|folder| folder.role == FolderRole::Inbox)
+            .unwrap();
+        let id = store.folder_message_ids(&inbox.id).unwrap()[0].clone();
+        let marked = f
+            .service
+            .handle(nail_api::Request::MarkJunk {
+                message_ids: vec![id.clone()],
+                junk: true,
+            })
+            .await;
+        assert!(
+            matches!(marked, nail_api::Response::Queued { .. }),
+            "{marked:?}"
+        );
+        let user = Some((true, JunkSource::User));
+        let verdict = || store.junk_verdict(&id).unwrap().map(|v| (v.junk, v.source));
+        assert_eq!(verdict(), user);
+
+        f.service.classify_arrivals(vec![id.clone()]).await;
+        assert_eq!(verdict(), user);
     }
 }

@@ -2,7 +2,7 @@
   "name": "nail",
   "private": true,
   "description": "Nail email & PIM client (npm workspaces root)",
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "engines": {
     "node": ">=24",
@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w ui",
-    "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present && node --test e2e/perf/run-perf.test.mjs && node --test e2e/visual/scripts.test.mjs \"e2e/visual/lib/*.test.ts\" \"scripts/visual-review/*.test.mjs\"",
+    "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present && node --test e2e/perf/run-perf.test.mjs && node --test e2e/visual/scripts.test.mjs \"e2e/visual/lib/*.test.ts\" \"e2e/readme/lib/*.test.ts\" \"scripts/visual-review/*.test.mjs\"",
     "check:sockets": "node scripts/check-socket-binds.mjs",
     "check:duplicates": "node scripts/check-duplicates.mjs",
     "prepare": "node scripts/install-hooks.mjs",
@@ -36,6 +36,7 @@
     "e2e:only": "npm run test -w e2e",
     "visual": "node e2e/visual/run-visual.mjs",
     "visual:update": "node e2e/visual/run-visual.mjs --update",
+    "readme:media": "node scripts/readme-media.mjs",
     "visual:review": "node scripts/visual-review/generate.mjs",
     "visual:selftest": "node e2e/visual/selftest.mjs"
   },

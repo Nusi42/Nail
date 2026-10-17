@@ -73,6 +73,7 @@ npm test                                   # socket-bind check, Vitest (ui), pac
 npm run check                              # every formatter and linter, 0 warnings (node scripts/check.mjs --only a,b / --list)
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (e2e:only = already built)
 npm run visual                             # visual regression (visual:update writes baselines, then review)
+npm run readme:media                       # re-record the README's GIFs and stills in docs/media (review before commit)
 npm run gen:api                            # regenerate the TypeScript contract (a test fails when stale)
 cargo run -p nail-cli -- serve --seed demo-multi   # web mode with mock accounts and test controls (also demo, demo-imap)
 npm run dev / npm run tauri dev            # Vite on a free port / desktop app with hot reload
@@ -92,7 +93,8 @@ like this:
    half-finished — check it in its folder (`npm run check`, its tests), then merge it or let an agent finish it.
 3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`): packages in `nail-work-2` and up, reset to
    `main`; reviewers with a fresh context; merge into `work-1`, full suite, push `work-1`,
-   `git -C <master> merge --ff-only work-1` (Git Bash).
+   `git -C <master> merge --ff-only work-1` (Git Bash), then `git push github work-1:main` from
+   `nail-work-1` (GitHub, ADR 0198).
 4. CodeGraph's index lives in `nail-work-1/.codegraph` (the master has none): pass
    `projectPath: <work root>\nail-work-1` to `codegraph_explore`, or run `codegraph explore` there.
 5. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
@@ -107,6 +109,11 @@ like this:
 
 - `main` lives in the master and moves only by fast-forward to `work-1` after a green lead stage. Work folders commit on
   their own `work-<N>` branch. Commit only when asked, or as part of an agreed workflow stage.
+- GitHub (`<public remote>`, remote `github` in `nail-work-1`) gets `main` after each fast-forward. Every
+  commit uses the public identity of the folder's local config (GitHub noreply, ADR 0198), never a real name or
+  address; the commit-msg and pre-push hooks check it.
+- License: AGPL-3.0-or-later with a contributor license agreement (dual licensing, `CONTRIBUTING.md`); the plug-in kit
+  and the example plug-ins MIT (ADR 0198). Never add a GPL / LGPL / AGPL dependency: it would block the other license.
 - End commit messages with the Co-Authored-By / Claude-Session lines required by the session.
 
 ## Memory

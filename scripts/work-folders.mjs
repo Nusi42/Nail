@@ -6,8 +6,8 @@
  *   node scripts/work-folders.mjs create <n> [--no-install]
  *       clone the master into <parent of this folder>\nail-work-<N> on branch
  *       work-<N> (taken from the master when it exists, else created from
- *       `main` and pushed), write its .claude/settings.local.json, `npm ci`,
- *       `npm run build`
+ *       `main` and pushed), give it the master's commit identity (ADR 0198),
+ *       write its .claude/settings.local.json, `npm ci`, `npm run build`
  *   node scripts/work-folders.mjs guard-master
  *       make Cargo refuse every build in the master (a rustc wrapper in its
  *       gitignored .cargo/config.local.toml)
@@ -24,6 +24,7 @@ import {
   branchOf,
   claudeLocalSettings,
   folderOf,
+  identityConfig,
   isInOneDrive,
   masterCargoConfig,
   parseFolderNumber,
@@ -38,6 +39,21 @@ import {
  */
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+}
+
+/**
+ * A key of the repository's own config, if it sets one.
+ *
+ * @param {string} cwd
+ * @param {string} key
+ * @returns {string | undefined}
+ */
+function localValue(cwd, key) {
+  try {
+    return git(cwd, ["config", "--local", "--get", key]) || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The master repository: this work folder's `origin`. */
@@ -61,6 +77,7 @@ function create(n, install) {
   if (fs.existsSync(target)) throw new Error(`${target} exists already`);
   const branch = branchOf(n);
   execFileSync("git", ["clone", master, target], { stdio: "inherit" });
+  for (const args of identityConfig((key) => localValue(master, key))) git(target, args);
   const known = git(target, ["branch", "-r", "--list", `origin/${branch}`]) !== "";
   if (known) {
     git(target, ["switch", branch]);

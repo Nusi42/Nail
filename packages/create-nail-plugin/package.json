@@ -1,9 +1,9 @@
 {
   "name": "create-nail-plugin",
   "private": true,
-  "version": "1.0.0-rc.1",
+  "version": "0.8.0",
   "description": "Starter template for Nail plug-ins (npm create nail-plugin)",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "create-nail-plugin": "./index.mjs"

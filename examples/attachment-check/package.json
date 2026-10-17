@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Example Nail plug-in: stops mail that mentions a missing attachment",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "nail-plugin build",

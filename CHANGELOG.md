@@ -8,6 +8,10 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+The version is 0.8.0: the internal candidate `1.0.0-rc.1` was
+never published and is renumbered; 1.0 follows once the gates in
+[`docs/release-checklist.md`](docs/release-checklist.md) are passed.
+
 ### Changed (M5b, ADRs 0109–0114)
 
 - **Navigation rail and views**: Mail, Calendar, Contacts, Tasks and
@@ -37,12 +41,17 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ### Fixed
 
+- A message you marked as junk could be reported as "marked by the server"
+  when its arrival was classified after your mark (its `$Junk` keyword then
+  looked like the server's verdict); your own verdict now always stands.
+- The look-alike sender warning ran its two sentences together and showed
+  its advice in the monospace style of link addresses.
 - `nail serve --seed demo-multi` keeps its secrets in the demo keychain
   file, so encryption at rest survives a restart there too.
 - Plug-in hot reload in `nail plugin dev` could stop watching a folder, or
   restart a plug-in that was just disabled, when changes arrived quickly.
 
-## [1.0.0-rc.1] — 2026-10-02
+## [1.0.0-rc.1] — 2026-10-02 (internal, renumbered 0.8.0)
 
 The first release candidate for Windows: everything planned for version 1.0
 (plan milestones M0–M4) is in. What still stands between this candidate and
