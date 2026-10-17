@@ -33,6 +33,15 @@ nothing about it is set in stone.
 
 ## A tour
 
+### Safe by default
+
+HTML mail renders in a sandbox that never runs scripts, remote images stay
+blocked until you allow a sender, links that hide their real target and senders
+that disguise themselves are flagged, and the complete source of every message
+is one click away.
+
+<img src="docs/media/safety.gif" alt="A phishing mail from a look-alike bank domain is flagged; Show source opens the raw message." width="100%">
+
 ### Conversations that read like a conversation
 
 Rows group a whole thread, your own replies from Sent included. The reader shows
@@ -57,21 +66,21 @@ in the app or in any text editor.
 
 <img src="docs/media/themes.gif" alt="The same conversation in the Nocturne, Sage, Graphite, High contrast and Frost themes." width="100%">
 
+### Arrange it your way
+
+Customize the layout right in the window: pick a preset, drag panes to
+another side, hide or remove them, and add widgets such as a mini calendar
+or today's agenda. Every change is undoable and lands in `layout.kdl`;
+toolbars can be customized the same way.
+
+<img src="docs/media/layout.gif" alt="Customize layout from the rail's View menu: the Reader below preset, a mini calendar added to the folder pane, Done." width="100%">
+
 ### Every action a few keys away
 
 `Ctrl+K` opens the command palette with every action of the app; key sequences
 like `g c` (go to the calendar) work too.
 
 <img src="docs/media/palette.gif" alt="The command palette opens with Ctrl+K, 'calendar' is typed, and the calendar opens." width="100%">
-
-### Safe by default
-
-HTML mail renders in a sandbox that never runs scripts, remote images stay
-blocked until you allow a sender, links that hide their real target and senders
-that disguise themselves are flagged, and the complete source of every message
-is one click away.
-
-<img src="docs/media/safety.gif" alt="A phishing mail from a look-alike bank domain is flagged; Show source opens the raw message." width="100%">
 
 ### Your folders, on the server
 

@@ -10,7 +10,7 @@ import path from "node:path";
 import { expect, test as base, type Page } from "@playwright/test";
 import { control, repoRoot, startNail, type NailServer } from "../support/nail";
 import { rpc } from "../support/remote";
-import { messageRows, readerToolbar, refreshList, showView } from "../support/views";
+import { messageRows, rail, readerToolbar, refreshList, showView } from "../support/views";
 import { CALENDAR_TIME, CONVERSATION, loadMainWindow, MAIN_TIME } from "../visual/screens.ts";
 import { preparePage, seedCalendar } from "../visual/support.ts";
 import { decodePng, type Image } from "../visual/lib/png.ts";
@@ -146,6 +146,36 @@ test("themes: five built-in themes, switched live", async ({ page, nail }) => {
     await rec.shot(1300);
   }
   saved(rec, "themes");
+});
+
+test("layout: customize the window in place", async ({ page, nail }) => {
+  const rec = await open(page, nail);
+  await rec.shot(900);
+  const editor = page.getByRole("region", { name: "Customizing layout: Mail" });
+  const palette = page.getByRole("complementary", { name: "Layout palette" });
+  // The rail's View menu (an empty spot of the rail).
+  await rec.click(rail(page), { button: "right", hold: 700 });
+  await rec.click(
+    page.getByRole("menu", { name: "View" }).getByRole("menuitem", { name: "Customize layout" }),
+    {
+      settle: () => expect(editor).toBeVisible(),
+      hold: 1200,
+    },
+  );
+  await rec.click(palette.getByRole("button", { name: /Reader below/ }), { hold: 1500 });
+  await rec.click(palette.getByRole("button", { name: "Move Mini month", exact: true }), {
+    hold: 500,
+  });
+  await rec.click(page.getByRole("button", { name: "Add Mini month to Folders", exact: true }), {
+    settle: () => expect(editor.locator('[data-part="mini-month"]').first()).toBeVisible(),
+    hold: 1500,
+  });
+  await rec.click(editor.getByRole("button", { name: "Done" }), {
+    settle: () => expect(editor).toBeHidden(),
+    hold: 900,
+  });
+  await rec.click(row(page, "Your invoice for September 2026"), { hold: 2600 });
+  saved(rec, "layout");
 });
 
 test("palette: every action a few keys away", async ({ page, nail }) => {
