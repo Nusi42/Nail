@@ -25,3 +25,5 @@ Thumbs.db
 # Claude Code local settings (machine-specific, e.g. autoMemoryDirectory)
 /.claude/settings.local.json
 /.nail-build/
+# The maintainer's own setup for Claude Code (paths, remotes; ADR 0199), never committed
+/CLAUDE.local.md

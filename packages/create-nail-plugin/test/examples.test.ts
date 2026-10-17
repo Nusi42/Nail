@@ -100,7 +100,7 @@ describe.each(exampleNames())("the %s example", (name) => {
   });
 });
 
-// Review M4a: build output never goes into the repository (OneDrive), so
+// Review M4a: build output never goes into the repository, so
 // the docs never tell anyone to build an example in place.
 describe("example build docs", () => {
   it("build a copy outside the repository", () => {

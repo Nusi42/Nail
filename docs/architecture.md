@@ -808,7 +808,7 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        lib/staged.mjs (.githooks/pre-commit), install-hooks.mjs (`prepare`: core.hooksPath),
                        check-editorconfig.mjs + lib/editorconfig-check.mjs;
                        work-folders.mjs + lib/work-folder.mjs (ADR 0132: create a work folder, guard the master;
-                       assertWorkFolder refuses development commands inside OneDrive); post-edit.mjs (the Claude Code
+                       assertWorkFolder refuses development commands in a checkout marked as the master, ADR 0199); post-edit.mjs (the Claude Code
                        post-edit hook of .claude/settings.json) + lib/run-checks.mjs (per-file checks, shared with pre-commit.mjs)
                        Q2 (ADR 0171): check-duplicates.mjs + lib/duplicates/ (config.mjs thresholds + ignores, jscpd.mjs,
                        sources.mjs lexer, ssot.mjs checks, owners.mjs package of each finding, index.mjs, report.mjs, cli.mjs);
@@ -1171,7 +1171,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   borrow the wrapper; the Vite build splits the initial code into `vendor`, `vendor-ui`, `catalogs`, `default-theme`
   and size-capped `app` chunks with `strictExecutionOrder` (the mock core loads only with `?mock=1`); rolldown's load-dependent plug-in timing
   notice is off (`checks.bundlerTimings`). Vite configs that import a symlinked workspace package keep
-  `resolve.preserveSymlinks: true` (`ui/`, `packages/create-nail-plugin`; needed for checkouts inside OneDrive).
+  `resolve.preserveSymlinks: true` (`ui/`, `packages/create-nail-plugin`; needed for checkouts inside cloud-synced folders such as OneDrive).
 
 ### M5d
 
@@ -1337,3 +1337,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - README and repository (ADRs 0197, 0198): `README.md` with the animated banner and GIFs from `docs/media/`
   (recorded by `e2e/readme/`); GitHub remote `github` in `nail-work-1`; public commit identity checked by
   `scripts/check-private.mjs` (commit-msg and pre-push); license AGPL-3.0-or-later with a contributor license agreement (dual licensing), plug-in kit and examples MIT.
+- The maintainer's setup out of the repository (ADR 0199): the master is the checkout with `NAIL_CHECKOUT_ROLE=master`
+  (environment or gitignored `.env.local`, `scripts/lib/work-folder.mjs` `localSettings` / `isMaster`); work-folder
+  names from `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`; `nail-wave` takes its folders as args; personal
+  paths and remotes only in the untracked `CLAUDE.local.md`.

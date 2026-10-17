@@ -4,7 +4,7 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  // Keep Vite's cache out of the repository (OneDrive).
+  // Keep Vite's cache out of the repository (it may be in a synced folder).
   cacheDir: path.join(tmpdir(), "nail-vite", "create-nail-plugin"),
   // `@nail/plugin-api` is a workspace symlink in node_modules. When the
   // real path cannot be resolved (node_modules in a OneDrive cloud folder is

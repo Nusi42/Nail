@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 /**
- * Work folders (ADR-WORK-FOLDERS; helpers in scripts/lib/work-folder.mjs).
- * Run from an existing work folder; the master is its `origin`.
+ * Work folders (ADRs 0132, 0199; helpers in scripts/lib/work-folder.mjs).
+ * Optional: only for a maintainer who keeps a master checkout. Run from an
+ * existing work folder; the master is its `origin`.
  *
- *   node scripts/work-folders.mjs create <n> [--no-install]
- *       clone the master into <parent of this folder>\nail-work-<N> on branch
- *       work-<N> (taken from the master when it exists, else created from
- *       `main` and pushed), give it the master's commit identity (ADR 0198),
- *       write its .claude/settings.local.json, `npm ci`, `npm run build`
  *   node scripts/work-folders.mjs guard-master
- *       make Cargo refuse every build in the master (a rustc wrapper in its
- *       gitignored .cargo/config.local.toml)
+ *       mark the `origin` checkout as the master (NAIL_CHECKOUT_ROLE=master in
+ *       its gitignored .env.local) and make Cargo refuse every build there (a
+ *       rustc wrapper in its gitignored .cargo/config.local.toml)
+ *   node scripts/work-folders.mjs create <n> [--no-install]
+ *       clone the master into <parent of this folder>/<prefix><n> on branch
+ *       <branch prefix><n> (default nail-work-<N> on work-<N>; taken from the
+ *       master when it exists, else created from `main` and pushed), give it
+ *       the master's commit identity (ADR 0198), write its
+ *       .claude/settings.local.json, `npm ci`, `npm run build`
  */
 import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
@@ -18,6 +21,7 @@ import path from "node:path";
 
 import {
   HOOKS_PATH_ARGS,
+  LOCAL_ENV,
   MASTER_RUSTC_WRAPPER,
   REPO_ROOT,
   assertWorkFolder,
@@ -25,7 +29,9 @@ import {
   claudeLocalSettings,
   folderOf,
   identityConfig,
-  isInOneDrive,
+  isMaster,
+  localSettings,
+  markedAsMaster,
   masterCargoConfig,
   parseFolderNumber,
 } from "./lib/work-folder.mjs";
@@ -56,11 +62,23 @@ function localValue(cwd, key) {
   }
 }
 
-/** The master repository: this work folder's `origin`. */
-function masterPath() {
+/** This work folder's `origin`, which must be a local checkout. */
+function originPath() {
   const url = git(REPO_ROOT, ["remote", "get-url", "origin"]);
-  if (!isInOneDrive(url) || !fs.existsSync(path.join(url, ".git"))) {
-    throw new Error(`origin of ${REPO_ROOT} is ${url}, not the master checkout in OneDrive`);
+  if (!fs.existsSync(path.join(url, ".git"))) {
+    throw new Error(`origin of ${REPO_ROOT} is ${url}, not a local checkout`);
+  }
+  return url;
+}
+
+/** The master repository: this work folder's `origin`, marked as the master. */
+function masterPath() {
+  const url = originPath();
+  if (!isMaster(url)) {
+    throw new Error(
+      `origin of ${REPO_ROOT} is ${url}, which is not marked as the master ` +
+        "(run `node scripts/work-folders.mjs guard-master` first)",
+    );
   }
   return url;
 }
@@ -73,9 +91,10 @@ function masterPath() {
  */
 function create(n, install) {
   const master = masterPath();
-  const target = path.join(path.dirname(REPO_ROOT), folderOf(n));
+  const settings = localSettings(master);
+  const target = path.join(path.dirname(REPO_ROOT), folderOf(n, settings));
   if (fs.existsSync(target)) throw new Error(`${target} exists already`);
-  const branch = branchOf(n);
+  const branch = branchOf(n, settings);
   execFileSync("git", ["clone", master, target], { stdio: "inherit" });
   for (const args of identityConfig((key) => localValue(master, key))) git(target, args);
   const known = git(target, ["branch", "-r", "--list", `origin/${branch}`]) !== "";
@@ -102,16 +121,18 @@ function create(n, install) {
   console.log(`${target}: branch ${branch}${known ? " (from the master)" : " (new, from main)"}`);
 }
 
-/** Makes Cargo refuse to build in the master. */
+/** Marks `origin` as the master and makes Cargo refuse to build there. */
 function guardMaster() {
-  const master = masterPath();
+  const master = originPath();
+  const env = path.join(master, LOCAL_ENV);
+  fs.writeFileSync(env, markedAsMaster(fs.existsSync(env) ? fs.readFileSync(env, "utf8") : ""));
   const cargoDir = path.join(master, ".cargo");
   fs.mkdirSync(cargoDir, { recursive: true });
   const wrapper = path.join(cargoDir, "master-guard.cmd");
   fs.writeFileSync(wrapper, MASTER_RUSTC_WRAPPER);
   const config = path.join(cargoDir, "config.local.toml");
   fs.writeFileSync(config, masterCargoConfig(path.relative(master, wrapper)));
-  console.log(`${config}: every rustc call in the master is refused (${wrapper})`);
+  console.log(`${master}: marked as the master (${env}); every rustc call there is refused`);
 }
 
 assertWorkFolder("node scripts/work-folders.mjs");

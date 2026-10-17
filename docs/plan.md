@@ -22,7 +22,7 @@ Source of truth for *what* to build: [`design.md`](design.md). This file says *h
 | docker | not installed | Integration tests use in-process mock servers (`nail-testkit`); real Dovecot/Stalwart/Radicale containers run in CI later |
 | gh | not installed | No GitHub remote yet |
 
-The master repository lives in a OneDrive folder and is never built in; all work happens in clones under `<work root>\nail-work-<N>` (branch `work-<N>`), each with its own `target/` and `.nail-build/` (ADR 0132; earlier, a local `.cargo/config.toml` moved `target/` to `%LOCALAPPDATA%\nail-build\target`).
+The master repository is never built in; all work happens in clones `<work root>/nail-work-<N>` (branch `work-<N>`), each with its own `target/` and `.nail-build/` (ADR 0132; earlier, a local `.cargo/config.toml` moved `target/` to `%LOCALAPPDATA%\nail-build\target`).
 
 ## 3. Repository layout
 

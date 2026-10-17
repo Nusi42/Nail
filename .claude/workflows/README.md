@@ -4,8 +4,8 @@
 disjoint directories → integration → two reviews → fix → independent verify.
 Every milestone since M2 has used it.
 
-Agents work in the work folders, never in the master
-(ADR 0132, docs/dev-setup.md "Work folders"):
+Agents work in the work folders, never in the master checkout
+(ADRs 0132, 0199, docs/dev-setup.md "Work folders"):
 the lead stages (contract, integration, reviews, fix, verify) in
 `nail-work-1` on `work-1`, parallel package *i* in `nail-work-<N>` on
 `work-<N>`. After each green lead stage (contract, integration, fix) the
@@ -22,13 +22,12 @@ integrator merges the branches into `work-1`.
 3. Write its arguments as `args/<wave>.json` (see `args/m5d.json` for the
    shape) and set `since` to the commit the wave starts from.
 4. Ask Claude to run the `nail-wave` workflow with those arguments
-   (`Workflow({ scriptPath: ".claude/workflows/nail-wave.js", args: … })`;
-   the session runs in the master, so a relative path resolves to
-   `<master>\.claude\workflows\nail-wave.js`; pass that path
-   with `%USERPROFILE%` expanded if the tool needs an absolute one). The
-   script names folders as `%USERPROFILE%\…` in prose and `~/…` in Git Bash
-   commands: the Workflow runtime has no Node APIs to look up the home
-   folder, and no user name may enter the repository (ADR 0192).
+   (`Workflow({ scriptPath: "<master>/.claude/workflows/nail-wave.js", args: … })`).
+   The folders and the commit trailer are the maintainer's setup, not part
+   of the repository: pass them as the arguments `master` / `masterSh`,
+   `workRoot` / `workRootSh` (prose and Git Bash forms; write the home
+   folder as `%USERPROFILE%` / `~`, never a user name, ADR 0192) and
+   `trailer` (`CLAUDE.local.md` keeps them).
 
 ## Arguments
 
@@ -42,6 +41,10 @@ integrator merges the branches into `work-1`.
 | `slots` | Ownership map the contract prepares for the parallel packages |
 | `build[]` | Parallel packages: `key`, `dirs` (owned paths), `npm` (may add npm packages), `prompt`, optional `folder` (work folder number; default lead + 1 + index) |
 | `lead` | Work folder number of the lead stages (default 1) |
+| `master`, `masterSh` | The master checkout (prose / Git Bash form); required |
+| `workRoot`, `workRootSh` | The folder holding the work folders (prose / Git Bash form); required |
+| `folderPrefix`, `branchPrefix` | Work folder and branch names (default `nail.win`, `WIN`) |
+| `trailer` | The commit trailer lines of the session; required |
 | `integrate` | Task for the integration stage |
 | `reviews[]` | Review lenses (`key`, `lens`); one should always be quality or security |
 | `verify` | Extra checks for the independent verify stage |

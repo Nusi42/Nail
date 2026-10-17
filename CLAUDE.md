@@ -8,17 +8,20 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - Where the code lives: `docs/architecture.md` (code map + notes by milestone); commands and test conventions:
   `docs/dev-setup.md`.
 - Project memory: `.claude/memory/` (see "Memory" below).
-- Where to work: the work folders, never the master (see "Work folders" below).
+- Where to work: any clone; a maintainer may use a master checkout plus work folders (see "Work folders" below).
+- The maintainer's own setup (paths, remotes, installers): an untracked `CLAUDE.local.md`, if present.
 
 ## Non-negotiable rules
 
-- **Work folders (ADR 0132).** `<master>` is the master repository: it only receives
-  pushes and `git merge --ff-only work-1`. Never edit, build, test, run, install or commit anything there (the npm entry
-  points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work in `<work root>\nail-work-1`
-  (branch `work-1`, the lead) or, for a parallel package, `nail-work-<N>` (branch `work-<N>`, reset to `origin/main`, push the
-  branch when done; never push to `main`). New folder: `node scripts/work-folders.mjs create <n>`.
-  Details: `docs/dev-setup.md` "Work folders". Hooks: pre-commit (per-file checks), pre-push (`npm run check`), and
-  the Claude Code post-edit hook (per-file checks on each edited file; fix what it reports).
+- **Work folders (ADRs 0132, 0199, optional).** A plain clone is a work folder. A maintainer may mark one checkout
+  as the master (`node scripts/work-folders.mjs guard-master`: `NAIL_CHECKOUT_ROLE=master` in its gitignored
+  `.env.local`): it only receives pushes and `git merge --ff-only`; never edit, build, test, run, install or commit
+  anything there (the npm entry points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work then
+  happens in work folders (`nail-work-<N>` on `work-<N>` by default; `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`):
+  the lead in folder 1, a parallel package in its own folder (reset to `origin/main`, push the branch when done; never
+  push to `main`). New folder: `node scripts/work-folders.mjs create <n>`. Details: `docs/dev-setup.md` "Work folders".
+  Hooks: pre-commit (per-file checks), pre-push (`npm run check`), and the Claude Code post-edit hook (per-file checks on
+  each edited file; fix what it reports).
 - **Tests from day 1.** Every change ships with unit tests; every user-visible behaviour with a Playwright scenario. Never report work as done while any suite is red or tests were skipped.
 - **Docs split.** Internal docs → `docs/`. User-facing manuals and references → `userDocs/<lang>/` (`en` written, `de` empty for now).
 - **Languages.** No literal user-visible strings in React or Rust. Strings live in Fluent catalogs `locales/en/*.ftl` (complete) and `locales/de/*.ftl` (same files, empty). Missing keys fall back to English per key.
@@ -54,7 +57,7 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 ## Tooling facts
 
 - Rust stable (1.99; `rust-version` stays 1.97), MSVC, Node 26 + npm 11. **npm workspaces, not pnpm** (pnpm is not installed). No docker locally: integration tests use in-process mock servers from `crates/nail-testkit`.
-- Work folders live outside OneDrive (ADR 0132): Cargo builds into the folder's `target/`, test and build output goes to its
+- Cargo builds into the checkout's `target/`, test and build output goes to its
   gitignored `.nail-build/` (`NAIL_BUILD_DIR` overrides; the development update key stays in `%LOCALAPPDATA%\nail-dev\keys`).
   When running several cargo processes in one folder, give each its own `CARGO_TARGET_DIR` under `.nail-build/`.
 - Config files are KDL v2.
@@ -81,37 +84,33 @@ npm run dev / npm run tauri dev            # Vite on a free port / desktop app w
 
 ## If you are the lead (the main session)
 
-The owner starts Claude Code in the master folder `<master>`. That folder
-is only the launch point: drive the work folders by absolute path (`git -C`, `cd` in each command), and edit, build,
-test and commit only there; in the master run nothing but `git merge --ff-only work-1`. A new session picks up the work
-like this:
+The lead may start in the master checkout and drive the work folders by absolute path (`git -C`, `cd` in each
+command); in the master it runs nothing but `git merge --ff-only`. Where the master, the work folders and the remotes
+are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the work like this:
 
 1. Read `.claude/memory/next-steps.md` (the current wave and what comes next) and the wave's status line in
    `docs/plan.md`.
-2. `git fetch` in `nail-work-1`, then check the package branches: `git log --oneline main..origin/work-<N>`. Agents belong
-   to the session that started them: a package with commits on its branch and no running agent is finished or
-   half-finished — check it in its folder (`npm run check`, its tests), then merge it or let an agent finish it.
-3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`): packages in `nail-work-2` and up, reset to
-   `main`; reviewers with a fresh context; merge into `work-1`, full suite, push `work-1`,
-   `git -C <master> merge --ff-only work-1` (Git Bash), then `git push github work-1:main` from
-   `nail-work-1` (GitHub, ADR 0198).
-4. CodeGraph's index lives in `nail-work-1/.codegraph` (the master has none): pass
-   `projectPath: <work root>\nail-work-1` to `codegraph_explore`, or run `codegraph explore` there.
-5. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
+2. `git fetch` in the lead's work folder, then check the package branches: `git log --oneline main..origin/work-<N>`.
+   Agents belong to the session that started them: a package with commits on its branch and no running agent is
+   finished or half-finished — check it in its folder (`npm run check`, its tests), then merge it or let an agent
+   finish it.
+3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`; its args name the folders): packages in
+   work folders 2 and up, reset to `main`; reviewers with a fresh context; merge into the lead's branch, full suite,
+   push it, fast-forward the master's `main`, then publish `main` to the public remote.
+4. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
    their results.
-6. The owner reviews proposals and milestone results as HTML pages (artifacts); keep replies short.
-7. The owner may stop a session after any step and resume with "Continue where we left off: follow 'If you are the
-   lead' in CLAUDE.md and .claude/memory/next-steps.md". So after every finished step, and whenever background work
-   starts, update `.claude/memory/next-steps.md` (state, running work with folder / branch, what waits for the owner,
-   next steps), commit it on `work-1` and fast-forward `main` before reporting.
+5. Proposals and milestone results go to the maintainer as HTML pages (artifacts); keep replies short.
+6. A session may stop after any step and resume with "Continue where we left off: follow 'If you are the lead' in
+   CLAUDE.md and .claude/memory/next-steps.md". So after every finished step, and whenever background work starts,
+   update `.claude/memory/next-steps.md` (state, running work with folder / branch, what waits for the maintainer,
+   next steps), commit it on the lead's branch and fast-forward `main` before reporting.
 
 ## Git
 
-- `main` lives in the master and moves only by fast-forward to `work-1` after a green lead stage. Work folders commit on
-  their own `work-<N>` branch. Commit only when asked, or as part of an agreed workflow stage.
-- GitHub (`<public remote>`, remote `github` in `nail-work-1`) gets `main` after each fast-forward. Every
-  commit uses the public identity of the folder's local config (GitHub noreply, ADR 0198), never a real name or
-  address; the commit-msg and pre-push hooks check it.
+- `main` moves only by fast-forward to the lead's branch after a green lead stage. Work folders commit on their own
+  branch. Commit only when asked, or as part of an agreed workflow stage.
+- Every commit uses a public identity from the checkout's local git config (e.g. a GitHub noreply address, ADR 0198),
+  never a real name or private address; the commit-msg and pre-push hooks check it against the private patterns.
 - License: AGPL-3.0-or-later with a contributor license agreement (dual licensing, `CONTRIBUTING.md`); the plug-in kit
   and the example plug-ins MIT (ADR 0198). Never add a GPL / LGPL / AGPL dependency: it would block the other license.
 - End commit messages with the Co-Authored-By / Claude-Session lines required by the session.

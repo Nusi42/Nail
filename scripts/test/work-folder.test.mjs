@@ -1,6 +1,7 @@
 // Tests of scripts/lib/work-folder.mjs (master repository and work folders). Run: node --test scripts/test/
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -13,7 +14,9 @@ import {
   claudeLocalSettings,
   folderOf,
   identityConfig,
-  isInOneDrive,
+  isMaster,
+  localSettings,
+  markedAsMaster,
   masterCargoConfig,
   masterRefusal,
   parseFolderNumber,
@@ -38,9 +41,12 @@ test("a new work folder takes the master's own commit identity, nothing else", (
   );
 });
 
-test("work folder n is nail-work-<N> on branch work-<N>", () => {
+test("work folders are nail-work-<N> on work-<N> unless configured otherwise", () => {
   assert.equal(folderOf(1), "nail-work-1");
   assert.equal(branchOf(12), "work-12");
+  const settings = { NAIL_WORK_FOLDER_PREFIX: "mail-", NAIL_WORK_BRANCH_PREFIX: "lane-" };
+  assert.equal(folderOf(2, settings), "mail-2");
+  assert.equal(branchOf(2, settings), "lane-2");
 });
 
 test("folder numbers are 1-99", () => {
@@ -51,25 +57,35 @@ test("folder numbers are 1-99", () => {
   }
 });
 
-test("OneDrive folders are recognised by a path segment", () => {
-  assert.equal(isInOneDrive("C:\\Users\\x\\OneDrive\\<projects>\\nail"), true);
-  assert.equal(isInOneDrive("C:/Users/x/onedrive/nail"), true);
-  assert.equal(isInOneDrive("C:\\Users\\x\\OneDrive - Company\\nail"), true);
-  assert.equal(isInOneDrive("C:\\Users\\x\\<work root>\\nail-work-1"), false);
-  assert.equal(isInOneDrive("C:\\Users\\x\\NotOneDrive\\nail"), false);
-  assert.equal(isInOneDrive("C:\\Users\\x\\OneDriveBackup\\nail"), false);
-});
-
-test("the master refuses development commands and names the work folders", () => {
-  const refusal = masterRefusal("C:\\Users\\x\\OneDrive\\<projects>\\nail", "npm run check");
-  assert.ok(refusal !== undefined);
-  assert.ok(refusal.startsWith("npm run check: refused"));
-  assert.match(refusal, /<projects>\.InWork\\nail\.work-1 \(branch work-1\)/);
-  assert.match(refusal, /work-folders\.mjs create <n>/);
-  assert.equal(
-    masterRefusal("C:\\Users\\x\\<work root>\\nail-work-2", "npm run check"),
-    undefined,
-  );
+test("only a checkout marked as the master refuses development commands", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nail-master-"));
+  try {
+    // A plain clone (any path, OneDrive or not) is a work folder.
+    assert.equal(isMaster(dir, {}), false);
+    assert.equal(masterRefusal(dir, "npm run check", {}), undefined);
+    // Marked in its .env.local, other settings kept.
+    const env = path.join(dir, ".env.local");
+    fs.writeFileSync(
+      env,
+      markedAsMaster("NAIL_WORK_FOLDER_PREFIX=mail-\nNAIL_CHECKOUT_ROLE=work\n"),
+    );
+    assert.equal(
+      fs.readFileSync(env, "utf8"),
+      "NAIL_WORK_FOLDER_PREFIX=mail-\nNAIL_CHECKOUT_ROLE=master\n",
+    );
+    assert.equal(localSettings(dir, {}).NAIL_WORK_FOLDER_PREFIX, "mail-");
+    assert.equal(isMaster(dir, {}), true);
+    const refusal = masterRefusal(dir, "npm run check", {});
+    assert.ok(refusal !== undefined);
+    assert.ok(refusal.startsWith("npm run check: refused"));
+    assert.match(refusal, /work folder \(mail-1 and up\)/);
+    assert.match(refusal, /work-folders\.mjs create <n>/);
+    // The environment wins over the file.
+    assert.equal(isMaster(dir, { NAIL_CHECKOUT_ROLE: "work" }), false);
+    assert.equal(markedAsMaster(""), "NAIL_CHECKOUT_ROLE=master\n");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("the master's cargo config names the refusing wrapper", () => {

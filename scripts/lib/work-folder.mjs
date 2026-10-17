@@ -1,10 +1,16 @@
 /**
- * Master repository and work folders (ADR-WORK-FOLDERS): the checkout in
- * OneDrive is the master. It holds `main`, receives pushes and fast-forward
- * merges, and nothing is built, tested, run or committed in it. All work
- * happens in clones outside OneDrive, `<base>\nail-work-<N>` on branch
- * `work-<N>` (`<work root>\nail-work-1` for the lead and
- * integration, `work-2` and up for builders).
+ * Master repository and work folders (ADR 0132, made configurable by
+ * ADR 0199). Optional: a plain clone is a work folder and nothing is
+ * refused. A maintainer may keep one checkout as the *master*, which holds
+ * `main`, receives pushes and fast-forward merges, and where nothing is
+ * built, tested, run or committed; all work then happens in clones named
+ * `<prefix><N>` on branch `<branch prefix><N>` (default `nail-work-<N>`
+ * on `work-<N>`).
+ *
+ * The settings come from the environment or from the checkout's gitignored
+ * `.env.local` (`KEY=value` lines; the environment wins):
+ * `NAIL_CHECKOUT_ROLE=master` marks the master, `NAIL_WORK_FOLDER_PREFIX`
+ * and `NAIL_WORK_BRANCH_PREFIX` name the work folders.
  *
  * The development entry points (`npm run dev` / `check` / `test` / `e2e` /
  * `visual`, `npm run tauri`, the pre-commit hook, `npm ci`'s `prepare`) call
@@ -13,27 +19,87 @@
  * the CLI is scripts/work-folders.mjs, the tests
  * scripts/test/work-folder.test.mjs.
  */
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
+
+/** The checkout's local settings file (gitignored, never committed). */
+export const LOCAL_ENV = ".env.local";
+
+/** The role that makes a checkout the master. */
+export const MASTER_ROLE = "master";
 
 /**
- * Branch of work folder `n`: `work-<N>`.
+ * The checkout's settings: `.env.local` overlaid with `env`.
  *
- * @param {number} n
- * @returns {string}
+ * @param {string} root the checkout's root
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {Record<string, string | undefined>}
  */
-export function branchOf(n) {
-  return `WIN${String(n)}`;
+export function localSettings(root, env = process.env) {
+  const file = path.join(root, LOCAL_ENV);
+  const local = fs.existsSync(file) ? parseEnv(fs.readFileSync(file, "utf8")) : {};
+  return { ...local, ...env };
 }
 
 /**
- * Folder name of work folder `n`: `nail-work-<N>`.
+ * Whether the checkout at `root` is the master.
  *
- * @param {number} n
+ * @param {string} root
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {boolean}
+ */
+export function isMaster(root, env = process.env) {
+  return localSettings(root, env).NAIL_CHECKOUT_ROLE === MASTER_ROLE;
+}
+
+/**
+ * `.env.local` text with the master role set (other lines kept).
+ *
+ * @param {string} text the current `.env.local`, empty when there is none
  * @returns {string}
  */
-export function folderOf(n) {
-  return `nail.win${String(n)}`;
+export function markedAsMaster(text) {
+  const kept = text
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "" && !/^\s*NAIL_CHECKOUT_ROLE\s*=/.test(line));
+  return `${[...kept, `NAIL_CHECKOUT_ROLE=${MASTER_ROLE}`].join("\n")}\n`;
+}
+
+/**
+ * How work folders and their branches are named.
+ *
+ * @param {Record<string, string | undefined>} [settings]
+ * @returns {{ folder: string, branch: string }}
+ */
+export function namingOf(settings = {}) {
+  return {
+    folder: settings.NAIL_WORK_FOLDER_PREFIX ?? "nail.win",
+    branch: settings.NAIL_WORK_BRANCH_PREFIX ?? "WIN",
+  };
+}
+
+/**
+ * Branch of work folder `n`: `work-<N>` by default.
+ *
+ * @param {number} n
+ * @param {Record<string, string | undefined>} [settings]
+ * @returns {string}
+ */
+export function branchOf(n, settings) {
+  return `${namingOf(settings).branch}${String(n)}`;
+}
+
+/**
+ * Folder name of work folder `n`: `nail-work-<N>` by default.
+ *
+ * @param {number} n
+ * @param {Record<string, string | undefined>} [settings]
+ * @returns {string}
+ */
+export function folderOf(n, settings) {
+  return `${namingOf(settings).folder}${String(n)}`;
 }
 
 /**
@@ -51,40 +117,26 @@ export function parseFolderNumber(text) {
 }
 
 /**
- * Whether `dir` lies in a OneDrive folder (a path segment starting with
- * "OneDrive", as in `C:\Users\x\OneDrive` or `OneDrive - Company`).
- *
- * @param {string} dir
- * @returns {boolean}
- */
-export function isInOneDrive(dir) {
-  return path
-    .resolve(dir)
-    .split(/[\\/]/)
-    .some((segment) => /^onedrive\b/i.test(segment));
-}
-
-/**
  * The message for a development command started in the master, or
- * `undefined` when `root` is a work folder.
+ * `undefined` when the checkout is not the master.
  *
  * @param {string} root the checkout's root
  * @param {string} what the refused action, e.g. "npm run check"
+ * @param {NodeJS.ProcessEnv} [env]
  * @returns {string | undefined}
  */
-export function masterRefusal(root, what) {
-  if (!isInOneDrive(root)) return undefined;
+export function masterRefusal(root, what, env = process.env) {
+  if (!isMaster(root, env)) return undefined;
   return (
     `${what}: refused in ${root}.\n` +
-    "This checkout lies in OneDrive: it is the master repository, which only receives pushes and\n" +
-    "fast-forward merges. Nothing is built, tested, run or committed here.\n" +
-    `Work in a clone outside OneDrive, e.g. <work root>\\${folderOf(1)} (branch ${branchOf(1)});\n` +
-    "create one with `node scripts/work-folders.mjs create <n>` from an existing work folder\n" +
+    `This checkout is the master repository (NAIL_CHECKOUT_ROLE=master, ${LOCAL_ENV}): it only\n` +
+    "receives pushes and fast-forward merges. Nothing is built, tested, run or committed here.\n" +
+    `Work in a work folder (${folderOf(1, localSettings(root, env))} and up); create one with\n` +
+    "`node scripts/work-folders.mjs create <n>` from an existing work folder\n" +
     '(docs/dev-setup.md, "Work folders").'
   );
 }
 
-/** Root of the checkout this module belongs to. */
 /** The repository's git hooks (pre-commit, pre-push; ADR 0123), relative to a checkout. */
 export const HOOKS_DIR = ".githooks";
 
@@ -109,6 +161,7 @@ export function identityConfig(masterValue) {
   });
 }
 
+/** Root of the checkout this module belongs to. */
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /**
@@ -131,8 +184,8 @@ export function assertWorkFolder(what, root = REPO_ROOT) {
  */
 export const MASTER_RUSTC_WRAPPER = [
   "@echo off",
-  "echo error: this checkout is the Nail master repository (OneDrive): nothing is built here. 1>&2",
-  "echo Work in a clone outside OneDrive, e.g. <work root>\\nail-work-1 (docs/dev-setup.md, Work folders). 1>&2",
+  "echo error: this checkout is the Nail master repository: nothing is built here. 1>&2",
+  "echo Work in a work folder (docs/dev-setup.md, Work folders). 1>&2",
   "exit /b 1",
   "",
 ].join("\r\n");
@@ -147,8 +200,8 @@ export const MASTER_RUSTC_WRAPPER = [
 export function masterCargoConfig(wrapper) {
   return [
     "# Local only (gitignored), written by `node scripts/work-folders.mjs guard-master`.",
-    "# This checkout is the master repository (OneDrive): nothing is built here, so every",
-    "# rustc call is refused. Work in a clone outside OneDrive (docs/dev-setup.md, Work folders).",
+    "# This checkout is the master repository: nothing is built here, so every rustc call",
+    "# is refused. Work in a work folder (docs/dev-setup.md, Work folders).",
     "[build]",
     `rustc-wrapper = ${JSON.stringify(wrapper.replaceAll("\\", "/"))}`,
     "",

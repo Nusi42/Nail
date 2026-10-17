@@ -12,7 +12,7 @@ import { HOOKS_PATH_ARGS, assertWorkFolder } from "./lib/work-folder.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// `npm ci` in the master would fill OneDrive with node_modules.
+// No node_modules in a master checkout (ADR 0199): nothing is built there.
 assertWorkFolder("npm install / npm ci");
 try {
   execFileSync("git", ["rev-parse", "--git-dir"], { cwd: root, stdio: "ignore" });

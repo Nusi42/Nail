@@ -6,18 +6,19 @@
 // the short report goes to stderr with exit code 2, which Claude Code feeds
 // back to the agent.
 //
-// The lead session runs in the master and its agents edit files in
-// the work folders, so the checkout to check is found from the edited file,
-// not from the session's folder, and that checkout's own checks run (its
-// scripts/lib/run-checks.mjs and node_modules). Files inside OneDrive are
-// never checked: nothing runs in the master.
+// A lead session may run in a master checkout while its agents edit files
+// in the work folders (ADR 0132), so the checkout to check is found from the
+// edited file, not from the session's folder, and that checkout's own checks
+// run (its scripts/lib/run-checks.mjs and node_modules). Files of a master
+// checkout (NAIL_CHECKOUT_ROLE=master, ADR 0199) are never checked: nothing
+// runs there.
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { parseJson } from "./lib/json.mjs";
 import { isMain } from "./lib/program.mjs";
-import { isInOneDrive } from "./lib/work-folder.mjs";
+import { isMaster } from "./lib/work-folder.mjs";
 
 /** Exit code that makes Claude Code show stderr to the agent. */
 const FEEDBACK_EXIT_CODE = 2;
@@ -79,10 +80,10 @@ async function main() {
   const named = editedFile(fs.readFileSync(0, "utf8"));
   if (named === undefined) return;
   const file = path.resolve(named);
-  if (!fs.existsSync(file) || isInOneDrive(file)) return;
+  if (!fs.existsSync(file)) return;
   const root = checkoutOf(file);
   const rel = root === undefined ? undefined : relativeTo(root, file);
-  if (root === undefined || rel === undefined) return;
+  if (root === undefined || rel === undefined || isMaster(root)) return;
   // The work folder's own runner (its version may differ from this copy's).
   /** @type {unknown} */
   const loaded = await import(pathToFileURL(path.join(root, RUNNER)).href);

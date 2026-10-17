@@ -13,33 +13,39 @@ export const meta = {
 
 const A = args
 // Master repository and work folders (docs/dev-setup.md "Work folders",
-// ADR 0132): the master checkout only
-// receives pushes and fast-forward merges. The lead stages (contract,
-// integrate, reviews, fix, verify) work in nail-work-<lead> on work-<lead>; after
-// each green lead stage main is fast-forwarded to work-<lead> (FF below), so
-// main is always green. Parallel package i resets nail-work-<lead+1+i> (or
-// b.folder) to main, works on its branch and pushes it.
-// The Workflow runtime has no Node APIs (no process / os), so the home folder
-// cannot be computed here: prose names Windows paths with %USERPROFILE%,
-// commands use Git Bash's ~ (agents run Git Bash; ~ expands to the home
-// folder). No user name in the repository (ADR 0192).
-const MASTER = '<master>'
-const MASTER_SH = '<master>'
+// ADRs 0132, 0199): the master checkout only receives pushes and
+// fast-forward merges. The lead stages (contract, integrate, reviews, fix,
+// verify) work in work folder <lead>; after each green lead stage main is
+// fast-forwarded to the lead's branch (FF below), so main is always green.
+// Parallel package i resets work folder <lead+1+i> (or b.folder) to main,
+// works on its branch and pushes it.
+// Where they are is the maintainer's setup, never in the repository: the
+// args name it (the Workflow runtime has no Node APIs to read .env.local).
+//   master / masterSh: the master in prose (Windows) and Git Bash form
+//   workRoot / workRootSh: the folder that holds the work folders
+//   folderPrefix / branchPrefix: default nail.win / WIN (as scripts/lib/work-folder.mjs)
+//   trailer: the commit trailer lines of the session
+for (const key of ['master', 'masterSh', 'workRoot', 'workRootSh', 'trailer']) {
+  if (!A[key]) throw new Error(`nail-wave: args.${key} is required (see the comment above)`)
+}
+const MASTER = A.master
+const MASTER_SH = A.masterSh
 const LEAD = A.lead || 1
-const folder = n => `<work root>\\nail.win${n}`
-const folderSh = n => `<work root>/nail.win${n}`
+const FOLDER_PREFIX = A.folderPrefix || 'nail.win'
+const folder = n => `${A.workRoot}\\${FOLDER_PREFIX}${n}`
+const folderSh = n => `${A.workRootSh}/${FOLDER_PREFIX}${n}`
 const REPO = folder(LEAD)
 const REPO_SH = folderSh(LEAD)
-const LEAD_BRANCH = `WIN${LEAD}`
+const branchOf = n => `${A.branchPrefix || 'WIN'}${n}`
+const LEAD_BRANCH = branchOf(LEAD)
 const slotOf = (b, i) => b.folder || LEAD + 1 + i
 // The last step of every green lead stage that commits.
 const FF = `then fast-forward the master: \`git push origin ${LEAD_BRANCH} && git -C ${MASTER_SH} merge --ff-only ${LEAD_BRANCH}\` (the only write ever made in the master; if it fails, report it and stop — never edit files there)`
 const OPTS = { model: 'opus', effort: 'medium' }
-const TRAILER = `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
-Claude-Session: a published page, not linked here`
+const TRAILER = A.trailer
 
 const COMMON = `You are implementing "Nail", a Rust + TypeScript/React email & PIM client (Windows 11; Bash tool = Git Bash with POSIX paths like ${REPO_SH}; %USERPROFILE% in this prompt is your home folder, ~ in Git Bash; PowerShell also available). Your shell may start in another directory: cd into your work folder in every command or use absolute paths.
-WHERE YOU WORK: ${MASTER} (OneDrive) is the MASTER repository. Never edit, build, test, run or commit anything there (its npm scripts, cargo and git hook refuse anyway). Your work folder is named in your task; the lead's is ${REPO} (branch ${LEAD_BRANCH}). Build output stays inside your work folder (target/, .nail-build/).
+WHERE YOU WORK: ${MASTER} is the MASTER repository. Never edit, build, test, run or commit anything there (its npm scripts, cargo and git hook refuse anyway). Your work folder is named in your task; the lead's is ${REPO} (branch ${LEAD_BRANCH}). Build output stays inside your work folder (target/, .nail-build/).
 Earlier milestones are done (git log; .claude/memory/*status*.md). We are now in wave ${A.wave}. Read docs/plan.md ${A.planRef} fully (including its "Scope decisions"), the ADRs in docs/adr/ relevant to your area, docs/dev-setup.md, and the relevant sections of docs/design.md. CLAUDE.md (in your context; re-read your work folder's copy, it may be newer) lists commands and conventions — follow them.
 Mandatory rules:
 - Tests from day 1: every change ships with meaningful unit tests (and Playwright scenarios where your package owns e2e). Never report success with failing or skipped tests; if something cannot pass, say exactly what and why.
@@ -47,7 +53,7 @@ Mandatory rules:
 - No literal user-visible strings in UI or user-facing Rust output; Fluent catalogs locales/en/*.ftl complete, locales/de/*.ftl same file names but empty; per-key English fallback.
 - React components never use inline styles or literal classNames; data-part attributes only; styling only from the compiled theme; structure only from layout.kdl.
 - The core owns data; UI talks only through NailClient; every write goes through the operation queue.
-- Licences: Nail is closed source for now — do not add GPL/LGPL/AGPL dependencies (MPL-2.0, MIT, Apache-2.0, BSD, ISC, Zlib, Unicode are fine). Check licences before adding a crate/package. Avoid an OpenSSL build dependency unless an ADR justifies it.
+- Licences: Nail is AGPL-3.0-or-later and dual-licensed (ADR 0198) — do not add GPL/LGPL/AGPL dependencies (MPL-2.0, MIT, Apache-2.0, BSD, ISC, Zlib, Unicode are fine). Check licences before adding a crate/package. Avoid an OpenSSL build dependency unless an ADR justifies it.
 - The machine is shared with other development work (other Vite / tauri dev projects may be running and holding ports and memory): run cargo with -j 4 (os error 1455 = out of page file -> rerun with -j 2), never bind fixed development ports (take free ports), and never kill processes you did not start.
 - No network except localhost mocks and package registries. A Vite dev server / 'tauri dev' may be running from the user's session: never kill it; if npm ci hits a locked file use npm install and say so.
 - Prefer well-maintained crates/packages; verify real APIs in ~/.cargo/registry or node_modules rather than guessing.
@@ -84,9 +90,9 @@ if (!contract || (!contract.allTestsPass && !A.acceptContract)) {
 }
 
 const RULES = (key, dirs, npm, n) => `
-YOUR WORK FOLDER: ${folder(n)} (branch WIN${n}). Four agents work at the same time, each in its own work folder.
-- Start: cd there; the tree must be clean (\`git status --porcelain\` empty, else stop and report); \`git fetch origin && git switch WIN${n} && git reset --hard origin/main\` (= the contract); \`npm ci\` (npm install if files are locked; say so).
-- Finish: commit your work on WIN${n} ("${A.wave}: ${key}", trailer below; the pre-commit hook must pass, never --no-verify), then \`git push --force-with-lease origin WIN${n}\`. The integrator merges WIN${n} into ${LEAD_BRANCH}. No other git writes.
+YOUR WORK FOLDER: ${folder(n)} (branch ${branchOf(n)}). Four agents work at the same time, each in its own work folder.
+- Start: cd there; the tree must be clean (\`git status --porcelain\` empty, else stop and report); \`git fetch origin && git switch ${branchOf(n)} && git reset --hard origin/main\` (= the contract); \`npm ci\` (npm install if files are locked; say so).
+- Finish: commit your work on ${branchOf(n)} ("${A.wave}: ${key}", trailer below; the pre-commit hook must pass, never --no-verify), then \`git push --force-with-lease origin ${branchOf(n)}\`. The integrator merges ${branchOf(n)} into ${LEAD_BRANCH}. No other git writes.
 ${TRAILER}
 - You own ONLY: ${dirs}. Do not edit anything else (not crates/nail-api, not crates/nail-core, not shared registries, defaults/*.kdl, nail-api fixtures, root Cargo.toml/package.json, or other agents' files). Register UI only through your feature's index.ts; strings only in your own locale file. Everything else goes into apiRequests with exact details for the integrator.
 - Dependencies only in your own crates' Cargo.toml (workspace = true where declared). ${npm ? 'You MAY add npm packages to ui with npm install -w ui <pkg>.' : 'Do NOT change package.json/package-lock.json.'}
@@ -104,7 +110,7 @@ Contract follow-ups: ${(contract.followUps || []).join(' | ')}
 YOUR TASK: ${b.prompt}`, { ...OPTS, label: b.key, phase: 'Build', schema: RESULT })
     .then(r => ({ key: b.key, ...(r || { summary: 'AGENT FAILED', allTestsPass: false, apiRequests: [], followUps: [], filesChanged: [], testCommands: [], testReport: '' }) }))
 ))
-const buildReport = built.map((r, i) => `### ${r.key} (branch WIN${slotOf(A.build[i], i)}) — allTestsPass=${r.allTestsPass}
+const buildReport = built.map((r, i) => `### ${r.key} (branch ${branchOf(slotOf(A.build[i], i))}) — allTestsPass=${r.allTestsPass}
 ${r.summary}
 Tests: ${r.testReport}
 API requests: ${(r.apiRequests || []).join(' | ') || 'none'}
@@ -118,7 +124,7 @@ YOUR TASK: integration of ${A.wave} in YOUR WORK FOLDER ${REPO} (branch ${LEAD_B
 Reports from the parallel packages (each committed on its branch and pushed to origin):
 ${buildReport}
 
-0. \`git fetch origin\`, then merge every package branch into ${LEAD_BRANCH}: ${A.build.map((b, i) => `origin/WIN${slotOf(b, i)} (${b.key})`).join(', ')}. A branch that was not pushed means that package failed: say so and finish its work yourself.
+0. \`git fetch origin\`, then merge every package branch into ${LEAD_BRANCH}: ${A.build.map((b, i) => `origin/${branchOf(slotOf(b, i))} (${b.key})`).join(', ')}. A branch that was not pushed means that package failed: say so and finish its work yourself.
 1. Get everything green first (npm run build, cargo fmt/clippy -D warnings/test --workspace, npm run lint, npm test, npm run e2e:only). Resolve all apiRequests, renumber ADRs consistently, regenerate TS types. Commit "${A.wave}: parallel packages" (trailer below).
 2. ${A.integrate}
 3. Update userDocs/en, docs/dev-setup.md, docs/architecture.md (code map, milestone notes), CLAUDE.md (rules only), and docs/plan.md (status line for this wave, follow-ups/deferrals). Add a memory file .claude/memory/${A.memoryName}.md (frontmatter name/description/metadata.type project; what was integrated, pitfalls) and a line in .claude/memory/MEMORY.md.

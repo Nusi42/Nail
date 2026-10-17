@@ -19,55 +19,64 @@ Docker is not needed. Integration tests use the in-process mock servers from
 `crates/nail-testkit` (IMAP) and `crates/nail-testkit-net` (SMTP, POP3,
 OAuth2, HTTP, DNS; M1a).
 
-### Work folders (ADR 0132)
+### Work folders (ADRs 0132, 0199; optional)
 
-`<master>` is the **master repository**. It
-holds `main`, receives pushes and fast-forward merges, and nothing is built,
-tested, run, installed or committed there (releases included). All work
-happens in clones outside OneDrive, with `origin` pointing to the master:
+A plain clone needs none of this: it is a work folder, and nothing is
+refused. A maintainer who runs several packages in parallel may keep one
+checkout as the **master repository**: it holds `main`, receives pushes
+and fast-forward merges, and nothing is built, tested, run, installed or
+committed there (releases included). All work then happens in clones with
+`origin` pointing to the master:
 
 | Folder | Branch | Use |
 | --- | --- | --- |
-| `<work root>\nail-work-1` | `work-1` | the lead: contracts, integration, reviews, fixes, verification, releases |
+| `<work root>/nail-work-1` | `work-1` | the lead: contracts, integration, reviews, fixes, verification, releases |
 | `nail-work-2`, `nail-work-3`, … | `work-2`, `work-3`, … | one per parallel work package |
 
+Settings come from the environment or from a checkout's gitignored
+`.env.local` (`KEY=value` lines; the environment wins):
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `NAIL_CHECKOUT_ROLE` | (none) | `master` marks the master checkout |
+| `NAIL_WORK_FOLDER_PREFIX` | `nail.win` | work folder `n` is `<prefix><n>`, next to the folder that creates it |
+| `NAIL_WORK_BRANCH_PREFIX` | `WIN` | its branch is `<prefix><n>` |
+
 ```sh
-node scripts/work-folders.mjs create 6        # from a work folder: clone the master into nail-work-6 (branch work-6), npm ci
+node scripts/work-folders.mjs guard-master    # once, from a work folder: mark origin as the master, Cargo refuses there
+node scripts/work-folders.mjs create 6        # clone the master into nail-work-6 (branch work-6), copy its identity, npm ci
 git fetch origin && git reset --hard origin/main  # a package folder starts from main (clean tree first)
 git push --force-with-lease origin work-3       # a package is done (pre-push runs npm run check); the lead merges origin/work-3 into work-1
 git push origin work-1 && git -C <master> merge --ff-only work-1   # after each green lead stage: main = work-1
-git push github work-1:main                     # then publish main on GitHub (nail-work-1 only, ADR 0198)
-node scripts/work-folders.mjs guard-master    # once: Cargo in the master refuses every build
 ```
 
 `main` is always green: it only moves to a `work-1` commit whose full suite
-passed. GitHub (`<public remote>`, private for now) is the
-remote `github` of `nail-work-1` and receives `main` after each fast-forward
-(ADR 0198). Commits use the public identity in each folder's local config
-(`user.name` / `user.email`: the GitHub account's noreply address), never
-the machine's global name and address; `work-folders.mjs create` copies it
-from the master. Hooks in every work folder: pre-commit = the private-data guard on
-the staged content + the fast per-file checks, commit-msg = the private-data
-guard on the message, pre-push = the private-data guard on the pushed commits +
-`npm run check` (`.githooks/`), and Claude Code's post-edit hook
-runs the per-file checks on every file an agent edits
-(`.claude/settings.json` → `scripts/post-edit.mjs`, which finds the work
-folder from the edited file and runs that folder's checks; findings go back
-to the agent; files inside OneDrive are skipped).
+passed. Where `main` is published (a public remote) is the maintainer's
+setup, kept with the paths in an untracked `CLAUDE.local.md` that Claude
+Code loads. Commits use the public identity in each checkout's local config
+(`user.name` / `user.email`, e.g. a GitHub noreply address; ADR 0198),
+never a real name or private address; `work-folders.mjs create` copies it
+from the master. Hooks in every work folder: pre-commit = the private-data
+guard on the staged content + the fast per-file checks, commit-msg = the
+private-data guard on the message and the identity, pre-push = the
+private-data guard on the pushed commits + `npm run check` (`.githooks/`),
+and Claude Code's post-edit hook runs the per-file checks on every file an
+agent edits (`.claude/settings.json` → `scripts/post-edit.mjs`, which finds
+the work folder from the edited file and runs that folder's checks; findings
+go back to the agent; files of a master checkout are skipped).
 
 Guards: `npm run dev` / `check` / `test` / `visual` / `tauri` /
 `build:desktop`, the perf runner, the installer build, `npm ci`'s `prepare`
-and the Git hooks refuse inside any OneDrive folder
-(`scripts/lib/work-folder.mjs`). In the master, the gitignored `.cargo/config.local.toml`
-(included by the committed `.cargo/config.toml`)
+and the Git hooks refuse in a checkout marked as the master
+(`scripts/lib/work-folder.mjs`). In the master, the gitignored
+`.cargo/config.local.toml` (included by the committed `.cargo/config.toml`)
 names a refusing `rustc-wrapper`. `create` also writes the folder's
 `.claude/settings.local.json`, so Claude Code's memory stays in the checkout
-(`.claude/memory`). The owner's Claude Code session runs in the master
-folder and is only the launch point: it drives the work
-folders by absolute path, and every edit, build, test and commit happens
-there.
+(`.claude/memory`). A lead session may run in the master as its launch
+point: it drives the work folders by absolute path, and every edit, build,
+test and commit happens there.
 
-Cargo builds into each work folder's `target/`. Give parallel cargo
+Cargo builds into each checkout's `target/`. Give parallel cargo
 processes in one folder their own `CARGO_TARGET_DIR` (under `.nail-build/`).
 Machine-specific cargo settings go into the gitignored
 `.cargo/config.local.toml`, which the committed `.cargo/config.toml`
@@ -181,12 +190,11 @@ Builds and platforms (ADR 0130):
 
 The Vite configs that import a symlinked workspace package set
 `resolve.preserveSymlinks: true` (`ui/vite.config.ts`,
-`packages/create-nail-plugin/vitest.config.ts`). It dates from checkouts
-inside OneDrive, where `node_modules` is a cloud-file reparse point that
-Vite cannot canonicalize ("Failed to resolve import", or Node loading a
-package's `.ts` sources natively). Work folders are outside OneDrive
-(ADR 0132), but the setting stays harmless and keeps other checkouts
-working.
+`packages/create-nail-plugin/vitest.config.ts`). It keeps checkouts
+inside a cloud-synced folder such as OneDrive working, where `node_modules` is
+a cloud-file reparse point that Vite cannot canonicalize ("Failed to resolve
+import", or Node loading a package's `.ts` sources natively); elsewhere it
+changes nothing.
 
 | Files | Tool | Config | Fix |
 | --- | --- | --- | --- |

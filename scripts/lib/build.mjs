@@ -18,7 +18,7 @@ import { forEachArg } from "./args.mjs";
 
 /**
  * Base directory for build output: `NAIL_BUILD_DIR`, else the checkout's own
- * gitignored `.nail-build/` (work folders live outside OneDrive, and each
+ * gitignored `.nail-build/` (every checkout, a work folder included,
  * builds into its own directory). Same rule as e2e/support/nail.ts.
  *
  * @param {Env} env

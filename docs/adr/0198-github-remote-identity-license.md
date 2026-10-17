@@ -4,7 +4,7 @@ Status: accepted (2026-10-17)
 
 ## Context
 
-The owner wants `<public remote>` (private for now) as the
+Requirement: a GitHub repository (private for now) as the
 repository's remote. Until now `main` lived only in the master
 (ADR 0132). Before the first push the whole history was checked: the files
 and messages were clean (ADR 0192), but every commit carried the maintainer's
@@ -15,14 +15,15 @@ code had no license yet (`LicenseRef-Proprietary`, `UNLICENSED`).
 
 ## Decision
 
-- **Remote.** `nail-work-1` has the remote `github`. After the lead's
-  fast-forward of `main` (ADR 0132), `git push github work-1:main` publishes
-  it; the pre-push hook runs the private-data guard and `npm run check`
+- **Remote.** The lead's work folder has the GitHub remote. After the
+  lead's fast-forward of `main` (ADR 0132), a push of the lead's branch to
+  the remote's `main` publishes it (the maintainer's `CLAUDE.local.md`
+  holds the remote and the command, ADR 0199); the pre-push hook runs the private-data guard and `npm run check`
   first. The master stays the local hub, and package branches are not
   pushed to GitHub.
 - **Public identity.** Commits are made as
-  `Nusi42 <167581605+Nusi42@users.noreply.github.com>` (GitHub's noreply
-  address, linked to the account), set in the local config of the master
+  the GitHub account's noreply address (`<id>+<handle>@users.noreply.github.com`,
+  linked to the account), set in the local config of the master
   and of every work folder; `scripts/work-folders.mjs create` copies it
   from the master (`identityConfig`).
 - **History rewritten.** The author and committer of every

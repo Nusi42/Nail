@@ -2,8 +2,8 @@
 
 Distribution of the Windows app (plan M4b WP112, ADRs 0087, 0089):
 signing, update manifests, winget. Build output never goes into the
-repository (it lives in OneDrive): everything writes to
-`%LOCALAPPDATA%\nail-build\` or `NAIL_BUILD_DIR`, like `scripts/`.
+repository: everything writes to the checkout's gitignored `.nail-build/`
+or `NAIL_BUILD_DIR`, like `scripts/`.
 
 | Path | What |
 | --- | --- |
