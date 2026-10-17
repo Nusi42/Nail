@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The private-data guard (ADR 0192): fails when a pattern of
-// %USERPROFILE%\.nail-private\patterns.txt (or $NAIL_PRIVATE_PATTERNS)
+// %USERPROFILE%\.config\nail\private-patterns.txt (or $NAIL_PRIVATE_PATTERNS)
 // matches, case-insensitively, or the base64 form of a literal pattern
 // matches. Without the file it passes ("no private patterns configured"), so
 // CI and other machines work. Findings name file and line; the matched text

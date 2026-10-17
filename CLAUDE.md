@@ -35,7 +35,7 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   ADRs, memory, workflow args or commit messages. Write paths as `%USERPROFILE%\…` (prose) / `~/…` (Git Bash); test
   data = `example.com` / `.net` / `.org` and the demo personas; pass the maintainer's bug reports to agents generically. The guard
   `scripts/check-private.mjs` (pre-commit staged content, commit-msg, pre-push, step `private` of `npm run check`)
-  reads its patterns from `%USERPROFILE%\.nail-private\patterns.txt`, which lives outside every repository: never
+  reads its patterns from `%USERPROFILE%\.config\nail\private-patterns.txt`, which lives outside every repository: never
   commit it or copy its values anywhere (absent file = passes, e.g. on other machines).
 - **Zero warnings (Q1, ADR 0123).** 0 warnings, 0 errors; never relax lint levels or `-D warnings` (no new `allow`
   in `[workspace.lints]`, no ESLint rule switched off, no `--no-verify`). An unavoidable exception needs

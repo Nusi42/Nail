@@ -125,7 +125,7 @@ test("output masks every match", () => {
 
 test("the patterns file: environment override, absent file = nothing to check", () => {
   assert.equal(patternsPath({ [PATTERNS_ENV]: "x.txt" }), "x.txt");
-  assert.match(patternsPath({}), /\.nail-private[\\/]patterns\.txt$/);
+  assert.match(patternsPath({}), /\.config[\\/]nail[\\/]private-patterns\.txt$/);
   assert.equal(loadMatchers(path.join(os.tmpdir(), "nail-no-such-patterns.txt")), undefined);
 });
 

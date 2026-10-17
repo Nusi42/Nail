@@ -1,7 +1,7 @@
 // The private-data guard (ADR 0192): the owner's private details (addresses,
 // domains, providers, the Windows user name, ...) must never reach git. The
 // patterns live OUTSIDE every repository, in
-// %USERPROFILE%\.nail-private\patterns.txt (one regular expression per line,
+// %USERPROFILE%\.config\nail\private-patterns.txt (one regular expression per line,
 // `#` starts a comment, matched case-insensitively). Never copy that file or
 // any of its values into the repository; tests use synthetic patterns only.
 // scripts/check-private.mjs runs the checks; scripts/test/private-patterns.test.mjs
@@ -33,13 +33,13 @@ export const MIN_ENCODED_LENGTH = 5;
 
 /**
  * Where the patterns file is: $NAIL_PRIVATE_PATTERNS, else
- * %USERPROFILE%\.nail-private\patterns.txt.
+ * %USERPROFILE%\.config\nail\private-patterns.txt.
  *
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}
  */
 export function patternsPath(env = process.env) {
-  return env[PATTERNS_ENV] ?? path.join(os.homedir(), ".nail-private", "patterns.txt");
+  return env[PATTERNS_ENV] ?? path.join(os.homedir(), ".config", "nail", "private-patterns.txt");
 }
 
 /**

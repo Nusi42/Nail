@@ -84,7 +84,7 @@ export function checkSteps(options = {}) {
       install: INSTALL.npm,
     },
     {
-      // ADR 0192: patterns from %USERPROFILE%/.nail-private/patterns.txt
+      // ADR 0192: patterns from %USERPROFILE%/.config/nail/private-patterns.txt
       // (outside the repository); passes when the file is absent (other machines).
       id: "private",
       title: "No private data (the owner's patterns, every tracked file)",

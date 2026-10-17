@@ -20,7 +20,7 @@ private. The git author address stays as it is.
    prose and `<work root>/nail-work-<N>` / `<master>` in commands (agents run Git Bash, which
    expands `~`).
 2. **Guard** `scripts/check-private.mjs` (logic in `scripts/lib/private-patterns.mjs`):
-   - The patterns live outside every repository in `%USERPROFILE%\.nail-private\patterns.txt` (one regular
+   - The patterns live outside every repository in `%USERPROFILE%\.config\nail\private-patterns.txt` (one regular
      expression per line, `#` comments, matched case-insensitively; `NAIL_PRIVATE_PATTERNS` points at another
      file). Without the file the guard prints "no private patterns configured" and passes (CI, other machines).
      The file and its values are never copied into a repository, ADR, memory file or commit message.

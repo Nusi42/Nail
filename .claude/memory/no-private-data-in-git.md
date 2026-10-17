@@ -21,7 +21,7 @@ forward.
 **How to apply:** when passing a bug report from the owner's real account to an agent, describe it generically ("a real
 IMAP account", "a folder", counts only if needed) and add "do not copy any of these details into the repo". Reviews
 treat private data in a diff as a blocking finding. The automatic guard (patterns kept outside the repo in
-`%USERPROFILE%\.nail-private\patterns.txt`, checked by `scripts/check-private.mjs` in the pre-commit / commit-msg / pre-push hooks and `npm run check`; ADR 0192) must stay on. History was rewritten twice: ADR 0192 and ADR 0198 (identities, the real name in a byline,
+`%USERPROFILE%\.config\nail\private-patterns.txt`, checked by `scripts/check-private.mjs` in the pre-commit / commit-msg / pre-push hooks and `npm run check`; ADR 0192) must stay on. History was rewritten twice: ADR 0192 and ADR 0198 (identities, the real name in a byline,
 another project's name). The guard also checks commit identities. The owner's GitHub handle is in
 the patterns but allowed in its GitHub forms (noreply identity, github.com URLs) only.
 

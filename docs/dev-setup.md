@@ -324,7 +324,7 @@ contents, the Windows user name (write `%USERPROFILE%\…` in prose,
 `example.org` and the demo personas.
 
 `scripts/check-private.mjs` enforces it with patterns kept **outside every
-repository** in `%USERPROFILE%\.nail-private\patterns.txt` (one regular
+repository** in `%USERPROFILE%\.config\nail\private-patterns.txt` (one regular
 expression per line, `#` comments, case-insensitive; `NAIL_PRIVATE_PATTERNS`
 names another file). Never commit that file or copy its values anywhere in a
 repository, a commit message, an ADR or memory. Without the file the guard
