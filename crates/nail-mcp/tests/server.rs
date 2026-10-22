@@ -19,7 +19,8 @@ use nail_api::mcp::{McpCallKind, McpOutcome, McpScope};
 use nail_api::{Event, UiContext};
 use rmcp::model::ClientConfig;
 use rmcp::model::{
-    CallToolRequestParams, ReadResourceRequestParams, ResourceContents, SubscribeRequestParams,
+    CacheScope, CallToolRequestParams, ReadResourceRequestParams, ResourceContents,
+    SubscribeRequestParams,
 };
 use rmcp::service::{RunningService, ServiceError};
 use rmcp::{ClientHandler, RoleClient};
@@ -385,6 +386,27 @@ async fn tools_filter_by_grant_and_mark_content() {
         .await
         .unwrap_err();
     assert!(matches!(err, ServiceError::McpError(_)));
+    drop(client.cancel().await);
+}
+
+/// Every list result carries the caching hints, also for a client that
+/// negotiated a protocol before 2026-07-28 (the default handshake here).
+#[tokio::test]
+async fn list_results_carry_caching_hints() {
+    let env = start().await;
+    let (id, token) = create_client(&env.store, "lists").await;
+    grant(&env.store, &id, &[McpScope::Read], &["work"]).await;
+    let (client, _) = connect(env.server.url(), &token).await;
+    let uncached = (Some(0), Some(CacheScope::Private));
+
+    let tools = client.list_tools(None).await.unwrap();
+    assert_eq!((tools.ttl_ms, tools.cache_scope), uncached);
+    let resources = client.list_resources(None).await.unwrap();
+    assert_eq!((resources.ttl_ms, resources.cache_scope), uncached);
+    let templates = client.list_resource_templates(None).await.unwrap();
+    assert_eq!((templates.ttl_ms, templates.cache_scope), uncached);
+    let prompts = client.list_prompts(None).await.unwrap();
+    assert_eq!((prompts.ttl_ms, prompts.cache_scope), uncached);
     drop(client.cancel().await);
 }
 

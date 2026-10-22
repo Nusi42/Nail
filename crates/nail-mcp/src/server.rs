@@ -59,6 +59,18 @@ pub enum ClientSource {
     Fixed(McpClientId),
 }
 
+/// Adds the caching hints (SEP-2549) to a list result. Protocol 2026-07-28
+/// requires them; older peers get them too, since some clients validate list
+/// results against the newer schema. The lists follow the caller's grants and
+/// the installed plug-ins, so they are stale at once and never shared.
+macro_rules! uncached {
+    ($result:expr) => {
+        $result
+            .with_ttl_ms(0)
+            .with_cache_scope(rmcp::model::CacheScope::Private)
+    };
+}
+
 /// Why a call failed.
 #[derive(Debug)]
 pub(crate) enum Failure {
@@ -851,7 +863,7 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
                     .with_mime_type("application/json"),
             );
         }
-        Ok(ListResourcesResult::with_all_items(resources))
+        Ok(uncached!(ListResourcesResult::with_all_items(resources)))
     }
 
     fn list_resource_templates(
@@ -861,14 +873,14 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
     ) -> impl Future<Output = Result<ListResourceTemplatesResult, ErrorData>>
     + rmcp::service::MaybeSendFuture
     + '_ {
-        std::future::ready(Ok(ListResourceTemplatesResult::with_all_items(
+        std::future::ready(Ok(uncached!(ListResourceTemplatesResult::with_all_items(
             uri::TEMPLATES
                 .iter()
                 .map(|(template, name, description)| {
                     ResourceTemplate::new(*template, *name).with_description(*description)
                 })
                 .collect(),
-        )))
+        ))))
     }
 
     async fn read_resource(
@@ -991,7 +1003,7 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
                 &access,
             ));
         }
-        Ok(ListToolsResult::with_all_items(tools))
+        Ok(uncached!(ListToolsResult::with_all_items(tools)))
     }
 
     async fn call_tool(
@@ -1009,9 +1021,9 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListPromptsResult, ErrorData>> + rmcp::service::MaybeSendFuture + '_
     {
-        std::future::ready(Ok(ListPromptsResult::with_all_items(
+        std::future::ready(Ok(uncached!(ListPromptsResult::with_all_items(
             crate::prompts::definitions(self.shared.data.as_ref()),
-        )))
+        ))))
     }
 
     async fn get_prompt(
