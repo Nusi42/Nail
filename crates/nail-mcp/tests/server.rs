@@ -12,8 +12,8 @@ mod common;
 use std::time::Duration;
 
 use common::{
-    FakeData, call as tool, connect, connect_fails, create_client, grant, set_grant, start,
-    start_with, summary,
+    FakeData, call as tool, connect, connect_fails, connect_stateless, create_client, grant,
+    set_grant, start, start_with, summary,
 };
 use nail_api::mcp::{McpCallKind, McpOutcome, McpScope};
 use nail_api::{Event, UiContext};
@@ -674,8 +674,7 @@ async fn the_endpoint_file_follows_the_server() {
 
 #[tokio::test]
 async fn listen_streams_of_protocol_2026_07_28_get_updates() {
-    use rmcp::model::{ProtocolVersion, ServerNotification, SubscriptionFilter};
-    use rmcp::service::{ClientLifecycleMode, ClientServiceExt};
+    use rmcp::model::{ServerNotification, SubscriptionFilter};
 
     let env = start().await;
     let (id, token) = create_client(&env.store, "modern").await;
@@ -686,22 +685,7 @@ async fn listen_streams_of_protocol_2026_07_28_get_updates() {
         &["work"],
     )
     .await;
-    let transport = rmcp::transport::StreamableHttpClientTransport::with_client(
-        nail_mcp::bridge::loopback_http_client().unwrap(),
-        rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig::with_uri(
-            env.server.url().to_owned(),
-        )
-        .auth_header(token),
-    );
-    let client = ClientConfig::default()
-        .serve_with_lifecycle(
-            transport,
-            ClientLifecycleMode::Discover {
-                preferred_versions: vec![ProtocolVersion::V_2026_07_28],
-            },
-        )
-        .await
-        .unwrap();
+    let client = connect_stateless(ClientConfig::default(), env.server.url(), &token).await;
     // Stateless requests work as well.
     let value = text(&read(&client, "nail://accounts").await.unwrap());
     assert_eq!(value["accounts"].as_array().unwrap().len(), 1, "work only");

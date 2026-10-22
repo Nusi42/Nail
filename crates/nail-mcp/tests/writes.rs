@@ -16,8 +16,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use common::{
-    FakeData, call, create_client, grant, pending, set_grant, start, start_with_settings, summary,
-    transport,
+    FakeData, call, connect_stateless, create_client, grant, pending, set_grant, start,
+    start_with_settings, summary, transport,
 };
 use nail_api::agents::{
     ActionActor, ActionKind, ActionPolicyMode, ActionTargetKind, Confirmation, ConfirmationFilter,
@@ -30,9 +30,8 @@ use nail_store::Store;
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, ClientConfig, ElicitRequestParams, ElicitResult,
     ElicitationAction, ElicitationCapability, ErrorData, FormElicitationCapability,
-    ProtocolVersion,
 };
-use rmcp::service::{ClientLifecycleMode, ClientServiceExt, RequestContext, RunningService};
+use rmcp::service::{RequestContext, RunningService};
 use rmcp::{ClientHandler, RoleClient, ServiceExt};
 use serde_json::{Value, json};
 
@@ -740,16 +739,7 @@ async fn stateless_clients_answer_through_mrtr_rounds() {
     let (id, token) = create_client(&env.store, "Modern").await;
     grant(&env.store, &id, &[McpScope::Send], &["work"]).await;
     let answering = Answering::new(ElicitationAction::Accept, Some(json!({"approve": true})));
-    let client = answering
-        .clone()
-        .serve_with_lifecycle(
-            transport(env.server.url(), &token),
-            ClientLifecycleMode::Discover {
-                preferred_versions: vec![ProtocolVersion::V_2026_07_28],
-            },
-        )
-        .await
-        .unwrap();
+    let client = connect_stateless(answering.clone(), env.server.url(), &token).await;
     let result = tokio::time::timeout(
         Duration::from_secs(10),
         call(&client, "send_message", json!({"draft_id": "d1"})),

@@ -19,8 +19,8 @@ use nail_mcp::{
     ThreadData, WriteSettings,
 };
 use nail_store::Store;
-use rmcp::model::{ClientConfig, ResourceUpdatedNotificationParam};
-use rmcp::service::{NotificationContext, RunningService};
+use rmcp::model::{ClientConfig, ProtocolVersion, ResourceUpdatedNotificationParam};
+use rmcp::service::{ClientLifecycleMode, ClientServiceExt, NotificationContext, RunningService};
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::{ClientHandler, RoleClient, ServiceExt};
@@ -1015,6 +1015,24 @@ pub(crate) async fn connect_fails(url: &str, token: &str) -> bool {
         .serve(transport(url, token))
         .await
         .is_err()
+}
+
+/// `handler` connected without `initialize`: the stateless lifecycle of
+/// protocol 2026-07-28 (`discover`, then self-contained requests).
+pub(crate) async fn connect_stateless<H: ClientHandler>(
+    handler: H,
+    url: &str,
+    token: &str,
+) -> RunningService<RoleClient, H> {
+    handler
+        .serve_with_lifecycle(
+            transport(url, token),
+            ClientLifecycleMode::Discover {
+                preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+            },
+        )
+        .await
+        .unwrap()
 }
 
 /// Calls the tool `name` with `args` (a JSON object).
