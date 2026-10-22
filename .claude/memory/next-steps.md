@@ -1,10 +1,10 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (README, AGPL-3.0, 0.8.0, setup out of the repo; ADRs 0197–0199; history rewrite + first push pending)"
+description: Where the project stands and what to do next — read first when continuing in a new session (0.8.0 public; MCP caching-hints fix published; two nail-core load flakes open)
 metadata:
   node_type: memory
   type: project
-  modified: 2026-10-17T19:47:28.693Z
+  modified: 2026-10-22T20:27:54.368Z
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
@@ -32,6 +32,18 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 **Waiting for the maintainer to try** (newest installer in `<installer folder>\`, payload smoke passed): HTML mail
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
+
+**Latest (2026-10-22):** a user reported that Claude Code refused Nail's `tools/list` ("ttlMs: expected number,
+cacheScope: expected one of public | private"): it validates list results against the 2026-07-28 schema even on a
+2025-11-25 session, and rmcp 3.5.0 leaves both fields out. Fixed and published (`af95bf28`): every list and
+`resources/read` result carries `ttlMs: 0` / `cacheScope: "private"` (`uncached!` in `crates/nail-mcp/src/server.rs`,
+test `results_carry_caching_hints`). The reporter can drop their stdio adapter once they run a build from this
+`main`; no installer was built. The lead folder was set up fresh (`npm ci`, `npm run build`, `github` remote).
+
+**Flaky under full-workspace load (open):** nail-core `messages_move_into_a_shared_mailbox_and_into_another_account`
+(`tests/m4c_leftovers.rs`) and `editing_an_answered_meeting_does_not_answer_again` (`tests/exchange.rs`) each timed
+out once in `eventually` (30 s) during `cargo test --workspace -j 4`; both pass alone (3/3). Find the cost, don't
+raise the timeout (`docs/dev-setup.md`).
 
 **Possible follow-ups:** the source of events / contacts (iCalendar / vCard) like Show source; EWS folder operations
 (CreateFolder / UpdateFolder / MoveFolder / DeleteFolder in the EWS client); MCP / plug-in folder tools.
