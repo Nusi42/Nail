@@ -59,10 +59,11 @@ pub enum ClientSource {
     Fixed(McpClientId),
 }
 
-/// Adds the caching hints (SEP-2549) to a list result. Protocol 2026-07-28
-/// requires them; older peers get them too, since some clients validate list
-/// results against the newer schema. The lists follow the caller's grants and
-/// the installed plug-ins, so they are stale at once and never shared.
+/// Adds the caching hints (SEP-2549) to a list or `resources/read` result.
+/// Protocol 2026-07-28 requires them; older peers get them too, since some
+/// clients validate results against the newer schema. The results follow the
+/// caller's grants, the installed plug-ins and the live mailbox, so they are
+/// stale at once and never shared.
 macro_rules! uncached {
     ($result:expr) => {
         $result
@@ -667,7 +668,7 @@ impl<D: McpData> Shared<D> {
                     .await?,
             ),
         };
-        Ok(ReadResourceResult::new(vec![contents]))
+        Ok(uncached!(ReadResourceResult::new(vec![contents])))
     }
 
     /// Checks a subscription request against the grant.

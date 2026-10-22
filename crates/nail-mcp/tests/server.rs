@@ -389,24 +389,28 @@ async fn tools_filter_by_grant_and_mark_content() {
     drop(client.cancel().await);
 }
 
-/// Every list result carries the caching hints, also for a client that
-/// negotiated a protocol before 2026-07-28 (the default handshake here).
+/// Every list result and every `resources/read` result carries the caching
+/// hints, also for a client that negotiated a protocol before 2026-07-28 (the
+/// default handshake here).
 #[tokio::test]
-async fn list_results_carry_caching_hints() {
+async fn results_carry_caching_hints() {
     let env = start().await;
     let (id, token) = create_client(&env.store, "lists").await;
     grant(&env.store, &id, &[McpScope::Read], &["work"]).await;
     let (client, _) = connect(env.server.url(), &token).await;
     let uncached = (Some(0), Some(CacheScope::Private));
+    macro_rules! assert_uncached {
+        ($result:expr) => {{
+            let result = $result.await.unwrap();
+            assert_eq!((result.ttl_ms, result.cache_scope), uncached);
+        }};
+    }
 
-    let tools = client.list_tools(None).await.unwrap();
-    assert_eq!((tools.ttl_ms, tools.cache_scope), uncached);
-    let resources = client.list_resources(None).await.unwrap();
-    assert_eq!((resources.ttl_ms, resources.cache_scope), uncached);
-    let templates = client.list_resource_templates(None).await.unwrap();
-    assert_eq!((templates.ttl_ms, templates.cache_scope), uncached);
-    let prompts = client.list_prompts(None).await.unwrap();
-    assert_eq!((prompts.ttl_ms, prompts.cache_scope), uncached);
+    assert_uncached!(client.list_tools(None));
+    assert_uncached!(client.list_resources(None));
+    assert_uncached!(client.list_resource_templates(None));
+    assert_uncached!(client.list_prompts(None));
+    assert_uncached!(client.read_resource(ReadResourceRequestParams::new("nail://accounts")));
     drop(client.cancel().await);
 }
 
