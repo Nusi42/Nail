@@ -19,6 +19,7 @@ import {
   releasePage,
   releaseSection,
   releasedChangelog,
+  unwrapped,
   updateBase,
   updateNotes,
 } from "../lib/release.mjs";
@@ -75,6 +76,28 @@ test("the GitHub release links into the tagged sources", () => {
   );
   assert.match(notes, /\[the site\]\(https:\/\/example\.org\/\)/, "absolute links stay");
   assert.equal(absoluteLinks("[a](#top) [b](/x)", "B"), "[a](#top) [b](/x)");
+});
+
+test("paragraphs and list items are one line each, code stays", () => {
+  const text = [
+    "A paragraph",
+    "wrapped.",
+    "",
+    "- An item",
+    "  wrapped too.",
+    "- Next.",
+    "",
+    "### Head",
+    "",
+    "```text",
+    "a",
+    "b",
+    "```",
+  ].join("\n");
+  assert.equal(
+    unwrapped(text),
+    "A paragraph wrapped.\n\n- An item wrapped too.\n- Next.\n\n### Head\n\n```text\na\nb\n```",
+  );
 });
 
 test("the update dialog gets the introduction as plain text", () => {

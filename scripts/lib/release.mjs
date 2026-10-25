@@ -146,8 +146,32 @@ export function plainLinks(markdown) {
 }
 
 /**
- * The GitHub release's text: the section, its links into the tagged
- * sources.
+ * `markdown` with the lines of each paragraph and list item joined: a
+ * GitHub release shows every line break. Code blocks stay as they are.
+ *
+ * @param {string} markdown
+ */
+export function unwrapped(markdown) {
+  /** @type {string[]} */
+  const lines = [];
+  let fenced = false;
+  for (const line of markdown.split("\n")) {
+    const text = line.trim();
+    if (text.startsWith("```")) fenced = !fenced;
+    const previous = lines.at(-1);
+    const starts = /^(?:#|[-*+] |\d+\. |```|>|\|)/.test(text);
+    if (!fenced && text && !starts && previous?.trim() && !/^(?:#|```)/.test(previous.trim())) {
+      lines[lines.length - 1] = `${previous} ${text}`;
+    } else {
+      lines.push(line);
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
+ * The GitHub release's text: the section, its lines unwrapped and its
+ * links into the tagged sources.
  *
  * @param {string} section
  * @param {string} repository
@@ -155,7 +179,7 @@ export function plainLinks(markdown) {
  */
 export function githubNotes(section, repository, version) {
   const base = `${repository}/blob/${releaseTag(version)}/${RELEASE_NOTES.replace(/\/[^/]+$/, "")}`;
-  return `${absoluteLinks(section, base)}\n`;
+  return `${absoluteLinks(unwrapped(section), base)}\n`;
 }
 
 /**
