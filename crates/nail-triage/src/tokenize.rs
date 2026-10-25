@@ -140,9 +140,13 @@ impl Tokenizer {
         c.out
     }
 
-    /// The word tokens of a text (not deduplicated).
+    /// The word tokens of a text (not deduplicated). UAX #29 attaches
+    /// combining marks to the character before them, even to a tab: a
+    /// "word" is split at whitespace again.
     fn words<'t>(&'t self, text: &'t str) -> impl Iterator<Item = String> + 't {
         text.unicode_words()
+            .flat_map(|word| word.split(char::is_whitespace))
+            .filter(|word| !word.is_empty())
             .filter_map(|word| self.word_token(word))
     }
 
@@ -393,6 +397,17 @@ mod tests {
             ["alpha", "beta"]
         );
         assert_eq!(truncate_at_char("äöü", 3), "ä");
+    }
+
+    #[test]
+    fn combining_marks_after_whitespace_make_no_token_with_whitespace() {
+        // Found by `tokens_are_well_formed`: a variation selector and a
+        // combining vowel sign after a tab.
+        let tokens = tokens_of(&[], "\t\u{fe00}\u{115af} x");
+        assert!(
+            tokens.iter().all(|t| !t.chars().any(char::is_whitespace)),
+            "{tokens:?}"
+        );
     }
 
     fn arb_text() -> impl Strategy<Value = String> {
