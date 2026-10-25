@@ -15,6 +15,7 @@ import { errorMessageOf } from "../../api/client";
 import type { DesktopSettings, LocalizedMessage } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
+import { usePlatformFeature } from "../../state/platform";
 import { useClient } from "../../state/queries";
 import { QueryProblem } from "./QueryProblem";
 import { systemKeys, useDesktopSettings } from "./queries";
@@ -91,6 +92,7 @@ function Check({
 /** Widget `desktop-settings`. */
 export function DesktopSettingsWidget({ node }: WidgetProps) {
   const t = useT();
+  const startup = usePlatformFeature("start-with-system");
   const label = useLabel();
   const query = useDesktopSettings();
   const { busy, problem, save } = useSaveDesktopSettings();
@@ -128,33 +130,35 @@ export function DesktopSettingsWidget({ node }: WidgetProps) {
               }}
             />
           </fieldset>
-          <fieldset data-part="form.section" data-section="startup" disabled={busy}>
-            <legend data-part="form.section.title">{t("system-desktop-startup")}</legend>
-            <Check
-              field="start-with-windows"
-              checked={data.settings.start_with_windows}
-              disabled={data.startWithWindowsManaged}
-              label={t("system-desktop-start-with-windows")}
-              hint={t(
-                data.startWithWindowsManaged
-                  ? "system-desktop-start-with-windows-managed"
-                  : "system-desktop-start-with-windows-hint",
-              )}
-              onChange={(start_with_windows) => {
-                change({ start_with_windows });
-              }}
-            />
-            <Check
-              field="start-hidden"
-              checked={data.settings.start_hidden}
-              disabled={!data.settings.start_with_windows}
-              label={t("system-desktop-start-hidden")}
-              hint={t("system-desktop-start-hidden-hint")}
-              onChange={(start_hidden) => {
-                change({ start_hidden });
-              }}
-            />
-          </fieldset>
+          {startup && (
+            <fieldset data-part="form.section" data-section="startup" disabled={busy}>
+              <legend data-part="form.section.title">{t("system-desktop-startup")}</legend>
+              <Check
+                field="start-with-windows"
+                checked={data.settings.start_with_windows}
+                disabled={data.startWithWindowsManaged}
+                label={t("system-desktop-start-with-windows")}
+                hint={t(
+                  data.startWithWindowsManaged
+                    ? "system-desktop-start-with-windows-managed"
+                    : "system-desktop-start-with-windows-hint",
+                )}
+                onChange={(start_with_windows) => {
+                  change({ start_with_windows });
+                }}
+              />
+              <Check
+                field="start-hidden"
+                checked={data.settings.start_hidden}
+                disabled={!data.settings.start_with_windows}
+                label={t("system-desktop-start-hidden")}
+                hint={t("system-desktop-start-hidden-hint")}
+                onChange={(start_hidden) => {
+                  change({ start_hidden });
+                }}
+              />
+            </fieldset>
+          )}
           {showDev && (
             <fieldset data-part="form.section" data-section="developer" disabled={busy}>
               <legend data-part="form.section.title">{t("system-desktop-developer")}</legend>

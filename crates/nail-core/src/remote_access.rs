@@ -144,6 +144,8 @@ impl Service {
                         theme: Box::new((*theme).clone()),
                         layout,
                         locale,
+                        // The desktop host is out of a remote session's reach.
+                        platform: nail_api::platform::PlatformInfo::current(false),
                     }
                 }
                 other => other,

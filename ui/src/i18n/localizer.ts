@@ -7,6 +7,8 @@
  */
 import { FluentBundle, FluentResource, type FluentVariable } from "@fluent/bundle";
 import { negotiateLanguages } from "@fluent/langneg";
+import type { Os } from "../api/generated";
+import { OS_MESSAGE_ARG } from "../api/generated/constants";
 
 /** The language every catalog falls back to. */
 export const FALLBACK_LOCALE = "en";
@@ -78,6 +80,7 @@ export function createLocalizer(
   requested: readonly string[],
   warnMissing = false,
   override: string | null = null,
+  os: Os | null = null,
 ): Localizer {
   const locale = negotiateLocale(requested, availableLocales(catalogs, override));
   const chain: FluentBundle[] = [];
@@ -110,9 +113,16 @@ export function createLocalizer(
         return id;
       }
       const errors: Error[] = [];
-      const text = found.bundle.formatPattern(found.pattern, args ?? null, errors);
-      if (errors.length > 0 && warnMissing) {
-        console.warn(`nail: formatting "${id}"`, errors);
+      // ADR 0202: every message gets the core's system, as in the core's
+      // own catalogs; the message's arguments win.
+      const all = os === null ? (args ?? null) : { [OS_MESSAGE_ARG]: os, ...args };
+      const text = found.bundle.formatPattern(found.pattern, all, errors);
+      // Until the config arrives the system is unknown: `$os` selects fall
+      // back to their default variant, which is expected.
+      const reported =
+        os === null ? errors.filter((e) => !e.message.endsWith(`$${OS_MESSAGE_ARG}`)) : errors;
+      if (reported.length > 0 && warnMissing) {
+        console.warn(`nail: formatting "${id}"`, reported);
       }
       return text;
     },

@@ -9,6 +9,7 @@ import { errorMessageIdOf } from "../../api/client";
 import type { CryptoKey, CryptoTechnology, KeyId } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
+import { usePlatformFeature } from "../../state/platform";
 import { CheckField, SelectField, TextField } from "../../widgets/forms";
 import { KeyDetail } from "./KeyDetail";
 import { GenerateTool, ImportTool, LookupTool, WindowsStoreTool } from "./KeyTools";
@@ -83,6 +84,9 @@ export function KeyManager({ node }: WidgetProps) {
   });
   const list = keys.data ?? [];
   const current = list.find((k) => k.id === selected) ?? list[0] ?? null;
+  // ADR 0202: the Windows certificate store only where the core has it.
+  const windowsStore = usePlatformFeature("windows-certificate-store");
+  const tools = KEY_TOOLS.filter((k) => k !== "windows" || windowsStore);
   const onKeys = (added: CryptoKey[]) => {
     const first = added[0];
     if (first) {
@@ -101,7 +105,7 @@ export function KeyManager({ node }: WidgetProps) {
     >
       <p data-part="security-keys.intro">{t("security-keys-intro")}</p>
       <div data-part="security-keys.tools" role="toolbar" aria-label={t("security-keys-tools")}>
-        {KEY_TOOLS.map((k) => (
+        {tools.map((k) => (
           <button
             key={k}
             type="button"

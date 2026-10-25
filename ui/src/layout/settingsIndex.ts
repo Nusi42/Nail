@@ -7,9 +7,11 @@
  * by `features/registry.ts` (`appRegistry.settings`). The index holds, per
  * section, the group label, the section label and keywords, and the labels
  * of every widget in the section's tree, so a search finds the section
- * that holds a setting. Pure; the settings page (WP163) renders it.
+ * that holds a setting. Widgets and labels the platform lacks a feature for
+ * (ADR 0202) are left out. Pure; the settings page (WP163) renders it.
  */
-import type { LayoutNode, ResolvedLayout } from "../api/generated";
+import type { LayoutNode, PlatformFeature, PlatformInfo, ResolvedLayout } from "../api/generated";
+import { hasFeature } from "../api/platform";
 
 /** What a feature declares about one settings widget kind. */
 export interface SettingsWidgetInfo {
@@ -17,6 +19,34 @@ export interface SettingsWidgetInfo {
   labels: readonly string[];
   /** Fluent id of extra search words (space separated), if any. */
   keywords?: string;
+  /** The platform feature the whole widget needs (ADR 0202); hidden without it. */
+  requires?: PlatformFeature;
+  /** Labels shown only with a platform feature (part of a widget). */
+  platformLabels?: Readonly<Partial<Record<PlatformFeature, readonly string[]>>>;
+}
+
+/**
+ * Whether `info`'s widget is shown on `platform` (`undefined` = every
+ * widget, for callers that do not know it).
+ */
+export function widgetOffered(
+  info: SettingsWidgetInfo | undefined,
+  platform: PlatformInfo | undefined,
+): boolean {
+  return (
+    info?.requires === undefined || platform === undefined || hasFeature(platform, info.requires)
+  );
+}
+
+/** The labels of `info` shown on `platform` (`undefined` = all of them). */
+function offeredLabels(info: SettingsWidgetInfo, platform: PlatformInfo | undefined): string[] {
+  const labels = [...info.labels];
+  for (const [feature, ids] of Object.entries(info.platformLabels ?? {})) {
+    if (platform === undefined || hasFeature(platform, feature as PlatformFeature)) {
+      labels.push(...ids);
+    }
+  }
+  return labels;
 }
 
 /** Where an index entry's text comes from. */
@@ -56,13 +86,15 @@ function widgetKinds(node: LayoutNode, out: string[]): string[] {
 /**
  * Builds the index. `label` translates a layout label (`@id` or literal),
  * `t` a Fluent id. Section and group labels default to
- * `@settings.section.<id>` / `@settings.group.<id>`.
+ * `@settings.section.<id>` / `@settings.group.<id>`. `platform` leaves out
+ * what the system lacks (`undefined` = keep everything).
  */
 export function buildSettingsIndex(
   layout: ResolvedLayout,
   infos: Readonly<Record<string, SettingsWidgetInfo>>,
   label: (text: string) => string,
   t: (id: string) => string,
+  platform?: PlatformInfo,
 ): SettingsIndexEntry[] {
   const out: SettingsIndexEntry[] = [];
   for (const group of layout.settings) {
@@ -80,8 +112,8 @@ export function buildSettingsIndex(
       }
       for (const kind of widgetKinds(section.root, [])) {
         const info = Object.hasOwn(infos, kind) ? infos[kind] : undefined;
-        if (info === undefined) continue;
-        for (const id of info.labels) {
+        if (info === undefined || !widgetOffered(info, platform)) continue;
+        for (const id of offeredLabels(info, platform)) {
           out.push({ ...base, kind: "setting", text: t(id), widget: kind });
         }
         if (info.keywords !== undefined) {

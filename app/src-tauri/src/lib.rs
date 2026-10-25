@@ -554,7 +554,7 @@ async fn show_notifications(app: AppHandle, service: Service) {
 
 /// Tells the user why the app does not start (another Nail process holds
 /// the data directory).
-#[expect(unsafe_code, reason = "one MessageBoxW call")]
+#[cfg_attr(windows, expect(unsafe_code, reason = "one MessageBoxW call"))]
 fn refuse_start(message: &str) {
     tracing::error!("{message}");
     // Test runs (ADR 0146): no message box on the user's screen.

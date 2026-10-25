@@ -190,7 +190,11 @@ describe("recovery key", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Open your data with the recovery key",
     });
-    expect(within(dialog).getByText(/its key is missing from this computer/)).toBeVisible();
+    expect(
+      within(dialog).getByText(
+        /its key is missing from the Windows Credential Manager on this computer/,
+      ),
+    ).toBeVisible();
     expect(await violations(container)).toEqual([]);
     const input = within(dialog).getByLabelText("Recovery key");
     await user.type(input, formatRecoveryKey(new Uint8Array(32)));

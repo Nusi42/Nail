@@ -8,6 +8,7 @@
 import { errorMessageOf } from "../../api/client";
 import type { InstallationInfo } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
+import { usePlatformFeature } from "../../state/platform";
 import { channelMessageId, installKindMessageId, installScopeMessageId } from "./model";
 import { useInstallation, useUpdateStatus } from "./queries";
 import { UpdateSection } from "./UpdateSettings";
@@ -25,6 +26,7 @@ function Facts({ info }: { info: InstallationInfo }) {
   const t = useT();
   const status = useUpdateStatus();
   const channel = status.data?.settings.channel ?? info.forced_channel;
+  const mapi = usePlatformFeature("simple-mapi");
   return (
     <ul data-part="about-nail.facts" aria-label={t("system-about-facts")}>
       <Fact name="version" label={t("system-about-version")} value={info.version} />
@@ -54,11 +56,13 @@ function Facts({ info }: { info: InstallationInfo }) {
       {info.webview_version !== null && (
         <Fact name="webview" label={t("system-about-webview")} value={info.webview_version} />
       )}
-      <Fact
-        name="mapi"
-        label={t("system-about-mapi")}
-        value={t(info.mapi_installed ? "system-about-mapi-yes" : "system-about-mapi-no")}
-      />
+      {mapi && (
+        <Fact
+          name="mapi"
+          label={t("system-about-mapi")}
+          value={t(info.mapi_installed ? "system-about-mapi-yes" : "system-about-mapi-no")}
+        />
+      )}
     </ul>
   );
 }

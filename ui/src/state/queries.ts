@@ -9,6 +9,7 @@ import type {
   AccountStatus,
   FolderId,
   MessageId,
+  PlatformInfo,
   ResolvedLayout,
   ResolvedTheme,
   SearchError,
@@ -77,6 +78,8 @@ export interface AppConfig {
   theme: ResolvedTheme;
   layout: ResolvedLayout;
   locale: string | null;
+  /** The system the core runs on and what it offers there (ADR 0202). */
+  platform: PlatformInfo;
 }
 
 export function useConfig() {
@@ -89,6 +92,7 @@ export function useConfig() {
         theme: normalizeTheme(r.theme),
         layout: normalizeLayout(r.layout),
         locale: r.locale,
+        platform: r.platform,
       };
     },
     staleTime: Number.POSITIVE_INFINITY,

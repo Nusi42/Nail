@@ -353,6 +353,7 @@ mod tests {
     }
 
     /// Sends the test message as a client would.
+    #[cfg(windows)]
     async fn send_request(client: &mut (impl AsyncWrite + Unpin)) {
         let request = MapiPipeRequest {
             version: MAPI_PROTOCOL_VERSION,
@@ -365,6 +366,7 @@ mod tests {
     }
 
     /// Reads the server's answer frame.
+    #[cfg(windows)]
     async fn read_response(client: &mut (impl AsyncRead + Unpin)) -> MapiPipeResponse {
         let mut header = [0u8; 4];
         client.read_exact(&mut header).await.unwrap();

@@ -2,7 +2,10 @@
 //! user's SID (the Simple MAPI pipe name and its ACL), a security
 //! descriptor from SDDL, random tokens, and opening `ms-settings:` URIs.
 
-#![expect(unsafe_code, reason = "Win32 calls, each with its SAFETY note")]
+#![cfg_attr(
+    windows,
+    expect(unsafe_code, reason = "Win32 calls, each with its SAFETY note")
+)]
 
 use std::fmt::Write as _;
 

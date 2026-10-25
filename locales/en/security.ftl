@@ -90,7 +90,7 @@ security-details-marked-verified = Key marked as verified.
 
 security-chain-label = Certificate chain
 security-chain-valid = The certificate chain is valid.
-security-chain-untrusted-root = The certificate chain ends at a root Windows does not trust.
+security-chain-untrusted-root = The certificate chain ends at a root { common-system-name } does not trust.
 security-chain-incomplete = The certificate chain is incomplete.
 security-chain-expired = A certificate in the chain has expired.
 security-chain-wrong-usage = The certificate may not be used for e-mail.
@@ -273,7 +273,7 @@ security-source-setup-message = Autocrypt setup message
 security-source-wkd = Web Key Directory of the domain
 security-source-keyserver = { security-lookup-source-keys-openpgp-org }
 security-source-message = Attached to a message
-security-secret-keychain = Protected by the Windows Credential Manager
+security-secret-keychain = Protected by { common-keychain }
 security-secret-passphrase = Protected by a passphrase
 security-secret-windows-store = Kept in the Windows certificate store
 
@@ -304,9 +304,14 @@ security-key-delete-yes = Delete key
 ## Protection of new secret keys
 
 security-protection = Protect the secret key with
-security-protection-keychain = Windows Credential Manager (no prompts)
+security-protection-keychain = { common-keychain-name } (no prompts)
 security-protection-passphrase = A passphrase
-security-protection-keychain-hint = Recommended. The key is protected by your Windows sign-in.
+security-protection-keychain-hint =
+    Recommended. The key is protected by your { $os ->
+        [windows] Windows sign-in
+        [macos] macOS login
+       *[other] login keyring
+    }.
 security-protection-passphrase-hint = You will be asked for the passphrase when the key is used. It cannot be recovered if you forget it.
 security-protection-new-passphrase = { common-passphrase }
 security-protection-confirm = Repeat passphrase
@@ -398,13 +403,18 @@ security-identity-protect-headers-hint = The real subject travels inside the enc
 
 security-settings-label = Data protection
 security-vault-title = Encryption at rest
-security-vault-intro = Encrypts the mail Nail stores on this computer (messages, drafts, message previews and the search index) with a key kept in the Windows Credential Manager. It protects your mail if the disk is copied or the laptop is stolen, even without BitLocker. Subjects, addresses and dates stay readable in the database so that lists and searches stay fast.
+security-vault-intro =
+    Encrypts the mail Nail stores on this computer (messages, drafts, message previews and the search index) with a key kept in { common-keychain }. It protects your mail if the disk is copied or the laptop is stolen, even without { $os ->
+        [windows] BitLocker
+        [macos] FileVault
+       *[other] disk encryption
+    }. Subjects, addresses and dates stay readable in the database so that lists and searches stay fast.
 security-vault-recommended = Recommended: turn this on. It is off by default for now.
 security-vault-state-plain = Off: your mail is stored unencrypted on this computer.
 security-vault-state-encrypting = Encrypting your data…
 security-vault-state-encrypted = On: your mail is stored encrypted.
 security-vault-state-decrypting = Decrypting your data…
-security-vault-key-keychain = The key is kept in the Windows Credential Manager.
+security-vault-key-keychain = The key is kept in { common-keychain }.
 security-vault-phase = { $phase }: { $done } of { $total } ({ $percent } %)
 security-vault-phase-database = Database
 security-vault-phase-blobs = Stored messages
@@ -476,9 +486,9 @@ security-action-recovery-check = Check the recovery key…
 security-action-recovery-restore = Restore access with the recovery key…
 security-action-recovery-keywords = recovery key vault encryption lost keychain backup
 security-recovery-title = { security-recovery-input }
-security-recovery-what = With encryption at rest, the key to your data is kept in the Windows Credential Manager. If that entry is ever lost — a new Windows profile, a reset — the recovery key is the only way back to your data.
+security-recovery-what = With encryption at rest, the key to your data is kept in { common-keychain }. If that entry is ever lost — a new user profile, a reset — the recovery key is the only way back to your data.
 security-recovery-not-encrypted = Turn on encryption at rest first; then you can create a recovery key for it.
-security-recovery-missing = There is no recovery key yet. If the key in the Credential Manager is lost, your data cannot be opened.
+security-recovery-missing = There is no recovery key yet. If the key in { common-keychain-short } is lost, your data cannot be opened.
 security-recovery-needed-banner = Your data is encrypted but its key is missing from this computer. Enter your recovery key to open it.
 security-recovery-created = Created
 security-recovery-checked = Last checked
@@ -489,7 +499,7 @@ security-recovery-replace = Create a new recovery key
 security-recovery-replace-warning = The current recovery key stops working as soon as the new one is created.
 security-recovery-check = Check recovery key
 security-recovery-remove = Remove recovery key
-security-recovery-remove-warning = Without a recovery key, your data is lost if the key in the Credential Manager is lost.
+security-recovery-remove-warning = Without a recovery key, your data is lost if the key in { common-keychain-short } is lost.
 security-recovery-remove-confirm = Remove it
 security-recovery-keep = Keep it
 security-recovery-intro = Nail creates a recovery key and shows it once. Write it down or print it, and keep it somewhere safe away from this computer. Nail does not keep a copy.
@@ -516,11 +526,11 @@ security-recovery-done = Your recovery key works. Keep it safe.
 security-recovery-check-intro = Type your recovery key to check that your copy still works. Nothing changes.
 security-recovery-check-valid = This recovery key works.
 security-recovery-check-invalid = This is not your current recovery key.
-security-recovery-restore-needed = Your data is encrypted, but its key is missing from this computer’s Credential Manager. Type your recovery key to open your data again.
-security-recovery-restore-intro = Type your recovery key to put the key to your data back into the Credential Manager.
+security-recovery-restore-needed = Your data is encrypted, but its key is missing from { common-keychain } on this computer. Type your recovery key to open your data again.
+security-recovery-restore-intro = Type your recovery key to put the key to your data back into { common-keychain-short }.
 security-recovery-restore = Open with recovery key
 security-recovery-restore-lost = Without the recovery key the encrypted data cannot be opened by anyone, including Nail.
-security-recovery-restored = Your data is open again. The key is back in the Credential Manager.
+security-recovery-restored = Your data is open again. The key is back in { common-keychain-short }.
 security-recovery-kit-title = { recovery-kit-title }
 security-recovery-kit-text = Recovery key for Nail’s encrypted data, created { $created }.
 security-recovery-kit-keep = Keep this page somewhere safe. Anyone with it and a copy of your data can read your data.
@@ -531,9 +541,18 @@ security-smartcard-title = { security-settings-tab-smartcards }
 security-smartcard-intro = Use keys on a smartcard or USB token (PKCS#11) for S/MIME and OpenPGP. The private key never leaves the card; Nail asks for the PIN when it needs it and never stores it.
 security-smartcard-desktop-only = Smartcards can only be used in the desktop app.
 security-smartcard-modules = { security-smartcard-module-filter }
-security-smartcard-modules-hint = The driver of your card or token, for example C:\Windows\System32\opensc-pkcs11.dll. Your card’s vendor names it.
+security-smartcard-modules-hint =
+    The driver of your card or token, for example { $os ->
+        [windows] C:\Windows\System32\opensc-pkcs11.dll
+        [macos] /Library/OpenSC/lib/opensc-pkcs11.so
+       *[other] /usr/lib/x86_64-linux-gnu/opensc-pkcs11.so
+    }. Your card’s vendor names it.
 security-smartcard-no-modules = No module yet.
-security-smartcard-module-path = Module (DLL)
+security-smartcard-module-path =
+    Module ({ $os ->
+        [windows] DLL
+       *[other] shared library
+    })
 security-smartcard-module-pick-title = Choose the PKCS#11 module
 security-smartcard-module-filter = PKCS#11 modules
 security-smartcard-add-module = Add module

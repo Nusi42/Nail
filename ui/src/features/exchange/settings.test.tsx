@@ -8,7 +8,13 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import type { AuthConfig, DiscoveredAccount, ExchangeOptions } from "../../api/generated";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { renderWithProviders, widget } from "../../test/harness";
+import {
+  onPlatform,
+  renderWithProviders,
+  settleQueries,
+  widget,
+  type Env,
+} from "../../test/harness";
 import {
   actions,
   ExchangeAccountType,
@@ -336,14 +342,13 @@ describe("account setup and settings", () => {
     );
   });
 
-  it("signs in as the Windows user, another Windows account, or with OAuth for Graph", async () => {
-    const env = setup();
-    const user = userEvent.setup();
-    const state: { auth: AuthConfig; password: string } = {
-      auth: { method: "windows", username: null, secret: null, package: null },
-      password: "",
-    };
-    function Host({ engine }: { engine: "graph" | "ews" }) {
+  /** The sign-in fields for `engine`, starting from `state.auth`; `state` follows the edits. */
+  function renderSignIn(
+    env: Env,
+    engine: "graph" | "ews",
+    state: { auth: AuthConfig; password: string },
+  ) {
+    function Host() {
       const [auth, setAuth] = useState<AuthConfig>(state.auth);
       const [password, setPassword] = useState("");
       state.auth = auth;
@@ -359,7 +364,25 @@ describe("account setup and settings", () => {
         />
       );
     }
-    const { unmount } = renderWithProviders(<Host engine="ews" />, env);
+    return renderWithProviders(<Host />, env);
+  }
+
+  const WINDOWS_USER: AuthConfig = {
+    method: "windows",
+    username: null,
+    secret: null,
+    package: null,
+  };
+  const WINDOWS_CHOICES = [
+    "As the user signed in to Windows",
+    "With another Windows account",
+  ] as const;
+
+  it("signs in as the Windows user, another Windows account, or with OAuth for Graph", async () => {
+    const env = setup();
+    const user = userEvent.setup();
+    const state: { auth: AuthConfig; password: string } = { auth: WINDOWS_USER, password: "" };
+    const { unmount } = renderSignIn(env, "ews", state);
     expect(screen.getByRole("radio", { name: "As the user signed in to Windows" })).toBeChecked();
     expect(
       screen.getByText("Nail signs in like Outlook does and stores no password."),
@@ -378,11 +401,32 @@ describe("account setup and settings", () => {
     expect(state.password).toBe("secret");
     unmount();
     state.auth = exchangeCandidate("ada@corp.example", "graph").incoming.server.auth;
-    renderWithProviders(<Host engine="graph" />, env);
+    renderSignIn(env, "graph", state);
     expect(screen.queryByRole("radio")).toBeNull();
     expect(
       screen.getByText("Microsoft 365 accounts sign in with Microsoft in your browser."),
     ).toBeInTheDocument();
+  });
+
+  it("offers the Windows sign-in only where the core has it, but keeps a configured one (ADR 0202)", async () => {
+    const env = setup();
+    onPlatform(env, "linux");
+    const password: AuthConfig = {
+      method: "password",
+      username: "ada",
+      secret: null,
+      mechanism: null,
+    };
+    const { unmount } = renderSignIn(env, "ews", { auth: password, password: "" });
+    expect(await screen.findByRole("radio", { name: "With a password" })).toBeChecked();
+    await settleQueries(env);
+    for (const name of WINDOWS_CHOICES) expect(screen.queryByRole("radio", { name })).toBeNull();
+    unmount();
+    renderSignIn(env, "ews", { auth: WINDOWS_USER, password: "" });
+    for (const name of WINDOWS_CHOICES) {
+      expect(await screen.findByRole("radio", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("radio", { name: WINDOWS_CHOICES[0] })).toBeChecked();
   });
 
   it("edits the account options and shows the status", async () => {

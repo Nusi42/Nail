@@ -28,7 +28,7 @@ use std::process::ExitCode;
 
 #[cfg(not(windows))]
 fn main() -> ExitCode {
-    ExitCode::from(nail_api::mapi::MapiResult::NotSupported.code() as u8)
+    ExitCode::from(u8::try_from(nail_api::mapi::MapiResult::NotSupported.code()).unwrap_or(u8::MAX))
 }
 
 #[cfg(windows)]

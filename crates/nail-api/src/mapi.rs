@@ -665,11 +665,11 @@ mod tests {
             mapi_dll_relative_path(WindowsArch::X86),
             r"mapi\x86\NailMapi.dll"
         );
-        let dll = Path::new(r"C:\Program Files\Nail\mapi\arm64\NailMapi.dll");
-        assert_eq!(
-            app_exe_from_dll(dll),
-            Some(PathBuf::from(r"C:\Program Files\Nail").join("Nail.exe"))
-        );
+        // Built with the platform's separator: the DLL path is a Windows
+        // fact, the walk up to the install directory is the same everywhere.
+        let install_dir = Path::new("Program Files").join("Nail");
+        let dll = install_dir.join("mapi").join("arm64").join("NailMapi.dll");
+        assert_eq!(app_exe_from_dll(&dll), Some(install_dir.join("Nail.exe")));
     }
 
     #[test]

@@ -89,6 +89,7 @@ import type { PimImportResult } from "./PimImportResult";
 import type { PimSearchHit } from "./PimSearchHit";
 import type { PimSource } from "./PimSource";
 import type { PimSourceTestResult } from "./PimSourceTestResult";
+import type { PlatformInfo } from "./PlatformInfo";
 import type { PluginActivity } from "./PluginActivity";
 import type { PluginBadge } from "./PluginBadge";
 import type { PluginBanner } from "./PluginBanner";
@@ -175,7 +176,11 @@ layout: ResolvedLayout,
  * UI language override from the settings as a BCP 47 tag (e.g.
  * `"de"`), or `null` to follow the OS / browser language.
  */
-locale: string | null, } | { "type": "Accounts", 
+locale: string | null, 
+/**
+ * The system the core runs on and what it offers there (ADR 0202).
+ */
+platform: PlatformInfo, } | { "type": "Accounts", 
 /**
  * All accounts, in display order.
  */

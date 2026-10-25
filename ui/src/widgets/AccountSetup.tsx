@@ -22,6 +22,7 @@ import {
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { type WidgetProps } from "../layout/widgetRegistry";
 import { isEmail } from "../state/addresses";
+import { usePlatformFeature } from "../state/platform";
 import { queryKeys, useAccountsConfig, useClient } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import {
@@ -186,6 +187,8 @@ export function AccountSetup({ node }: WidgetProps) {
   const oauthResults = useUi((s) => s.oauthResults);
   const selectAccount = useUi((s) => s.selectAccount);
   const closeWindow = useUi((s) => s.closeWindow);
+  // A sign-in prompt is answered with the Windows sign-in (ADR 0202).
+  const windowsSignIn = usePlatformFeature("windows-sign-in");
 
   const [step, setStep] = useState<SetupStep>("address");
   const [name, setName] = useState("");
@@ -457,20 +460,22 @@ export function AccountSetup({ node }: WidgetProps) {
               <p data-part="account-setup.notice">
                 {t(exchangeInfo.prompt.localized.id, exchangeInfo.prompt.localized.args)}
               </p>
-              <button
-                type="button"
-                data-part="form.button"
-                data-action="lookup-again"
-                disabled={busy}
-                onClick={answerPrompt}
-              >
-                {t(
-                  exchangeInfo.prompt.kind === "confirm-redirect"
-                    ? "setup-exchange-trust"
-                    : "setup-exchange-windows-sign-in",
-                  { host: exchangeInfo.prompt.host },
-                )}
-              </button>
+              {(exchangeInfo.prompt.kind === "confirm-redirect" || windowsSignIn) && (
+                <button
+                  type="button"
+                  data-part="form.button"
+                  data-action="lookup-again"
+                  disabled={busy}
+                  onClick={answerPrompt}
+                >
+                  {t(
+                    exchangeInfo.prompt.kind === "confirm-redirect"
+                      ? "setup-exchange-trust"
+                      : "setup-exchange-windows-sign-in",
+                    { host: exchangeInfo.prompt.host },
+                  )}
+                </button>
+              )}
             </div>
           )}
           {candidates.length === 0 ? (

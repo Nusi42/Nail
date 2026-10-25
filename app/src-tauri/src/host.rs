@@ -14,11 +14,15 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
+#[cfg(windows)]
+use nail_api::desktop::PathPick;
 use nail_api::desktop::{
     DefaultAppsStatus, DesktopChange, DesktopHost, DesktopNotifier, DesktopSettings,
-    HostUpdateState, InstallationInfo, PathPick, UpdateSettings, default_apps_settings_uri,
+    HostUpdateState, InstallationInfo, UpdateSettings, default_apps_settings_uri,
 };
+#[cfg(windows)]
 use nail_api::engine::BoxFuture;
+#[cfg(windows)]
 use nail_api::print::PrintJob;
 use nail_api::windows::{PopOutOpen, window_kind};
 use nail_api::{ApiError, ErrorCode, LocalizedMessage, PrintJobId};
@@ -142,18 +146,12 @@ impl ShellHost {
     }
 
     /// The main window's handle (the owner of file dialogs).
+    #[cfg(windows)]
     fn main_window_handle(&self) -> Option<isize> {
-        #[cfg(windows)]
-        {
-            use tauri::Manager as _;
-            let (app, _) = self.app.get()?;
-            let window = app.get_webview_window(crate::shell::MAIN_WINDOW)?;
-            window.hwnd().ok().map(|h| h.0 as isize)
-        }
-        #[cfg(not(windows))]
-        {
-            None
-        }
+        use tauri::Manager as _;
+        let (app, _) = self.app.get()?;
+        let window = app.get_webview_window(crate::shell::MAIN_WINDOW)?;
+        window.hwnd().ok().map(|h| h.0 as isize)
     }
 
     fn localize(&self, id: &str) -> String {
@@ -163,7 +161,9 @@ impl ShellHost {
         }
     }
 
-    /// Loads the print view in a hidden window and writes it as PDF.
+    /// Loads the print view in a hidden window and writes it as PDF
+    /// (WebView2 only; elsewhere the trait's default answers `unsupported`).
+    #[cfg(windows)]
     async fn write_pdf(&self, job: &PrintJob, path: &str) -> Result<u64, ApiError> {
         use crate::printing::{PDF_TIMEOUT, READY_TIMEOUT, pdf_error};
         let target = crate::printing::check_target(path)?;
@@ -189,27 +189,20 @@ impl ShellHost {
                 .await
                 .map_err(|_| pdf_error("the print view did not finish loading"))?
                 .map_err(|_| pdf_error("the print view went away"))?;
-            #[cfg(windows)]
-            {
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                let options = job.options.clone();
-                let file = target.clone();
-                window
-                    .with_webview(move |webview| {
-                        crate::printing::print_webview_to_pdf(&webview, &file, &options, tx);
-                    })
-                    .map_err(pdf_error)?;
-                tokio::time::timeout(PDF_TIMEOUT, rx)
-                    .await
-                    .map_err(|_| pdf_error("WebView2 did not finish the PDF"))?
-                    .map_err(|_| pdf_error("WebView2 went away"))?
-                    .map_err(pdf_error)?;
-                Ok(())
-            }
-            #[cfg(not(windows))]
-            {
-                Err(pdf_error("PDF files need WebView2 (Windows)"))
-            }
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let options = job.options.clone();
+            let file = target.clone();
+            window
+                .with_webview(move |webview| {
+                    crate::printing::print_webview_to_pdf(&webview, &file, &options, tx);
+                })
+                .map_err(pdf_error)?;
+            tokio::time::timeout(PDF_TIMEOUT, rx)
+                .await
+                .map_err(|_| pdf_error("WebView2 did not finish the PDF"))?
+                .map_err(|_| pdf_error("WebView2 went away"))?
+                .map_err(pdf_error)?;
+            Ok(())
         }
         .await;
         self.print_ready.forget(&job.job_id);
@@ -333,6 +326,10 @@ impl DesktopHost for ShellHost {
         self.lock_dev().as_ref().map(|d| d.url().to_owned())
     }
 
+    // The system's file dialog and PDF printing exist on Windows only
+    // (ADR 0202): elsewhere the trait's defaults answer `unsupported`, and
+    // the UI falls back to a typed path or a browser download.
+    #[cfg(windows)]
     fn pick_path<'a>(
         &'a self,
         pick: &'a PathPick,
@@ -350,14 +347,7 @@ impl DesktopHost for ShellHost {
             std::thread::Builder::new()
                 .name("nail-file-dialog".into())
                 .spawn(move || {
-                    #[cfg(windows)]
-                    let answer = crate::dialog::show(&spec, owner);
-                    #[cfg(not(windows))]
-                    let answer: Result<Option<String>, String> = {
-                        let _ = (spec, owner);
-                        Err("file dialogs need Windows".to_owned())
-                    };
-                    drop(tx.send(answer));
+                    drop(tx.send(crate::dialog::show(&spec, owner)));
                 })
                 .map_err(|e| ApiError::internal(format!("cannot open the file dialog: {e}")))?;
             rx.await
@@ -366,6 +356,7 @@ impl DesktopHost for ShellHost {
         })
     }
 
+    #[cfg(windows)]
     fn print_to_pdf<'a>(
         &'a self,
         job: &'a PrintJob,

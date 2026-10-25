@@ -4,10 +4,15 @@
 //! `PrintToPdf` writes it with the job's paper size and orientation, and
 //! the window closes.
 
-#![expect(unsafe_code, reason = "WebView2 COM calls, each with its SAFETY note")]
+#![cfg_attr(
+    windows,
+    expect(unsafe_code, reason = "WebView2 COM calls, each with its SAFETY note")
+)]
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 

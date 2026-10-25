@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import type { Os } from "../api/generated";
 import { shippedCatalogs } from "./catalogs";
 import {
   createLocalizer,
@@ -24,17 +25,20 @@ export interface I18nProviderProps {
   locale?: string | null;
   /** Catalogs to use; defaults to the shipped `locales/` files. */
   catalogs?: Catalogs;
+  /** The core's system, passed to every message as `$os` (ADR 0202); unknown before a session. */
+  os?: Os | null;
   children: ReactNode;
 }
 
 export function I18nProvider({
   locale = null,
   catalogs = shippedCatalogs,
+  os = null,
   children,
 }: I18nProviderProps) {
   const localizer = useMemo(
-    () => createLocalizer(catalogs, requestedLocales(locale), import.meta.env.DEV, locale),
-    [catalogs, locale],
+    () => createLocalizer(catalogs, requestedLocales(locale), import.meta.env.DEV, locale, os),
+    [catalogs, locale, os],
   );
   useEffect(() => {
     document.documentElement.lang = localizer.locale;

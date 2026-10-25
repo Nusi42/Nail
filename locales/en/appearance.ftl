@@ -11,12 +11,17 @@ settings-tab-appearance = { common-appearance }
 appearance-loading = Loading themes…
 
 appearance-themes-title = { backup-item-theme }
-appearance-follow-system = Follow Windows
-appearance-follow-system-hint = Switch between a light and a dark theme when Windows changes between light and dark mode.
+appearance-follow-system =
+    { $os ->
+        [windows] Follow Windows
+        [macos] Follow macOS
+       *[other] Follow the system
+    }
+appearance-follow-system-hint = Switch between a light and a dark theme when { common-system-name } changes between light and dark mode.
 appearance-light-theme = Light theme
 appearance-dark-theme = Dark theme
 appearance-gallery-label = Themes
-appearance-gallery-hint = Picking a theme here turns Follow Windows off and keeps that theme.
+appearance-gallery-hint = Picking a theme here turns “{ appearance-follow-system }” off and keeps that theme.
 # $kind (string) — "Light", "Dark" or "High contrast"
 appearance-theme-meta = { $kind }
 # $kind (string) — "Light", "Dark" or "High contrast"

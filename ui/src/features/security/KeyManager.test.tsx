@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createEnv, renderNode, widget } from "../../test/harness";
+import { createEnv, onPlatform, renderNode, widget } from "../../test/harness";
 import { armorKey } from "./mock";
 import { must } from "../../test/must";
 import { requestsOf } from "../../test/env";
@@ -310,6 +310,14 @@ describe("security-keys tools", () => {
     expect(await within(tool).findByRole("note")).toHaveTextContent(/turned off/);
     await user.type(within(tool).getByRole("textbox", { name: "Address" }), "liskov@mit.example");
     expect(within(tool).getByRole("button", { name: "Search" })).toBeDisabled();
+  });
+
+  it("offers the Windows store only where the core has it (ADR 0202)", async () => {
+    const env = createEnv();
+    onPlatform(env, "macos");
+    await open(env);
+    expect(screen.getByRole("button", { name: "Find online" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Windows certificates" })).toBeNull();
   });
 
   it("imports a certificate from the Windows store", async () => {

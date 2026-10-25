@@ -263,8 +263,11 @@ describe("account setup", () => {
   });
 
   it("offers the sign-ins of each engine and applies them", () => {
-    expect(exchangeSignIns("graph")).toEqual(["oauth2"]);
-    expect(exchangeSignIns("ews")).toContain("windows-current");
+    expect(exchangeSignIns("graph", true)).toEqual(["oauth2"]);
+    expect(exchangeSignIns("ews", true)).toContain("windows-current");
+    // ADR 0202: no Windows sign-in where the core lacks it.
+    expect(exchangeSignIns("ews", false)).toEqual(["password", "oauth2"]);
+    expect(exchangeSignIns("graph", false)).toEqual(["oauth2"]);
     const current = { method: "windows" as const, username: null, secret: null, package: null };
     expect(exchangeSignInOf(current)).toBe("windows-current");
     const account = withExchangeSignIn(current, "windows-account", "ada@corp.example");

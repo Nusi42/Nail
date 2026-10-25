@@ -133,7 +133,14 @@ remote-bind-lan = All networks of this computer (0.0.0.0)
 remote-bind-custom = One address…
 remote-settings-bind-address = Address
 remote-settings-bind-address-hint = An IP address of this computer, for example 192.168.1.20.
-remote-settings-lan-warning = Other devices on your network can reach Nail. Windows may ask to allow Nail through the firewall.
+remote-settings-lan-warning =
+    Other devices on your network can reach Nail. { $os ->
+        [windows] { remote-firewall-asks }
+        [macos] { remote-firewall-asks }
+       *[other] A firewall may need to allow Nail.
+    }
+# Windows and macOS ask themselves when Nail first listens on the network.
+remote-firewall-asks = { common-system-name } may ask to allow Nail through the firewall.
 remote-settings-port = { common-port }
 remote-settings-host-name = Host name
 remote-settings-host-name-hint = The name other devices use to reach this computer, for example nail-desktop.local. Passkeys need a name, not an IP address. Empty: this computer’s name.

@@ -7,7 +7,13 @@ import { act, render, waitFor } from "@testing-library/react";
 import type { ComponentType, ReactElement, ReactNode } from "react";
 import { ActionsProvider } from "../actions/ActionsProvider";
 import { TransportClient } from "../api/client";
-import type { LayoutNode, ResolvedLayout, ResolvedTheme } from "../api/generated";
+import type {
+  LayoutNode,
+  Os,
+  PlatformFeature,
+  ResolvedLayout,
+  ResolvedTheme,
+} from "../api/generated";
 import { MockTransport } from "../api/mock";
 import { createMockData } from "../api/mockData";
 import { normalizeLayout, normalizeNode } from "../api/normalize";
@@ -30,6 +36,14 @@ export interface Env {
   client: TransportClient;
   store: UiStore;
   queryClient: QueryClient;
+}
+
+/**
+ * Makes the mock core report `os` with only `features` (ADR 0202); the mock
+ * starts as the Windows desktop app with every feature.
+ */
+export function onPlatform(env: Env, os: Os, features: readonly PlatformFeature[] = []): void {
+  env.transport.data.platform = { os, features: [...features] };
 }
 
 export function createEnv(options: { inboxSize?: number; state?: Partial<UiState> } = {}): Env {
@@ -80,7 +94,11 @@ export function Providers({
     <QueryClientProvider client={env.queryClient}>
       <UiStoreContext.Provider value={env.store}>
         <ClientContext.Provider value={env.client}>
-          <I18nProvider locale={locale} {...(catalogs ? { catalogs } : {})}>
+          <I18nProvider
+            locale={locale}
+            os={env.transport.data.platform.os}
+            {...(catalogs ? { catalogs } : {})}
+          >
             <ThemeProvider theme={theme ?? env.transport.data.theme}>
               <PluginLayout layout={resolvedLayout}>
                 {(withPlugins) => (

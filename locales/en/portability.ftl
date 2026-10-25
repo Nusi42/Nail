@@ -224,7 +224,7 @@ portability-backup-item-hint-settings = Nail’s settings (never sign-in tokens,
 portability-backup-item-hint-theme = Your theme.kdl.
 portability-backup-item-hint-layout = Your layout.kdl.
 portability-backup-item-hint-rules = rules.kdl and saved searches.
-portability-backup-item-hint-accounts = accounts.kdl; passwords stay in the Windows Credential Manager and must be entered again after a restore elsewhere.
+portability-backup-item-hint-accounts = accounts.kdl; passwords stay in { common-keychain } and must be entered again after a restore elsewhere.
 portability-backup-item-hint-local-mail = Mail in Local Folders. Mail on servers is not backed up; it is still on the server.
 portability-backup-item-hint-keys = Your OpenPGP and S/MIME keys including secret keys. Off by default: anyone with the backup and its passphrase could sign and decrypt as you.
 portability-backup-item-hint-pim-local = Calendars, contacts and tasks kept only in Nail.
@@ -302,7 +302,11 @@ portability-diagnostics-title = Diagnostics for support
 portability-diagnostics-widget-text = If support asks for it, Nail writes a zip with logs and settings. You see exactly what goes in before it is saved, and nothing is sent anywhere.
 portability-diagnostics-open = Create diagnostics bundle…
 portability-diagnostics-intro = Choose what to include. Passwords, tokens and keys are always removed. Mail content is only included for messages you pick.
-portability-diagnostics-item-hint-system-info = Nail and Windows versions, WebView2, settings that affect behaviour.
+portability-diagnostics-item-hint-system-info =
+    Nail and { common-system-name } versions, { $os ->
+        [windows] WebView2
+       *[other] the web view
+    }, settings that affect behaviour.
 portability-diagnostics-item-hint-logs = The recent log files.
 portability-diagnostics-item-hint-config = accounts.kdl, layout.kdl, theme.kdl, rules.kdl without secrets.
 portability-diagnostics-item-hint-account-status = Connection states and the last errors per account.

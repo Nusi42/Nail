@@ -24,6 +24,55 @@ describe("localizer", () => {
     expect(l.t("count", { n: 1 })).toBe("One mail");
   });
 
+  /** A message that names the system's credential store. */
+  const OS_CATALOG = {
+    en: ["store = { $os ->\n [windows] Credential Manager\n *[other] keyring\n}"],
+  };
+
+  it("passes the core's system to every message as $os (ADR 0202)", () => {
+    const os = OS_CATALOG;
+    expect(createLocalizer(os, ["en"], false, null, "windows").t("store")).toBe(
+      "Credential Manager",
+    );
+    expect(createLocalizer(os, ["en"], false, null, "linux").t("store")).toBe("keyring");
+    // Unknown before a session; a message's own argument wins.
+    expect(createLocalizer(os, ["en"]).t("store")).toBe("keyring");
+    expect(createLocalizer(os, ["en"], false, null, "linux").t("store", { os: "windows" })).toBe(
+      "Credential Manager",
+    );
+  });
+
+  it("warns in dev about formatting errors, but not about the system before it is known", () => {
+    const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
+    expect(createLocalizer(OS_CATALOG, ["en"], true).t("store")).toBe("keyring");
+    expect(warn).not.toHaveBeenCalled();
+    const name = { en: ["hi = Hello { $name }"] };
+    createLocalizer(name, ["en"], true).t("hi");
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+
+  it.each(["windows", "macos", "linux", "other"] as const)(
+    "formats every shipped English message on %s without errors",
+    (os) => {
+      const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
+      const l = createLocalizer(shippedCatalogs, ["en"], true, null, os);
+      for (const id of [
+        "security-vault-intro",
+        "security-smartcard-modules-hint",
+        "security-smartcard-module-path",
+        "security-protection-keychain-hint",
+        "remote-settings-lan-warning",
+        "portability-diagnostics-item-hint-system-info",
+        "appearance-follow-system",
+      ]) {
+        expect(l.t(id)).not.toMatch(/\{|\$os|^[a-z-]+$/);
+      }
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    },
+  );
+
   it("returns the id for keys missing everywhere (and warns in dev)", () => {
     const warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
     const l = createLocalizer(catalogs, ["en"], true);

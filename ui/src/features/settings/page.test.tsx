@@ -10,6 +10,7 @@ import type { ActionContext } from "../../actions/registry";
 import type { ResolvedLayout } from "../../api/generated";
 import {
   createEnv,
+  onPlatform,
   renderNode,
   settleQueries,
   widget,
@@ -45,6 +46,11 @@ function actionContext(
   };
 }
 
+/** The widgets of the cards on the page, in order. */
+const cardWidgets = (container: HTMLElement) =>
+  [...container.querySelectorAll('[data-part="settings-page.card"]')].map((c) =>
+    c.getAttribute("data-widget"),
+  );
 const nav = () => screen.getByRole("navigation", { name: "Settings sections" });
 const title = () =>
   screen.getByRole("heading", {
@@ -233,11 +239,36 @@ describe("settings page (M5b)", () => {
     env.store.getState().toggleNode("page-virtual-accounts");
     const { container } = renderNode(page(), env);
     await settleQueries(env);
-    expect(
-      [...container.querySelectorAll('[data-part="settings-page.card"]')].map((c) =>
-        c.getAttribute("data-widget"),
-      ),
-    ).toEqual(["account-settings"]);
+    expect(cardWidgets(container)).toEqual(["account-settings"]);
+  });
+
+  it.each([
+    ["windows", ["update-settings", "desktop-settings", "default-apps"]],
+    ["linux", ["update-settings", "desktop-settings"]],
+  ] as const)("shows on %s only the desktop cards the system has (ADR 0202)", async (os, cards) => {
+    const env = createEnv();
+    if (os !== "windows") onPlatform(env, os);
+    await env.client.call({
+      type: "SetUiState",
+      key: UI_STATE_SETTINGS_SECTION,
+      value: "desktop",
+    });
+    const { container } = renderNode(page(), env);
+    await settleQueries(env);
+    expect(cardWidgets(container)).toEqual(cards);
+  });
+
+  it.each([
+    ["windows", "One section matches “mapi”."],
+    ["linux", "No settings match “mapi”."],
+  ] as const)("finds on %s only what the system has (ADR 0202)", async (os, status) => {
+    const env = createEnv();
+    if (os !== "windows") onPlatform(env, os);
+    const user = userEvent.setup();
+    renderNode(page(), env);
+    await settleQueries(env);
+    await user.type(screen.getByRole("searchbox", { name: "Search settings" }), "mapi");
+    expect(screen.getByRole("status")).toHaveTextContent(status);
   });
 
   it("explains a layout without settings sections", async () => {

@@ -262,3 +262,36 @@ common-note = Note
 common-error = Error
 common-export-ellipsis = Export…
 common-text-files = Text files
+
+## The system's own parts (ADR 0202). Every message gets $os (string): the
+## core's system, "windows", "macos", "linux" or "other".
+
+# Where passwords and the data key are kept, inside a sentence.
+common-keychain =
+    { $os ->
+        [windows] the Windows Credential Manager
+        [macos] the macOS Keychain
+       *[other] the system keyring
+    }
+# The same, short, after it was named once.
+common-keychain-short =
+    { $os ->
+        [windows] the Credential Manager
+        [macos] the Keychain
+       *[other] the keyring
+    }
+# The same as a label.
+common-keychain-name =
+    { $os ->
+        [windows] Windows Credential Manager
+        [macos] macOS Keychain
+       *[other] System keyring
+    }
+# The system's name inside a sentence.
+common-system-name =
+    { $os ->
+        [windows] Windows
+        [macos] macOS
+        [linux] Linux
+       *[other] the system
+    }

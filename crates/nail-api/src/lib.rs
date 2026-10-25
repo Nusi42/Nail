@@ -158,6 +158,7 @@ pub mod message_source;
 pub mod ops;
 pub mod palette;
 pub mod pim;
+pub mod platform;
 pub mod plugins;
 pub mod portability;
 pub mod print;

@@ -100,6 +100,7 @@ import type { PimSourceKind } from "./PimSourceKind";
 import type { PimSourceState } from "./PimSourceState";
 import type { PinPromptCloseReason } from "./PinPromptCloseReason";
 import type { PinPurpose } from "./PinPurpose";
+import type { PlatformFeature } from "./PlatformFeature";
 import type { PluginCommandSurface } from "./PluginCommandSurface";
 import type { PluginEventName } from "./PluginEventName";
 import type { PluginHookKind } from "./PluginHookKind";
@@ -334,6 +335,15 @@ export const PSEUDO_CLASS_STATES = ["hover","active","focus","focus-visible","fo
 
 /** Pre-M5 Nail icon names → Lucide names (only names that differ). */
 export const LEGACY_ICON_NAMES = {"account-add":"user-plus","attachment":"paperclip","close":"x","compose":"square-pen","delete":"trash","drafts":"file-pen-line","filter":"funnel","junk":"shield-alert","mark-read":"mail-open","outbox":"send-horizontal","sent":"send","snooze":"alarm-clock","sync":"refresh-cw"} as const;
+
+/** The argument every localized message gets: the core's system (ADR 0202). */
+export const OS_MESSAGE_ARG = "os" as const;
+
+/** Every `PlatformFeature`, in the contract's order. */
+export const PLATFORM_FEATURE_VALUES = ["windows-sign-in","windows-certificate-store","start-with-system","default-apps","simple-mapi"] as const satisfies readonly PlatformFeature[];
+
+/** The platform features only the desktop app reports (ADR 0202). */
+export const DESKTOP_APP_FEATURES = ["start-with-system","default-apps","simple-mapi"] as const;
 
 /** The views of the default layout, in rail order. */
 export const BUILTIN_VIEWS = ["mail","calendar","contacts","tasks","settings"] as const;

@@ -204,6 +204,28 @@ async fn without_the_desktop_only_the_first_run_is_served() {
     assert_eq!(again, state);
 }
 
+/// ADR 0202: the desktop app's features (start with the system, default
+/// apps, Simple MAPI) are reported only with a desktop host, and only where
+/// the system has them.
+#[tokio::test]
+async fn the_platform_reports_desktop_features_with_a_host() {
+    use nail_api::platform::{PlatformFeature, PlatformInfo};
+    async fn platform(service: &Service) -> PlatformInfo {
+        match service.handle(Request::GetConfig).await {
+            Response::Config { platform, .. } => platform,
+            other => panic!("{other:?}"),
+        }
+    }
+    let (with_host, _d, _c) = desktop_service(Some(FakeHost::with(nsis())));
+    let (without, _d2, _c2) = desktop_service::<FakeHost>(None);
+    let desktop = platform(&with_host).await;
+    let served = platform(&without).await;
+    assert_eq!(desktop, PlatformInfo::current(true));
+    assert_eq!(served, PlatformInfo::current(false));
+    assert_eq!(desktop.has(PlatformFeature::StartWithSystem), cfg!(windows));
+    assert!(!served.has(PlatformFeature::DefaultApps));
+}
+
 #[tokio::test]
 async fn the_updater_follows_settings_and_states() {
     let host = FakeHost::with(nsis());

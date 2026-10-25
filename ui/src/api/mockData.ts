@@ -24,6 +24,7 @@ import type {
   MessageBody,
   MessageSummary,
   OutboxEntry,
+  PlatformInfo,
   ResolvedLayout,
   ResolvedTheme,
   UiContext,
@@ -58,6 +59,7 @@ import { createSecurityMockState, type SecurityMockState } from "../features/sec
 import { createSieveMockState, type SieveMockState } from "../features/sieve/mock";
 import { createTriageMockState, type TriageMockState } from "../features/triage/mock";
 import { DAY_MS } from "../state/clock";
+import { PLATFORM_FEATURE_VALUES } from "./generated/constants";
 
 export interface MockData {
   /** Real accounts, in display order. */
@@ -69,6 +71,8 @@ export interface MockData {
   theme: ResolvedTheme;
   layout: ResolvedLayout;
   locale: string | null;
+  /** The platform `GetConfig` reports (default: the Windows desktop app). */
+  platform: PlatformInfo;
   /** The `accounts.kdl` model. */
   accountsConfig: AccountsConfig;
   /** Connection state per real account. */
@@ -405,6 +409,7 @@ export function createMockData(inboxSize = 250): MockData {
     theme: defaultTheme(),
     layout: defaultLayout(),
     locale: null,
+    platform: { os: "windows", features: [...PLATFORM_FEATURE_VALUES] },
     accountsConfig: {
       accounts: [
         mockAccountConfig(

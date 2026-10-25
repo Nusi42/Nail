@@ -36,6 +36,7 @@ import {
   FIRST_RUN_DIALOG,
   UPDATE_SETTINGS_WIDGET,
 } from "./names";
+import { hasFeature, loadedPlatform } from "../../state/platform";
 import { systemKeys } from "./queries";
 import { UpdateSettingsWidget } from "./UpdateSettings";
 
@@ -94,6 +95,7 @@ export const actions: Feature["actions"] = {
   },
   /** Opens Windows Settings → Default apps on Nail's page. */
   [DEFAULT_APPS_ACTION]: {
+    enabled: (ctx) => hasFeature(loadedPlatform(ctx.queryClient), "default-apps"),
     run: async (ctx) => {
       await ctx.client.call({ type: "OpenDefaultAppsSettings" });
     },
@@ -161,12 +163,16 @@ export const settings: NonNullable<Feature["settings"]> = {
       "system-desktop-title",
       "system-desktop-tray",
       "system-desktop-close-to-tray",
-      "system-desktop-startup",
-      "system-desktop-start-with-windows",
-      "system-desktop-start-hidden",
       "system-desktop-developer",
       "system-desktop-dev-endpoint",
     ],
+    platformLabels: {
+      "start-with-system": [
+        "system-desktop-startup",
+        "system-desktop-start-with-windows",
+        "system-desktop-start-hidden",
+      ],
+    },
     keywords: "settings-keywords-desktop-settings",
   },
   [DEFAULT_APPS_WIDGET]: {
@@ -174,9 +180,10 @@ export const settings: NonNullable<Feature["settings"]> = {
       "system-settings-tab-default-apps",
       "system-default-apps-title",
       "system-default-apps-list",
-      "system-default-apps-mapi",
       "system-default-apps-choose",
     ],
+    platformLabels: { "simple-mapi": ["system-default-apps-mapi"] },
     keywords: "settings-keywords-default-apps",
+    requires: "default-apps",
   },
 };

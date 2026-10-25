@@ -17,6 +17,7 @@ import { useEffect } from "react";
 import { useActions } from "../../actions/ActionsProvider";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
+import { usePlatformFeature } from "../../state/platform";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { remoteStore } from "../remote";
@@ -124,6 +125,8 @@ export function FirstRun({ close }: { close: () => void }) {
   const installation = useInstallation();
   const { busy, problem, run } = useBusyAction();
   const desktop = installation.isSuccess;
+  const defaultApps = usePlatformFeature("default-apps");
+  const startup = usePlatformFeature("start-with-system");
 
   const complete = async (then?: () => void) => {
     await run(async () => {
@@ -139,8 +142,8 @@ export function FirstRun({ close }: { close: () => void }) {
       <h3 data-part="first-run.title">{t("system-first-run-title")}</h3>
       <p data-part="first-run.intro">{t("system-first-run-intro")}</p>
       <ul data-part="first-run.steps" aria-label={t("common-setup-steps")}>
-        {desktop && <DefaultAppsStep />}
-        {desktop && <StartupStep />}
+        {desktop && defaultApps && <DefaultAppsStep />}
+        {desktop && startup && <StartupStep />}
         <ImportStep
           onImport={() => void complete(() => void actions.dispatch(IMPORT_WIZARD_ACTION))}
         />

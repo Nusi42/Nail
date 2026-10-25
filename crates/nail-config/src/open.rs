@@ -75,7 +75,9 @@ pub fn editor_command(path: &Path, line: u32, column: u32, editor: Option<&str>)
         return command;
     }
     command.args(&parts);
-    let name = Path::new(&program)
+    // Either separator, so a Windows path names the same editor on every OS.
+    let base = program.rsplit(['/', '\\']).next().unwrap_or(&program);
+    let name = Path::new(base)
         .file_stem()
         .map(|s| s.to_string_lossy().to_lowercase())
         .unwrap_or_default();

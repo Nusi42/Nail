@@ -3,9 +3,12 @@
 //! (`IFileOpenDialog` / `IFileSaveDialog`) on a thread of its own with COM
 //! in single-threaded apartment mode, owned by the main window.
 
-#![expect(
-    unsafe_code,
-    reason = "COM calls of the common item dialog, each with its SAFETY note"
+#![cfg_attr(
+    windows,
+    expect(
+        unsafe_code,
+        reason = "COM calls of the common item dialog, each with its SAFETY note"
+    )
 )]
 
 use nail_api::desktop::{PathPick, PathPickKind};

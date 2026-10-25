@@ -10,12 +10,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionsProvider } from "../../actions/ActionsProvider";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { useComposeContext } from "../../state/hooks";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import { createEnv, onPlatform, renderWithProviders, widget, type Env } from "../../test/harness";
 import { richStoreFor } from "../composer/store";
 import { appRegistry } from "../registry";
 import { remoteStore } from "../remote";
 import {
   ABOUT_DIALOG,
+  DEFAULT_APPS_ACTION,
   FIRST_RUN_DIALOG,
   IMPORT_WIZARD_ACTION,
   handleSystemEvent,
@@ -28,6 +29,8 @@ import { FirstRun, FirstRunGate } from "./FirstRun";
 import { ProgramDraftNotice } from "./ProgramDraft";
 import { activeComposer } from "../composer/sessions";
 import { actionContext } from "../../test/env";
+import { must } from "../../test/must";
+import { queryKeys } from "../../state/queries";
 
 afterEach(() => {
   // Unmount before resetting module-level stores.
@@ -353,6 +356,42 @@ describe("desktop-only cards outside the desktop app", () => {
       expect(screen.queryByRole("alert")).toBeNull();
     },
   );
+});
+
+describe.each(["macos", "linux"] as const)("the desktop app on %s (ADR 0202)", (os) => {
+  it("keeps the tray but offers no start with the system", async () => {
+    const env = createEnv();
+    onPlatform(env, os);
+    renderWithProviders(<NodeView node={widget("desktop-settings")} path="t/0" />, env);
+    expect(await screen.findByRole("checkbox", { name: /notification area$/ })).toBeVisible();
+    await waitFor(() => {
+      expect(screen.queryByRole("checkbox", { name: "Start Nail with Windows" })).toBeNull();
+    });
+    expect(screen.queryByRole("checkbox", { name: /without a window/ })).toBeNull();
+  });
+
+  it("offers only the import on the first-run screen", async () => {
+    const env = createEnv();
+    onPlatform(env, os);
+    renderWithProviders(<FirstRun close={vi.fn()} />, env);
+    expect(await screen.findByRole("button", { name: "Import…" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Choose in Default apps" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Start Nail with Windows/ })).toBeNull();
+  });
+
+  it("leaves Simple MAPI out of About and default apps out of the actions", async () => {
+    const env = createEnv();
+    onPlatform(env, os);
+    renderWithProviders(<AboutNail />, env);
+    const facts = await screen.findByRole("list", { name: "Installation" });
+    expect(await within(facts).findByText("1.0.0")).toBeVisible();
+    await waitFor(() => {
+      expect(env.queryClient.getQueryData(queryKeys.config)).toBeDefined();
+    });
+    expect(within(facts).queryByText(/Send to/)).toBeNull();
+    const action = must(appRegistry.actions[DEFAULT_APPS_ACTION]);
+    expect(action.enabled?.(actionContext(env), [])).toBe(false);
+  });
 });
 
 describe("first-run screen", () => {

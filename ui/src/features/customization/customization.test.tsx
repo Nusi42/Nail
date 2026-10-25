@@ -36,6 +36,7 @@ function seedConfig(env: Env): AppConfig {
     theme: structuredClone(env.transport.data.theme),
     layout: structuredClone(env.transport.data.layout),
     locale: null,
+    platform: structuredClone(env.transport.data.platform),
   };
   env.queryClient.setQueryData(queryKeys.config, config);
   return config;

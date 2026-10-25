@@ -33,6 +33,7 @@ import type {
 } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
+import { usePlatformFeature } from "../../state/platform";
 import { formatInstant } from "../pim/fmt";
 import { localZone } from "../pim/time";
 import { Problem } from "./common";
@@ -40,6 +41,7 @@ import {
   exchangeHost,
   exchangeSignInOf,
   exchangeSignIns,
+  isWindowsSignIn,
   exchangeWarnings,
   redirectedHost,
   withEngine,
@@ -250,8 +252,11 @@ export function ExchangeSignInFields({
 }) {
   const t = useT();
   const ids = { group: useId(), login: useId(), pkg: useId(), password: useId(), hint: useId() };
-  const choices = exchangeSignIns(engine);
   const current = exchangeSignInOf(auth);
+  // A Windows sign-in already configured stays visible (and changeable)
+  // on a system without it.
+  const windowsSignIn = usePlatformFeature("windows-sign-in") || isWindowsSignIn(current);
+  const choices = exchangeSignIns(engine, windowsSignIn);
   const signIn: ExchangeSignIn = choices.includes(current) ? current : (choices[0] ?? "oauth2");
   const login =
     auth.method === "windows"

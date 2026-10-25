@@ -111,10 +111,13 @@ async fn get_config_returns_defaults_and_locale() {
             theme,
             layout,
             locale,
+            platform,
         } => {
             assert_eq!(*theme, nail_config::default_selected_theme());
             assert_eq!(*layout, nail_config::default_layout());
             assert_eq!(locale.as_deref(), Some("de"));
+            // No desktop host here: the core's own features only.
+            assert_eq!(platform, nail_api::platform::PlatformInfo::current(false));
         }
         other => panic!("unexpected {other:?}"),
     }

@@ -225,11 +225,17 @@ function useCoreEvents(): void {
       }
       switch (event.type) {
         case "ConfigChanged":
-          queryClient.setQueryData<AppConfig>(queryKeys.config, (old) => ({
-            theme: normalizeTheme(event.theme),
-            layout: normalizeLayout(event.layout),
-            locale: old?.locale ?? null,
-          }));
+          // Before the first answer there is nothing to update: that
+          // answer brings the new files (and the platform) anyway.
+          queryClient.setQueryData<AppConfig>(queryKeys.config, (old) =>
+            old === undefined
+              ? undefined
+              : {
+                  ...old,
+                  theme: normalizeTheme(event.theme),
+                  layout: normalizeLayout(event.layout),
+                },
+          );
           ui().setConfigError(null);
           break;
         case "UiStateChanged":
@@ -405,7 +411,7 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
 
   const locale = localeOverride ?? config.data?.locale ?? null;
   return (
-    <I18nProvider locale={locale}>
+    <I18nProvider locale={locale} os={config.data?.platform.os ?? null}>
       {config.data ? (
         <ThemeProvider theme={config.data.theme} modeOverride={modeOverride}>
           <PluginLayout layout={config.data.layout}>

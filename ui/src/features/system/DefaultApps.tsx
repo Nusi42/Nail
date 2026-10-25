@@ -13,6 +13,7 @@ import { errorMessageOf } from "../../api/client";
 import type { DefaultAppState, LocalizedMessage } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
+import { usePlatformFeature } from "../../state/platform";
 import { useClient } from "../../state/queries";
 import { defaultAppMessageId, defaultAppStateMessageId } from "./model";
 import { QueryProblem } from "./QueryProblem";
@@ -96,6 +97,8 @@ export function DefaultAppsContent({ showMapi = true }: { showMapi?: boolean }) 
   const installation = useInstallation();
   const data = query.data;
   const mapiInstalled = installation.data?.mapi_installed ?? true;
+  // ADR 0202: Simple MAPI exists on Windows only.
+  const mapi = usePlatformFeature("simple-mapi") && showMapi;
   return (
     <>
       {query.isError && <QueryProblem error={query.error} part="default-apps.error" />}
@@ -115,7 +118,7 @@ export function DefaultAppsContent({ showMapi = true }: { showMapi?: boolean }) 
               registered={association.registered}
             />
           ))}
-          {showMapi && mapiInstalled && (
+          {mapi && mapiInstalled && (
             <Row
               name="mapi"
               label={t("system-default-apps-mapi")}
@@ -125,7 +128,7 @@ export function DefaultAppsContent({ showMapi = true }: { showMapi?: boolean }) 
           )}
         </ul>
       )}
-      {data && showMapi && !mapiInstalled && (
+      {data && mapi && !mapiInstalled && (
         <p data-part="form.hint" data-field="mapi">
           {t("system-default-apps-mapi-missing")}
         </p>

@@ -158,7 +158,9 @@ impl Catalog {
 }
 
 fn fluent_args(message: &LocalizedMessage) -> FluentArgs<'_> {
+    use nail_api::platform::{OS_MESSAGE_ARG, Os};
     let mut args = FluentArgs::new();
+    args.set(OS_MESSAGE_ARG, Os::current().as_str());
     for (name, value) in &message.args {
         let value = match value {
             MessageArg::Number(n) => FluentValue::from(*n),
@@ -323,6 +325,23 @@ mod tests {
         // Unknown ids render as themselves.
         assert_eq!(en.render(&msg("no-such-message")), "no-such-message");
         assert_eq!(english(&msg("no-such-message")), "no-such-message");
+    }
+
+    /// ADR 0202: every message gets the core's system as `$os`, so the
+    /// catalogs name its own parts; a message's own argument wins.
+    #[test]
+    fn messages_name_the_systems_own_parts() {
+        use nail_api::platform::{OS_MESSAGE_ARG, Os};
+        let en = Catalog::english();
+        let store = |os: Os| match os {
+            Os::Windows => "the Credential Manager",
+            Os::Macos => "the Keychain",
+            Os::Linux | Os::Other => "the keyring",
+        };
+        let text = en.render(&msg("vault-restart-needed"));
+        assert!(text.contains(store(Os::current())), "{text}");
+        let linux = en.render(&msg("vault-restart-needed").arg(OS_MESSAGE_ARG, Os::Linux.as_str()));
+        assert!(linux.contains(store(Os::Linux)), "{linux}");
     }
 
     /// German falls back to English per key (the German catalogs are

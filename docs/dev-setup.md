@@ -182,9 +182,9 @@ Builds and platforms (ADR 0130):
   listing it. Fix the cause (for example a barrel that pulls the mock core
   back in), and never raise `chunkSizeWarningLimit`.
 - rustc warnings are enforced through clippy `-D warnings`. Code under
-  `cfg(not(windows))` is linted only on a Linux machine, with
-  `cargo clippy --workspace --all-targets -- -D warnings` there; Windows
-  never compiles it.
+  `cfg(not(windows))` is linted only on a Linux or macOS machine, with
+  `cargo clippy --workspace --all-targets -- -D warnings` there ("Linux
+  (WSL2) and macOS", ADR 0202); Windows never compiles it.
 - Clap help text is the doc comment, printed verbatim. Do not put backticks
   in it; name environment variables in an `about` / `help` attribute.
 
@@ -883,8 +883,51 @@ node e2e/perf/run-perf.mjs --corpus standard     # after cargo build --release -
 ```
 
 The interop tests run where Docker is available ("Interop tests" above); `cfg(not(windows))`
-code is linted on a Linux machine. Key handling, signing and the release
+code is linted and tested on Linux ("Linux (WSL2) and macOS" below). Key handling, signing and the release
 steps: [`docs/release.md`](release.md).
+
+### Linux (WSL2) and macOS (ADR 0202)
+
+Windows first, but the workspace builds, lints and tests on Linux and macOS too.
+On Windows, check the non-Windows code in a WSL2 distribution (Ubuntu 24.04):
+
+```sh
+# PowerShell, once: a distribution of its own, outside cloud-synced folders
+wsl --install Ubuntu-24.04 --name nail-ubuntu --location "$env:USERPROFILE\WSL\nail-ubuntu" --no-launch
+# inside it (root): the Tauri / WebKitGTK build dependencies and the keyring
+apt-get install -y build-essential curl file git pkg-config libssl-dev libwebkit2gtk-4.1-dev \
+  libxdo-dev libayatana-appindicator3-dev librsvg2-dev libsecret-1-dev libdbus-1-dev xvfb
+# as a normal user: Rust (the version in "Tooling facts"), Node 26 (e.g. through nvm)
+```
+
+Clone into the distribution's own file system (`~/nail`, not `/mnt/c/…`: much faster, and
+`target/` must not be shared with Windows). To try uncommitted work, fetch the work folder's
+`HEAD` and apply `git diff HEAD --binary` from it. Then:
+
+```sh
+npm ci && npm run build
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace -j 4
+npm test
+npx playwright install --with-deps chromium && npm run e2e:only -- tests/platform.spec.ts
+```
+
+Conventions for code that differs per system:
+
+- Windows-only code is `cfg(windows)`, its fallback `cfg(not(windows))` (macOS and Linux
+  alike; `cfg(target_os = "macos")` only where macOS really differs). An `#[expect]` that
+  holds only on Windows is `#[cfg_attr(windows, expect(…))]`.
+- A `DesktopHost` method Windows alone implements is `cfg(windows)` in the shell: the trait's
+  default answers `unsupported`, and the UI falls back as in web mode.
+- A feature only some systems have is a `PlatformFeature` (`crates/nail-api/src/platform.rs`),
+  reported with `GetConfig`; the UI checks it with `usePlatformFeature`, and a settings widget
+  declares it as `requires` / `platformLabels` in its `SettingsWidgetInfo`.
+- A text naming a part of the system selects on `$os` (every message gets it); shared names
+  are the `common-keychain*` / `common-system-name` messages in `common.ftl`.
+- Tests build paths with the platform's separator (`Path::join`), never from `C:\…` literals,
+  unless the code under test is Windows-only.
+- Bundles: `app/src-tauri/tauri.linux.conf.json` (deb, AppImage) and `tauri.macos.conf.json`
+  (app, dmg); the installer scripts are Windows-only.
 
 ## Run
 

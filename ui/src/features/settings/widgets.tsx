@@ -24,9 +24,11 @@ import { NodeView } from "../../layout/LayoutRenderer";
 import {
   buildSettingsIndex,
   searchSettings,
+  widgetOffered,
   type SettingsIndexEntry,
 } from "../../layout/settingsIndex";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
+import { usePlatform } from "../../state/platform";
 import { UI_STATE_SETTINGS_SECTION, useSetUiState, useUiStateValue } from "../../state/uiState";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
@@ -123,10 +125,22 @@ function showFound(el: HTMLElement, fallbackFocus: HTMLElement | null): () => vo
 /** The section's widgets, each on a card (a stack's rows; else the whole tree). */
 function SectionCards({ section }: { section: SettingsSection }) {
   const hidden = useUi((s) => s.hiddenNodes);
+  const platform = usePlatform();
   const root = section.root;
+  // ADR 0202: a widget the system lacks a feature for is not shown.
+  const offered = (child: LayoutNode) =>
+    child.type !== "widget" ||
+    widgetOffered(
+      Object.hasOwn(appRegistry.settings, child.kind)
+        ? appRegistry.settings[child.kind]
+        : undefined,
+      platform,
+    );
   const children: LayoutNode[] =
     root.type === "stack"
-      ? root.children.filter((child) => child.id === null || !hidden.includes(child.id))
+      ? root.children.filter(
+          (child) => (child.id === null || !hidden.includes(child.id)) && offered(child),
+        )
       : [root];
   return (
     <>
@@ -225,6 +239,7 @@ function settingMatches(matches: readonly SettingsIndexEntry[]): SettingsIndexEn
 export function SettingsPage({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
+  const platform = usePlatform();
   const groupId = useId();
   const layout = useLayoutConfig();
   const uiStore = useUiStoreApi();
@@ -245,8 +260,8 @@ export function SettingsPage({ node }: WidgetProps) {
   const unmark = useRef<(() => void) | null>(null);
 
   const index = useMemo(
-    () => buildSettingsIndex(layout, appRegistry.settings, label, t),
-    [layout, label, t],
+    () => buildSettingsIndex(layout, appRegistry.settings, label, t, platform),
+    [layout, label, t, platform],
   );
   const hits = useMemo(() => rankSettingsHits(searchSettings(index, query), query), [index, query]);
   const searching = showSearch && query.trim() !== "";

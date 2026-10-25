@@ -943,6 +943,7 @@ impl Service {
                 theme: Box::new((*self.inner.config.theme()).clone()),
                 layout: Box::new((*self.inner.config.layout()).clone()),
                 locale: self.inner.locale.clone(),
+                platform: nail_api::platform::PlatformInfo::current(self.inner.desktop.is_some()),
             },
             Request::ListAccounts => Response::Accounts {
                 accounts: self.list_accounts().await?,

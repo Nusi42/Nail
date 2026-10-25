@@ -3185,6 +3185,8 @@ pub enum Response {
         /// UI language override from the settings as a BCP 47 tag (e.g.
         /// `"de"`), or `null` to follow the OS / browser language.
         locale: Option<String>,
+        /// The system the core runs on and what it offers there (ADR 0202).
+        platform: crate::platform::PlatformInfo,
     },
     /// Answer to [`Request::ListAccounts`].
     Accounts {

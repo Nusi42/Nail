@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import type { DiscoveredAccount } from "../api/generated";
 import { securityDemoBySender } from "../features/security/mock";
-import { createEnv, renderNode, widget, type Env } from "../test/harness";
+import { createEnv, onPlatform, renderNode, widget, type Env } from "../test/harness";
 import { accountProblems, newIdentity, parseAuthservIds } from "./AccountSettings";
 import {
   accountSignIn,
@@ -210,6 +210,48 @@ describe("account-setup", () => {
     expect(preferredCandidate([forged])).toBe(0);
     expect(preferredCandidate([])).toBe(0);
   });
+
+  it.each([
+    ["windows", 1],
+    ["linux", 0],
+  ] as const)(
+    "offers the Windows sign-in for a sign-in prompt only on Windows (%s, ADR 0202)",
+    async (os, buttons) => {
+      const user = userEvent.setup();
+      const env = createEnv();
+      if (os !== "windows") onPlatform(env, os);
+      const send = env.transport.send.bind(env.transport);
+      vi.spyOn(env.transport, "send").mockImplementation(async (request) => {
+        const response = await send(request);
+        return response.type === "Discovered"
+          ? {
+              ...response,
+              exchange: {
+                prompt: {
+                  kind: "needs-login",
+                  host: "autodiscover.example.com",
+                  localized: {
+                    id: "exchange-autodiscover-needs-login",
+                    args: { host: "autodiscover.example.com" },
+                  },
+                },
+                display_name: null,
+                mailboxes: [],
+              },
+            }
+          : response;
+      });
+      renderNode(widget("account-setup"), env);
+      await user.type(screen.getByRole("textbox", { name: "Email address" }), "ada@example.com");
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "autodiscover.example.com asks you to sign in",
+      );
+      expect(
+        screen.queryAllByRole("button", { name: "Look again with my Windows sign-in" }),
+      ).toHaveLength(buttons);
+    },
+  );
 
   it("builds configurations and secrets", () => {
     const candidate = manualCandidate("ada@x.example");

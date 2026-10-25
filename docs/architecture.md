@@ -1347,3 +1347,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - No hosted CI (ADR 0201): no `.github/workflows/`; the pre-push hook runs `npm run check`, merges and releases need the
   full local run (`docs/dev-setup.md` "Verification (no hosted CI)"); releases are built, signed and published locally
   (`docs/release.md`).
+- Platforms beyond Windows (ADR 0202): `nail_api::platform` (`Os`, `PlatformFeature`, `PlatformInfo`, `OS_MESSAGE_ARG`)
+  in the `GetConfig` answer, desktop features only with a desktop host and never for remote sessions; the UI's
+  `ui/src/state/platform.ts` (`usePlatformFeature`) and `SettingsWidgetInfo.requires` / `platformLabels`
+  (`ui/src/layout/settingsIndex.ts`); every Fluent message gets `$os` (`nail-config` `fluent_args`, the UI's
+  `createLocalizer`); `DesktopHost::pick_path` / `print_to_pdf` exist in the shell on Windows only; Linux / macOS
+  bundles in `app/src-tauri/tauri.{linux,macos}.conf.json`; Linux checks in WSL2 (`docs/dev-setup.md`).

@@ -164,7 +164,13 @@ export class MockTransport extends ClosableTransport implements MockCore {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };
       case "GetConfig":
-        return { type: "Config", theme: mockConfigTheme(this), layout: d.layout, locale: d.locale };
+        return {
+          type: "Config",
+          theme: mockConfigTheme(this),
+          layout: d.layout,
+          locale: d.locale,
+          platform: structuredClone(d.platform),
+        };
       case "ListAccounts":
         return { type: "Accounts", accounts: mail.listAccounts(d) };
       case "ListFolders": {

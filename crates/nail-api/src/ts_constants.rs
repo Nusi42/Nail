@@ -361,6 +361,20 @@ fn appearance(c: Constants) -> Result<Constants, serde_json::Error> {
 fn shell(c: Constants) -> Result<Constants, serde_json::Error> {
     use crate::{menus, views as v};
     c.add(
+        "OS_MESSAGE_ARG",
+        "The argument every localized message gets: the core's system (ADR 0202).",
+        &crate::platform::OS_MESSAGE_ARG,
+    )?
+    .enum_values(
+        "PlatformFeature",
+        &every!(crate::platform::PlatformFeature: WindowsSignIn, WindowsCertificateStore, StartWithSystem, DefaultApps, SimpleMapi),
+    )?
+    .add(
+        "DESKTOP_APP_FEATURES",
+        "The platform features only the desktop app reports (ADR 0202).",
+        &crate::platform::PlatformFeature::OF_DESKTOP_APP,
+    )?
+    .add(
         "BUILTIN_VIEWS",
         "The views of the default layout, in rail order.",
         &v::BUILTIN_VIEWS,

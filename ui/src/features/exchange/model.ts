@@ -398,9 +398,22 @@ export const EXCHANGE_SETUP_CHOICES: readonly ExchangeSetupChoice[] = [
   ...EXCHANGE_ENGINE_VALUES,
 ];
 
-/** The sign-in methods an engine accepts (Graph: OAuth only). */
-export function exchangeSignIns(engine: ExchangeEngine): readonly ExchangeSignIn[] {
-  return engine === "graph" ? ["oauth2"] : EXCHANGE_SIGN_INS;
+/**
+ * The sign-in methods offered for `engine` (Graph: OAuth only); Windows
+ * sign-in only where the core has it (`windowsSignIn`, the
+ * `windows-sign-in` platform feature, ADR 0202).
+ */
+export function exchangeSignIns(
+  engine: ExchangeEngine,
+  windowsSignIn: boolean,
+): readonly ExchangeSignIn[] {
+  if (engine === "graph") return ["oauth2"];
+  return windowsSignIn ? EXCHANGE_SIGN_INS : EXCHANGE_SIGN_INS.filter((s) => !isWindowsSignIn(s));
+}
+
+/** Whether `signIn` uses the Windows account (SSPI). */
+export function isWindowsSignIn(signIn: ExchangeSignIn): boolean {
+  return signIn === "windows-current" || signIn === "windows-account";
 }
 
 export function exchangeSignInOf(auth: AuthConfig): ExchangeSignIn {

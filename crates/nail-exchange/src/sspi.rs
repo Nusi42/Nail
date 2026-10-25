@@ -167,6 +167,7 @@ impl NegotiateAuth for SspiNegotiate {
     }
 }
 
+#[cfg(windows)]
 fn sspi_error(code: ErrorCode, message: String) -> EngineError {
     EngineError::permanent(code, message).with_localized(LocalizedMessage::new(
         if code == ErrorCode::AuthFailed {
