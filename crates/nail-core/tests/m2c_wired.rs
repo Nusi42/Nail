@@ -9,7 +9,7 @@
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
 use common::{
-    Multi, TIMEOUT, archive_and_flag, eventually, folder, folders, messages, save_rule,
+    Multi, TIMEOUT, archive_and_flag, eventually, folder, folders, messages, recv_event, save_rule,
     update_account,
 };
 use nail_api::Folder;
@@ -105,10 +105,10 @@ async fn next_notification(
     let deadline = tokio::time::Instant::now() + within;
     loop {
         let left = deadline.saturating_duration_since(tokio::time::Instant::now());
-        match tokio::time::timeout(left, events.recv()).await {
-            Ok(Ok(Event::NotificationRequested { notification })) => return Some(notification),
-            Ok(Ok(_) | Err(broadcast::error::RecvError::Lagged(_))) => {}
-            Ok(Err(broadcast::error::RecvError::Closed)) | Err(_) => return None,
+        match tokio::time::timeout(left, recv_event(events)).await {
+            Ok(Event::NotificationRequested { notification }) => return Some(notification),
+            Ok(_) => {}
+            Err(_) => return None,
         }
     }
 }

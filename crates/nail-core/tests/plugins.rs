@@ -12,7 +12,7 @@
 
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
-use common::{assert_nothing_to_place, install_package};
+use common::{assert_nothing_to_place, install_package, recv_event};
 use nail_core::testing::{error_of, quiet_options};
 
 use std::collections::BTreeMap;
@@ -159,15 +159,13 @@ async fn wait_event<T>(
     let mut seen = Vec::new();
     loop {
         let left = deadline.saturating_duration_since(Instant::now());
-        match tokio::time::timeout(left, rx.recv()).await {
-            Ok(Ok(event)) => {
+        match tokio::time::timeout(left, recv_event(rx)).await {
+            Ok(event) => {
                 if let Some(found) = pick(&event) {
                     return found;
                 }
                 seen.push(event);
             }
-            Ok(Err(broadcast::error::RecvError::Lagged(_))) => {}
-            Ok(Err(e)) => panic!("{what}: {e}"),
             Err(elapsed) => panic!("no {what} within 20 s ({elapsed}); saw {seen:#?}"),
         }
     }

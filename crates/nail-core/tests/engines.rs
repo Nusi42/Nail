@@ -250,22 +250,15 @@ async fn writes_reach_the_imap_server() {
 }
 
 async fn wait_op_done(events: &mut broadcast::Receiver<Event>, op: &nail_api::OpId) {
-    let deadline = tokio::time::Instant::now() + TIMEOUT;
-    loop {
-        let event = tokio::time::timeout_at(deadline, events.recv())
-            .await
-            .expect("op finished in time")
-            .unwrap();
-        if let Event::OpStatus { status } = event
-            && &status.op_id == op
-        {
-            match status.state {
-                nail_api::OpState::Done => return,
-                nail_api::OpState::Failed => panic!("op failed: {status:?}"),
-                _ => {}
-            }
-        }
-    }
+    next_matching(events, "the op to finish", |event| match event {
+        Event::OpStatus { status } if &status.op_id == op => match status.state {
+            nail_api::OpState::Done => Some(()),
+            nail_api::OpState::Failed => panic!("op failed: {status:?}"),
+            _ => None,
+        },
+        _ => None,
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -304,21 +297,13 @@ async fn server_flag_changes_arrive_through_idle() {
     f.control("imap-deliver",
         &json!({ "raw": "From: x@y.example\r\nSubject: Pushed by IDLE\r\nMessage-ID: <idle@y.example>\r\n\r\nhi" }),
     );
-    eventually("new mail pushed", || async {
-        inbox_count(&f.service, MULTI_WORK_ID).await == 16
+    // Announced after it is stored (and queued for the arrival rules): wait
+    // for the announcement, reading the events as they come.
+    next_matching(&mut events, "NewMail announced", |e| {
+        matches!(e, Event::NewMail { .. }).then_some(())
     })
     .await;
-    let mut announced = false;
-    loop {
-        match events.try_recv() {
-            Ok(event) => announced |= matches!(event, Event::NewMail { .. }),
-            // Busy runs: older events (connection log notices, ADR 0190)
-            // may be skipped; keep reading the newer ones.
-            Err(broadcast::error::TryRecvError::Lagged(_)) => {}
-            Err(_) => break,
-        }
-    }
-    assert!(announced, "NewMail was broadcast");
+    assert_eq!(inbox_count(&f.service, MULTI_WORK_ID).await, 16);
     // A dropped IDLE connection comes back.
     f.demo.work.drop_idle_connections();
     assert!(f.demo.work.wait_for_idle(1, TIMEOUT).await);

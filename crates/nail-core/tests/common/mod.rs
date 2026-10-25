@@ -73,12 +73,23 @@ where
     }
 }
 
+/// The next event. On busy runs the channel may drop older events
+/// (connection log notices, ADR 0190): the newer ones are read.
+pub(crate) async fn recv_event(rx: &mut broadcast::Receiver<Event>) -> Event {
+    loop {
+        match rx.recv().await {
+            Ok(event) => return event,
+            Err(broadcast::error::RecvError::Lagged(_)) => {}
+            Err(broadcast::error::RecvError::Closed) => panic!("the core stopped"),
+        }
+    }
+}
+
 /// The next event (at most 10 s away).
 pub(crate) async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
-    tokio::time::timeout(Duration::from_secs(10), rx.recv())
+    tokio::time::timeout(Duration::from_secs(10), recv_event(rx))
         .await
         .expect("no event within 10 s")
-        .unwrap()
 }
 
 /// The core's answer.
@@ -504,10 +515,9 @@ pub(crate) async fn next_matching<T>(
 ) -> T {
     let deadline = tokio::time::Instant::now() + TIMEOUT;
     loop {
-        let event = tokio::time::timeout_at(deadline, events.recv())
+        let event = tokio::time::timeout_at(deadline, recv_event(events))
             .await
-            .unwrap_or_else(|_| panic!("timed out waiting for: {what}"))
-            .unwrap();
+            .unwrap_or_else(|_| panic!("timed out waiting for: {what}"));
         if let Some(value) = pick(event) {
             return value;
         }
