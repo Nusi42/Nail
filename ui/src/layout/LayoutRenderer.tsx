@@ -11,6 +11,7 @@
  */
 import {
   Fragment,
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -41,6 +42,7 @@ import {
   useWindowChrome,
 } from "./LayoutChrome";
 import { useWindowWidth } from "./useWindowWidth";
+import { usesWidget } from "./views";
 import { useWidgetRegistry, type WidgetNode } from "./widgetRegistry";
 
 type SplitNode = Extract<LayoutNode, { type: "split" }>;
@@ -378,6 +380,22 @@ function TabsView({ node, path }: { node: TabsNode; path: string }) {
   const activeIndex = visible.some(({ index }) => index === wanted)
     ? wanted
     : (visible[0]?.index ?? 0);
+
+  // A request to show a widget (`revealWidgets`, e.g. the reader after
+  // Open) switches to the tab that holds it; a layout without tabs has it
+  // in view already.
+  // Only a new request switches (the user may pick another tab after it),
+  // and not one made before these tabs were shown.
+  const reveal = useUi((s) => s.revealRequest);
+  const handled = useRef(reveal?.seq ?? 0);
+  useEffect(() => {
+    if (reveal === null || reveal.seq === handled.current) return;
+    handled.current = reveal.seq;
+    const target = visible.find(({ child }) =>
+      reveal.kinds.some((kind) => usesWidget(child, kind)),
+    );
+    if (target !== undefined && target.index !== activeIndex) setActiveTab(key, target.index);
+  }, [reveal, visible, activeIndex, key, setActiveTab]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const position = visible.findIndex(({ index }) => index === activeIndex);

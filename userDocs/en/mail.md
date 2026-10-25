@@ -134,8 +134,11 @@ Layout & toolbars; **Not now** keeps the strip and does not ask again.
 
 ### Keyboard
 
-In the list, `Enter` or `o` moves the focus into the reader, onto the
-conversation's open card. In the reader (or after clicking a card):
+In the list, `Enter` or `o` (or a double-click on a message) moves the
+focus into the reader, onto the conversation's open card. In a narrow window,
+where the list and the reader are tabs, this also switches to the reader's
+tab; a single click only selects the message. In the reader (or after
+clicking a card):
 
 | Key | Action |
 | --- | --- |

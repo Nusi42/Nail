@@ -173,3 +173,34 @@ for (const { theme, density } of EXPANDED_SWEEPS) {
     });
   });
 }
+
+test("at phone width a double-click on a message shows it, a click only chooses it", async ({
+  page,
+}) => {
+  await server.start({ seed: "demo-multi" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(server.url);
+  const messagesTab = page.getByRole("tab", { name: "Messages", exact: true });
+  const messageTab = page.getByRole("tab", { name: "Message", exact: true });
+  await expect(messagesTab).toHaveAttribute("aria-selected", "true");
+  const row = nightingale(page);
+
+  // A click chooses the message; the list stays.
+  await row.click();
+  await expect(row).toHaveAttribute("aria-selected", "true");
+  await expect(messagesTab).toHaveAttribute("aria-selected", "true");
+
+  // A double-click opens it: the message tab shows it.
+  await row.dblclick();
+  await expect(messageTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(READER_SUBJECT)).toBeVisible();
+  await expect(page.locator(READER_SUBJECT)).toContainText("Nightingale");
+
+  // Back to the list, Enter opens it again.
+  await messagesTab.click();
+  await expect(row).toBeVisible();
+  await page.getByRole("listbox", { name: "Messages" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(messageTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(READER_SUBJECT)).toBeVisible();
+});

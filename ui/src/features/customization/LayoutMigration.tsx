@@ -10,9 +10,10 @@
  */
 import { useId } from "react";
 import defaultLayoutText from "../../../../defaults/layout.kdl?raw";
-import type { LayoutNode, ResolvedLayout } from "../../api/generated";
+import type { ResolvedLayout } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
+import { usesWidget } from "../../layout/views";
 import { useSetUiState, useUiState } from "../../state/uiState";
 import { useUiStoreApi } from "../../state/uiStore";
 import { DIALOGS } from "./names";
@@ -27,11 +28,6 @@ const VIEW_HOST = "view-host";
 /** The shipped default layout (`defaults/layout.kdl`), the incoming file of the offer. */
 export const DEFAULT_LAYOUT_TEXT: string = defaultLayoutText;
 
-function hasWidget(node: LayoutNode, kind: string): boolean {
-  if (node.type === "widget") return node.kind === kind;
-  return node.children.some((child) => hasWidget(child, kind));
-}
-
 /**
  * Whether `layout` is a pre-rail layout of the user's: it has views (the
  * default's), but its main window shows none of them in a view host.
@@ -39,7 +35,7 @@ function hasWidget(node: LayoutNode, kind: string): boolean {
 export function needsLayoutMigration(layout: ResolvedLayout): boolean {
   if (Object.keys(layout.views).length === 0) return false;
   const main = layout.windows.main ?? [];
-  return main.length > 0 && !main.some((bp) => hasWidget(bp.root, VIEW_HOST));
+  return main.length > 0 && !main.some((bp) => usesWidget(bp.root, VIEW_HOST));
 }
 
 /** The offer, shown once over the main window (an app effect). */

@@ -21,6 +21,10 @@ import { CARD_WIDGETS } from "../../widgets/ThreadViewModel";
 /** UI-state key: `"dismissed"` or `"migrated"` once the user answered. */
 export const UI_STATE_READER_OFFER = "conversation-reader.layout-offer";
 
+/** The widget kinds that show the open message: the conversation and the lone message. */
+export const THREAD_VIEW = "thread-view";
+export const MESSAGE_VIEW = "message-view";
+
 type Widget = Extract<LayoutNode, { type: "widget" }>;
 
 /** A reader stack of the strip era: where it is and its children. */
@@ -36,11 +40,11 @@ function isCardKind(kind: string): boolean {
 }
 
 function isStrip(node: LayoutNode): node is Widget {
-  return node.type === "widget" && node.kind === "thread-view" && node.options.mode !== "cards";
+  return node.type === "widget" && node.kind === THREAD_VIEW && node.options.mode !== "cards";
 }
 
 function isMessageView(node: LayoutNode): boolean {
-  return node.type === "widget" && node.kind === "message-view";
+  return node.type === "widget" && node.kind === MESSAGE_VIEW;
 }
 
 function collect(
@@ -85,7 +89,7 @@ export function feedWidget(stack: StripStack): NewWidget {
   if (!all) options.card = [...new Set(kinds)].join(" ");
   const view = stack.children.find(isMessageView);
   if (view?.type === "widget" && view.options["mark-read"] === false) options["mark-read"] = false;
-  return { kind: "thread-view", id: strip?.id ?? null, label: strip?.label ?? null, options };
+  return { kind: THREAD_VIEW, id: strip?.id ?? null, label: strip?.label ?? null, options };
 }
 
 /**

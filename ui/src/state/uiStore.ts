@@ -104,6 +104,12 @@ export interface UiState {
   splitSizes: Record<string, string[]>;
   /** Active tab index by tabs key. */
   activeTabs: Record<string, number>;
+  /**
+   * The latest request to show the pane holding one of these widget kinds:
+   * a tab set whose tab contains one switches to that tab (a narrow layout
+   * shows the reader after Open). `seq` makes a repeated request count.
+   */
+  revealRequest: { kinds: readonly string[]; seq: number } | null;
   /** Keyboard context last focused (`list`, `reader`, …). */
   keyContext: string;
   connection: ConnectionStatus;
@@ -169,6 +175,7 @@ export interface UiState {
   toggleNode: (id: string) => void;
   setSplitSizes: (key: string, sizes: string[]) => void;
   setActiveTab: (key: string, index: number) => void;
+  revealWidgets: (kinds: readonly string[]) => void;
   setKeyContext: (context: string) => void;
   setConnection: (status: ConnectionStatus) => void;
   setSync: (sync: SyncState | null) => void;
@@ -229,6 +236,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     hiddenNodes: [],
     splitSizes: {},
     activeTabs: {},
+    revealRequest: null,
     keyContext: "list",
     connection: "connecting",
     sync: null,
@@ -298,6 +306,9 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     },
     setActiveTab: (key, index) => {
       set((s) => ({ activeTabs: { ...s.activeTabs, [key]: index } }));
+    },
+    revealWidgets: (kinds) => {
+      set((s) => ({ revealRequest: { kinds, seq: (s.revealRequest?.seq ?? 0) + 1 } }));
     },
     setKeyContext: (context) => {
       set((s) => (s.keyContext === context ? s : { keyContext: context }));

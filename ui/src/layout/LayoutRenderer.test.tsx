@@ -1,6 +1,8 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { normalizeLayout } from "../api/normalize";
-import { createEnv, renderWithProviders, setWindowWidth } from "../test/harness";
+import { onTestFinished } from "vitest";
+import { createEnv, renderWithProviders, setWindowWidth, stubElementSizes } from "../test/harness";
+import { INBOX } from "../test/mockIds";
 import { WindowView } from "./LayoutRenderer";
 import { must } from "../test/must";
 
@@ -116,6 +118,43 @@ describe("layout engine", () => {
     fireEvent.keyDown(must(tabs[0]), { key: "ArrowLeft" });
     expect(tabs[2]).toHaveAttribute("aria-selected", "true");
     expect(env.store.getState().activeTabs.panes).toBe(2);
+  });
+
+  it("shows the message tab when a message is opened in a narrow window", async () => {
+    setWindowWidth(600);
+    const restore = stubElementSizes();
+    onTestFinished(restore);
+    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    const { container } = renderWithProviders(
+      <WindowView layout={env.transport.data.layout} name="mail" />,
+      env,
+    );
+    const tabs = screen.getAllByRole("tab");
+    const row = await waitFor(() =>
+      must(container.querySelector<HTMLElement>('[data-part="message-list.row"]')),
+    );
+    // A click only chooses the message; the list stays in view.
+    fireEvent.click(row);
+    expect(tabs[1]).toHaveAttribute("aria-selected", "true");
+    // A double-click opens it: the reader's tab shows.
+    fireEvent.doubleClick(row);
+    await waitFor(() => {
+      expect(tabs[2]).toHaveAttribute("aria-selected", "true");
+    });
+    // The user goes back to the list; nothing switches by itself.
+    fireEvent.click(must(tabs[1]));
+    expect(tabs[1]).toHaveAttribute("aria-selected", "true");
+    // Each new request switches again (Enter runs the same action).
+    act(() => {
+      env.store.getState().revealWidgets(["thread-view"]);
+    });
+    expect(tabs[2]).toHaveAttribute("aria-selected", "true");
+    // A request for a widget no tab holds changes nothing.
+    fireEvent.click(must(tabs[0]));
+    act(() => {
+      env.store.getState().revealWidgets(["no-such-widget"]);
+    });
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
   });
 
   it("resizes a split with the keyboard and the pointer", () => {

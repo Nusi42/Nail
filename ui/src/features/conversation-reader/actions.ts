@@ -10,13 +10,15 @@
  * else the first one shown. Without a feed (a layout of the strip, a lone
  * message) j / k step through the list like `mail.next` / `mail.previous`.
  *
- * From the list, Enter / o (`conversation.open-in-reader`, `keys
- * context="list"`) move the focus into the reader: onto the selected card's
- * header, else the newest open card, else the message shown alone.
+ * From the list, Enter / o or a double-click (`conversation.open-in-reader`,
+ * `keys context="list"`) move the focus into the reader: onto the selected
+ * card's header, else the newest open card, else the message shown alone.
+ * A narrow layout that shows the reader in a tab switches to it.
  */
 import type { ActionInfo } from "../../actions/palette";
 import { builtinActions, type ActionContext, type ActionHandler } from "../../actions/registry";
 import { feedStore, stepStop } from "../../widgets/ThreadViewModel";
+import { MESSAGE_VIEW, THREAD_VIEW } from "./readerStack";
 
 export const CONVERSATION_ACTIONS = {
   nextCard: "conversation.next-card",
@@ -154,8 +156,13 @@ export const conversationActions: Record<string, ActionHandler> = {
     },
   },
   [CONVERSATION_ACTIONS.openInReader]: {
-    run: () => {
+    run: (ctx) => {
+      // A narrow layout shows the reader in another (hidden) tab: switch to
+      // it, and focus again once it shows; where the reader is in view the
+      // first focus holds.
+      ctx.store.getState().revealWidgets([THREAD_VIEW, MESSAGE_VIEW]);
       focusReader();
+      requestAnimationFrame(() => focusReader());
     },
   },
 };

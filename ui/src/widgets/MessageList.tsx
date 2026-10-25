@@ -12,7 +12,9 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { useActions } from "../actions/ActionsProvider";
 import { comboFromEvent, normalizeCombo } from "../actions/keys";
+import { CONVERSATION_ACTIONS } from "../features/conversation-reader/actions";
 import {
   listSelectionFor,
   prunePicked,
@@ -935,6 +937,13 @@ export function MessageList({ node }: WidgetProps) {
     });
   }, [expandable]);
 
+  // A double-click opens the message like Enter (a narrow layout switches
+  // to the reader); its first click already chose the row.
+  const { dispatch } = useActions();
+  const openRow = () => {
+    void dispatch(CONVERSATION_ACTIONS.openInReader);
+  };
+
   /**
    * A click on a row (P3): Ctrl / Cmd + click picks it besides the others,
    * Shift + click picks the rows from the last chosen one to it, a plain
@@ -1103,6 +1112,7 @@ export function MessageList({ node }: WidgetProps) {
             onClick={(event) => {
               clickRow(row, item.index, event);
             }}
+            onDoubleClick={openRow}
           >
             {columns.length > 0 ? (
               <div data-part="message-list.row.columns">
