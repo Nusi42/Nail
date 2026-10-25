@@ -28,6 +28,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::time::{Duration, Instant};
 
+use crate::cpu_clock::thread_cpu_time;
+
 use base64::Engine as _;
 use nail_api::agents::{ActionActor, ActionAttribution, McpClientRef};
 use nail_api::plugins::admin::{MAX_LOG_MESSAGE, MAX_STORAGE_KEY, MAX_STORAGE_VALUE};
@@ -307,12 +309,14 @@ pub(crate) struct Launch {
     pub cpu: Arc<Mutex<CpuMeter>>,
 }
 
-/// The CPU budget of the current turn, checked by the interrupt handler.
-/// A stopped plug-in (disabled, uninstalled, reloaded) is interrupted at
-/// once, whatever budget its turn has left (M2d review).
+/// The CPU budget of the current turn, checked by the interrupt handler on
+/// the plug-in's thread against that thread's CPU time (ADR 0204: waiting
+/// for a processor does not count). A stopped plug-in (disabled,
+/// uninstalled, reloaded) is interrupted at once, whatever budget its turn
+/// has left (M2d review).
 struct Budget {
-    epoch: Instant,
-    /// Nanoseconds since `epoch`; 0 = no turn running.
+    /// The thread's CPU time in nanoseconds when the turn must end; 0 = no
+    /// turn running.
     deadline: AtomicU64,
     fired: AtomicBool,
     /// Cleared by the host when it stops the plug-in.
@@ -324,7 +328,6 @@ struct Budget {
 impl Budget {
     fn new(alive: Arc<AtomicBool>) -> Self {
         Self {
-            epoch: Instant::now(),
             deadline: AtomicU64::new(0),
             fired: AtomicBool::new(false),
             alive,
@@ -332,15 +335,17 @@ impl Budget {
         }
     }
 
-    fn now(&self) -> u64 {
-        u64::try_from(self.epoch.elapsed().as_nanos()).unwrap_or(u64::MAX)
+    /// The calling thread's CPU time in nanoseconds (always the plug-in's:
+    /// turns are armed and checked on its thread).
+    fn now() -> u64 {
+        u64::try_from(thread_cpu_time().as_nanos()).unwrap_or(u64::MAX)
     }
 
     fn arm(&self, budget: Duration) {
         self.fired.store(false, Ordering::SeqCst);
         let nanos = u64::try_from(budget.as_nanos()).unwrap_or(u64::MAX / 2);
         self.deadline
-            .store(self.now().saturating_add(nanos).max(1), Ordering::SeqCst);
+            .store(Self::now().saturating_add(nanos).max(1), Ordering::SeqCst);
     }
 
     /// Disarms; whether the budget was exceeded.
@@ -359,7 +364,7 @@ impl Budget {
             return true;
         }
         let deadline = self.deadline.load(Ordering::Relaxed);
-        if deadline != 0 && self.now() > deadline {
+        if deadline != 0 && Self::now() > deadline {
             self.fired.store(true, Ordering::SeqCst);
             return true;
         }
@@ -1965,7 +1970,7 @@ impl Sandbox {
             s.origin = origin;
             s.logs_this_turn = 0;
         }
-        let started = Instant::now();
+        let started = thread_cpu_time();
         self.budget.arm(budget);
         let result = self.ctx.with(|ctx| {
             let run = || -> rquickjs::Result<()> {
@@ -2024,7 +2029,7 @@ impl Sandbox {
             s.blobs_in.clear();
             s.blobs_out.clear();
             s.blob_out_bytes = 0;
-            s.meter(started.elapsed());
+            s.meter(thread_cpu_time().saturating_sub(started));
             s.fatal.take()
         };
         if fired {
@@ -2541,10 +2546,29 @@ mod tests {
         assert!(!budget.check());
         assert!(!budget.disarm());
         budget.arm(Duration::ZERO);
-        std::thread::sleep(Duration::from_millis(2));
-        assert!(budget.check());
+        // Late once the thread has computed past the deadline.
+        let spin = Instant::now();
+        let mut x = 0u64;
+        while !budget.check() {
+            x = std::hint::black_box(x.wrapping_add(1));
+            assert!(
+                spin.elapsed() < Duration::from_mins(1),
+                "the budget never fired"
+            );
+        }
         assert!(budget.disarm());
         assert!(!budget.check());
+    }
+
+    /// ADR 0204: time the thread waits (for a processor, here asleep) does
+    /// not count against its budget.
+    #[test]
+    fn waiting_does_not_use_the_budget() {
+        let budget = Budget::new(Arc::new(AtomicBool::new(true)));
+        budget.arm(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(400));
+        assert!(!budget.check());
+        assert!(!budget.disarm());
     }
 
     /// M2d review: a stopped plug-in is interrupted whatever budget is

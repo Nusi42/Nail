@@ -58,6 +58,7 @@
 
 #![warn(missing_docs)]
 
+mod cpu_clock;
 pub mod dev;
 pub mod extensions;
 pub mod gate;

@@ -4797,6 +4797,7 @@ dependencies = [
  "chrono",
  "fluent-bundle",
  "hex",
+ "libc",
  "nail-api",
  "nail-mime",
  "nail-util",
@@ -4813,6 +4814,7 @@ dependencies = [
  "tracing",
  "unic-langid",
  "url",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

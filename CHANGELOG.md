@@ -53,6 +53,10 @@ never published and is renumbered; 1.0 follows once the gates in
 
 ### Fixed
 
+- A plug-in's CPU budget and hourly quota counted elapsed time, so on a busy
+  PC a well-behaved plug-in could be stopped for "using too much CPU" while
+  it was only waiting for a processor. They now count the CPU time of the
+  plug-in's own thread (ADR 0204).
 - A message you marked as junk could be reported as "marked by the server"
   when its arrival was classified after your mark (its `$Junk` keyword then
   looked like the server's verdict); your own verdict now always stands.

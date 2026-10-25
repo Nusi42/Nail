@@ -375,6 +375,9 @@ schemars = "1.2.2"
 # Simple MAPI DLL (nail-mapi, WP111): raw Win32 bindings (named pipes,
 # process start, the MAPI structures); MIT OR Apache-2.0, already in the lock.
 windows-sys = "0.61.2"
+# The CPU time of a plug-in's thread on Linux and macOS (nail-plugins,
+# ADR 0204; MIT OR Apache-2.0, already in the lock).
+libc = "0.2.189"
 # Registry (installation facts, Run key, default apps; the desktop shell).
 windows-registry = "0.6.1"
 # M4c: WebView2 PrintToPdf in the desktop shell (MIT; the version wry uses).

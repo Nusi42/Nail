@@ -115,7 +115,17 @@ async fn a_loop_after_an_await_is_stopped_too() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_loop_while_activating_fails_the_start() {
-    let (fake, host) = fake_host();
+    // A start budget well inside the start timeout: the budget counts CPU
+    // time (ADR 0204), which a busy machine hands out more slowly than the
+    // timeout's clock runs.
+    let fake = Fake::new();
+    let host = host_with(
+        &fake,
+        nail_plugins::limits::HostLimits {
+            activation_budget: Duration::from_millis(300),
+            ..limits()
+        },
+    );
     let err = host
         .start(spec("hang", &[], "for (;;) {}"))
         .await

@@ -264,21 +264,25 @@ async fn a_scheduled_run_while_one_runs_is_skipped_as_overlap() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_cpu_quota_skips_jobs_until_the_hour_has_passed() {
+    // The quota counts the plug-in thread's CPU time (ADR 0204), so the job
+    // does a fixed amount of work (about 60 ms in a debug build) instead of
+    // spinning for a time, which a busy machine would give it only part of.
+    const QUOTA: Duration = Duration::from_millis(20);
     let fake = Fake::new();
     fake.set_now("2026-10-02T10:00:00Z");
     let host = host_with(
         &fake,
         HostLimits {
-            cpu_quota_per_hour: Duration::from_millis(80),
+            cpu_quota_per_hour: QUOTA,
             ..job_limits()
         },
     );
     let js = r#"
       export default { activate(ctx) {
         ctx.jobs.register("burn", () => {
-          const until = Date.now() + 150;
-          while (Date.now() < until) {}
-          nail.log.info("BURNED");
+          let x = 0;
+          for (let i = 0; i < 1000000; i++) x += i % 7;
+          nail.log.info("BURNED " + x);
         });
       } };
     "#;
@@ -294,14 +298,19 @@ async fn the_cpu_quota_skips_jobs_until_the_hour_has_passed() {
     host.run_job(&id, "burn").unwrap();
     result(&fake, "burner", "BURNED").await;
     runs_of(&fake, "burner", 1).await;
-    assert!(host.cpu_last_hour(&id) >= Duration::from_millis(100));
+    // The turn's CPU time is counted when it ends, just after the job's
+    // result went out.
+    wait_for("the run's CPU time", || {
+        (host.cpu_last_hour(&id) >= QUOTA).then_some(())
+    })
+    .await;
     // Reported to the core.
     wait_for("cpu report", || {
         fake.cpu
             .lock()
             .unwrap()
             .iter()
-            .any(|(p, _, ms)| p == "burner" && *ms >= 100)
+            .any(|(p, _, ms)| p == "burner" && u128::from(*ms) >= QUOTA.as_millis())
             .then_some(())
     })
     .await;
