@@ -68,6 +68,13 @@ at once: the 520-message listings take half the time); and a sync reset the user
 answered" (Graph and EWS report it in the event's own response, not the attendee list), so the next edit answered
 again (`event_from_exchange` takes the user's addresses). 10 of 10 runs of the Exchange tests pass under that load.
 
+**Releases (2026-10-25, ADR 0203):** `npm run release:prepare -- --version X.Y.Z` and `npm run release:publish`
+(`docs/release.md` "Releasing"). Maintainer decisions: GitHub Releases only (rolling `stable` / `beta` releases hold
+`latest.json`), unsigned for now, x64 NSIS + portable zip, first version 0.8.0. The release update key exists; where it
+is kept is in the maintainer's `CLAUDE.local.md`, never in the repository (public half
+`packaging/updater/release.pub`). A dry run with the release key built and checked everything. Not published yet:
+the first real release waits for the maintainer's go-ahead.
+
 **Possible follow-ups:** the source of events / contacts (iCalendar / vCard) like Show source; EWS folder operations
 (CreateFolder / UpdateFolder / MoveFolder / DeleteFolder in the EWS client); MCP / plug-in folder tools.
 
@@ -89,8 +96,7 @@ run the full local verification (`docs/dev-setup.md` "Verification (no hosted CI
 5. Release checklist (`docs/release-checklist.md`):
    - full local verification run (item 5)
    - security review sign-off
-   - EV certificate
-   - update key
+   - code signing (SignPath or a standard certificate; EV brings no SmartScreen advantage any more)
    - the encryption-at-rest default decision
    - real-account tests from `docs/backlog.md`, as far as the maintainer wants
 
