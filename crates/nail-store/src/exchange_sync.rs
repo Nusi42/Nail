@@ -109,13 +109,17 @@ impl Store {
     /// (local-only messages without a server id are not included).
     pub fn exchange_unlisted_messages(&self, folder: &FolderId) -> Result<Vec<MessageId>> {
         self.with_conn(|conn| {
-            let mut stmt = conn.prepare_cached(
+            // A message moved here locally is not listed until its move
+            // is replayed.
+            let mut stmt = conn.prepare_cached(&format!(
                 "SELECT m.id FROM messages m
                  WHERE m.folder_id = ?1 AND m.remote_id IS NOT NULL
                    AND NOT EXISTS (SELECT 1 FROM exchange_listed l
                                    WHERE l.scope = ?1 AND l.remote_id = m.remote_id)
+                   AND NOT {}
                  ORDER BY m.id",
-            )?;
+                crate::queue::has_waiting_op("m.id")
+            ))?;
             crate::util::collect_ids(&mut stmt, [folder.as_str()])
         })
     }
@@ -193,10 +197,14 @@ impl Store {
         mailbox: Option<&str>,
     ) -> Result<Vec<MessageId>> {
         self.with_conn(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT message_id FROM exchange_removed
-                 WHERE account_id = ?1 AND mailbox = ?2 ORDER BY message_id",
-            )?;
+            // Marked before the user moved it: kept until the move is
+            // replayed.
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT r.message_id FROM exchange_removed r
+                 WHERE r.account_id = ?1 AND r.mailbox = ?2 AND NOT {}
+                 ORDER BY r.message_id",
+                crate::queue::has_waiting_op("r.message_id")
+            ))?;
             message_ids(&mut stmt, params![account.as_str(), mailbox_key(mailbox)])
         })
     }
@@ -400,6 +408,35 @@ mod tests {
         assert_eq!(store.exchange_listed(folder.as_str()).unwrap().len(), 2);
         store.clear_exchange_listed(folder.as_str()).unwrap();
         assert!(store.exchange_listed(folder.as_str()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_message_waiting_for_replay_is_never_taken_as_removed() {
+        let store = store();
+        let folder: FolderId = "x-inbox".into();
+        store.clear_exchange_listed(folder.as_str()).unwrap();
+        store
+            .mark_exchange_removed(&account(), None, &"m2".into(), 5)
+            .unwrap();
+        // The user changed m2 (moved it here, say): the server learns it on
+        // replay, so neither a listing nor a flush may drop it before.
+        store
+            .enqueue(&crate::queue::Operation::UpdateFlags {
+                message_id: "m2".into(),
+                change: nail_api::ops::FlagChange {
+                    seen: Some(true),
+                    ..nail_api::ops::FlagChange::default()
+                },
+            })
+            .unwrap();
+        assert_eq!(
+            store.exchange_unlisted_messages(&folder).unwrap(),
+            vec![MessageId::from("m1")]
+        );
+        assert_eq!(
+            store.exchange_removed(&account(), None).unwrap(),
+            Vec::<MessageId>::new()
+        );
     }
 
     #[test]

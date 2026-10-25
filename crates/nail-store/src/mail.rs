@@ -1264,16 +1264,15 @@ impl Store {
     /// their UID cleared: their UIDs are stale, and the next sync adopts
     /// them again by Message-ID.
     pub fn clear_folder(&self, folder: &FolderId) -> Result<usize> {
-        const WAITING: &str = "SELECT message_id FROM op_queue
-            WHERE message_id IS NOT NULL AND state IN ('pending', 'in_flight')";
+        let waiting = crate::queue::has_waiting_op("messages.id");
         self.with_tx(|tx| {
             folder_account_in_tx(tx, folder)?;
             tx.execute(
-                &format!("UPDATE messages SET uid = NULL WHERE folder_id = ?1 AND id IN ({WAITING})"),
+                &format!("UPDATE messages SET uid = NULL WHERE folder_id = ?1 AND {waiting}"),
                 [folder.as_str()],
             )?;
             let deleted = tx.execute(
-                &format!("DELETE FROM messages WHERE folder_id = ?1 AND id NOT IN ({WAITING})"),
+                &format!("DELETE FROM messages WHERE folder_id = ?1 AND NOT {waiting}"),
                 [folder.as_str()],
             )?;
             tx.execute(

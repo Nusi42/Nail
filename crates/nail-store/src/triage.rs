@@ -488,14 +488,14 @@ impl Store {
     /// returns them to the Inbox.
     pub fn orphaned_in_folder(&self, folder: &FolderId) -> Result<Vec<MessageId>> {
         self.with_conn(|conn| {
-            let mut stmt = conn.prepare_cached(
+            let mut stmt = conn.prepare_cached(&format!(
                 "SELECT m.id FROM messages m
                  WHERE m.folder_id = ?1
                    AND NOT EXISTS (SELECT 1 FROM snoozed_messages s WHERE s.message_id = m.id)
-                   AND NOT EXISTS (SELECT 1 FROM op_queue q WHERE q.message_id = m.id
-                                   AND q.state IN ('pending', 'in_flight'))
+                   AND NOT {}
                  ORDER BY m.id",
-            )?;
+                crate::queue::has_waiting_op("m.id")
+            ))?;
             let rows = stmt.query_map([folder.as_str()], |r| {
                 Ok(MessageId::from(r.get::<_, String>(0)?))
             })?;

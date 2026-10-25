@@ -416,10 +416,10 @@ pub(crate) fn pending_ops_for_message_in_tx(
     tx: &Transaction<'_>,
     id: &MessageId,
 ) -> Result<Vec<Operation>> {
-    let mut stmt = tx.prepare_cached(
+    let mut stmt = tx.prepare_cached(&format!(
         "SELECT payload FROM op_queue
-         WHERE message_id = ?1 AND state IN ('pending', 'in_flight') ORDER BY id",
-    )?;
+         WHERE message_id = ?1 AND state IN {WAITING_STATES} ORDER BY id"
+    ))?;
     let payloads = stmt
         .query_map([id.as_str()], |r| r.get::<_, String>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -615,6 +615,18 @@ fn op_payloads(
     crate::util::collect_rows(&mut stmt, params)
 }
 
+/// SQL: the states of an operation still waiting for replay.
+pub(crate) const WAITING_STATES: &str = "('pending', 'in_flight')";
+
+/// SQL condition: the message `message` (a column, e.g. `m.id`) has an
+/// operation waiting for replay. Sync never deletes such a message: it is
+/// where the user put it, and the server learns it on replay.
+pub(crate) fn has_waiting_op(message: &str) -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM op_queue q WHERE q.message_id = {message} AND q.state IN {WAITING_STATES})"
+    )
+}
+
 const OP_COLS: &str =
     "id, account_id, payload, state, attempts, last_error, created_at, updated_at";
 
@@ -746,7 +758,7 @@ impl Store {
         self.with_conn(|conn| {
             let mut stmt = conn.prepare_cached(&format!(
                 "SELECT {OP_COLS} FROM op_queue
-                 WHERE message_id = ?1 AND state IN ('pending', 'in_flight') ORDER BY id"
+                 WHERE message_id = ?1 AND state IN {WAITING_STATES} ORDER BY id"
             ))?;
             let rows = stmt.query_map([id.as_str()], op_from_row)?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -763,7 +775,7 @@ impl Store {
             Ok(conn.execute(
                 &format!(
                     "UPDATE op_queue SET kind = ?2, payload = ?3, updated_at = {NOW}
-                     WHERE id = ?1 AND state IN ('pending', 'in_flight')"
+                     WHERE id = ?1 AND state IN {WAITING_STATES}"
                 ),
                 params![id.0, operation.kind(), payload],
             )? > 0)
@@ -786,9 +798,11 @@ impl Store {
         self.with_tx(|tx| {
             let rows = op_payloads(
                 tx,
-                "SELECT id, payload FROM op_queue
-                 WHERE message_id = ?1 AND id > ?2 AND state IN ('pending', 'in_flight')
-                 ORDER BY id",
+                &format!(
+                    "SELECT id, payload FROM op_queue
+                     WHERE message_id = ?1 AND id > ?2 AND state IN {WAITING_STATES}
+                     ORDER BY id"
+                ),
                 params![message.as_str(), after.0],
             )?;
             let mut updated = 0;
@@ -832,9 +846,11 @@ impl Store {
         self.with_tx(|tx| {
             let rows = op_payloads(
                 tx,
-                "SELECT id, payload FROM op_queue
-                 WHERE message_id = ?1 AND state IN ('pending', 'in_flight')
-                 ORDER BY id",
+                &format!(
+                    "SELECT id, payload FROM op_queue
+                     WHERE message_id = ?1 AND state IN {WAITING_STATES}
+                     ORDER BY id"
+                ),
                 params![message.as_str()],
             )?;
             let mut updated = 0;
@@ -861,7 +877,7 @@ impl Store {
     pub fn pending_op_count(&self) -> Result<u32> {
         self.with_conn(|conn| {
             Ok(conn.query_row(
-                "SELECT COUNT(*) FROM op_queue WHERE state IN ('pending', 'in_flight')",
+                &format!("SELECT COUNT(*) FROM op_queue WHERE state IN {WAITING_STATES}"),
                 [],
                 |row| row.get(0),
             )?)

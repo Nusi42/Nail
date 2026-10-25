@@ -397,10 +397,13 @@ impl Store {
                         params![object_id, href, etag],
                     )?;
                     tx.execute(
-                        "UPDATE pim_objects SET sync = 'synced'
-                         WHERE id = ?1 AND sync = 'pending' AND deleted = 0
-                           AND NOT EXISTS (SELECT 1 FROM pim_ops WHERE object_id = ?1
-                                           AND state IN ('pending', 'in_flight'))",
+                        &format!(
+                            "UPDATE pim_objects SET sync = 'synced'
+                             WHERE id = ?1 AND sync = 'pending' AND deleted = 0
+                               AND NOT EXISTS (SELECT 1 FROM pim_ops WHERE object_id = ?1
+                                               AND state IN {})",
+                            crate::queue::WAITING_STATES
+                        ),
                         [object_id],
                     )?;
                 }
