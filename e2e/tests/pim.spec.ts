@@ -11,7 +11,7 @@ import {
   openMail,
   closeWindow,
 } from "../support/views";
-import { eventChip, icalTime, openCalendar } from "../support/calendar";
+import { eventChip, icalTime, openCalendar, syncCalendars } from "../support/calendar";
 
 /**
  * Wave M3a (ADR 0063) against `nail serve --seed demo-multi`: calendars,
@@ -62,15 +62,6 @@ interface DavObject {
 
 const davObjects = (collection: string) =>
   control<DavObject[]>(server, "dav-objects", { collection });
-
-/** Syncs every source from the calendar window's toolbar. */
-async function syncNow(page: Page) {
-  await toolbarAction(
-    page,
-    page.getByRole("toolbar", { name: "Calendar actions" }),
-    "Sync calendars and contacts",
-  );
-}
 
 test("a recurring event is changed for this and the following occurrences", async ({ page }) => {
   await server.start({ seed: "demo-multi" });
@@ -126,7 +117,7 @@ test("an event syncs to the CalDAV server and a server-side change appears", asy
     name: "lunch.ics",
     data: serverEvent("lunch@other.example", "Lunch with Charles", 1, 12),
   });
-  await syncNow(page);
+  await syncCalendars(page);
   await expect(eventChip(calendar, "Lunch with Charles")).toBeVisible();
 });
 
@@ -167,7 +158,7 @@ test("a reminder fires at the controlled clock time", async ({ page }) => {
     name: "checkup.ics",
     data: serverEvent("checkup@other.example", "Checkup", 1, 10, "-PT10M"),
   });
-  await syncNow(page);
+  await syncCalendars(page);
   await expect(eventChip(calendar, "Checkup")).toBeVisible();
   const toast = page.getByRole("group", { name: "Reminder: Checkup" });
   await control(server, "clock-set", { at: unixAt(1, 9, 40) });

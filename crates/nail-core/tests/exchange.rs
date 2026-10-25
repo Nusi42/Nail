@@ -122,6 +122,31 @@ async fn graph_synced(service: &Service) {
     .await;
 }
 
+/// Waits until the Graph account ran a whole pass that started after the
+/// call: every pass starts with the folder hierarchy, so the second start
+/// seen means the first is finished.
+async fn graph_pass(env: &Env) {
+    let starts = || {
+        env.graph
+            .requests()
+            .iter()
+            .filter(|r| r.path.ends_with("/mailFolders/delta"))
+            .count()
+    };
+    let before = starts();
+    eventually("a whole Graph pass", || async {
+        ok(
+            &env.service,
+            Request::SyncNow {
+                account_id: Some(AccountId::new(GRAPH)),
+            },
+        )
+        .await;
+        starts() >= before + 2
+    })
+    .await;
+}
+
 /// Waits for the EWS account's first inbox listing.
 async fn ews_synced(service: &Service) {
     eventually("the EWS inbox", || async {
@@ -1412,6 +1437,29 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
     assert_eq!(
         env.graph.event(remote).unwrap()["changeKey"].as_str(),
         stored.etag.as_deref()
+    );
+    // A sync keeps the answer: the server has it in the event's own
+    // response, not in the user's attendee entry.
+    graph_pass(&env).await;
+    let Response::PimEvent { event, .. } = ok(
+        service,
+        Request::GetEvent {
+            event_id: instance.event_id.clone(),
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    let me = event
+        .fields
+        .attendees
+        .iter()
+        .find(|a| a.email == "ada@contoso.example")
+        .expect("the user is invited");
+    assert_eq!(
+        me.status,
+        nail_api::pim::calendar::ParticipationStatus::Accepted
     );
     // A local edit of the own copy (categories) is an update, not a
     // second answer.

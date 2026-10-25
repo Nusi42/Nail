@@ -15,6 +15,7 @@ import {
   saveVacationReply,
 } from "../support/views";
 import { defined } from "../support/defined";
+import { eventChip, syncCalendars } from "../support/calendar";
 import { expectSentThrough, newMessage } from "../support/compose";
 
 /**
@@ -73,6 +74,18 @@ const graphPim = () =>
     events: Record<string, unknown>[];
     tasks: { list: string; task: Record<string, unknown> }[];
   }>(server, "graph-pim");
+
+/** Waits until Graph has the event `subject` and `check` holds for it. */
+async function expectGraphEvent(
+  subject: string,
+  check: (event: Record<string, unknown>) => boolean,
+) {
+  await expect
+    .poll(async () => (await graphPim()).events.some((e) => e.subject === subject && check(e)), {
+      timeout: 30_000,
+    })
+    .toBe(true);
+}
 
 interface EwsItem {
   id: string;
@@ -348,34 +361,42 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
   await room.click();
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
-  await expect
-    .poll(
-      async () =>
-        (await graphPim()).events.some(
-          (e) =>
-            e.subject === "Design review" && JSON.stringify(e).includes("baker@contoso.example"),
-        ),
-      { timeout: 30_000 },
-    )
-    .toBe(true);
+  await expectGraphEvent("Design review", (e) =>
+    JSON.stringify(e).includes("baker@contoso.example"),
+  );
 
   // An invitation in the Exchange calendar is answered through Graph's
   // meeting API (no iMIP mail).
   await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
-  await calendar
-    .getByRole("button", { name: /^Architecture review,/ })
-    .first()
-    .click();
+  await eventChip(calendar, "Architecture review").click();
   await expect(editor).toBeVisible();
   await editor.getByRole("button", { name: "Accept", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await control<{ action: string }[]>(server, "graph-meetings")).map((a) => a.action),
-      { timeout: 30_000 },
-    )
-    .toContain("accept");
+  const answers = async () =>
+    (await control<{ action: string }[]>(server, "graph-meetings")).map((a) => a.action);
+  await expect.poll(answers, { timeout: 30_000 }).toContain("accept");
   expect(await control<string[]>(server, "graph-sent")).toEqual([]);
+
+  // A sync keeps the answer, and a later edit of the own copy is an
+  // update, not a second answer to the organizer.
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
+  await syncCalendars(page);
+  await eventChip(calendar, "Architecture review").click();
+  await expect(editor.getByRole("button", { name: "Accept", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(
+    editor
+      .getByRole("group", { name: "People and rooms" })
+      .getByRole("listitem")
+      .filter({ hasText: "(you)" }),
+  ).toContainText("Accepted");
+  await editor.getByLabel("Show me as", { exact: true }).selectOption({ label: "Free" });
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor).toBeHidden();
+  await expectGraphEvent("Architecture review", (e) => e.showAs === "free");
+  expect(await answers()).toEqual(["accept"]);
 });
 
 test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic replies and answers a meeting", async ({

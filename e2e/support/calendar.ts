@@ -3,7 +3,7 @@
  * chips and iCalendar times for events the mock servers serve.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
-import { showView, viewRegion } from "./views";
+import { showView, toolbarAction, viewRegion } from "./views";
 
 /** Shows the calendar view (in its agenda with `agenda`); answers the view. */
 export async function openCalendar(
@@ -17,6 +17,15 @@ export async function openCalendar(
     await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   }
   return calendar;
+}
+
+/** Syncs every source (and Exchange account) from the calendar's toolbar. */
+export async function syncCalendars(page: Page): Promise<void> {
+  await toolbarAction(
+    page,
+    page.getByRole("toolbar", { name: "Calendar actions" }),
+    "Sync calendars and contacts",
+  );
 }
 
 /** An event chip in the calendar views, by the start of its label. */

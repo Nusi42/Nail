@@ -237,16 +237,7 @@ fn attendee_of(a: &ExchangeAttendee, rooms: &[String], rsvp: bool) -> Attendee {
         email: a.email.address.clone(),
         name: a.email.name.clone(),
         role,
-        status: match a.response {
-            ExchangeResponse::Accepted | ExchangeResponse::Organizer => {
-                ParticipationStatus::Accepted
-            }
-            ExchangeResponse::Declined => ParticipationStatus::Declined,
-            ExchangeResponse::TentativelyAccepted => ParticipationStatus::Tentative,
-            ExchangeResponse::None | ExchangeResponse::NotResponded => {
-                ParticipationStatus::NeedsAction
-            }
-        },
+        status: participation_of(a.response),
         kind,
         rsvp,
         delegated_to: Vec::new(),
@@ -255,7 +246,17 @@ fn attendee_of(a: &ExchangeAttendee, rooms: &[String], rsvp: bool) -> Attendee {
 }
 
 /// The fields of one event or exception.
-fn fields_of(e: &ExchangeEvent, notes: &mut Vec<LocalizedMessage>) -> EventFields {
+/// An Exchange response as a participation status.
+fn participation_of(response: ExchangeResponse) -> ParticipationStatus {
+    match response {
+        ExchangeResponse::Accepted | ExchangeResponse::Organizer => ParticipationStatus::Accepted,
+        ExchangeResponse::Declined => ParticipationStatus::Declined,
+        ExchangeResponse::TentativelyAccepted => ParticipationStatus::Tentative,
+        ExchangeResponse::None | ExchangeResponse::NotResponded => ParticipationStatus::NeedsAction,
+    }
+}
+
+fn fields_of(e: &ExchangeEvent, own: &[String], notes: &mut Vec<LocalizedMessage>) -> EventFields {
     let (start, start_note) = pim_time(&e.start, e.is_all_day);
     let (end, end_note) = pim_time(&e.end, e.is_all_day);
     notes.extend(start_note);
@@ -302,6 +303,17 @@ fn fields_of(e: &ExchangeEvent, notes: &mut Vec<LocalizedMessage>) -> EventField
         .iter()
         .map(|a| attendee_of(a, &rooms, e.response_requested))
         .collect();
+    // An attendee's copy has the user's own answer in `my_response`: the
+    // server does not update the user's entry in the attendee list.
+    if !e.is_organizer
+        && e.my_response != ExchangeResponse::None
+        && let Some(me) = fields
+            .attendees
+            .iter_mut()
+            .find(|a| own.iter().any(|o| o.eq_ignore_ascii_case(&a.email)))
+    {
+        me.status = participation_of(e.my_response);
+    }
     fields.alarms = e
         .reminder_minutes
         .map(Alarm::minutes_before)
@@ -329,10 +341,10 @@ fn recurrence_id(original: &ExchangeDateTime, series_start: &PimTime) -> Option<
 }
 
 /// An Exchange event (a series with its exceptions, or a single event) in
-/// Nail's shape.
-pub fn event_from_exchange(e: &ExchangeEvent) -> MappedEvent {
+/// Nail's shape; `own` are the user's addresses (their own answer).
+pub fn event_from_exchange(e: &ExchangeEvent, own: &[String]) -> MappedEvent {
     let mut notes = Vec::new();
-    let fields = fields_of(e, &mut notes);
+    let fields = fields_of(e, own, &mut notes);
     let recurrence = e.recurrence.as_ref().map(|r| {
         let start = &fields.start;
         let exceptions = e
@@ -364,7 +376,7 @@ pub fn event_from_exchange(e: &ExchangeEvent) -> MappedEvent {
             let original = x.original_start.as_ref()?;
             Some(EventOverride {
                 recurrence_id: recurrence_id(original, &fields.start)?,
-                fields: fields_of(x, &mut notes),
+                fields: fields_of(x, own, &mut notes),
                 this_and_future: false,
             })
         })
@@ -864,7 +876,7 @@ mod tests {
 
     #[test]
     fn a_weekly_series_maps_to_nail() {
-        let mapped = event_from_exchange(&weekly_series());
+        let mapped = event_from_exchange(&weekly_series(), &[]);
         assert!(mapped.notes.is_empty(), "{:?}", mapped.notes);
         assert_eq!(mapped.uid, "040000008200E00074C5B7101A82E008");
         let f = &mapped.fields;
@@ -917,7 +929,7 @@ mod tests {
     #[test]
     fn a_series_round_trips_to_exchange() {
         let source = weekly_series();
-        let event = event_from_exchange(&source).into_event("e1".into(), "c1".into(), false);
+        let event = event_from_exchange(&source, &[]).into_event("e1".into(), "c1".into(), false);
         let own = vec!["ada@corp.example".to_owned()];
         let ctx = WriteContext {
             remote: Some(("AAMkAD", Some("DwAAABY"))),
@@ -1048,7 +1060,7 @@ mod tests {
         single.end = berlin("2026-10-06T00:00:00");
         single.show_as = ShowAs::Free;
         single.is_cancelled = true;
-        let mapped = event_from_exchange(&single);
+        let mapped = event_from_exchange(&single, &[]);
         assert_eq!(mapped.fields.start, PimTime::date("2026-10-05"));
         assert_eq!(mapped.fields.end, PimTime::date("2026-10-06"));
         assert_eq!(mapped.fields.transparency, Transparency::Free);
@@ -1106,7 +1118,7 @@ mod tests {
             address: "boss@corp.example".into(),
             name: None,
         });
-        let mapped = event_from_exchange(&e);
+        let mapped = event_from_exchange(&e, &[]);
         assert_eq!(mapped.notes.len(), 2, "start and end");
         assert_eq!(mapped.notes[0].id, texts::PIM_ZONE);
         assert_eq!(
@@ -1127,5 +1139,54 @@ mod tests {
         .unwrap();
         assert!(!back.is_organizer);
         assert_eq!(back.my_response, ExchangeResponse::TentativelyAccepted);
+    }
+
+    #[test]
+    fn the_own_answer_is_the_events_own_response() {
+        let attendee = |address: &str, response| ExchangeAttendee {
+            email: ExchangeEmail {
+                address: address.into(),
+                name: None,
+            },
+            kind: ExchangeAttendeeKind::Required,
+            response,
+            proposed: None,
+        };
+        let mut e = weekly_master_stub();
+        e.is_organizer = false;
+        e.organizer = Some(ExchangeEmail {
+            address: "boss@corp.example".into(),
+            name: None,
+        });
+        // The server answers in `my_response`; the user's entry in the
+        // attendee list stays as it was sent.
+        e.attendees = vec![
+            attendee("me@corp.example", ExchangeResponse::None),
+            attendee("bob@corp.example", ExchangeResponse::Declined),
+        ];
+        e.my_response = ExchangeResponse::Accepted;
+        let own = vec!["ME@corp.example".to_owned()];
+        let statuses = |e: &ExchangeEvent| -> Vec<ParticipationStatus> {
+            event_from_exchange(e, &own)
+                .fields
+                .attendees
+                .iter()
+                .map(|a| a.status)
+                .collect()
+        };
+        assert_eq!(
+            statuses(&e),
+            [ParticipationStatus::Accepted, ParticipationStatus::Declined]
+        );
+        // No own response from the server: the attendee entry stands.
+        e.my_response = ExchangeResponse::None;
+        assert_eq!(statuses(&e)[0], ParticipationStatus::NeedsAction);
+        // Without the user's addresses nothing is the own entry.
+        e.my_response = ExchangeResponse::Declined;
+        let mapped = event_from_exchange(&e, &[]);
+        assert_eq!(
+            mapped.fields.attendees[0].status,
+            ParticipationStatus::NeedsAction
+        );
     }
 }

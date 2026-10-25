@@ -305,18 +305,20 @@ async fn save_collection(
 }
 
 /// The store items of one Exchange item (a To Do task with its checklist
-/// gives several), with their `href` / `etag`.
+/// gives several), with their `href` / `etag`; `own` are the user's
+/// addresses.
 fn items_of(
     service: &Service,
     item: &ExchangePimItem,
     key: &str,
     read_only: bool,
+    own: &[String],
 ) -> Vec<(PimItem, String, String, Option<String>)> {
     let href = item.remote_id().to_owned();
     let etag = item.change_key().map(str::to_owned);
     match item {
         ExchangePimItem::Event(e) => {
-            let mapped = nail_exchange::mapping::events::event_from_exchange(e);
+            let mapped = nail_exchange::mapping::events::event_from_exchange(e, own);
             let id = EventId::new(derived_id("ev", key, &mapped.uid));
             let event = mapped.into_event(id, CalendarId::new(key), read_only);
             let raw = service.event_text(&event, None, None);
@@ -485,7 +487,7 @@ async fn sync_collection(
         let own = own_addresses(account);
         let mut stored: Vec<(PimItem, String, String, Option<String>)> = Vec::new();
         for item in &delta.upserted {
-            stored.extend(items_of(service, item, key, folder.read_only));
+            stored.extend(items_of(service, item, key, folder.read_only, &own));
         }
         // The own answer to each meeting as the server has it (a later
         // local edit answers again only when it changes; ADR 0078).
