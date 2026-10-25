@@ -60,11 +60,13 @@ the next sync dropped a change queued after it as a conflict (`respond_to_meetin
 the IDLE test waited for its announcement wrongly (`recv_event` in the core tests' common module skips lag). A
 proptest found a tokenizer bug (combining marks after a tab made a token with whitespace), fixed.
 
-**Load-sensitive tests (open):** under extreme CPU load (WSL, 96 busy loops on 32 cores:
-`under-load.sh`-style) several Exchange tests time out: `an_interrupted_first_listing_is_not_new_mail`,
-`an_interrupted_relisting_merges_after_its_last_page` (almost every run), `graph_folders_are_created_renamed_moved_and_deleted`
-("is a system folder") and `editing_an_answered_meeting_does_not_answer_again` (about 1 in 10-15). At 48 busy loops
-and in normal full runs they pass. Find the cost, don't raise the timeout (`docs/dev-setup.md`).
+**Load-sensitive tests (fixed, 2026-10-25):** four Exchange tests that timed out under extreme CPU load (WSL, 96
+busy loops on 32 cores) had real causes: a Graph folder was stored before its Exchange record, so a rename right
+after its creation was refused as a system folder (`upsert_exchange_folder` now stores both in one transaction);
+Gmail and Exchange stored each new message in its own transaction (`ingest_api_messages` now stores a chunk of 25
+at once: the 520-message listings take half the time); and a sync reset the user's own meeting answer to "not
+answered" (Graph and EWS report it in the event's own response, not the attendee list), so the next edit answered
+again (`event_from_exchange` takes the user's addresses). 10 of 10 runs of the Exchange tests pass under that load.
 
 **Possible follow-ups:** the source of events / contacts (iCalendar / vCard) like Show source; EWS folder operations
 (CreateFolder / UpdateFolder / MoveFolder / DeleteFolder in the EWS client); MCP / plug-in folder tools.
