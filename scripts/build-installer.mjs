@@ -52,6 +52,7 @@ import {
   artifactNames,
   assertOutsideRepo,
   buildBase,
+  bundlerKeyEnv,
   checksumLines,
   keysDir,
   installerConfigOverlay,
@@ -158,7 +159,7 @@ function main() {
   // buildEnv, which never holds it.
   const buildEnv = withoutUpdaterSecrets({ ...process.env, CARGO_TARGET_DIR: targetDir });
   /** @type {NodeJS.ProcessEnv} */
-  const bundleEnv = { ...process.env, CARGO_TARGET_DIR: targetDir };
+  const bundleEnv = bundlerKeyEnv({ ...process.env, CARGO_TARGET_DIR: targetDir });
   /** @type {{ pubkey: string } | null} */
   let updaterKey;
   if (options.devUpdaterKey) {

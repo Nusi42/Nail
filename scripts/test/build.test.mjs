@@ -22,6 +22,7 @@ import {
   targetTriple,
   tauriArch,
   updaterKeyFromEnv,
+  bundlerKeyEnv,
   updaterPluginConfig,
 } from "../lib/build.mjs";
 
@@ -271,6 +272,19 @@ test("the update key comes as a pair or not at all", () => {
     () => updaterKeyFromEnv({ TAURI_SIGNING_PRIVATE_KEY: "k" }, read),
     /public key is not/,
   );
+});
+
+test("the bundler gets a key path in the one variable it reads", () => {
+  assert.deepEqual(bundlerKeyEnv({ TAURI_SIGNING_PRIVATE_KEY_PATH: "C:/k.key", X: "1" }), {
+    TAURI_SIGNING_PRIVATE_KEY: "C:/k.key",
+    X: "1",
+  });
+  assert.deepEqual(
+    bundlerKeyEnv({ TAURI_SIGNING_PRIVATE_KEY: "text", TAURI_SIGNING_PRIVATE_KEY_PATH: "p" }),
+    { TAURI_SIGNING_PRIVATE_KEY: "text" },
+    "a key given as text wins",
+  );
+  assert.deepEqual(bundlerKeyEnv({ X: "1" }), { X: "1" });
 });
 
 test("artifact names follow the Tauri bundler", () => {

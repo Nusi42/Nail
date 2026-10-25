@@ -550,6 +550,20 @@ export function withoutUpdaterSecrets(env) {
 }
 
 /**
+ * The environment of `tauri bundle`: `env` with a key given as
+ * `TAURI_SIGNING_PRIVATE_KEY_PATH` moved to `TAURI_SIGNING_PRIVATE_KEY`,
+ * which is the only one the bundler reads (it takes a path there too).
+ *
+ * @param {Env} env
+ * @returns {Env}
+ */
+export function bundlerKeyEnv(env) {
+  const { TAURI_SIGNING_PRIVATE_KEY_PATH: keyPath, ...rest } = env;
+  if (!keyPath || env.TAURI_SIGNING_PRIVATE_KEY) return rest;
+  return { ...rest, TAURI_SIGNING_PRIVATE_KEY: keyPath };
+}
+
+/**
  * Features that exist only for tests (they let environment variables
  * redirect the registry, the update source or the Simple MAPI pipe). An
  * installer build must never enable them.
