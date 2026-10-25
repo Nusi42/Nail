@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Prints the app version (app/src-tauri/tauri.conf.json) for CI:
+ * Prints the app version (`[workspace.package]` in Cargo.toml, ADR 0203):
  *
  *   node scripts/release-version.mjs                 0.1.0
  *   node scripts/release-version.mjs --next          0.1.1 (the smoke test's update)
@@ -8,28 +8,25 @@
  *                                                    names another version
  *   node scripts/release-version.mjs --channel       stable, or beta for a pre-release
  */
+import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { bumpPatch } from "./lib/build.mjs";
-import { readJson } from "./lib/json.mjs";
-import { parseVersion } from "./lib/update-manifest.mjs";
+import { repoRoot } from "./lib/program.mjs";
+import { channelOf } from "./lib/release.mjs";
+import { CARGO_TOML, workspaceVersion } from "./lib/version.mjs";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const conf = /** @type {{ version: string }} */ (
-  readJson(path.join(repoRoot, "app", "src-tauri", "tauri.conf.json"))
-);
-const version = conf.version;
+const version = workspaceVersion(readFileSync(path.join(repoRoot, CARGO_TOML), "utf8"));
 const args = process.argv.slice(2);
 
 if (args[0] === "--next") {
   console.log(bumpPatch(version));
 } else if (args[0] === "--channel") {
-  console.log(parseVersion(version).pre.length ? "beta" : "stable");
+  console.log(channelOf(version));
 } else if (args[0] === "--tag") {
   const tag = (args[1] ?? "").replace(/^refs\/tags\//, "");
   if (tag.replace(/^v/, "") !== version) {
-    console.error(`tag ${tag} does not match the app version ${version} (tauri.conf.json)`);
+    console.error(`tag ${tag} does not match the app version ${version} (${CARGO_TOML})`);
     process.exit(1);
   }
   console.log(version);

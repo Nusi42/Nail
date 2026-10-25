@@ -24,20 +24,16 @@ items: [`docs/backlog.md`](backlog.md).
 
 ## Release steps (after the gates)
 
-1. Set the version (`1.0.0`) in the Cargo workspace, `app/src-tauri/tauri.conf.json`
-   and the npm packages (`ui`, `e2e`, `packages/plugin-api`,
-   `packages/create-nail-plugin`); `npm install --package-lock-only`.
-2. Move the `[Unreleased]` / candidate entries of `CHANGELOG.md` under the
-   version and date; write `packaging/release-notes/1.0.0.md` and the user
-   page `userDocs/en/release-notes.md`.
-3. Full local verification run (gate 5), then tag `v1.0.0`; build and sign
-   x64 and ARM64 locally and write the update and winget manifests
-   (`docs/release.md` "Releasing").
-4. Create the GitHub release by hand (web UI) with the installers attached;
-   publish the manifests at the update base URL (`stable/latest.json`,
-   `beta/latest.json`); submit the winget manifests.
-5. Smoke test the published installers (`scripts/installer-smoke.ps1`,
-   update from the release candidate).
+1. Write the `1.0.0` section of the user page `userDocs/en/release-notes.md`
+   and keep the `[Unreleased]` entries of `CHANGELOG.md` current.
+2. `npm run release:prepare -- --version 1.0.0` with the release update key
+   (gate 6): version, changelog, most of the local verification (gate 5;
+   the installer smoke tests, ARM64 and perf by hand), installers, update manifest, release commit (`docs/release.md`
+   "Releasing"). Sign first if gate 2 is done.
+3. Try the installer, then `npm run release:publish`: tag, pushes, the
+   GitHub release, the `stable` manifest. Submit the winget manifests.
+4. Smoke test the published installers (`scripts/installer-smoke.ps1`,
+   update from the previous release).
 
 ## Status of the candidate
 

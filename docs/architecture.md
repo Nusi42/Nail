@@ -595,9 +595,9 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        window DWM-cloaked, WS_EX_NOACTIVATE, off the taskbar, never set_focus; no notifications /
                        file dialogs / Settings app; test control `windows` + e2e expectWindowsInBackground;
                        M4b deps: tauri tray-icon, tauri-plugin-updater (rustls / ring) (ADR 0087)
-packaging/             M4b WP112 (ADR 0089): updater/dev.pub (development update key; private keys never in the
-                       repo), winget/ facts, release-notes/<version>.md (written before a release); README =
-                       key handling
+packaging/             M4b WP112 (ADR 0089): updater/dev.pub and release.pub (public halves of the development and
+                       release update keys; private keys never in the repo), winget/ facts; README = key handling.
+                       Release notes come from userDocs/en/release-notes.md (ADR 0203)
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
                        M2a: security/; M2b: remote/, launch/; M2c: sieve/ (status, vacation),
                        triage/ (junk, snooze, notifications), sync/ (policies, bodies), menus/
@@ -799,7 +799,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
-                       import-signing-cert.ps1 / verify-signatures.ps1, lib/ (minisign, sign, winget, …; M4b
+                       release.mjs (release:prepare / release:publish; lib/release.mjs, lib/version.mjs: the one
+                       version and repository, lib/run.mjs; ADR 0203), import-signing-cert.ps1 / verify-signatures.ps1, lib/ (minisign, sign, winget, …; M4b
                        ADR 0089), check-socket-binds.mjs (ADR 0057), check-private.mjs + lib/private-patterns.mjs
                        (private-data guard, ADR 0192), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040);

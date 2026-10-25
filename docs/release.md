@@ -1,7 +1,7 @@
 # Releasing, signing and the update key
 
 Internal procedures for Windows releases (plan M4b WP112; ADRs 0089, 0093,
-0201). The tools and file formats are described in `packaging/README.md` and
+0201, 0203). The tools and file formats are described in `packaging/README.md` and
 `scripts/README.md`; this page is about the keys and the steps. Nail has no
 hosted CI (ADR 0201): a release is built, signed and published locally.
 
@@ -25,7 +25,9 @@ from the Authenticode certificate.
   encrypted USB stick): **losing it means installed copies can never be
   updated again**, and a leak means an attacker who also controls the update
   host can ship "updates". Rotating the key needs one release signed with
-  the old key that embeds the new public key.
+  the old key that embeds the new public key. Its public half is
+  `packaging/updater/release.pub`, which `release:prepare` builds into the
+  app and checks every signature against.
 - A build picks up `TAURI_SIGNING_PRIVATE_KEY` (key text, or
   `TAURI_SIGNING_PRIVATE_KEY_PATH`) + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
   and the public half in `NAIL_UPDATER_PUBKEY` / `NAIL_UPDATER_PUBKEY_FILE`;
@@ -77,38 +79,48 @@ or make the MAPI DLL start any program inside other (elevated) programs.
 
 ## Releasing
 
-Work in a clean work folder reset to the release commit (the build compiles
-whatever is on disk).
+Releases are GitHub releases of the public repository (ADR 0203). Two
+commands in the lead's work folder, on a clean checkout of its branch:
 
-1. Bump the version (`tauri.conf.json`, workspace `Cargo.toml`), add
-   `packaging/release-notes/<version>.md`, tag `v<version>`;
-   `node scripts/release-version.mjs --tag v<version>` checks that the tag
-   matches the app version, `--channel` prints `stable` or `beta`.
-2. Run the full local verification (`docs/dev-setup.md` "Verification (no
-   hosted CI)") on that checkout.
-3. Build x64 and ARM64 (NSIS, MSI, offline NSIS, portable, SBOMs, `.sig`),
-   signed if configured, with the release update key given only to this
-   command (see "Who sees the private key"), `NAIL_UPDATER_PUBKEY` and
-   `NAIL_UPDATE_BASE_URL` set:
-   `node scripts/build-installer.mjs --arch x64 --offline-webview --out .nail-build/release/x64`,
-   the same with `--arch arm64` and `--out .nail-build/release/arm64`
-   (cross-built; once:
-   `rustup target add aarch64-pc-windows-msvc i686-pc-windows-msvc`).
-4. `scripts/verify-signatures.ps1 -Folder .nail-build/release/x64` (and
-   `arm64`) when signing is configured.
-5. Write the update manifests (every `.sig` is checked against the public
-   key first):
-   `node scripts/update-manifest.mjs --version <version> --channel <channel> --artifacts .nail-build/release/x64 --artifacts .nail-build/release/arm64 --download-base https://github.com/<owner>/<repo>/releases/download/v<version> --notes packaging/release-notes/<version>.md --out .nail-build/updates`,
-   and the winget manifests:
-   `node scripts/winget-manifest.mjs --version <version> --artifacts .nail-build/release/x64 --artifacts .nail-build/release/arm64 --installer-url-template "https://github.com/<owner>/<repo>/releases/download/v{{version}}/{{file}}" --out .nail-build/winget`.
-6. Push the tag and create the GitHub release by hand (web UI): title
-   `Nail <version>`, the release notes, every file of
-   `.nail-build/release/x64` and `.nail-build/release/arm64` attached, marked
-   as a pre-release for the `beta` channel.
-7. Upload `updates/<channel>/latest.json` to the update host and open the
-   winget pull request.
+1. Write the version's section of `userDocs/en/release-notes.md`
+   (``## Nail X.Y (`X.Y.Z`)``; it becomes the GitHub release's text, its
+   introduction the update dialog's text) and keep the changelog's
+   `[Unreleased]` entries current. Commit both.
+2. Prepare, with the release update key set for this command only (see
+   "Who sees the private key"):
 
-Before the first public release: the release update key and the update
-host (maintainer), `packaging/release-notes/<version>.md`, and one green
-local verification run including the installer and MSI smoke tests, the
-MAPI tests and the desktop smoke tests.
+   ```text
+   TAURI_SIGNING_PRIVATE_KEY_PATH=<private key> TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<password or empty>      npm run release:prepare -- --version X.Y.Z
+   ```
+
+   It refuses uncommitted files or an existing tag, sets the version
+   (`Cargo.toml` `[workspace.package]` and every copy), moves the
+   changelog's `[Unreleased]` entries under it, runs the local verification
+   (`docs/dev-setup.md` "Verification (no hosted CI)" without ARM64, the
+   installer smoke tests and the perf run, which stay by hand;
+   `--skip-checks` for a re-run after a late failure), builds
+   the x64 NSIS installer and the portable zip with update signatures and
+   the update base `<repository>/releases/download`, writes
+   `<channel>/latest.json` (every signature checked against
+   `packaging/updater/release.pub`) and the release text, and commits
+   `chore(release): release X.Y.Z`. Output: `.nail-build/release/X.Y.Z/`.
+   `--dry-run` does all of it without committing (the version files are
+   restored); with `--dev-updater-key` it needs no release key.
+3. Install the built installer and try it.
+4. `npm run release:publish` (`-- --yes` without the question): tags
+   `vX.Y.Z`, pushes the branch and the tag to origin (fast-forwarding a
+   master checkout there), pushes the branch as `main` and the tag to the
+   public remote (`--remote`, default `github`), creates the GitHub release
+   with every built file (a pre-release for a `-beta` version), and
+   replaces `latest.json` on the rolling release of the channel, `stable`
+   or `beta` (a stable release also refreshes `beta` unless beta is newer).
+   Needs the GitHub CLI, signed in once (`gh auth login`). A re-run goes on
+   where a failure stopped.
+
+Other builds by hand: signed builds need `NAIL_SIGN_THUMBPRINT` (then
+`scripts/verify-signatures.ps1 -Folder <out>`); the MSI, the offline
+WebView2 installer and ARM64 come from
+`node scripts/build-installer.mjs --arch arm64 --bundles nsis,msi --offline-webview --out <dir>`
+(cross-built; once: `rustup target add aarch64-pc-windows-msvc
+i686-pc-windows-msvc`); winget manifests from
+`node scripts/winget-manifest.mjs --version X.Y.Z --artifacts <dir> --installer-url-template "<repository>/releases/download/v{{version}}/{{file}}" --out .nail-build/winget`.

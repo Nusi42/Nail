@@ -19,6 +19,7 @@
  * the CLI is scripts/work-folders.mjs, the tests
  * scripts/test/work-folder.test.mjs.
  */
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -163,6 +164,26 @@ export function identityConfig(masterValue) {
 
 /** Root of the checkout this module belongs to. */
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+/**
+ * The `origin` of the checkout at `root` (a URL or a local path), or
+ * `undefined` when it has none.
+ *
+ * @param {string} [root]
+ * @returns {string | undefined}
+ */
+export function originOf(root = REPO_ROOT) {
+  try {
+    const url = execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return url.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Exits with an explanation when the checkout at `root` is the master.

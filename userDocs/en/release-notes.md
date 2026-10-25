@@ -1,5 +1,8 @@
 # Release notes
 
+What changed in each version of Nail, newest first. Earlier milestones (the
+preview versions) are summarized in the project's `CHANGELOG.md`.
+
 ## Nail 0.8 (`0.8.0`)
 
 This is a preview of Nail for Windows: mail,
@@ -91,7 +94,5 @@ please keep a [backup](backup-restore.md) of your data.
 - Signed or encrypted messages over 4 MB cannot be sent through Microsoft
   Graph.
 - The installers of this preview are not code-signed yet:
-  Windows SmartScreen may warn when you start them.
-
-Earlier milestones (the preview versions) are summarized in the project's
-`CHANGELOG.md`.
+  Windows SmartScreen may warn when you start them. Choose **More info**,
+  then **Run anyway**.

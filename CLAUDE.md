@@ -80,6 +80,7 @@ npm run e2e                                # builds ui + nail-cli + desktop app,
 npm run visual                             # visual regression (visual:update writes baselines, then review)
 npm run readme:media                       # re-record the README's GIFs and stills in docs/media (review before commit)
 npm run gen:api                            # regenerate the TypeScript contract (a test fails when stale)
+npm run release:prepare -- --version X.Y.Z # build a release (key for this command only), then release:publish
 cargo run -p nail-cli -- serve --seed demo-multi   # web mode with mock accounts and test controls (also demo, demo-imap)
 npm run dev / npm run tauri dev            # Vite on a free port / desktop app with hot reload
 ```

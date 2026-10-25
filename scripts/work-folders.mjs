@@ -30,6 +30,7 @@ import {
   folderOf,
   identityConfig,
   isMaster,
+  originOf,
   localSettings,
   markedAsMaster,
   masterCargoConfig,
@@ -64,7 +65,8 @@ function localValue(cwd, key) {
 
 /** This work folder's `origin`, which must be a local checkout. */
 function originPath() {
-  const url = git(REPO_ROOT, ["remote", "get-url", "origin"]);
+  const url = originOf(REPO_ROOT);
+  if (url === undefined) throw new Error(`${REPO_ROOT} has no origin`);
   if (!fs.existsSync(path.join(url, ".git"))) {
     throw new Error(`origin of ${REPO_ROOT} is ${url}, not a local checkout`);
   }

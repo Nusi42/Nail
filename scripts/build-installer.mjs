@@ -67,49 +67,13 @@ import {
   withoutUpdaterSecrets,
 } from "./lib/build.mjs";
 import { readJson } from "./lib/json.mjs";
+import { run } from "./lib/run.mjs";
 import { findSigntool, signingFromEnv, signtoolArgs, tauriSigning } from "./lib/sign.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 import { writeSboms } from "./sbom.mjs";
 import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const shell = process.platform === "win32";
-
-/**
- * Quotes an argument for cmd.exe when needed.
- *
- * @param {string} arg
- */
-function quote(arg) {
-  return /[\s"&|<>^]/.test(arg) ? `"${arg.replaceAll('"', '""')}"` : arg;
-}
-
-/**
- * Runs a command with inherited output; throws when it fails.
- *
- * @param {string} command
- * @param {string[]} args
- * @param {{ env?: NodeJS.ProcessEnv, shell?: boolean }} [options]
- */
-function run(command, args, options = {}) {
-  const useShell = options.shell ?? shell;
-  console.log(`> ${command} ${args.join(" ")}`);
-  // Without an explicit env a child never sees the update key.
-  /** @type {import("node:child_process").ExecFileSyncOptions} */
-  const spawnOptions = {
-    cwd: repoRoot,
-    stdio: "inherit",
-    ...options,
-    env: options.env ?? withoutUpdaterSecrets(process.env),
-    shell: useShell,
-  };
-  if (useShell) {
-    // npm / npx are .cmd files: they need a shell, which takes one string.
-    execFileSync([command, ...args].map(quote).join(" "), spawnOptions);
-  } else {
-    execFileSync(command, args, spawnOptions);
-  }
-}
 
 /** @param {string} file */
 function sha256(file) {

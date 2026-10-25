@@ -34,6 +34,8 @@
     "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings",
     "tauri": "node scripts/tauri.mjs",
     "e2e:only": "npm run test -w e2e",
+    "release:prepare": "node scripts/release.mjs prepare",
+    "release:publish": "node scripts/release.mjs publish",
     "visual": "node e2e/visual/run-visual.mjs",
     "visual:update": "node e2e/visual/run-visual.mjs --update",
     "readme:media": "node scripts/readme-media.mjs",

@@ -27,6 +27,7 @@ import {
 } from "./lib/update-manifest.mjs";
 import { readJson } from "./lib/json.mjs";
 import { forEachArg } from "./lib/args.mjs";
+import { runMain } from "./lib/program.mjs";
 
 /**
  * @param {string[]} argv
@@ -62,14 +63,15 @@ function parse(argv) {
   return { ...o, version, channel, downloadBase, out };
 }
 
-function main() {
-  const o = parse(process.argv.slice(2));
-  const pubkeyFile = o.pubkeyFile ?? process.env.NAIL_UPDATER_PUBKEY_FILE;
-  // An empty NAIL_UPDATER_PUBKEY counts as unset.
-  let publicKey = process.env.NAIL_UPDATER_PUBKEY;
-  if (!publicKey && pubkeyFile) publicKey = readFileSync(pubkeyFile, "utf8");
-  if (!publicKey) throw new Error("no update public key (NAIL_UPDATER_PUBKEY or --pubkey-file)");
-
+/**
+ * Writes the channel manifests of a release (`<out>/<channel>/latest.json`)
+ * after checking every installer's signature; answers the files written.
+ *
+ * @param {{ version: string, channel: string, artifacts: string[], downloadBase: string,
+ *   out: string, notes: string, pubDate: string, existingBeta: string | null,
+ *   publicKey: string }} o
+ */
+export function writeUpdateManifests(o) {
   /** @type {Map<string, string>} */
   const located = new Map();
   for (const dir of o.artifacts) {
@@ -87,21 +89,23 @@ function main() {
   const entries = collectPlatforms({ files, version: o.version, downloadBase: o.downloadBase });
   verifyPlatforms({
     entries,
-    publicKey,
+    publicKey: o.publicKey,
     version: o.version,
     read: (name) => readFileSync(located.get(name) ?? name),
   });
   const manifest = buildManifest({
     version: o.version,
     channel: o.channel,
-    notes: o.notes ? readFileSync(o.notes, "utf8") : "",
-    pubDate: o.pubDate ?? new Date().toISOString(),
+    notes: o.notes,
+    pubDate: o.pubDate,
     entries,
   });
   const existingBeta =
     o.existingBeta && existsSync(o.existingBeta)
       ? /** @type {{ version: string }} */ (readJson(o.existingBeta))
       : null;
+  /** @type {string[]} */
+  const written = [];
   for (const { path: rel, manifest: m } of manifestsForRelease({
     manifest,
     channel: o.channel,
@@ -111,7 +115,26 @@ function main() {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, manifestJson(m));
     console.log(`${file}: ${Object.keys(m.platforms).join(", ")}`);
+    written.push(file);
   }
+  return written;
 }
 
-main();
+/** @param {string[]} argv */
+function main(argv) {
+  const o = parse(argv);
+  const pubkeyFile = o.pubkeyFile ?? process.env.NAIL_UPDATER_PUBKEY_FILE;
+  // An empty NAIL_UPDATER_PUBKEY counts as unset.
+  let publicKey = process.env.NAIL_UPDATER_PUBKEY;
+  if (!publicKey && pubkeyFile) publicKey = readFileSync(pubkeyFile, "utf8");
+  if (!publicKey) throw new Error("no update public key (NAIL_UPDATER_PUBKEY or --pubkey-file)");
+  writeUpdateManifests({
+    ...o,
+    notes: o.notes ? readFileSync(o.notes, "utf8") : "",
+    pubDate: o.pubDate ?? new Date().toISOString(),
+    existingBeta: o.existingBeta ?? null,
+    publicKey,
+  });
+}
+
+await runMain(import.meta.url, main);

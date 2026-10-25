@@ -95,7 +95,7 @@ edition = "2024"
 rust-version = "1.97"
 license = "AGPL-3.0-or-later"
 publish = false
-repository = "https://example.invalid/nail"
+repository = "https://github.com/Nusi42/Nail"
 
 [workspace.dependencies]
 # Internal crates

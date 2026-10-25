@@ -17,7 +17,8 @@ every work folder.
 | `update-check.mjs` | the app updater's check + verified download, for the smoke tests |
 | `winget-manifest.mjs` | winget manifests from the NSIS installers |
 | `updater-key.mjs` | create / check the development update key (private half outside the repository) |
-| `release-version.mjs` | the app version, the next patch version, tag check, channel (CI) |
+| `release-version.mjs` | the app version (`Cargo.toml` `[workspace.package]`), the next patch version, tag check, channel |
+| `release.mjs` | `npm run release:prepare` / `release:publish`: version, checks, installers, manifests, GitHub release (ADR 0203) |
 | `import-signing-cert.ps1` | CI: Authenticode certificate from secrets → `NAIL_SIGN_THUMBPRINT` (skipped without) |
 | `verify-signatures.ps1` | CI: every exe / msi signed and timestamped |
 | `sbom.mjs` | CycloneDX SBOMs only (Rust crates from `cargo metadata`, UI packages from `package-lock.json`) |

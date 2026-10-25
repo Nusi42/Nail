@@ -12,6 +12,18 @@ The version is 0.8.0: the internal candidate `1.0.0-rc.1` was
 never published and is renumbered; 1.0 follows once the gates in
 [`docs/release-checklist.md`](docs/release-checklist.md) are passed.
 
+### Added (ADR 0203)
+
+- **Releases on GitHub**: `npm run release:prepare -- --version X.Y.Z`
+  builds a release (version, changelog, full verification, the x64 NSIS
+  installer and portable zip with update signatures, update manifest,
+  release commit); `npm run release:publish` tags it, pushes it and creates
+  the GitHub release. Installed copies find updates in the rolling `stable`
+  and `beta` releases of the repository.
+- The version has one source (`Cargo.toml`), and the release notes too:
+  the GitHub release and the update dialog take their text from
+  `userDocs/en/release-notes.md`.
+
 ### Changed (M5b, ADRs 0109–0114)
 
 - **Navigation rail and views**: Mail, Calendar, Contacts, Tasks and

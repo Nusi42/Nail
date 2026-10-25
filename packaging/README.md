@@ -8,13 +8,14 @@ or `NAIL_BUILD_DIR`, like `scripts/`.
 | Path | What |
 | --- | --- |
 | `updater/dev.pub` | public half of the **development** update key (the private half lives outside the repository) |
+| `updater/release.pub` | public half of the **release** update key, built into released apps (ADR 0203) |
 | `winget/nail.winget.json` | package facts for the winget manifests (identifier, publisher, licence, descriptions) |
-| `release-notes/<version>.md` | optional release notes (Markdown) put into the update manifests |
 
 The tools are in `scripts/` (tests in `scripts/test/`):
 
 | Script | What |
 | --- | --- |
+| `release.mjs` | `npm run release:prepare` / `release:publish`: a whole release on GitHub (ADR 0203, `docs/release.md`) |
 | `build-installer.mjs` | NSIS + MSI (+ offline WebView2 variant), x64 / ARM64, signing, update signatures |
 | `update-manifest.mjs` | `<channel>/latest.json` from a release's installers and `.sig` files (checked first) |
 | `winget-manifest.mjs` | the three winget manifest files from the NSIS installers |
