@@ -285,10 +285,13 @@ test("a shared mailbox appears and automatic replies are set and read back", asy
       timeout: 30_000,
     })
     .toContain("Back on Monday.");
-  // Read back through the Exchange editor (from the palette: the demo's
-  // schedule has fixed dates, so the banner depends on today's date).
+  // Read back through the Exchange editor, from the banner: the demo's
+  // replies are on around today.
   await showView(page, "Mail");
-  await runFromPalette(page, "out of office", "Automatic replies");
+  await page
+    .locator('[data-part="automatic-replies-banner"]')
+    .getByRole("button", { name: /^Edit/ })
+    .click();
   const replies = page.getByRole("dialog", { name: "Automatic replies" });
   await expect(replies.getByRole("textbox", { name: /in my organization/ })).toHaveValue(
     /Back on Monday\./,

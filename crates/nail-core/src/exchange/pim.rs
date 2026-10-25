@@ -1072,7 +1072,7 @@ impl ExchangeReplayer<'_> {
                     .respond_to_meeting(mailbox, remote, response, comment.as_deref(), send)
                     .await
                 {
-                    Ok(()) => {
+                    Ok(change_key) => {
                         let (k, uid) = (collection.collection_id.clone(), event.uid.clone());
                         drop(
                             self.service
@@ -1083,9 +1083,12 @@ impl ExchangeReplayer<'_> {
                                 })
                                 .await,
                         );
+                        // The answer's own version: the next sync must not
+                        // take it for a server edit (a change queued since
+                        // would be dropped as a conflict).
                         Ok(PimReplayOutcome::Done {
                             href: Some(remote.to_owned()),
-                            etag: None,
+                            etag: change_key,
                         })
                     }
                     Err(err) => Ok(outcome_of(&err)),

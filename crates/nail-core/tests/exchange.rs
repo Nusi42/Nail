@@ -14,7 +14,7 @@
 mod common;
 use common::{
     api_service, by_subject, eventually, folder_at, folders, messages, messages_in, mock_oauth,
-    oauth_provider, ok, online, send_now, until_some,
+    next_matching, oauth_provider, ok, online, send_now, until_some,
 };
 use nail_core::testing::TempService;
 
@@ -1361,6 +1361,7 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
     let service = &env.service;
     let review = || architecture_review(service);
     let instance = until_some("the invitation in the calendar", review).await;
+    let mut events = service.subscribe();
     ok(
         service,
         Request::RespondToInvitation {
@@ -1390,6 +1391,28 @@ async fn editing_an_answered_meeting_does_not_answer_again() {
         .unwrap();
     assert_eq!(action.body["comment"], "See you there");
     assert_eq!(action.body["sendResponse"], false);
+    // The answer changed the event on the server; its new version is
+    // recorded with the answer (not only by a later sync), so a sync before
+    // the next change is replayed does not take the answer for a server
+    // edit and drop that change as a conflict.
+    next_matching(&mut events, "the answer replayed", |event| match event {
+        Event::PimOpStatus { status } if status.state == nail_api::OpState::Done => Some(()),
+        _ => None,
+    })
+    .await;
+    let stored = service
+        .store()
+        .pim_object(&nail_api::pim::PimItemRef::Event {
+            event_id: instance.event_id.clone(),
+        })
+        .unwrap()
+        .unwrap();
+    let remote = stored.href.as_deref().unwrap_or_default();
+    let remote = remote.split('#').next().unwrap_or(remote);
+    assert_eq!(
+        env.graph.event(remote).unwrap()["changeKey"].as_str(),
+        stored.etag.as_deref()
+    );
     // A local edit of the own copy (categories) is an update, not a
     // second answer.
     let Response::PimEvent { event, .. } = ok(

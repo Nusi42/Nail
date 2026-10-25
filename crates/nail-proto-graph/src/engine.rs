@@ -17,8 +17,8 @@ use nail_api::engine::{
     SendProgress, SendReceipt,
 };
 use nail_api::exchange::engine::{
-    ExchangeDirectoryEngine, ExchangeEngine, ExchangeServerInfo, ExchangeSettingsEngine,
-    RemoteCategory,
+    ExchangeDirectoryEngine, ExchangeEngine, ExchangePimWriteOutcome, ExchangeServerInfo,
+    ExchangeSettingsEngine, RemoteCategory,
 };
 use nail_api::exchange::rules::ExchangeInboxRule;
 use nail_api::exchange::{
@@ -345,7 +345,9 @@ nail_exchange::exchange_pim_engine!(GraphEngine {
 });
 
 impl GraphEngine {
-    /// Answers a meeting through the meeting API (no iMIP).
+    /// Answers a meeting through the meeting API (no iMIP); the event's
+    /// change key afterwards. A failed read-back is no failed answer (it
+    /// is not sent twice).
     async fn answer_meeting(
         &self,
         mailbox: Option<&str>,
@@ -353,9 +355,13 @@ impl GraphEngine {
         response: InvitationResponse,
         comment: Option<&str>,
         send: bool,
-    ) -> Result<(), GraphError> {
+    ) -> Result<Option<String>, GraphError> {
         self.respond(mailbox, event_remote_id, response, comment, send, None)
-            .await
+            .await?;
+        Ok(match self.reread_event(mailbox, event_remote_id).await {
+            Ok(ExchangePimWriteOutcome::Done { change_key, .. }) => change_key,
+            _ => None,
+        })
     }
 }
 

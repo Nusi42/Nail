@@ -140,14 +140,16 @@ impl MockGraphServer {
 
     /// Starts a server with the tenant of a fixture (JSON text).
     pub async fn start_fixture(json: &str) -> std::io::Result<Self> {
-        let tenant = Tenant::from_fixture(json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Self::start_with(tenant).await
+        Self::start_with(fixture_tenant(json)?).await
     }
 
-    /// Starts a server with the demo tenant ([`fixtures::DEMO_TENANT`]).
+    /// Starts a server with the demo tenant ([`fixtures::DEMO_TENANT`]),
+    /// its automatic replies on around today
+    /// ([`Tenant::schedule_replies_around`]).
     pub async fn start_demo() -> std::io::Result<Self> {
-        Self::start_fixture(fixtures::DEMO_TENANT).await
+        let mut tenant = fixture_tenant(fixtures::DEMO_TENANT)?;
+        tenant.schedule_replies_around(chrono::Utc::now());
+        Self::start_with(tenant).await
     }
 
     /// Starts a server with `tenant`.
@@ -424,4 +426,9 @@ impl MockGraphServer {
     pub fn forbid_places(&self, forbidden: bool) {
         self.with_tenant(|t| t.places_forbidden = forbidden);
     }
+}
+
+/// [`Tenant::from_fixture`] with an I/O error, as the servers start.
+fn fixture_tenant(json: &str) -> std::io::Result<Tenant> {
+    Tenant::from_fixture(json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }

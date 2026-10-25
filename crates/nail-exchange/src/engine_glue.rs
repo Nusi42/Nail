@@ -126,7 +126,7 @@ macro_rules! exchange_pim_engine {
                 response: $crate::engine_glue::__reexport::InvitationResponse,
                 comment: Option<&'a str>,
                 send: bool
-            ) -> ());
+            ) -> Option<String>);
 
             $($extra)*
         }

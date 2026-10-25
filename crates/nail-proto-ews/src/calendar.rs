@@ -738,7 +738,9 @@ impl EwsClient {
     /// Answers a meeting request in the calendar (`AcceptItem`,
     /// `TentativelyAcceptItem`, `DeclineItem`), with an optional comment;
     /// without `send`, the response is saved and then removed, so the
-    /// calendar changes but nobody is told.
+    /// calendar changes but nobody is told. Returns the calendar item's
+    /// change key afterwards (`None` when it cannot be read back: the
+    /// answer went out all the same).
     pub async fn respond_to_meeting(
         &self,
         mailbox: Option<&str>,
@@ -746,7 +748,7 @@ impl EwsClient {
         response: InvitationResponse,
         comment: Option<&str>,
         send: bool,
-    ) -> Result<(), EwsError> {
+    ) -> Result<Option<String>, EwsError> {
         let id_shape = "<m:ItemShape><t:BaseShape>IdOnly</t:BaseShape></m:ItemShape>";
         let current = self
             .get_item(mailbox, &ItemRef::new(item_id), id_shape)
@@ -775,7 +777,14 @@ impl EwsClient {
         {
             self.delete_item(mailbox, &id, "HardDelete", "").await?;
         }
-        Ok(())
+        let after = self
+            .get_item(mailbox, &ItemRef::new(&reference.id), id_shape)
+            .await;
+        Ok(after.ok().and_then(|item| {
+            item.child("ItemId")
+                .and_then(ItemRef::from_element)
+                .and_then(|r| r.change_key)
+        }))
     }
 }
 

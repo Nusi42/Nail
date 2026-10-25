@@ -1263,7 +1263,8 @@ impl GraphEngine {
         }
     }
 
-    async fn reread_event(
+    /// The event's id and change key as the server has them now.
+    pub(crate) async fn reread_event(
         &self,
         mailbox: Option<&str>,
         id: &str,

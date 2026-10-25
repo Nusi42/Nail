@@ -835,7 +835,7 @@ async fn meeting_responses() {
         .into_iter()
         .find(|i| i.props.child_text("Subject") == Some("Board review"))
         .unwrap();
-    engine
+    let change_key = engine
         .respond_to_meeting(
             None,
             &review.id,
@@ -847,6 +847,9 @@ async fn meeting_responses() {
         .unwrap();
     let stored = server.item(&review.id).unwrap();
     assert_eq!(stored.props.child_text("MyResponseType"), Some("Tentative"));
+    // The answer changed the item: its new version comes back.
+    assert_ne!(stored.change_key, review.change_key);
+    assert_eq!(change_key.as_deref(), Some(stored.change_key.as_str()));
     let sent = server.meeting_messages();
     assert_eq!(sent[0].kind, "Tentative");
     assert_eq!(sent[0].to, [DELEGATE_ADDRESS]);

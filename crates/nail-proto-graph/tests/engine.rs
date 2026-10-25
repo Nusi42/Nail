@@ -1029,11 +1029,20 @@ async fn automatic_replies() {
     let (server, engine) = demo().await;
     let current = engine.automatic_replies().await.unwrap();
     assert_eq!(current.status, AutomaticRepliesStatus::Scheduled);
-    assert_eq!(current.start.as_deref(), Some("2026-10-19T07:00:00Z"));
+    // The demo's replies are on around today (`schedule_replies_around`).
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    assert!(
+        current.start.as_deref().is_some_and(|s| s < now.as_str()),
+        "{current:?}"
+    );
+    assert!(
+        current.end.as_deref().is_some_and(|e| e > now.as_str()),
+        "{current:?}"
+    );
     assert_eq!(current.external_audience, ExternalAudience::ContactsOnly);
     assert_eq!(
         current.internal_reply,
-        "I am at the conference until Friday.\nBob covers for me."
+        "I am at a conference this week.\nBob covers for me."
     );
     let settings = AutomaticRepliesSettings {
         status: AutomaticRepliesStatus::AlwaysEnabled,
@@ -1588,7 +1597,8 @@ async fn meeting_responses() {
         .into_iter()
         .find(|(_, e)| e["subject"] == "Architecture review")
         .unwrap();
-    engine
+    let before = server.event(&invite).unwrap()["changeKey"].clone();
+    let change_key = engine
         .respond_to_meeting(
             None,
             &invite,
@@ -1598,6 +1608,10 @@ async fn meeting_responses() {
         )
         .await
         .unwrap();
+    // The answer changed the event: its new version comes back.
+    let after = server.event(&invite).unwrap()["changeKey"].clone();
+    assert_ne!(before, after);
+    assert_eq!(change_key.as_deref(), after.as_str());
     let action = server.meeting_actions().pop().unwrap();
     assert_eq!(action.action, "accept");
     assert_eq!(

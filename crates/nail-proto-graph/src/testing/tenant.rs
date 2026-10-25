@@ -934,6 +934,20 @@ impl Tenant {
         })
     }
 
+    /// Moves the user's scheduled automatic replies to a window around
+    /// `now` (from 07:00 UTC the day before to 16:00 UTC three days later),
+    /// so the demo's replies are on whatever the date; a fixture's own dates
+    /// are fixed and soon in the past.
+    pub fn schedule_replies_around(&mut self, now: chrono::DateTime<chrono::Utc>) {
+        let at = |days: i64, time: &str| {
+            let day = now.date_naive() + chrono::Duration::days(days);
+            json!({"dateTime": format!("{day}T{time}.0000000"), "timeZone": "UTC"})
+        };
+        let replies = &mut self.own().automatic_replies;
+        replies["scheduledStartDateTime"] = at(-1, "07:00:00");
+        replies["scheduledEndDateTime"] = at(3, "16:00:00");
+    }
+
     /// A tenant from fixture JSON (see `fixtures/tenant-demo.json`).
     pub fn from_fixture(text: &str) -> Result<Self, String> {
         let value: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
@@ -1224,6 +1238,25 @@ mod tests {
             403
         );
         assert_eq!(tenant.mailbox("x@contoso.example").unwrap_err().status, 404);
+    }
+
+    #[test]
+    fn the_demo_replies_are_scheduled_around_a_day() {
+        let mut tenant = Tenant::from_fixture(super::super::fixtures::DEMO_TENANT).unwrap();
+        let now = chrono::DateTime::parse_from_rfc3339("2027-03-01T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        tenant.schedule_replies_around(now);
+        let replies = &tenant.own().automatic_replies;
+        assert_eq!(replies["status"], "scheduled");
+        assert_eq!(
+            replies["scheduledStartDateTime"],
+            json!({"dateTime": "2027-02-28T07:00:00.0000000", "timeZone": "UTC"})
+        );
+        assert_eq!(
+            replies["scheduledEndDateTime"],
+            json!({"dateTime": "2027-03-04T16:00:00.0000000", "timeZone": "UTC"})
+        );
     }
 
     #[test]

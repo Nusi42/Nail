@@ -504,7 +504,10 @@ pub trait ExchangePimEngine: Send + Sync + fmt::Debug {
 
     /// Answers a meeting invitation in the user's calendar (Graph
     /// `accept` / `tentativelyAccept` / `decline`, EWS
-    /// `AcceptItem` / …), optionally without sending the response.
+    /// `AcceptItem` / …), optionally without sending the response. The
+    /// answer changes the event on the server: returns its new change key
+    /// (`None` when it could not be read back), so the core does not take
+    /// its own answer for someone else's edit.
     fn respond_to_meeting<'a>(
         &'a self,
         mailbox: Option<&'a str>,
@@ -512,7 +515,7 @@ pub trait ExchangePimEngine: Send + Sync + fmt::Debug {
         response: InvitationResponse,
         comment: Option<&'a str>,
         send: bool,
-    ) -> BoxFuture<'a, Result<(), EngineError>>;
+    ) -> BoxFuture<'a, Result<Option<String>, EngineError>>;
 }
 
 /// An Exchange engine: everything an account needs (see the module docs).

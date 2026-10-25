@@ -30,8 +30,8 @@
         "externalAudience": "contactsOnly",
         "scheduledStartDateTime": {"dateTime": "2026-10-19T07:00:00.0000000", "timeZone": "UTC"},
         "scheduledEndDateTime": {"dateTime": "2026-10-23T16:00:00.0000000", "timeZone": "UTC"},
-        "internalReplyMessage": "<html><body><div>I am at the conference until Friday.<br>Bob covers for me.</div></body></html>",
-        "externalReplyMessage": "<html><body><div>Thanks for your mail. I answer after 23 October.</div></body></html>"
+        "internalReplyMessage": "<html><body><div>I am at a conference this week.<br>Bob covers for me.</div></body></html>",
+        "externalReplyMessage": "<html><body><div>Thanks for your mail. I answer when I am back.</div></body></html>"
       },
       "rules": [
         {"displayName": "Newsletters", "sequence": 1, "isEnabled": true, "hasError": false, "isReadOnly": false,

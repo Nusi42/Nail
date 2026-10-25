@@ -1507,7 +1507,8 @@ nail_exchange::exchange_pim_engine!(EwsEngine {
 });
 
 impl EwsEngine {
-    /// Answers a meeting through the meeting API (no iMIP).
+    /// Answers a meeting through the meeting API (no iMIP); the calendar
+    /// item's change key afterwards.
     async fn answer_meeting(
         &self,
         mailbox: Option<&str>,
@@ -1515,7 +1516,7 @@ impl EwsEngine {
         response: InvitationResponse,
         comment: Option<&str>,
         send: bool,
-    ) -> Result<(), EwsError> {
+    ) -> Result<Option<String>, EwsError> {
         self.client
             .respond_to_meeting(mailbox, event_remote_id, response, comment, send)
             .await
