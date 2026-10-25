@@ -158,10 +158,7 @@ impl Service {
                 subject: m.subject.clone(),
             };
             let rank = order.get(&m.id).copied().unwrap_or(usize::MAX);
-            match groups.iter_mut().find(|(k, _)| *k == key) {
-                Some((_, list)) => list.push((rank, message)),
-                None => groups.push((key, vec![(rank, message)])),
-            }
+            nail_util::group::push(&mut groups, key, (rank, message));
         }
         let local = self.local_now();
         for ((account, folder), mut list) in groups {

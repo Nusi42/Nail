@@ -550,7 +550,7 @@ crates/nail-util       Q2 (ADRs 0171, 0173): shared helpers without dependencies
                        parse_iso_date, rfc3339_utc (+ _opt / _millis), rfc3339_now (+ _millis), weekday_from_monday,
                        last_weekday_of_month, SECS_PER_DAY: the one civil-date and clock implementation), color.rs (WCAG
                        hex / luminance / contrast), snapshot.rs (write-or-compare of snapshot and golden files), batch (batched writes
-                       with a one-by-one fallback), expiring (expiring map), ical_text, markup (HTML escaping), mime_text,
+                       with a one-by-one fallback), expiring (expiring map), group (grouping in first-seen order), ical_text, markup (HTML escaping), mime_text,
                        named (case-insensitive pair lookups), percent, redact, sieve_lex (the Sieve lexer)
 crates/nail-net        Q2 (ADR 0173): shared plumbing of the protocol clients and mock servers, features http / io /
                        deflate / tls / xml: streams, TLS, line framing, HTTP client / retry / errors, one ApiClient for

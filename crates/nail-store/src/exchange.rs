@@ -34,8 +34,8 @@ use nail_api::exchange::{
 };
 use nail_api::pim::source::PimSourceKind;
 use nail_api::{
-    AccountId, AddressBookId, ApiError, CalendarId, ExchangeCategoryId, FolderId, MessageId, OpId,
-    PimSourceId, RuleId,
+    AccountId, AddressBookId, ApiError, CalendarId, ExchangeCategoryId, Folder, FolderId,
+    MessageId, OpId, PimSourceId, RuleId,
 };
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
 use serde::{Deserialize, Serialize};
@@ -549,15 +549,18 @@ impl Store {
 
     // --- Mail folders and items ---------------------------------------------
 
-    /// Stores a folder's Exchange data (the local folder must exist).
+    /// Stores a folder with its Exchange data in one transaction, so no
+    /// reader sees the folder without it (a Graph folder without Exchange
+    /// data is a mailbox root, which cannot be changed).
     pub fn upsert_exchange_folder(
         &self,
-        account: &AccountId,
+        folder: &Folder,
         record: &ExchangeFolderRecord,
     ) -> Result<()> {
         let well_known = record.well_known.as_ref().map(kebab).transpose()?;
-        self.with_conn(|conn| {
-            conn.execute(
+        self.with_tx(|tx| {
+            crate::mail::upsert_folder_in_tx(tx, folder)?;
+            tx.execute(
                 "INSERT INTO exchange_folders (folder_id, account_id, mailbox, remote_id,
                      change_key, parent_remote_id, well_known, cursor, full_sync_page,
                      last_sync_at)
@@ -571,7 +574,7 @@ impl Store {
                      last_sync_at = excluded.last_sync_at",
                 params![
                     record.folder_id.as_str(),
-                    account.as_str(),
+                    folder.account_id.as_str(),
                     mailbox_key(record.mailbox.as_deref()),
                     record.remote_id,
                     record.change_key,
@@ -1873,11 +1876,47 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_is_stored_with_its_exchange_data() {
+        let store = store();
+        let folder = Folder {
+            id: "x-clients".into(),
+            account_id: account(),
+            parent_id: None,
+            name: "Clients".into(),
+            path: "Clients".into(),
+            role: nail_api::FolderRole::Other,
+            unread: 0,
+            total: 0,
+        };
+        let record = ExchangeFolderRecord::new("x-clients", "AAMkClients");
+        store.upsert_exchange_folder(&folder, &record).unwrap();
+        assert_eq!(store.get_folder(&folder.id).unwrap().name, "Clients");
+        assert_eq!(
+            store
+                .exchange_folder(&folder.id)
+                .unwrap()
+                .unwrap()
+                .remote_id,
+            "AAMkClients"
+        );
+        // Neither is stored when the folder cannot be.
+        let elsewhere = Folder {
+            id: "x-other".into(),
+            account_id: AccountId::new("nobody"),
+            ..folder
+        };
+        let record = ExchangeFolderRecord::new("x-other", "AAMkOther");
+        assert!(store.upsert_exchange_folder(&elsewhere, &record).is_err());
+        assert_eq!(store.exchange_folder(&elsewhere.id).unwrap(), None);
+    }
+
+    #[test]
     fn folders_items_and_focused_inbox() {
         let store = store();
         let mut folder = ExchangeFolderRecord::new("x-inbox", "AAMkInbox");
         folder.well_known = Some(ExchangeWellKnownFolder::Inbox);
-        store.upsert_exchange_folder(&account(), &folder).unwrap();
+        let local = store.get_folder(&"x-inbox".into()).unwrap();
+        store.upsert_exchange_folder(&local, &folder).unwrap();
         store
             .set_exchange_folder_cursor(&"x-inbox".into(), Some("delta-1"), None, 7)
             .unwrap();

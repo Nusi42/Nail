@@ -46,7 +46,7 @@ use crate::{
     engine::{Signals, stopped},
     error::{CoreError, Result},
     ids,
-    ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_message},
+    ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_messages},
     replay::{
         Grouped, OpExecutor, group_results, group_slots, recorded_or, replay_account, sort_group,
     },
@@ -728,6 +728,7 @@ async fn store_messages(
                 fresh.push(m.clone());
             }
         }
+        let mut by_folder: Vec<(Folder, Vec<(IncomingMessage, RemoteExtras)>)> = Vec::new();
         for m in fresh {
             let raw = match &m.raw {
                 Some(raw) => raw.clone(),
@@ -758,11 +759,16 @@ async fn store_messages(
                 exchange: None,
                 gmail: m.gmail.clone(),
             };
-            let report = ingest_api_message(service, folder.clone(), incoming, extras).await?;
+            nail_util::group::push_by(&mut by_folder, folder, (incoming, extras), |a, b| {
+                a.id == b.id
+            });
+        }
+        for (folder, batch) in by_folder {
+            let report = ingest_api_messages(service, folder.clone(), batch).await?;
             // Only mail arriving in the inbox or a user folder counts (like
             // IMAP): never the user's own sent mail, Spam or Trash.
-            if report.new.contains(&id) && crate::sync::runs_arrival_rules(folder.role) {
-                new_ids.push((id, folder.id));
+            if crate::sync::runs_arrival_rules(folder.role) {
+                new_ids.extend(report.new.into_iter().map(|id| (id, folder.id.clone())));
             }
         }
     }
@@ -772,10 +778,7 @@ async fn store_messages(
         let inbox = ids::folder_id(account, GmailFolder::Inbox.path());
         let mut by_folder: Vec<(FolderId, Vec<MessageId>)> = Vec::new();
         for (id, folder) in new_ids {
-            match by_folder.iter_mut().find(|(f, _)| *f == folder) {
-                Some((_, list)) => list.push(id),
-                None => by_folder.push((folder, vec![id])),
-            }
+            nail_util::group::push(&mut by_folder, folder, id);
         }
         for (folder_id, message_ids) in by_folder {
             if folder_id == inbox {

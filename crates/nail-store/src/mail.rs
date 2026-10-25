@@ -397,6 +397,60 @@ pub(crate) fn set_flags_in_tx(tx: &Transaction<'_>, id: &MessageId, flags: Flags
     Ok(())
 }
 
+/// [`Store::upsert_folder`] inside a transaction.
+pub(crate) fn upsert_folder_in_tx(tx: &Transaction<'_>, folder: &Folder) -> Result<()> {
+    let role = enum_to_sql(&folder.role)?;
+    let account_exists = tx
+        .query_row(
+            "SELECT 1 FROM accounts WHERE id = ?1",
+            [folder.account_id.as_str()],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    if !account_exists {
+        return Err(Error::not_found("account", &folder.account_id));
+    }
+    if let Some(parent) = &folder.parent_id {
+        if *parent == folder.id {
+            return Err(Error::InvalidData(format!(
+                "folder {} is its own parent",
+                folder.id
+            )));
+        }
+        let parent_account = folder_account_in_tx(tx, parent)?;
+        if parent_account != folder.account_id {
+            return Err(Error::InvalidData(format!(
+                "parent {parent} of folder {} belongs to another account",
+                folder.id
+            )));
+        }
+    }
+    let changed = tx.execute(
+        "INSERT INTO folders (id, account_id, parent_id, name, path, role)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT (id) DO UPDATE SET
+             parent_id = excluded.parent_id, name = excluded.name,
+             path = excluded.path, role = excluded.role
+         WHERE folders.account_id = excluded.account_id",
+        params![
+            folder.id.as_str(),
+            folder.account_id.as_str(),
+            folder.parent_id.as_ref().map(FolderId::as_str),
+            folder.name,
+            folder.path,
+            role,
+        ],
+    )?;
+    if changed == 0 {
+        return Err(Error::InvalidData(format!(
+            "folder {} already exists in another account",
+            folder.id
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) fn folder_account_in_tx(tx: &Transaction<'_>, folder: &FolderId) -> Result<AccountId> {
     tx.prepare_cached("SELECT account_id FROM folders WHERE id = ?1")?
         .query_row([folder.as_str()], |row| row.get::<_, String>(0))
@@ -648,58 +702,7 @@ impl Store {
     /// [`Error::InvalidData`] when the folder would move to another account
     /// or its parent belongs to another account.
     pub fn upsert_folder(&self, folder: &Folder) -> Result<()> {
-        let role = enum_to_sql(&folder.role)?;
-        self.with_tx(|tx| {
-            let account_exists = tx
-                .query_row(
-                    "SELECT 1 FROM accounts WHERE id = ?1",
-                    [folder.account_id.as_str()],
-                    |_| Ok(()),
-                )
-                .optional()?
-                .is_some();
-            if !account_exists {
-                return Err(Error::not_found("account", &folder.account_id));
-            }
-            if let Some(parent) = &folder.parent_id {
-                if *parent == folder.id {
-                    return Err(Error::InvalidData(format!(
-                        "folder {} is its own parent",
-                        folder.id
-                    )));
-                }
-                let parent_account = folder_account_in_tx(tx, parent)?;
-                if parent_account != folder.account_id {
-                    return Err(Error::InvalidData(format!(
-                        "parent {parent} of folder {} belongs to another account",
-                        folder.id
-                    )));
-                }
-            }
-            let changed = tx.execute(
-                "INSERT INTO folders (id, account_id, parent_id, name, path, role)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                 ON CONFLICT (id) DO UPDATE SET
-                     parent_id = excluded.parent_id, name = excluded.name,
-                     path = excluded.path, role = excluded.role
-                 WHERE folders.account_id = excluded.account_id",
-                params![
-                    folder.id.as_str(),
-                    folder.account_id.as_str(),
-                    folder.parent_id.as_ref().map(FolderId::as_str),
-                    folder.name,
-                    folder.path,
-                    role,
-                ],
-            )?;
-            if changed == 0 {
-                return Err(Error::InvalidData(format!(
-                    "folder {} already exists in another account",
-                    folder.id
-                )));
-            }
-            Ok(())
-        })
+        self.with_tx(|tx| upsert_folder_in_tx(tx, folder))
     }
 
     /// One folder, with current counts.

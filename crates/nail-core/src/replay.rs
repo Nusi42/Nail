@@ -899,10 +899,9 @@ impl ImapExecutor<'_> {
             };
             match located {
                 Ok(Some((folder, uid))) => {
-                    match by_folder.iter_mut().find(|(f, _)| f.id == folder.id) {
-                        Some((_, uids)) => uids.push((index, uid)),
-                        None => by_folder.push((folder, vec![(index, uid)])),
-                    }
+                    nail_util::group::push_by(&mut by_folder, folder, (index, uid), |a, b| {
+                        a.id == b.id
+                    });
                 }
                 Ok(None) => out[index] = Some(Ok(())),
                 Err(err) => out[index] = Some(Err(err)),

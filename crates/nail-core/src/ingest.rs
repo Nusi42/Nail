@@ -492,26 +492,29 @@ pub(crate) fn reindex_all(
 /// Messages of an API engine (Gmail, Exchange) fetched per store transaction.
 pub(crate) const API_INGEST_CHUNK: usize = 25;
 
-/// Stores one message of an API engine (Gmail, Exchange) with its server
-/// data in one transaction: no reader sees it without them (ADR 0120).
-pub(crate) async fn ingest_api_message(
+/// Stores messages of an API engine (Gmail, Exchange) in `folder` with
+/// their server data in one transaction: no reader sees one without them
+/// (ADR 0120).
+pub(crate) async fn ingest_api_messages(
     service: &crate::Service,
     folder: Folder,
-    incoming: IncomingMessage,
-    extras: RemoteExtras,
+    messages: Vec<(IncomingMessage, RemoteExtras)>,
 ) -> crate::error::Result<IngestReport> {
-    let id = incoming
-        .id
-        .clone()
-        .ok_or_else(|| nail_api::ApiError::internal("an API message without its id"))?;
+    let mut incoming = Vec::with_capacity(messages.len());
+    let mut extras = BTreeMap::new();
+    for (message, remote) in messages {
+        let id = message
+            .id
+            .clone()
+            .ok_or_else(|| nail_api::ApiError::internal("an API message without its id"))?;
+        extras.insert(id, remote);
+        incoming.push(message);
+    }
     let blobs = service.blobs().clone();
     let index = service.inner.search.get();
     Ok(service
         .store()
-        .call(move |s| {
-            let extras = BTreeMap::from([(id, extras)]);
-            ingest_with_remote(s, &blobs, Some(&index), &folder, &[incoming], &extras)
-        })
+        .call(move |s| ingest_with_remote(s, &blobs, Some(&index), &folder, &incoming, &extras))
         .await?)
 }
 

@@ -49,7 +49,7 @@ numbers). Behaviour does not change; every suite stays green.
 
 ### 2. Shared logic extracted (examples)
 
-- nail-core: one `ingest_api_message` and `API_INGEST_CHUNK` for Gmail and
+- nail-core: one `ingest_api_messages` and `API_INGEST_CHUNK` for Gmail and
   Exchange, `replay::{group_slots, group_results, Grouped, recorded_or}`,
   `pinned_http` (SSRF-safe hops shared by subscriptions and `nail.http`)
   over `nail_proxy::pin_host`, `editing::on_config` for every blocking

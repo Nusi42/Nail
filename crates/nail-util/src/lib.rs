@@ -4,6 +4,7 @@
 //! - [`batch`]: batched writes with a one-by-one fallback.
 //! - [`color`]: sRGB hex colours, WCAG luminance and contrast ratios.
 //! - [`expiring`]: a thread-safe map whose entries expire (unlock caches).
+//! - [`group`]: grouping in first-seen order.
 //! - [`ical_text`]: iCalendar UTC stamps and durations (RFC 5545 texts).
 //! - [`markup`]: HTML escaping.
 //! - [`mime_text`]: byte search, header unfolding, backslash escapes,
@@ -26,6 +27,7 @@
 pub mod batch;
 pub mod color;
 pub mod expiring;
+pub mod group;
 pub mod ical_text;
 pub mod markup;
 pub mod mime_text;

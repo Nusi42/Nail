@@ -49,7 +49,7 @@ use super::{MAX_PAGES, RunningEngine, changed, exchange_parts};
 use crate::engine::{Signals, stopped};
 use crate::error::{CoreError, Result};
 use crate::ids;
-use crate::ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_message};
+use crate::ingest::{API_INGEST_CHUNK, IncomingMessage, ingest_api_messages};
 use crate::replay::{
     Grouped, OpExecutor, group_results, group_slots, recorded_or, replay_account, sort_group,
 };
@@ -918,8 +918,7 @@ async fn apply_hierarchy(
                     _ => false,
                 };
                 if !same {
-                    s.upsert_folder(folder)?;
-                    s.upsert_exchange_folder(&id, record)?;
+                    s.upsert_exchange_folder(folder, record)?;
                     changed = true;
                 }
             }
@@ -1564,7 +1563,11 @@ async fn store_messages(
         nail_exchange::policy::effective(&account.sync, &local_folder.path, local_folder.role);
     let now = unix_now();
     let mut new_ids: Vec<MessageId> = Vec::new();
+    // Only mail arriving in the own mailbox's inbox or a user folder counts.
+    let counts_as_new =
+        folder.mailbox.is_none() && crate::sync::runs_arrival_rules(local_folder.role);
     for chunk in messages.chunks(API_INGEST_CHUNK) {
+        let mut fresh = Vec::new();
         for m in chunk {
             let change = RemoteMessageChange {
                 remote_id: m.remote_id.clone(),
@@ -1639,13 +1642,12 @@ async fn store_messages(
                 )),
                 gmail: None,
             };
-            let report =
-                ingest_api_message(service, local_folder.clone(), incoming, extras).await?;
-            if report.new.contains(&id)
-                && folder.mailbox.is_none()
-                && crate::sync::runs_arrival_rules(local_folder.role)
-            {
-                new_ids.push(id);
+            fresh.push((incoming, extras));
+        }
+        if !fresh.is_empty() {
+            let report = ingest_api_messages(service, local_folder.clone(), fresh).await?;
+            if counts_as_new {
+                new_ids.extend(report.new);
             }
         }
     }
@@ -2242,10 +2244,7 @@ impl ExchangeExecutor<'_> {
                 write,
                 after,
             } = *grouped;
-            match by_mailbox.iter_mut().find(|(m, _)| *m == mailbox) {
-                Some((_, list)) => list.push((index, write, after)),
-                None => by_mailbox.push((mailbox, vec![(index, write, after)])),
-            }
+            nail_util::group::push(&mut by_mailbox, mailbox, (index, write, after));
         }
         for (mailbox, list) in by_mailbox {
             let writes: Vec<RemoteWrite> = list.iter().map(|(_, w, _)| w.clone()).collect();

@@ -551,10 +551,7 @@ impl GmailEngine {
                 out[index] = Some(Ok(WriteOutcome::Done { remote_id: None }));
                 continue;
             }
-            match groups.iter_mut().find(|(c, _)| *c == change) {
-                Some((_, members)) => members.push(index),
-                None => groups.push((change, vec![index])),
-            }
+            nail_util::group::push(&mut groups, change, index);
         }
         for (change, members) in &groups {
             let ids: Vec<String> = members

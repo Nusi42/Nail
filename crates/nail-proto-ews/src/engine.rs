@@ -95,9 +95,9 @@ pub struct EwsEngine {
     rooms: Mutex<HashSet<String>>,
 }
 
-/// A group of [`EwsEngine::write_many`]: its key, its request and the
+/// A group of [`EwsEngine::write_many`]: its key and request, and the
 /// writes it carries (index, item id).
-type ManyEntry<'w> = (String, ManyGroup<'w>, Vec<(usize, &'w str)>);
+type ManyEntry<'w> = ((String, ManyGroup<'w>), Vec<(usize, &'w str)>);
 
 /// One multi-item request of [`EwsEngine::write_many`].
 enum ManyGroup<'w> {
@@ -398,12 +398,9 @@ impl EwsEngine {
                 }
                 RemoteWrite::SetFlags { .. } | RemoteWrite::Append { .. } => continue,
             };
-            match groups.iter_mut().find(|(k, _, _)| *k == key) {
-                Some((_, _, members)) => members.push((index, id)),
-                None => groups.push((key, group, vec![(index, id)])),
-            }
+            nail_util::group::push_by(&mut groups, (key, group), (index, id), |a, b| a.0 == b.0);
         }
-        for (_, group, members) in &groups {
+        for ((_, group), members) in &groups {
             let ids: Vec<&str> = members.iter().map(|(_, id)| *id).collect();
             match self.write_group(mailbox, group, &ids).await {
                 Ok(answers) => {
