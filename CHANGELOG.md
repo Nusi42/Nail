@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-26
+
 The version is 0.8.0: the internal candidate `1.0.0-rc.1` was
 never published and is renumbered; 1.0 follows once the gates in
 [`docs/release-checklist.md`](docs/release-checklist.md) are passed.
@@ -182,4 +184,5 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.0]: https://github.com/Nusi42/Nail/releases/tag/v0.8.0
 [1.0.0-rc.1]: docs/release-checklist.md
