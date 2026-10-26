@@ -2,10 +2,12 @@
  * Node scripts run as programs, one way (wave Q2, DRY): `isMain` tells
  * whether a module is the program node started, `runMain` runs its `main`
  * then and turns the answer into the exit code (an error prints its message
- * and exits with 2). `repoRoot` is the checkout the scripts belong to.
+ * and exits with 2). `repoRoot` is the checkout the scripts belong to;
+ * `confirm` asks a yes/no question.
  * Tests in scripts/test/program.test.mjs.
  */
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 /** The checkout's root directory. */
@@ -44,4 +46,31 @@ export async function runMain(moduleUrl, main, argv = process.argv) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = ERROR_EXIT_CODE;
   }
+}
+
+/**
+ * Asks `question` and answers whether the reply is yes (`y` / `yes`). An
+ * input that ends without a reply (no terminal, e.g. a shell without
+ * stdin) counts as no instead of leaving the program waiting.
+ *
+ * @param {string} question the prompt, e.g. "Go on? [y/N] "
+ * @param {NodeJS.ReadableStream} input where the reply comes from
+ * @param {NodeJS.WritableStream} output where the question goes
+ * @returns {Promise<boolean>}
+ */
+export function confirm(question, input = process.stdin, output = process.stdout) {
+  return new Promise((resolve) => {
+    const prompt = createInterface({ input, output });
+    let answered = false;
+    prompt.once("close", () => {
+      if (answered) return;
+      output.write("\n");
+      resolve(false);
+    });
+    prompt.question(question, (answer) => {
+      answered = true;
+      prompt.close();
+      resolve(/^y(es)?$/i.test(answer.trim()));
+    });
+  });
 }

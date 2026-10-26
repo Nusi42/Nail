@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { afterEach, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { ERROR_EXIT_CODE, isMain, repoRoot, runMain } from "../lib/program.mjs";
+import { confirm, ERROR_EXIT_CODE, isMain, repoRoot, runMain } from "../lib/program.mjs";
 
 const self = fileURLToPath(import.meta.url);
 
@@ -66,5 +67,28 @@ describe("program", () => {
     );
     assert.equal(process.exitCode, ERROR_EXIT_CODE);
     assert.equal(errors.mock.calls[0]?.arguments[0], "broken");
+  });
+
+  it("takes y or yes as yes and anything else as no", async () => {
+    /** @type {[string, boolean][]} */
+    const cases = [
+      ["y", true],
+      ["Yes", true],
+      ["n", false],
+      ["", false],
+    ];
+    for (const [reply, expected] of cases) {
+      const input = new PassThrough();
+      const answer = confirm("Go on? ", input, new PassThrough());
+      input.end(`${reply}\n`);
+      assert.equal(await answer, expected, reply);
+    }
+  });
+
+  it("answers no when the input ends without a reply", async () => {
+    const input = new PassThrough();
+    const answer = confirm("Go on? ", input, new PassThrough());
+    input.end();
+    assert.equal(await answer, false);
   });
 });

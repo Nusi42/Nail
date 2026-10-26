@@ -30,12 +30,11 @@
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline/promises";
 
 import { forEachArg } from "./lib/args.mjs";
 import { buildBase, withoutUpdaterSecrets } from "./lib/build.mjs";
 import { readJson } from "./lib/json.mjs";
-import { repoRoot, runMain } from "./lib/program.mjs";
+import { confirm, repoRoot, runMain } from "./lib/program.mjs";
 import {
   CHANGELOG,
   RECORD_FILE,
@@ -351,11 +350,9 @@ async function publish(argv) {
   console.log(
     `Publish Nail ${version}: tag ${tag} at ${commit.slice(0, 8)}, push ${branch}, GitHub release on ${slug}.`,
   );
-  if (!o.yes) {
-    const prompt = createInterface({ input: process.stdin, output: process.stdout });
-    const answer = await prompt.question("Go on? [y/N] ");
-    prompt.close();
-    if (!/^y(es)?$/i.test(answer.trim())) return 1;
+  if (!o.yes && !(await confirm("Go on? [y/N] "))) {
+    console.error("Not published (answer y, or pass --yes where nothing can be typed).");
+    return 1;
   }
 
   // 1. The tag (an existing one must name the release commit).
