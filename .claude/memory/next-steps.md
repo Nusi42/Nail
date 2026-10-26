@@ -72,9 +72,10 @@ again (`event_from_exchange` takes the user's addresses). 10 of 10 runs of the E
 (`docs/release.md` "Releasing"). Maintainer decisions: GitHub Releases only (rolling `stable` / `beta` releases hold
 `latest.json`), unsigned for now, x64 NSIS + portable zip, first version 0.8.0. The release update key exists; where it
 is kept is in the maintainer's `CLAUDE.local.md`, never in the repository (public half
-`packaging/updater/release.pub`). 0.8.0 is prepared (2026-10-26: full checks green, release commit
-`chore(release): release 0.8.0` on the lead branch, files in `.nail-build/release/0.8.0/`); it waits for the maintainer
-to try the installer and say go for `npm run release:publish`. Plug-in budgets now count thread CPU time (ADR 0204).
+`packaging/updater/release.pub`). 0.8.0 is published (2026-10-26): GitHub release `v0.8.0` (latest)
+with the installer, zip, signature, checksums and SBOMs; the rolling `stable` / `beta` releases hold `latest.json`.
+Auto mode refuses `release:publish` as a public action: the maintainer runs
+`! cd ~/SelfMade.InWork/nail.win1 && npm run release:publish -- --yes` (no stdin there, hence `--yes`). Plug-in budgets now count thread CPU time (ADR 0204).
 One unexplained e2e failure during an earlier prepare run: `net::ERR_NO_BUFFER_SPACE` loading the app's script
 (Windows socket buffers); not reproduced in the e2e suite or `cargo test` alone (socket peaks about 1,200).
 
