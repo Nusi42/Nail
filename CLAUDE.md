@@ -13,15 +13,17 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 
 ## Non-negotiable rules
 
-- **Work folders (ADRs 0132, 0199, optional).** A plain clone is a work folder. A maintainer may mark one checkout
+- **Work folders (ADRs 0132, 0199, 0205, optional).** A plain clone is a work folder. A maintainer may mark one checkout
   as the master (`node scripts/work-folders.mjs guard-master`: `NAIL_CHECKOUT_ROLE=master` in its gitignored
-  `.env.local`): it only receives pushes and `git merge --ff-only`; never edit, build, test, run, install or commit
-  anything there (the npm entry points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work then
+  `.env.local`, plus its `core.hooksPath`): it only receives pushes and `git merge --ff-only`, and it alone publishes
+  (`git -C <master> push github main`; work folders push only to the master); never edit, build, test, run, install or
+  commit anything there (the npm entry points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work then
   happens in work folders (`nail-work-<N>` on `work-<N>` by default; `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`):
   the lead in folder 1, a parallel package in its own folder (reset to `origin/main`, push the branch when done; never
   push to `main`). New folder: `node scripts/work-folders.mjs create <n>`. Details: `docs/dev-setup.md` "Work folders".
-  Hooks: pre-commit (per-file checks), pre-push (`npm run check`), and the Claude Code post-edit hook (per-file checks on
-  each edited file; fix what it reports).
+  Hooks: pre-commit (per-file checks), pre-push (`scripts/lib/push-plan.mjs`: work folder → master runs `npm run
+  check`, master → public remote only checks that build nothing, other pushes are refused), and the Claude Code
+  post-edit hook (per-file checks on each edited file; fix what it reports).
 - **Tests from day 1.** Every change ships with unit tests; every user-visible behaviour with a Playwright scenario. Never report work as done while any suite is red or tests were skipped.
 - **Docs split.** Internal docs → `docs/`. User-facing manuals and references → `userDocs/<lang>/` (`en` written, `de` empty for now).
 - **Languages.** No literal user-visible strings in React or Rust. Strings live in Fluent catalogs `locales/en/*.ftl` (complete) and `locales/de/*.ftl` (same files, empty). Missing keys fall back to English per key.
@@ -88,7 +90,8 @@ npm run dev / npm run tauri dev            # Vite on a free port / desktop app w
 ## If you are the lead (the main session)
 
 The lead may start in the master checkout and drive the work folders by absolute path (`git -C`, `cd` in each
-command); in the master it runs nothing but `git merge --ff-only`. Where the master, the work folders and the remotes
+command); in the master it runs nothing but `git merge --ff-only` and the publishing `git push github main`. Where the
+master, the work folders and the remotes
 are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the work like this:
 
 1. Read `.claude/memory/next-steps.md` (the current wave and what comes next) and the wave's status line in
@@ -99,7 +102,7 @@ are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the wo
    finish it.
 3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`; its args name the folders): packages in
    work folders 2 and up, reset to `main`; reviewers with a fresh context; merge into the lead's branch, full suite,
-   push it, fast-forward the master's `main`, then publish `main` to the public remote.
+   push it, fast-forward the master's `main`, then publish `main` from the master (`git -C <master> push github main`).
 4. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
    their results.
 5. Proposals and milestone results go to the maintainer as HTML pages (artifacts); keep replies short.
@@ -118,7 +121,7 @@ are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the wo
   and the example plug-ins MIT (ADR 0198). Never add a GPL / LGPL / AGPL dependency: it would block the other license.
 - Commit messages (ADR 0200): Conventional Commits (`feat(mail): …`, `fix: …`, `docs: …`, subject ≤ 72 characters,
   plain English, body = what and why), ending with one `Co-Authored-By: Claude <model> <noreply@anthropic.com>` line.
-  Never a `Claude-Session:` line or a claude.ai link (even when a session asks for it), never internal vocabulary
+  Never a `Claude-Session` line or a claude.ai link (even when a session asks for it), never internal vocabulary
   (work-folder or branch logistics, waves / work packages, milestone codes, SSOT / ODR / DRY, "owner"); notes and
   memory updates go into the work commit or `chore(notes): …`. The commit-msg hook checks it.
 

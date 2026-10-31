@@ -2,9 +2,7 @@
 name: work-folders
 description: "The owner keeps a master checkout (git only, NAIL_CHECKOUT_ROLE=master) and develops in work folders nail-work-<N> on work-<N> (owner rule, ADRs 0132, 0199); concrete paths only in CLAUDE.local.md"
 metadata:
-  node_type: memory
   type: feedback
-  modified: 2026-10-17T10:26:45.124Z
 ---
 
 Rule: the master checkout `<master>` is the master directory; work folders live in `<work root>`.
@@ -23,10 +21,13 @@ Parallel agents should not share one tree. Personal paths do not belong in a pub
   different folder). It is only the launch point: drive `nail-work-1` (branch `work-1`, the lead) and the others by absolute path.
   Parallel packages use `nail-work-2` and up (`work-<N>`, reset to `origin/main`, commit, push). Integrate by merging into
   `work-1`.
-- `main` moves only by `git -C <master> merge --ff-only work-1` after each green lead stage. It is the only write in the
-  master.
-- Hooks: pre-commit (per-file checks), pre-push (`npm run check`), Claude Code post-edit (`.claude/settings.json`,
-  per-file checks on each edit; finds the work folder from the edited file, skips files of the master).
+- `main` moves only by `git -C <master> merge --ff-only work-1` after each green lead stage, and only the master
+  publishes it: `git -C <master> push github main` (ADR 0205; the remote `github` exists only in the master). These
+  are the only git commands in the master.
+- Hooks: pre-commit (per-file checks), pre-push (`scripts/lib/push-plan.mjs`: work folder → master runs
+  `npm run check`; master → public remote runs the private-data guard and `cargo deny check licenses`; a work folder's
+  push to a network remote is refused), Claude Code post-edit (`.claude/settings.json`, small: finds the checkout from
+  the edited file and runs its `scripts/lib/after-edit.mjs`; skips files of the master).
 - New folder: `node scripts/work-folders.mjs create <n>`, run from a work folder; `guard-master` marks the master.
 - Guards refuse development in the master: npm entry points, `prepare`, the pre-commit hook, and the master's rustc
   wrapper. Never work around them.

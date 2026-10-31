@@ -1,8 +1,11 @@
 #!/bin/sh
-# The private-data guard on the commits being pushed (messages and added
-# lines; ADR 0192; reads git's ref lines on stdin), then everything
-# `npm run check` checks, before a branch reaches the master
-# (scripts/check.mjs, ADRs 0123 and 0132). It refuses inside a master
-# checkout (ADR 0199). Never bypass with --no-verify: fix the finding instead.
-node scripts/check-private.mjs --push || exit 1
-exec node scripts/check.mjs
+# The pre-push hook (scripts/pre-push.mjs, ADR 0205): chooses the checks
+# from the checkout's role and the remote's URL. A work folder pushes only
+# to the master (the private-data guard on the pushed commits, then
+# `npm run check`); the master pushes only main and release tags to the
+# public remote (the guard on the pushed commits and every tracked file,
+# the dependency licences; nothing is built there); every other
+# combination is refused. The scripts are found next to this hook, the
+# checks run in the pushing checkout. Never bypass with --no-verify: fix
+# the finding instead.
+exec node "$(dirname "$0")/../scripts/pre-push.mjs" "$@"

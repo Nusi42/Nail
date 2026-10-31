@@ -1,6 +1,6 @@
 # 0203 — Releases on GitHub, prepared and published by script
 
-Status: accepted (2026-10-25)
+Status: accepted (2026-10-25); the pushes of `release:publish`: revised by ADR 0205
 
 ## Context
 

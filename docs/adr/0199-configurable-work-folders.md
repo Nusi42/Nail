@@ -1,6 +1,6 @@
 # 0199 — The maintainer's setup out of the repository
 
-Status: accepted (2026-10-17)
+Status: accepted (2026-10-17); where `main` is published from: revised by ADR 0205
 
 ## Context
 

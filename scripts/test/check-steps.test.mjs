@@ -225,10 +225,11 @@ test("chunkFiles keeps command lines short", () => {
   assert.deepEqual(chunkFiles([]), []);
 });
 
-test("the pre-commit hook runs the staged checks and is executable in git", () => {
-  const hook = fs.readFileSync(path.join(root, ".githooks", "pre-commit"), "utf8");
-  assert.match(hook, /^#!\/bin\/sh\n/);
-  assert.match(hook, /node scripts\/pre-commit\.mjs/);
+test("the Git hooks are shell scripts git can run (their wiring: hooks.test.mjs)", () => {
+  for (const name of ["pre-commit", "commit-msg", "pre-push"]) {
+    const hook = fs.readFileSync(path.join(root, ".githooks", name), "utf8");
+    assert.match(hook, /^#!\/bin\/sh\n/, name);
+  }
 });
 
 test(".prettierignore skips generated crate data but formats hand-written crate code (Q1 review)", async () => {

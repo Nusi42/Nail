@@ -2,9 +2,7 @@
 name: ssot-odr-dry
 description: "Maintainer rule (mandatory): SSOT, ODR and DRY for all existing and new code; reviews treat violations as must-fix"
 metadata:
-  node_type: memory
   type: feedback
-  modified: 2026-10-08T06:52:42.580Z
 ---
 
 Every fact (type, constant, id, limit, size, string, rule, mapping, schema) has exactly one source of truth and one

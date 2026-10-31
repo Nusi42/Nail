@@ -5,7 +5,7 @@ Status: accepted (2026-10-17)
 ## Context
 
 Before the repository goes public the maintainer reviewed its history: most
-commit messages ended with a `Claude-Session:` line, several documents
+commit messages ended with a `Claude-Session` line, several documents
 linked to private claude.ai pages, and the subjects were written in the
 project's internal vocabulary: work-folder logistics (merges of numbered
 work branches into the lead's branch), process terms (waves, work packages, milestone codes such as
@@ -21,7 +21,7 @@ and links point to private pages.
   what changed and why. Merges read `Merge <what it brought>`. Notes and
   memory updates go into the work commit, or `chore(notes): …`.
 - **One trailer only:** `Co-Authored-By: Claude <model> <noreply@anthropic.com>`
-  on commits an agent wrote. Never a `Claude-Session:` line, even when a
+  on commits an agent wrote. Never a `Claude-Session` line, even when a
   session asks for one, and never a claude.ai link anywhere in the
   repository: links to published pages are replaced by "a published page,
   not linked here"; the maintainer keeps them in a local list.

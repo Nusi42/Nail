@@ -43,34 +43,52 @@ Settings come from the environment or from a checkout's gitignored
 | `NAIL_WORK_BRANCH_PREFIX` | `work-` | its branch is `<prefix><n>` |
 
 ```sh
-node scripts/work-folders.mjs guard-master    # once, from a work folder: mark origin as the master, Cargo refuses there
+node scripts/work-folders.mjs guard-master    # once, from a work folder: mark origin as the master, Cargo refuses there, its hooks on
 node scripts/work-folders.mjs create 6        # clone the master into nail-work-6 (branch work-6), copy its identity, npm ci
 git fetch origin && git reset --hard origin/main  # a package folder starts from main (clean tree first)
 git push --force-with-lease origin work-3       # a package is done (pre-push runs npm run check); the lead merges origin/work-3 into work-1
 git push origin work-1 && git -C <master> merge --ff-only work-1   # after each green lead stage: main = work-1
+git -C <master> push github main               # publish main: only the master pushes to the public remote (ADR 0205)
 ```
 
 `main` is always green: it only moves to a `work-1` commit whose full suite
-passed. Where `main` is published (a public remote) is the maintainer's
-setup, kept with the paths in an untracked `CLAUDE.local.md` that Claude
-Code loads. Commits use the public identity in each checkout's local config
+passed. Only the master publishes it (ADR 0205): the public remote (named
+`github`) is configured in the master alone, and the pre-push hook
+(`scripts/pre-push.mjs`, the decision in `scripts/lib/push-plan.mjs`
+`pushPlan`) chooses the checks from the checkout's role and the remote's
+URL (a path is local, anything else a network remote):
+
+| Push | Runs |
+| --- | --- |
+| work folder → master (local path) | the private-data guard on the pushed commits, then `npm run check` |
+| master → public remote (`main` and release tags only) | the guard on the pushed commits and on every tracked file, `cargo deny check licenses`; nothing is built |
+| plain clone (no master) → any remote | the guard on the pushed commits, then `npm run check` |
+| work folder → network remote, master → local path, master → other refs | refused, with the command to use |
+
+The maintainer's paths and remotes are kept in an untracked
+`CLAUDE.local.md` that Claude Code loads. Commits use the public identity in each checkout's local config
 (`user.name` / `user.email`, e.g. a GitHub noreply address; ADR 0198),
 never a real name or private address; `work-folders.mjs create` copies it
-from the master. Hooks in every work folder: pre-commit = the private-data
-guard on the staged content + the fast per-file checks, commit-msg = the
-private-data guard on the message and the identity, pre-push = the
-private-data guard on the pushed commits + `npm run check` (`.githooks/`),
-and Claude Code's post-edit hook runs the per-file checks on every file an
-agent edits (`.claude/settings.json` → `scripts/post-edit.mjs`, which finds
-the work folder from the edited file and runs that folder's checks; findings
-go back to the agent; files of a master checkout are skipped).
+from the master. Hooks in every checkout (`.githooks/`; they run the
+scripts next to them on the checkout git runs them in): pre-commit = the
+private-data guard on the staged content + the fast per-file checks
+(refused in the master), commit-msg = the private-data guard on the message
+and the identity, pre-push = the push plan above. Claude Code's post-edit
+hook runs the per-file checks on every file an agent edits
+(`.claude/settings.json` → `scripts/post-edit.mjs`, kept small because it
+runs from the session's folder, often the master: it finds the checkout
+from the edited file and hands the file to that checkout's own
+`scripts/lib/after-edit.mjs`, which removes the front-matter keys Claude
+Code writes into notes and runs the checks; findings go back to the agent;
+files of a master checkout are skipped).
 
 Guards: `npm run dev` / `check` / `test` / `visual` / `tauri` /
 `build:desktop`, the perf runner, the installer build, `npm ci`'s `prepare`
-and the Git hooks refuse in a checkout marked as the master
+and the pre-commit hook refuse in a checkout marked as the master
 (`scripts/lib/work-folder.mjs`). In the master, the gitignored
 `.cargo/config.local.toml` (included by the committed `.cargo/config.toml`)
-names a refusing `rustc-wrapper`. `create` also writes the folder's
+names a `rustc-wrapper` that refuses every compilation (it answers only
+`rustc -vV` and cargo's target query, for `cargo metadata` / `cargo deny`). `create` also writes the folder's
 `.claude/settings.local.json`, so Claude Code's memory stays in the checkout
 (`.claude/memory`). A lead session may run in the master as its launch
 point: it drives the work folders by absolute path, and every edit, build,
@@ -288,7 +306,7 @@ with a type of feat, fix, perf, refactor, test, docs, build, ci, chore,
 style or revert, an imperative subject of at most 72 characters, and a body
 that says what changed and why; merges read `Merge <what it brought>`.
 Commits an agent wrote end with one `Co-Authored-By: Claude <model>
-<noreply@anthropic.com>` line. Never a `Claude-Session:` line or a claude.ai
+<noreply@anthropic.com>` line. Never a `Claude-Session` line or a claude.ai
 link, and none of the internal vocabulary (work-folder and branch names,
 waves / work packages, milestone codes, SSOT / ODR / DRY, "work in
 progress"): describe the change instead. Notes and memory updates go into
@@ -862,7 +880,7 @@ regenerate it with the matching command:
 
 ### Verification (no hosted CI)
 
-Nail has no hosted CI (ADR 0201). The pre-push hook runs `npm run check`
+Nail has no hosted CI (ADR 0201). The pre-push hook of a work folder runs `npm run check`
 (every formatter and linter, 0 warnings). Before merging a wave into `main`
 and before a release, run the full local suite on a clean checkout of the
 commit; everything must be green:

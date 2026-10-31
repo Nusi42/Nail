@@ -1,6 +1,6 @@
 # ADR 0132: Master repository in OneDrive, work folders outside it
 
-Status: accepted · 2026-10-04 · maintainer requirement (between the M5d contract and its packages)
+Status: accepted · 2026-10-04 · maintainer requirement (between the M5d contract and its packages) · publishing revised by ADR 0205
 
 ## Context
 

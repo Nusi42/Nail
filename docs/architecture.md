@@ -809,8 +809,12 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        lib/staged.mjs (.githooks/pre-commit), install-hooks.mjs (`prepare`: core.hooksPath),
                        check-editorconfig.mjs + lib/editorconfig-check.mjs;
                        work-folders.mjs + lib/work-folder.mjs (ADR 0132: create a work folder, guard the master;
-                       assertWorkFolder refuses development commands in a checkout marked as the master, ADR 0199); post-edit.mjs (the Claude Code
-                       post-edit hook of .claude/settings.json) + lib/run-checks.mjs (per-file checks, shared with pre-commit.mjs)
+                       assertWorkFolder refuses development commands in a checkout marked as the master, ADR 0199;
+                       lib/work-folder.mjs guardMaster also sets the master's core.hooksPath); post-edit.mjs (the Claude Code
+                       post-edit hook of .claude/settings.json; small and stable, it loads lib/after-edit.mjs of the edited
+                       file's checkout: note cleaning, lib/run-checks.mjs per-file checks shared with pre-commit.mjs);
+                       pre-push.mjs + lib/push-plan.mjs (.githooks/pre-push: pushPlan decides per checkout role and
+                       remote URL what a push runs or why it is refused; publishPushes for release:publish; ADR 0205)
                        Q2 (ADR 0171): check-duplicates.mjs + lib/duplicates/ (config.mjs thresholds + ignores, jscpd.mjs,
                        sources.mjs lexer, ssot.mjs checks, owners.mjs package of each finding, index.mjs, report.mjs, cli.mjs);
                        duplicates/ = allow.json (reasoned exceptions; `pinnedBy` = the pinning test) + mirrors.json
@@ -1336,7 +1340,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   in place (`Store::move_folder_tree`), IMAP mirroring matches by path (`ids::unique_folder_id`, `folders.delimiter`),
   config paths follow (`folders::rewrite_config`). UI slot `ui/src/features/folders/`, `state/queuedOps.ts`.
 - README and repository (ADRs 0197, 0198): `README.md` with the animated banner and GIFs from `docs/media/`
-  (recorded by `e2e/readme/`); GitHub remote `github` in `nail-work-1`; public commit identity checked by
+  (recorded by `e2e/readme/`); GitHub remote `github` in the master (ADR 0205); public commit identity checked by
   `scripts/check-private.mjs` (commit-msg and pre-push); license AGPL-3.0-or-later with a contributor license agreement (dual licensing), plug-in kit and examples MIT.
 - The maintainer's setup out of the repository (ADR 0199): the master is the checkout with `NAIL_CHECKOUT_ROLE=master`
   (environment or gitignored `.env.local`, `scripts/lib/work-folder.mjs` `localSettings` / `isMaster`); work-folder
@@ -1345,7 +1349,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - Commit messages (ADR 0200): Conventional Commits checked by the commit-msg hook (`scripts/check-commit-msg.mjs`, rules
   in `scripts/lib/commit-message.mjs`, also used by `check-private.mjs` for the message text); no session lines,
   claude.ai links or internal vocabulary.
-- No hosted CI (ADR 0201): no `.github/workflows/`; the pre-push hook runs `npm run check`, merges and releases need the
+- No hosted CI (ADR 0201): no `.github/workflows/`; the pre-push hook runs `npm run check` (ADR 0205: in a work folder or plain clone), merges and releases need the
   full local run (`docs/dev-setup.md` "Verification (no hosted CI)"); releases are built, signed and published locally
   (`docs/release.md`).
 - Platforms beyond Windows (ADR 0202): `nail_api::platform` (`Os`, `PlatformFeature`, `PlatformInfo`, `OS_MESSAGE_ARG`)
@@ -1354,3 +1358,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`ui/src/layout/settingsIndex.ts`); every Fluent message gets `$os` (`nail-config` `fluent_args`, the UI's
   `createLocalizer`); `DesktopHost::pick_path` / `print_to_pdf` exist in the shell on Windows only; Linux / macOS
   bundles in `app/src-tauri/tauri.{linux,macos}.conf.json`; Linux checks in WSL2 (`docs/dev-setup.md`).
+- Only the master publishes (ADR 0205): `.githooks/pre-push` runs `scripts/pre-push.mjs`, which asks
+  `scripts/lib/push-plan.mjs` `pushPlan` (checkout role: master / work folder / plain clone, remote URL: local path or
+  network) what to run: work folder to master = guard on the pushed commits + `npm run check`; master to the public
+  remote (`main` and release tags only) = guard on the pushed commits and every tracked file + `cargo deny check
+  licenses`; plain clone = guard + `npm run check`; anything else is refused. The master's rustc wrapper lets
+  `rustc -vV` and the target query through for `cargo metadata`; `guard-master` sets its `core.hooksPath`.
+  `release:publish` pushes through the master (`publishPushes`).

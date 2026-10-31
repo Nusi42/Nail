@@ -29,6 +29,12 @@ export const INSTALL = {
   npm: "npm ci",
 };
 
+/** The private-data guard over every tracked file (ADR 0192); `--push` etc. add a mode. */
+export const PRIVATE_CHECK = ["scripts/check-private.mjs"];
+
+/** `cargo deny` before the names of the checks to run (all of them when none follow). */
+export const DENY_ARGS = ["--locked", "check"];
+
 /**
  * The check steps in their run order (fast formatters first).
  *
@@ -89,7 +95,7 @@ export function checkSteps(options = {}) {
       id: "private",
       title: "No private data (the owner's patterns, every tracked file)",
       tool: "node",
-      args: ["scripts/check-private.mjs"],
+      args: PRIVATE_CHECK,
       install: INSTALL.npm,
     },
     {
@@ -163,9 +169,7 @@ export function checkSteps(options = {}) {
         ? "cargo deny (licences, bans, sources, advisories)"
         : "cargo deny (licences, bans, sources; advisories need --advisories or CI=1)",
       tool: "cargo-deny",
-      args: advisories
-        ? ["--locked", "check"]
-        : ["--locked", "check", "licenses", "bans", "sources"],
+      args: advisories ? DENY_ARGS : [...DENY_ARGS, "licenses", "bans", "sources"],
       install: INSTALL.deny,
     },
   ];

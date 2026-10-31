@@ -20,9 +20,10 @@
  * files are restored afterwards.
  *
  * publish, once the installer has been tried: tags the release commit
- * `vX.Y.Z`, pushes the branch and the tag to origin (and fast-forwards a
- * master checkout there), pushes the branch as `main` and the tag to the
- * public remote, creates the GitHub release with every built file, and
+ * `vX.Y.Z`, pushes the branch and the tag to origin; with a master checkout
+ * there it fast-forwards the master and the master pushes `main` and the
+ * tag to the public remote (ADR 0205), else this checkout pushes the branch
+ * as `main` and the tag, creates the GitHub release with every built file, and
  * replaces `latest.json` on the rolling release of the channel (and of
  * beta for a stable release, unless beta is newer). Every step checks
  * first, so a re-run after a failure goes on where it stopped. Needs the
@@ -56,7 +57,8 @@ import { output, run } from "./lib/run.mjs";
 import { CHANNELS, compareVersions, MANIFEST_FILE, parseVersion } from "./lib/update-manifest.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 import { CARGO_TOML, setVersion, workspaceRepository } from "./lib/version.mjs";
-import { assertWorkFolder, isMaster, originOf } from "./lib/work-folder.mjs";
+import { masterOf, publishPushes } from "./lib/push-plan.mjs";
+import { assertWorkFolder, originOf } from "./lib/work-folder.mjs";
 import { writeUpdateManifests } from "./update-manifest.mjs";
 
 /** The architecture and installers of a release (ADR 0203). */
@@ -365,15 +367,16 @@ async function publish(argv) {
       shell: false,
     });
 
-  // 2. The pushes: origin (and a master checkout there), then the public remote.
-  const origin = originOf(repoRoot);
-  if (origin !== undefined && o.remote !== "origin") {
-    run("git", ["push", "origin", branch, tag], { shell: false });
-    if (existsSync(origin) && isMaster(origin)) {
-      run("git", ["-C", origin, "merge", "--ff-only", branch], { shell: false });
-    }
-  }
-  run("git", ["push", o.remote, `${branch}:main`, tag], { shell: false });
+  // 2. The pushes: origin, then the public remote (from the master, if
+  // there is one, ADR 0205).
+  const pushes = publishPushes({
+    branch,
+    tag,
+    remote: o.remote,
+    origin: originOf(repoRoot),
+    master: o.remote === "origin" ? undefined : masterOf(repoRoot),
+  });
+  for (const args of pushes) run("git", args, { shell: false });
 
   // 3. The GitHub release with every built file.
   const files = readdirSync(record.artifacts).map((f) => path.join(record.artifacts, f));

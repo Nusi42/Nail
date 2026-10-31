@@ -2,9 +2,7 @@
 name: owner-installer-per-wave
 description: "After every merged wave, build the per-user NSIS installer in nail-work-1 and copy it to the owner's installer folder (CLAUDE.local.md) for the owner's manual tests"
 metadata:
-  node_type: memory
   type: feedback
-  modified: 2026-10-17T10:38:55.711Z
 ---
 
 After every wave that is green and merged, build the Windows installer in `nail-work-1`

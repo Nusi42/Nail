@@ -200,14 +200,21 @@ export function assertWorkFolder(what, root = REPO_ROOT) {
 
 /**
  * The rustc wrapper the master's `.cargo/config.local.toml` names: a batch
- * file that refuses every compilation (also `cargo metadata`, which asks
- * rustc for its version through the wrapper).
+ * file that refuses every compilation. It answers only cargo's two
+ * questions that compile nothing (`rustc -vV` and the target information
+ * `rustc - --crate-name ___ --print=…`), so `cargo metadata` and the
+ * master's pre-push licence check (`cargo deny check licenses`, ADR 0205)
+ * work there.
  */
 export const MASTER_RUSTC_WRAPPER = [
   "@echo off",
+  'if "%~2"=="-vV" goto query',
+  'if "%~2 %~3 %~4"=="- --crate-name ___" goto query',
   "echo error: this checkout is the Nail master repository: nothing is built here. 1>&2",
   "echo Work in a work folder (docs/dev-setup.md, Work folders). 1>&2",
   "exit /b 1",
+  ":query",
+  "%*",
   "",
 ].join("\r\n");
 
@@ -227,6 +234,30 @@ export function masterCargoConfig(wrapper) {
     `rustc-wrapper = ${JSON.stringify(wrapper.replaceAll("\\", "/"))}`,
     "",
   ].join("\n");
+}
+
+/**
+ * Marks the checkout at `master` as the master (ADR 0199): the role in its
+ * gitignored `.env.local`, a gitignored Cargo config whose rustc wrapper
+ * refuses every build, and `core.hooksPath`, so that its hooks run (the
+ * pre-push hook is what checks a publication, ADR 0205).
+ *
+ * @param {string} master the checkout's root
+ * @returns {string} the `.env.local` written
+ */
+export function guardMaster(master) {
+  const env = path.join(master, LOCAL_ENV);
+  fs.writeFileSync(env, markedAsMaster(fs.existsSync(env) ? fs.readFileSync(env, "utf8") : ""));
+  const cargoDir = path.join(master, ".cargo");
+  fs.mkdirSync(cargoDir, { recursive: true });
+  const wrapper = path.join(cargoDir, "master-guard.cmd");
+  fs.writeFileSync(wrapper, MASTER_RUSTC_WRAPPER);
+  fs.writeFileSync(
+    path.join(cargoDir, "config.local.toml"),
+    masterCargoConfig(path.relative(master, wrapper)),
+  );
+  execFileSync("git", HOOKS_PATH_ARGS, { cwd: master, stdio: "ignore" });
+  return env;
 }
 
 /**

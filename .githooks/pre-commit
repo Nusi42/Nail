@@ -1,6 +1,7 @@
 #!/bin/sh
 # Fast checks on the staged files (scripts/pre-commit.mjs, ADR 0123), after
-# the private-data guard on the staged content and names (ADR 0192).
-# Never bypass with --no-verify: fix the finding instead.
-node scripts/check-private.mjs --staged || exit 1
-exec node scripts/pre-commit.mjs
+# the private-data guard on the staged content and names (ADR 0192). The
+# scripts are found next to this hook, the guard reads the committing
+# checkout. Never bypass with --no-verify: fix the finding instead.
+node "$(dirname "$0")/../scripts/check-private.mjs" --staged || exit 1
+exec node "$(dirname "$0")/../scripts/pre-commit.mjs"

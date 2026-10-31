@@ -3,12 +3,12 @@
 //
 //   node scripts/check-notes.mjs                 every tracked note (`npm run check`)
 //   node scripts/check-notes.mjs <file>...       these files (pre-commit, post-edit)
-//   node scripts/check-notes.mjs --fix [<file>...]  remove the session lines instead
+//   node scripts/check-notes.mjs --fix [<file>...]  remove the keys Claude Code adds instead
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { NOTES, hasSessionLine, withoutSessionLines } from "./lib/notes.mjs";
+import { NOTES, SESSION_KEY, hasSessionLine, hasToolKeys, withoutToolKeys } from "./lib/notes.mjs";
 import { repoRoot, runMain } from "./lib/program.mjs";
 
 /** @param {string[]} argv */
@@ -27,16 +27,18 @@ function main(argv) {
     const full = path.resolve(repoRoot, file);
     if (!fs.existsSync(full)) continue;
     const text = fs.readFileSync(full, "utf8");
-    if (!hasSessionLine(text)) continue;
-    if (fix) fs.writeFileSync(full, withoutSessionLines(text));
-    else found.push(file);
+    if (fix) {
+      if (hasToolKeys(text)) fs.writeFileSync(full, withoutToolKeys(text));
+    } else if (hasSessionLine(text)) {
+      found.push(file);
+    }
   }
   if (found.length === 0) {
     console.log(`notes: ${String(files.length)} notes without session data`);
     return 0;
   }
   for (const file of found) {
-    console.error(`${file}: an originSessionId line (session data; remove it or run with --fix)`);
+    console.error(`${file}: an ${SESSION_KEY} line (session data; remove it or run with --fix)`);
   }
   return 1;
 }

@@ -8,11 +8,13 @@ import { test } from "node:test";
 import {
   HOOKS_DIR,
   HOOKS_PATH_ARGS,
+  LOCAL_ENV,
   MASTER_RUSTC_WRAPPER,
   REPO_ROOT,
   branchOf,
   claudeLocalSettings,
   folderOf,
+  guardMaster,
   identityConfig,
   isMaster,
   localSettings,
@@ -22,6 +24,7 @@ import {
   parseFolderNumber,
 } from "../lib/work-folder.mjs";
 import { parseJson } from "../lib/json.mjs";
+import { git, initRepo, withTempDir } from "./temp-repo.mjs";
 
 test("a new work folder takes the master's own commit identity, nothing else", () => {
   const master = new Map([
@@ -93,7 +96,33 @@ test("the master's cargo config names the refusing wrapper", () => {
   assert.match(config, /^\[build\]$/m);
   assert.match(config, /^rustc-wrapper = "\.cargo\/master-guard\.cmd"$/m);
   assert.match(MASTER_RUSTC_WRAPPER, /^@echo off\r\n/);
-  assert.match(MASTER_RUSTC_WRAPPER, /\r\nexit \/b 1\r\n$/);
+  // Every compilation is refused; only cargo's version and target questions
+  // (cargo metadata, cargo deny) pass.
+  assert.match(MASTER_RUSTC_WRAPPER, /\r\nexit \/b 1\r\n:query\r\n%\*\r\n$/);
+  const passes = MASTER_RUSTC_WRAPPER.split("\r\n").filter((l) => l.endsWith(" goto query"));
+  assert.deepEqual(passes, [
+    'if "%~2"=="-vV" goto query',
+    'if "%~2 %~3 %~4"=="- --crate-name ___" goto query',
+  ]);
+});
+
+test("marking the master writes its role and cargo guard and turns its hooks on", () => {
+  withTempDir("nail-guard-", (dir) => {
+    const master = initRepo(path.join(dir, "master"));
+    fs.writeFileSync(path.join(master, LOCAL_ENV), "NAIL_WORK_BRANCH_PREFIX=WIN\n");
+    assert.equal(guardMaster(master), path.join(master, LOCAL_ENV));
+    assert.equal(isMaster(master, {}), true);
+    assert.equal(localSettings(master, {}).NAIL_WORK_BRANCH_PREFIX, "WIN");
+    assert.equal(git(master, ["config", "core.hooksPath"]).trim(), HOOKS_DIR);
+    assert.equal(
+      fs.readFileSync(path.join(master, ".cargo", "master-guard.cmd"), "utf8"),
+      MASTER_RUSTC_WRAPPER,
+    );
+    assert.match(
+      fs.readFileSync(path.join(master, ".cargo", "config.local.toml"), "utf8"),
+      /^rustc-wrapper = "\.cargo\/master-guard\.cmd"$/m,
+    );
+  });
 });
 
 test("a work folder keeps Claude Code's memory in its checkout", () => {

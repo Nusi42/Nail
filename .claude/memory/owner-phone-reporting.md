@@ -2,9 +2,7 @@
 name: owner-phone-reporting
 description: "The maintainer follows the work mostly on the phone — report via commentable HTML artifact links, send screenshots after every milestone"
 metadata:
-  node_type: memory
   type: feedback
-  modified: 2026-10-04T22:16:02.943Z
 ---
 
 Report proposals, status and results as an HTML artifact link the owner can comment on, never as local `.md` files to read. After every milestone (and at other natural checkpoints) send screenshots of the running app to the owner's phone (SendUserFile) as proof that development continues.

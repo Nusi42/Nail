@@ -1,10 +1,8 @@
 ---
 name: next-steps
-description: Where the project stands and what to do next — read first when continuing in a new session (0.8.0 public; Linux build, platform gating, narrow-window open and flaky-test fixes committed on the lead branch, not yet on main)
+description: Where the project stands and what to do next — read first when continuing in a new session (0.8.0 public; only the master publishes since 2026-10-31, ADR 0205)
 metadata:
-  node_type: memory
   type: project
-  modified: 2026-10-25T17:00:00.000Z
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
@@ -32,6 +30,16 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 **Waiting for the maintainer to try** (newest installer in `<installer folder>\`, payload smoke passed): HTML mail
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
+
+**Latest (2026-10-31): only the master publishes (ADR 0205).** The remote `github` moved from the lead's
+work folder to the master; publishing is `git -C <master> push github main` after the fast-forward (exact command in
+`CLAUDE.local.md`). The pre-push hook runs `scripts/pre-push.mjs` (decision: `pushPlan` in
+`scripts/lib/push-plan.mjs`): work folder → master = guard + `npm run check`; master → public remote (`main` and
+release tags only) = guard on the pushed commits and the tracked files + `cargo deny check licenses`; a work folder's
+push to a network remote is refused. `release:publish` pushes through the master. The post-edit hook is now a small
+loader of the edited checkout's `scripts/lib/after-edit.mjs`, which also strips Claude Code's `modified` /
+`node_type` front-matter keys. If the master's hooks ever seem not to run: `git -C <master> config core.hooksPath`
+must be `.githooks` (`guard-master` sets it).
 
 **Latest (2026-10-22):** a user reported that Claude Code refused Nail's `tools/list` ("ttlMs: expected number,
 cacheScope: expected one of public | private"): it validates list results against the 2026-07-28 schema even on a

@@ -108,9 +108,11 @@ commands in the lead's work folder, on a clean checkout of its branch:
    restored); with `--dev-updater-key` it needs no release key.
 3. Install the built installer and try it.
 4. `npm run release:publish` (`-- --yes` without the question): tags
-   `vX.Y.Z`, pushes the branch and the tag to origin (fast-forwarding a
-   master checkout there), pushes the branch as `main` and the tag to the
-   public remote (`--remote`, default `github`), creates the GitHub release
+   `vX.Y.Z`, pushes the branch and the tag to origin; with a master
+   checkout there it fast-forwards the master, and the master pushes `main`
+   and the tag to the public remote (`--remote`, default `github`; only the
+   master publishes, ADR 0205); a plain clone pushes the branch as `main`
+   and the tag itself. Then it creates the GitHub release
    with every built file (a pre-release for a `-beta` version), and
    replaces `latest.json` on the rolling release of the channel, `stable`
    or `beta` (a stable release also refreshes `beta` unless beta is newer).

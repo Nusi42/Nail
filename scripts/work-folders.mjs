@@ -20,20 +20,18 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  HOOKS_DIR,
   HOOKS_PATH_ARGS,
-  LOCAL_ENV,
-  MASTER_RUSTC_WRAPPER,
   REPO_ROOT,
   assertWorkFolder,
   branchOf,
   claudeLocalSettings,
   folderOf,
+  guardMaster,
   identityConfig,
   isMaster,
   originOf,
   localSettings,
-  markedAsMaster,
-  masterCargoConfig,
   parseFolderNumber,
 } from "./lib/work-folder.mjs";
 
@@ -123,18 +121,14 @@ function create(n, install) {
   console.log(`${target}: branch ${branch}${known ? " (from the master)" : " (new, from main)"}`);
 }
 
-/** Marks `origin` as the master and makes Cargo refuse to build there. */
-function guardMaster() {
+/** Marks `origin` as the master, makes Cargo refuse to build there and turns its hooks on. */
+function markMaster() {
   const master = originPath();
-  const env = path.join(master, LOCAL_ENV);
-  fs.writeFileSync(env, markedAsMaster(fs.existsSync(env) ? fs.readFileSync(env, "utf8") : ""));
-  const cargoDir = path.join(master, ".cargo");
-  fs.mkdirSync(cargoDir, { recursive: true });
-  const wrapper = path.join(cargoDir, "master-guard.cmd");
-  fs.writeFileSync(wrapper, MASTER_RUSTC_WRAPPER);
-  const config = path.join(cargoDir, "config.local.toml");
-  fs.writeFileSync(config, masterCargoConfig(path.relative(master, wrapper)));
-  console.log(`${master}: marked as the master (${env}); every rustc call there is refused`);
+  const env = guardMaster(master);
+  console.log(
+    `${master}: marked as the master (${env}); every compilation there is refused; ` +
+      `core.hooksPath = ${HOOKS_DIR}`,
+  );
 }
 
 assertWorkFolder("node scripts/work-folders.mjs");
@@ -143,7 +137,7 @@ try {
   if (command === "create") {
     create(parseFolderNumber(arg), !rest.includes("--no-install"));
   } else if (command === "guard-master" && arg === undefined) {
-    guardMaster();
+    markMaster();
   } else {
     console.error("usage: node scripts/work-folders.mjs create <n> [--no-install] | guard-master");
     process.exit(2);

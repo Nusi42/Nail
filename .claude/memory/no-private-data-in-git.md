@@ -2,9 +2,7 @@
 name: no-private-data-in-git
 description: "Rule: none of the maintainer's private data may ever end up in git — not in code, tests, docs, ADRs, memory, commit messages or agent-written files"
 metadata:
-  node_type: memory
   type: feedback
-  modified: 2026-10-08T23:52:01.347Z
 ---
 
 Never commit the owner's private data: email addresses, domains, mail providers and server names of their accounts,

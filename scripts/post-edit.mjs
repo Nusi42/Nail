@@ -6,26 +6,24 @@
 // the short report goes to stderr with exit code 2, which Claude Code feeds
 // back to the agent.
 //
-// A lead session may run in a master checkout while its agents edit files
-// in the work folders (ADR 0132), so the checkout to check is found from the
-// edited file, not from the session's folder, and that checkout's own checks
-// run (its scripts/lib/run-checks.mjs and node_modules). Files of a master
-// checkout (NAIL_CHECKOUT_ROLE=master, ADR 0199) are never checked: nothing
-// runs there.
+// Claude Code starts this file from the session's folder
+// ($CLAUDE_PROJECT_DIR), often the master, whose copy lags behind until the
+// master is fast-forwarded. So it stays small and stable: it finds the
+// checkout from the edited file and hands the file to that checkout's own
+// scripts/lib/after-edit.mjs, which does the work (clean a note, run the
+// checks, skip a master checkout).
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { parseJson } from "./lib/json.mjs";
-import { NOTES, hasSessionLine, withoutSessionLines } from "./lib/notes.mjs";
 import { isMain } from "./lib/program.mjs";
-import { isMaster } from "./lib/work-folder.mjs";
 
 /** Exit code that makes Claude Code show stderr to the agent. */
 const FEEDBACK_EXIT_CODE = 2;
 
-/** The shared check runner, relative to a checkout's root. */
-const RUNNER = path.join("scripts", "lib", "run-checks.mjs");
+/** The module that handles an edited file, relative to a checkout's root. */
+export const AFTER_EDIT = path.join("scripts", "lib", "after-edit.mjs");
 
 /**
  * The edited file named by the hook input, if any.
@@ -48,7 +46,7 @@ export function editedFile(stdin) {
 
 /**
  * The Nail checkout that contains `file` (the nearest folder above it with
- * `.git` and the check runner), or `undefined`.
+ * `.git` and {@link AFTER_EDIT}), or `undefined`.
  *
  * @param {string} file an absolute path
  * @returns {string | undefined}
@@ -56,7 +54,9 @@ export function editedFile(stdin) {
 export function checkoutOf(file) {
   let dir = path.dirname(path.resolve(file));
   for (;;) {
-    if (fs.existsSync(path.join(dir, ".git")) && fs.existsSync(path.join(dir, RUNNER))) return dir;
+    if (fs.existsSync(path.join(dir, ".git")) && fs.existsSync(path.join(dir, AFTER_EDIT))) {
+      return dir;
+    }
     const parent = path.dirname(dir);
     if (parent === dir) return undefined;
     dir = parent;
@@ -84,20 +84,13 @@ async function main() {
   if (!fs.existsSync(file)) return;
   const root = checkoutOf(file);
   const rel = root === undefined ? undefined : relativeTo(root, file);
-  if (root === undefined || rel === undefined || isMaster(root)) return;
-  // Claude Code writes the session into every note it saves: take it out
-  // again at once (ADR 0200).
-  if (NOTES.test(rel)) {
-    const text = fs.readFileSync(file, "utf8");
-    if (hasSessionLine(text)) fs.writeFileSync(file, withoutSessionLines(text));
-  }
-  // The work folder's own runner (its version may differ from this copy's).
+  if (root === undefined || rel === undefined) return;
   /** @type {unknown} */
-  const loaded = await import(pathToFileURL(path.join(root, RUNNER)).href);
-  const runner = /** @type {typeof import("./lib/run-checks.mjs")} */ (loaded);
-  const results = await runner.runChecks(root, [rel]);
-  if (results.every((r) => r.code === 0)) return;
-  console.error(runner.shortReport(results));
+  const loaded = await import(pathToFileURL(path.join(root, AFTER_EDIT)).href);
+  const handler = /** @type {typeof import("./lib/after-edit.mjs")} */ (loaded);
+  const report = await handler.afterEdit(root, file, rel);
+  if (report === undefined) return;
+  console.error(report);
   process.exitCode = FEEDBACK_EXIT_CODE;
 }
 

@@ -3,5 +3,5 @@
 # private data in the message or the identity (scripts/check-private.mjs,
 # ADR 0192; the patterns stay outside the repository). Never bypass with
 # --no-verify.
-node scripts/check-commit-msg.mjs "$1" || exit 1
-exec node scripts/check-private.mjs --message "$1"
+node "$(dirname "$0")/../scripts/check-commit-msg.mjs" "$1" || exit 1
+exec node "$(dirname "$0")/../scripts/check-private.mjs" --message "$1"

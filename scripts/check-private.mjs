@@ -27,6 +27,7 @@ import {
   scanText,
 } from "./lib/private-patterns.mjs";
 import { messageText } from "./lib/commit-message.mjs";
+import { parsePushLines } from "./lib/push-plan.mjs";
 import { STAGED_FILES_ARGS, parseStaged } from "./lib/staged.mjs";
 
 // The repository the hook or check runs in (its working directory).
@@ -103,13 +104,12 @@ switch (mode) {
   }
   case "--push": {
     let commits = 0;
-    for (const line of fs.readFileSync(0, "utf8").split(/\r?\n/)) {
-      const [localRef, localSha, remoteRef, remoteSha] = line.trim().split(/\s+/);
-      if (localRef === undefined || localSha === undefined || ZERO.test(localSha)) continue;
-      checkName(`${localRef} ${remoteRef ?? ""}`);
+    const refs = parsePushLines(fs.readFileSync(0, "utf8"));
+    for (const { localRef, localSha, remoteRef, remoteSha } of refs) {
+      if (ZERO.test(localSha)) continue;
+      checkName(`${localRef} ${remoteRef}`);
       const range = [localSha, "--not", "--remotes"];
-      if (remoteSha !== undefined && !ZERO.test(remoteSha) && known(remoteSha))
-        range.push(remoteSha);
+      if (!ZERO.test(remoteSha) && known(remoteSha)) range.push(remoteSha);
       const log = git([
         "log",
         "--no-color",
