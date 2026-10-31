@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-10-31
+
 ### Fixed (ADRs 0206, 0207)
 
 - Links in HTML mail open outside the reader (the system browser in the
@@ -203,5 +205,6 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.1]: https://github.com/Nusi42/Nail/releases/tag/v0.8.1
 [0.8.0]: https://github.com/Nusi42/Nail/releases/tag/v0.8.0
 [1.0.0-rc.1]: docs/release-checklist.md
