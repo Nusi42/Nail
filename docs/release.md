@@ -98,7 +98,9 @@ commands in the lead's work folder, on a clean checkout of its branch:
    changelog's `[Unreleased]` entries under it, runs the local verification
    (`docs/dev-setup.md` "Verification (no hosted CI)" without ARM64, the
    installer smoke tests and the perf run, which stay by hand;
-   `--skip-checks` for a re-run after a late failure), builds
+   `--skip-checks` for a re-run after a late failure) with the advisory
+   checks (ADR 0209: no open Dependabot alert, read with `gh`; `cargo deny`
+   advisories; `npm audit --omit=dev`), builds
    the x64 NSIS installer and the portable zip with update signatures and
    the update base `<repository>/releases/download`, writes
    `<channel>/latest.json` (every signature checked against

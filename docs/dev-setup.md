@@ -275,6 +275,10 @@ select some, `--fail-fast` stops at the first failure. Cargo runs with
 `-j $CARGO_BUILD_JOBS` (default 4). `cargo deny` checks advisories only with
 `--advisories` (the RustSec database comes from the network); the full
 verification run uses plain `cargo deny check`, which includes them.
+`release:prepare` runs `npm run check -- --advisories` and `npm audit
+--omit=dev` and refuses open Dependabot alerts (GitHub's database has
+advisories RustSec lacks); an accepted risk gets a `deny.toml` `ignore`
+entry or is dismissed on GitHub, with its reason and ADR (ADR 0209).
 
 The **pre-commit hook** (`.githooks/pre-commit`, enabled by `npm install` /
 `npm ci` through the `prepare` script, which sets `core.hooksPath`) runs

@@ -1,6 +1,7 @@
 //! Test support for Nail: an in-process mock IMAP server, a mail corpus and
 //! TLS test material.
 //!
+//! * [`bytes`]: byte patching for crafted files ([`bytes::replace_first`]).
 //! * [`corpus`]: realistic, malformed and hostile `.eml` messages in
 //!   `INBOX` / `Sent` / `Archive`, embedded at build time ([`demo_corpus`]),
 //!   and the P2 demo conversations the seeds of `nail serve` add to them
@@ -26,6 +27,7 @@
 //! # Ok(()) }
 //! ```
 
+pub mod bytes;
 pub mod catalog;
 pub mod corpus;
 pub mod exchange;

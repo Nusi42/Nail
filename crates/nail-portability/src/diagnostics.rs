@@ -341,7 +341,10 @@ mod tests {
         assert_eq!(bundle.size_bytes, fs::metadata(&path).unwrap().len());
         assert_eq!(bundle.sha256.len(), 64);
         let mut archive = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
-        let names: Vec<String> = archive.file_names().map(str::to_owned).collect();
+        let names: Vec<String> = archive
+            .file_names()
+            .map(|name| name.unwrap().into_owned())
+            .collect();
         assert_eq!(
             names,
             vec!["manifest.json", "logs/nail.log", "config/accounts.kdl"]

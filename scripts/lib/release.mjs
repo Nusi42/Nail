@@ -12,6 +12,7 @@
  *   name holding that channel's `latest.json`, so the app's update base is
  *   `<repository>/releases/download` (`<base>/<channel>/latest.json`).
  */
+import { parseJson } from "./json.mjs";
 import { CHANNELS, MANIFEST_FILE, parseVersion } from "./update-manifest.mjs";
 
 /** The user-facing release notes. */
@@ -212,4 +213,65 @@ export function releasedChangelog(changelog, { version, date, page }) {
   return firstLink < 0
     ? `${moved.trimEnd()}\n\n${link}`
     : moved.slice(0, firstLink) + link + moved.slice(firstLink);
+}
+
+/**
+ * The advisory checks of `release:prepare` (ADR 0209), with network: the
+ * RustSec database through `cargo deny` (`npm run check -- --advisories`)
+ * and the npm registry's advisories for what the UI ships (`npm audit
+ * --omit=dev`). GitHub's own database (Dependabot) has advisories the other
+ * two lack; {@link openAlerts} reads those.
+ *
+ * @type {{ command: string, args: string[] }[]}
+ */
+export const ADVISORY_CHECKS = [
+  { command: "npm", args: ["run", "check", "--", "--advisories"] },
+  { command: "npm", args: ["audit", "--omit=dev"] },
+];
+
+/**
+ * A Dependabot alert, as far as the release check reads it.
+ *
+ * @typedef {object} DependabotAlert
+ * @property {number} number
+ * @property {{ package: { ecosystem: string, name: string }, manifest_path: string, scope: string | null }} dependency
+ * @property {{ ghsa_id: string, severity: string, summary: string }} security_advisory
+ */
+
+/**
+ * `gh` arguments that print the repository's open Dependabot alerts, one
+ * JSON object per line (every page).
+ *
+ * @param {string} slug `owner/name`
+ */
+export function dependabotAlertsArgs(slug) {
+  return [
+    "api",
+    "--paginate",
+    "--jq",
+    ".[]",
+    `repos/${slug}/dependabot/alerts?state=open&per_page=100`,
+  ];
+}
+
+/**
+ * The open alerts from the output of {@link dependabotAlertsArgs}, one line
+ * each (empty when there are none). An accepted risk is dismissed on
+ * GitHub with its reason, so it no longer blocks a release.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function openAlerts(text) {
+  return text
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => {
+      const alert = /** @type {DependabotAlert} */ (parseJson(line));
+      const { dependency: dep, security_advisory: advisory } = alert;
+      return (
+        `#${String(alert.number)} ${advisory.severity} ${dep.package.ecosystem} ${dep.package.name} ` +
+        `(${dep.manifest_path}, ${dep.scope ?? "unknown"}): ${advisory.ghsa_id} ${advisory.summary}`
+      );
+    });
 }

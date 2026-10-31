@@ -41,6 +41,7 @@ chrono.workspace = true
 nail-mime.workspace = true
 
 [dev-dependencies]
+nail-testkit.workspace = true
 pretty_assertions.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

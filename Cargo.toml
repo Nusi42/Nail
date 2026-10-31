@@ -202,7 +202,7 @@ hickory-proto = "0.26.3"
 # Autoconfig / Autodiscover XML.
 quick-xml = "0.42.0"
 # Full-text search.
-tantivy = "0.26.2"
+tantivy = "0.27.0"
 base64 = "0.23.1"
 
 # M1b (ADR 0022). Composer: MIME building, Markdown, CSS inlining; the
@@ -325,7 +325,7 @@ rquickjs = { version = "0.14.0", features = [
 ] }
 # `.nailplugin` archives (zip): deflate through zlib-rs (pure Rust, Zlib
 # licence); no bzip2 / zstd / lzma C code, no AES.
-zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # M3a (ADR 0058). Calendars, contacts and tasks. Licences: Apache-2.0 / MIT.
 # iCalendar / vCard parsing and writing, RRULE expansion and zone detection

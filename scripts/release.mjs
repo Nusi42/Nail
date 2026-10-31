@@ -8,8 +8,9 @@
  *
  * prepare, on a clean checkout of the lead branch: sets the version in
  * every copy (scripts/lib/version.mjs), moves the changelog's
- * `[Unreleased]` entries under it, runs the local verification (unless
- * --skip-checks), builds the x64 NSIS installer and the portable
+ * `[Unreleased]` entries under it, runs the local verification with the
+ * advisory checks (unless --skip-checks; ADR 0209: no open Dependabot
+ * alert, `cargo deny` advisories, `npm audit --omit=dev`), builds the x64 NSIS installer and the portable
  * zip with update signatures, writes the channel's `latest.json` (every
  * signature checked against packaging/updater/release.pub) and the GitHub
  * release's text, then commits `chore(release): release X.Y.Z` and writes
@@ -37,15 +38,18 @@ import { buildBase, withoutUpdaterSecrets } from "./lib/build.mjs";
 import { readJson } from "./lib/json.mjs";
 import { confirm, repoRoot, runMain } from "./lib/program.mjs";
 import {
+  ADVISORY_CHECKS,
   CHANGELOG,
   RECORD_FILE,
   RELEASE_NOTES,
   RELEASE_PUBKEY,
   channelAsset,
   channelOf,
+  dependabotAlertsArgs,
   downloadBase,
   githubNotes,
   githubSlug,
+  openAlerts,
   releasePage,
   releaseSection,
   releaseTag,
@@ -69,13 +73,13 @@ const BUNDLES = "nsis";
  * The local verification before a release (docs/dev-setup.md
  * "Verification (no hosted CI)"), without the steps for builds a release
  * does not ship (ARM64, MSI) and the installer smoke tests and the perf
- * run, which stay by hand.
+ * run, which stay by hand. The check runs with the advisories (ADR 0209).
  *
  * @type {{ command: string, args: string[], env?: Record<string, string> }[]}
  */
 const CHECKS = [
   { command: "npm", args: ["ci"] },
-  { command: "npm", args: ["run", "check"] },
+  ...ADVISORY_CHECKS,
   { command: "npm", args: ["test"] },
   { command: "node", args: ["--test", "scripts/test/*.test.mjs"] },
   { command: "npm", args: ["run", "build"] },
@@ -193,6 +197,15 @@ function prepare(argv) {
 
   try {
     if (!o.skipChecks) {
+      const alerts = openAlerts(
+        output("gh", dependabotAlertsArgs(githubSlug(repo)), { shell: false }),
+      );
+      if (alerts.length > 0) {
+        throw new Error(
+          "open Dependabot alerts (fix them, or dismiss an accepted risk on GitHub " +
+            `with its reason, ADR 0209):\n${alerts.join("\n")}`,
+        );
+      }
       for (const check of CHECKS) {
         const env = check.env && { ...withoutUpdaterSecrets(process.env), ...check.env };
         run(check.command, check.args, env ? { env } : {});

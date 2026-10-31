@@ -38,6 +38,13 @@ ignore = [
     # recorded in docs/plan.md "M2a follow-ups"). Remove when rsa 0.10 is
     # usable by both crates.
     { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 Marvin timing channel: no fix in this RustCrypto generation; decryption is blinded (ADR 0034)" },
+    # crypto-bigint 0.5: secret-dependent branches in some arithmetic
+    # (RUSTSEC-2026-0387), fixed only in 0.7.6. elliptic-curve 0.13 (pgp,
+    # cx448, p256 / p384 / p521) is pinned to 0.5 and pgp 0.21 stays on that
+    # generation. A local timing side channel while Nail signs or decrypts;
+    # no network-facing oracle (ADR 0209). Remove with the next RustCrypto
+    # generation.
+    { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 timing variability: no fix in this RustCrypto generation; local side channel only (ADR 0209)" },
 ]
 
 [licenses]

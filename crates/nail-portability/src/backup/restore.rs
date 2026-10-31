@@ -139,13 +139,21 @@ impl BackupArchive {
         let file =
             File::open(path).map_err(|e| PortabilityError::io(path.display().to_string(), e))?;
         let (reader, _header) = DecryptingReader::open(BufReader::new(file), passphrase)?;
-        let mut archive =
-            ZipArchive::new(reader).map_err(|e| PortabilityError::Corrupt(format!("zip: {e}")))?;
+        let zip_error = |e: zip::result::ZipError| PortabilityError::Corrupt(format!("zip: {e}"));
+        let mut archive = ZipArchive::new(reader).map_err(zip_error)?;
+        // Nail writes every name once and local headers that match the
+        // central directory; anything else is a crafted archive whose
+        // entries another reader would see differently.
+        if archive.has_duplicate_names() {
+            return Err(PortabilityError::Corrupt("duplicate entry names".into()));
+        }
+        archive.validate_header_consistency().map_err(zip_error)?;
         let first = archive
             .by_index(0)
-            .map_err(|e| PortabilityError::Corrupt(format!("zip: {e}")))?
+            .map_err(zip_error)?
             .name()
-            .to_owned();
+            .map_err(zip_error)?
+            .into_owned();
         if first != BACKUP_MANIFEST_ENTRY {
             return Err(PortabilityError::Corrupt(
                 "the manifest is not the first entry".into(),
@@ -240,7 +248,11 @@ impl BackupArchive {
     pub fn verify_entries(&mut self, ctx: &mut JobContext<'_>) -> Result<u64> {
         let entries = self.manifest.entries.clone();
         let mut good = 0;
-        let names: HashSet<String> = self.archive.file_names().map(str::to_owned).collect();
+        let names: HashSet<String> = self
+            .archive
+            .file_names()
+            .filter_map(|name| name.ok().map(std::borrow::Cow::into_owned))
+            .collect();
         for entry in &entries {
             ctx.check_cancelled()?;
             ctx.set_current(Some(entry.name.clone()));

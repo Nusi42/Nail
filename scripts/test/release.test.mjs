@@ -6,15 +6,18 @@ import { test } from "node:test";
 
 import { repoRoot } from "../lib/program.mjs";
 import {
+  ADVISORY_CHECKS,
   CHANGELOG,
   RELEASE_NOTES,
   RELEASE_PUBKEY,
   absoluteLinks,
   channelAsset,
   channelOf,
+  dependabotAlertsArgs,
   downloadBase,
   githubNotes,
   githubSlug,
+  openAlerts,
   plainLinks,
   releasePage,
   releaseSection,
@@ -149,4 +152,43 @@ test("the repository is a GitHub repository with a release key", () => {
   assert.equal(githubSlug("https://github.com/a/b.git"), "a/b");
   assert.throws(() => githubSlug("https://example.org/a/b"));
   assert.match(read(RELEASE_PUBKEY), /^[A-Za-z0-9+/=]+\s*$/, "the public half only");
+});
+
+test("a release checks the advisories of every database with network", () => {
+  const commands = ADVISORY_CHECKS.map((c) => [c.command, ...c.args].join(" "));
+  assert.deepEqual(commands, ["npm run check -- --advisories", "npm audit --omit=dev"]);
+  const source = readFileSync(path.join(repoRoot, "scripts/release.mjs"), "utf8");
+  assert.match(source, /\.\.\.ADVISORY_CHECKS/);
+  assert.match(source, /openAlerts\(/);
+  assert.deepEqual(dependabotAlertsArgs("example/nail"), [
+    "api",
+    "--paginate",
+    "--jq",
+    ".[]",
+    "repos/example/nail/dependabot/alerts?state=open&per_page=100",
+  ]);
+});
+
+test("open Dependabot alerts are listed one per line", () => {
+  assert.deepEqual(openAlerts(""), []);
+  assert.deepEqual(openAlerts("\n  \n"), []);
+  /**
+   * @param {number} number
+   * @param {string | null} scope
+   */
+  const alert = (number, scope) =>
+    JSON.stringify({
+      number,
+      dependency: {
+        package: { ecosystem: "rust", name: "zip" },
+        manifest_path: "Cargo.lock",
+        scope,
+      },
+      security_advisory: { ghsa_id: "GHSA-xxxx-yyyy-zzzz", severity: "high", summary: "Bad" },
+    });
+  assert.deepEqual(openAlerts(`${alert(9, "runtime")}\n${alert(10, null)}\n`), [
+    "#9 high rust zip (Cargo.lock, runtime): GHSA-xxxx-yyyy-zzzz Bad",
+    "#10 high rust zip (Cargo.lock, unknown): GHSA-xxxx-yyyy-zzzz Bad",
+  ]);
+  assert.throws(() => openAlerts("not json"));
 });

@@ -1378,6 +1378,14 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `rustc -vV` and the target query through for `cargo metadata`; `guard-master` sets its `core.hooksPath`.
   `release:publish` pushes through the master (`publishPushes`). ADR 0208: branches are rebased; the `linear` step
   (`scripts/check-linear.mjs`) refuses merge commits on pushes to and from the master.
+- Dependency advisories (ADR 0209): zip 9.2; `PluginPackage::read` (`crates/nail-plugins/src/package.rs`) and
+  `BackupArchive::open` (`crates/nail-portability/src/backup/restore.rs`) refuse `has_duplicate_names()` and call
+  `validate_header_consistency()` before reading any entry; neither extracts to disk. A restored plug-in's id passes
+  `nail_api::plugins::is_plugin_id` (`nail-core` `portability/backup.rs` `merge_plugin`). Crafted-archive tests patch names with
+  `nail_testkit::bytes::replace_first`. `release:prepare` refuses open
+  Dependabot alerts (`scripts/lib/release.mjs` `dependabotAlertsArgs` / `openAlerts`, through `gh`) and runs
+  `ADVISORY_CHECKS` (`npm run check -- --advisories`, `npm audit --omit=dev`). Accepted risks: `glib` 0.18 (Linux,
+  Tauri 2's GTK 3), `crypto-bigint` 0.5 (`deny.toml` ignore), `minimatch` (development).
 - The desktop window stays alive (ADR 0207): `app/src-tauri/src/webview_health.rs` subscribes to WebView2
   `ProcessFailed` for every webview (from `on_page_load`, once per label; `forget` on `Destroyed`), logs kind / reason /
   exit code, reloads a dead or hung page with back-off (0 / 5 / 30 s, at most 3 per 15 min; `Recovery`), gives up with

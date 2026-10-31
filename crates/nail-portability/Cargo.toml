@@ -48,6 +48,7 @@ testing = []
 [dev-dependencies]
 # The crate's own test doubles for its integration tests.
 nail-portability = { workspace = true, features = ["testing"] }
+nail-testkit.workspace = true
 pretty_assertions.workspace = true
 
 [lints]

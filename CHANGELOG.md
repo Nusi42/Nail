@@ -8,6 +8,20 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Security (ADR 0209)
+
+- Plug-in packages and backups are read with `zip` 9.2 and refused when
+  their local headers disagree with the central directory or a name occurs
+  twice, so no other zip reader can see different files than the ones Nail
+  checked. A restored plug-in needs a valid plug-in id.
+- Updated `rustls` (0.23.46), the mail HTML sanitizer `ammonia` (4.2.4),
+  `rustls-webpki`, `webpki-roots`, `tokio`, `zstd` and the search engine
+  `tantivy` (0.27) for published advisories; development tools updated
+  (`vite`, `vitest`, `undici`, `markdownlint-cli2` and others).
+- A release now stops while GitHub reports open Dependabot alerts, and
+  checks the RustSec and npm advisories of what it ships (development
+  setup only).
+
 ## [0.8.1] — 2026-10-31
 
 ### Fixed (ADRs 0206, 0207)

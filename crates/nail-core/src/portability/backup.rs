@@ -521,6 +521,7 @@ impl CoreRestoreTarget {
     ) -> Result<MergeOutcome, SinkError> {
         let id = name
             .strip_suffix(&format!("/{PACKAGE_FILE}"))
+            .filter(|id| nail_api::plugins::is_plugin_id(id))
             .ok_or_else(|| item_err(format!("unknown plug-in file {name}")))?;
         let installed = self
             .service
@@ -798,6 +799,32 @@ mod tests {
         )
         .unwrap();
         assert!(!store.notification_settings().unwrap().sound);
+    }
+
+    /// A plug-in entry names its file through the plug-in id, so only a
+    /// valid id (one path segment) gets as far as a file name.
+    #[test]
+    fn restored_plugins_need_a_valid_id() {
+        let (service, _data, _config) = service();
+        let mut target = CoreRestoreTarget::new(&service, false);
+        for name in [
+            "a/b/package.nailplugin",
+            "Not An Id/package.nailplugin",
+            "package.nailplugin",
+        ] {
+            let result = target.merge_file(BackupItem::Plugins, name, b"x", true);
+            assert!(
+                matches!(result, Err(SinkError::Item(_))),
+                "{name}: {result:?}"
+            );
+        }
+        let ok = target.merge_file(
+            BackupItem::Plugins,
+            &format!("follow-up/{PACKAGE_FILE}"),
+            b"x",
+            true,
+        );
+        assert_eq!(ok.unwrap().added, 1);
     }
 
     #[test]

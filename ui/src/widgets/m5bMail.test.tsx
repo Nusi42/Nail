@@ -27,6 +27,7 @@ import {
 } from "../test/harness";
 import { PROPOSAL_READER } from "./proposalToolbars";
 import { must } from "../test/must";
+import { stubProperties } from "../test/stub";
 import { objectContaining } from "../test/matchers";
 import { FIRST, INBOX } from "../test/mockIds";
 
@@ -498,11 +499,21 @@ describe("reader (M5b)", () => {
     expect(status).toHaveAttribute("role", "status");
     expect(status).toHaveAttribute("data-state", "empty");
     expect(status).toBeEmptyDOMElement();
-    fireEvent.click(save);
-    expect(status).toHaveTextContent("Saving…");
-    expect(card).toHaveAttribute("data-state", "saving");
-    // jsdom cannot download (no object URLs): the failure replaces it.
-    await waitFor(() => expect(status).toHaveTextContent("The attachment could not be saved."));
+    // The download fails (an object URL cannot be made) and the failure
+    // replaces "Saving…".
+    const restoreUrl = stubProperties(URL, {
+      createObjectURL: () => {
+        throw new Error("no object URLs");
+      },
+    });
+    try {
+      fireEvent.click(save);
+      expect(status).toHaveTextContent("Saving…");
+      expect(card).toHaveAttribute("data-state", "saving");
+      await waitFor(() => expect(status).toHaveTextContent("The attachment could not be saved."));
+    } finally {
+      restoreUrl();
+    }
     expect(card).toHaveAttribute("data-state", "failed");
     expect(status?.querySelector('[data-part="attachment-card.status.icon"]')).toHaveAttribute(
       "data-icon",

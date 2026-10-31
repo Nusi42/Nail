@@ -11,7 +11,9 @@
 //! * every path is a plain relative path ([`is_safe_path`]: no `..`, no
 //!   absolute or drive paths, no `\`, no Windows device names), unique
 //!   ignoring case; no symbolic links, no encrypted entries, no
-//!   compression other than stored / deflate;
+//!   compression other than stored / deflate; local headers must match
+//!   the central directory (no repeated names, no overlapping or unlisted
+//!   entries), so every zip reader sees the same files;
 //! * `manifest.json` parses ([`PluginManifest::parse`]; its issues are
 //!   reported, not raised) and the files it names exist.
 //!
@@ -303,6 +305,17 @@ impl PluginPackage {
         if archive.len() > MAX_FILES {
             return Err(PackageError::new(K::TooManyFiles));
         }
+        // The central directory keeps one entry per exact name, so a
+        // repeated name would silently shadow the other copy.
+        if archive.has_duplicate_names() {
+            return Err(PackageError::new(K::DuplicatePath));
+        }
+        // Local headers must match the central directory, without
+        // overlapping or unlisted entries: another zip reader must not
+        // see different files than the ones checked here ("zip cloaking").
+        archive
+            .validate_header_consistency()
+            .map_err(|e| PackageError::new(K::NotAZip).detail(&e))?;
         let mut seen = HashSet::new();
         let mut files = BTreeMap::new();
         let mut budget = MAX_PACKAGE_BYTES;
@@ -312,7 +325,10 @@ impl PluginPackage {
                 let entry = archive
                     .by_index_raw(i)
                     .map_err(|e| PackageError::new(K::Unreadable).detail(&e))?;
-                let name = entry.name().to_owned();
+                let name = entry
+                    .name()
+                    .map_err(|e| PackageError::new(K::UnsafePath).detail(&e))?
+                    .into_owned();
                 let is_dir = name.ends_with('/');
                 let plain = name.strip_suffix('/').unwrap_or(&name);
                 if !is_safe_path(plain) || entry.enclosed_name().is_none() {
@@ -542,6 +558,8 @@ pub fn build_package<'a>(
 mod tests {
     use std::io::Write;
 
+    use nail_testkit::bytes::replace_first;
+
     use super::*;
 
     const MANIFEST: &str = r#"{"id":"hello","name":"Hello","version":"1.0.0","apiVersion":"1","main":"dist/index.js",
@@ -635,6 +653,62 @@ mod tests {
             deflate(),
         );
         assert_eq!(kind(&bytes), PackageErrorKind::DuplicatePath);
+    }
+
+    #[test]
+    fn refuses_exact_duplicate_names() {
+        // The central directory keeps one entry per exact name, so the
+        // second copy would otherwise vanish behind the first.
+        let mut bytes = zip_with(
+            &[
+                ("manifest.json", MANIFEST.as_bytes()),
+                ("dist/index.js", b"good"),
+                ("dist/indey.js", b"evil"),
+            ],
+            deflate(),
+        );
+        // Local header and central directory entry of the third file.
+        replace_first(&mut bytes, b"dist/indey.js", b"dist/index.js", 2);
+        assert_eq!(kind(&bytes), PackageErrorKind::DuplicatePath);
+    }
+
+    #[test]
+    fn refuses_local_headers_that_differ_from_the_central_directory() {
+        // "Zip cloaking": the local header names another file than the
+        // central directory, so two readers would see different packages.
+        let mut bytes = zip_with(
+            &[
+                ("manifest.json", MANIFEST.as_bytes()),
+                ("dist/index.js", b"x"),
+            ],
+            deflate(),
+        );
+        // Only the first occurrence: the local header.
+        replace_first(&mut bytes, b"dist/index.js", b"dist/evil0.js", 1);
+        assert_eq!(kind(&bytes), PackageErrorKind::NotAZip);
+    }
+
+    #[test]
+    fn refuses_legacy_and_aes_compression_methods() {
+        // Shrink (1), Reduce (2), Implode (6) and the AES marker (99)
+        // never reach a decoder.
+        for method in [1u8, 2, 6, 99] {
+            let mut bytes = zip_with(&[("manifest.json", MANIFEST.as_bytes())], deflate());
+            bytes[8] = method;
+            let central = bytes
+                .windows(4)
+                .position(|w| w == [0x50, 0x4b, 0x01, 0x02])
+                .unwrap();
+            bytes[central + 10] = method;
+            assert!(PluginPackage::read(&bytes).is_err(), "method {method}");
+            if method != 99 {
+                assert_eq!(
+                    kind(&bytes),
+                    PackageErrorKind::Compression,
+                    "method {method}"
+                );
+            }
+        }
     }
 
     #[test]

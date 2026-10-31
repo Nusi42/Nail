@@ -639,10 +639,12 @@ fn cancelled_backups_leave_nothing() {
 /// Writes an archive by hand with the same layers as a backup: the
 /// manifest, then `files` (whatever the manifest says about them).
 fn write_by_hand(path: &Path, manifest: &BackupManifest, files: &[(&str, &[u8])]) {
-    let file = File::create(path).unwrap();
-    let encrypting =
-        crypto::EncryptingWriter::new(file, PASSPHRASE, KdfParams::insecure_for_tests()).unwrap();
-    let mut zip = ZipWriter::new_stream(encrypting);
+    encrypt_by_hand(path, &zip_by_hand(manifest, files));
+}
+
+/// The plain zip of [`write_by_hand`], to be patched before encrypting.
+fn zip_by_hand(manifest: &BackupManifest, files: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut zip = ZipWriter::new_stream(Vec::new());
     let options = SimpleFileOptions::default();
     zip.start_file(BACKUP_MANIFEST_ENTRY, options).unwrap();
     serde_json::to_writer(&mut zip, manifest).unwrap();
@@ -650,7 +652,60 @@ fn write_by_hand(path: &Path, manifest: &BackupManifest, files: &[(&str, &[u8])]
         zip.start_file(*name, options).unwrap();
         zip.write_all(bytes).unwrap();
     }
-    zip.finish().unwrap().into_inner().finish().unwrap();
+    zip.finish().unwrap().into_inner()
+}
+
+/// Encrypts a plain zip with the backup's layers.
+fn encrypt_by_hand(path: &Path, plain: &[u8]) {
+    let file = File::create(path).unwrap();
+    let mut encrypting =
+        crypto::EncryptingWriter::new(file, PASSPHRASE, KdfParams::insecure_for_tests()).unwrap();
+    encrypting.write_all(plain).unwrap();
+    encrypting.finish().unwrap();
+}
+
+/// Archives another zip reader would read differently are refused on
+/// open: a name twice in the central directory, or a local header that
+/// names another file than its central directory entry.
+#[test]
+fn duplicate_and_cloaked_entries_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = BackupManifest {
+        format_version: 1,
+        app_version: "x".into(),
+        schema_version: 15,
+        created_at: "2026-10-02T00:00:00Z".into(),
+        contents: BackupContents { items: vec![] },
+        entries: vec![],
+        counts: JobCounts::default(),
+        accounts: vec![],
+        plugins: vec![],
+    };
+    let files: &[(&str, &[u8])] = &[("config/theme.kdl", b"good"), ("config/theme.kdx", b"evil")];
+    let plain = zip_by_hand(&manifest, files);
+    let control = dir.path().join("control.nailbackup");
+    encrypt_by_hand(&control, &plain);
+    assert!(BackupArchive::open(&control, PASSPHRASE).is_ok());
+
+    let mut duplicate = plain.clone();
+    // The local header and the central directory entry.
+    nail_testkit::bytes::replace_first(&mut duplicate, b"config/theme.kdx", b"config/theme.kdl", 2);
+    let path = dir.path().join("duplicate.nailbackup");
+    encrypt_by_hand(&path, &duplicate);
+    assert!(matches!(
+        BackupArchive::open(&path, PASSPHRASE),
+        Err(PortabilityError::Corrupt(_))
+    ));
+
+    let mut cloaked = plain;
+    // Only the first occurrence: the local header.
+    nail_testkit::bytes::replace_first(&mut cloaked, b"config/theme.kdx", b"config/theme.kdy", 1);
+    let path = dir.path().join("cloaked.nailbackup");
+    encrypt_by_hand(&path, &cloaked);
+    assert!(matches!(
+        BackupArchive::open(&path, PASSPHRASE),
+        Err(PortabilityError::Corrupt(_))
+    ));
 }
 
 #[test]
