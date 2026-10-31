@@ -94,6 +94,8 @@ export interface StartOptions {
    * it. Default: the real time.
    */
   demoNow?: Date;
+  /** The server's log filter (`NAIL_LOG`; the tests' default keeps only errors). */
+  log?: string;
 }
 
 /**
@@ -124,7 +126,10 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
   const serve = await spawnServe(nailBinary(), args, {
     cwd: repoRoot,
     timeoutMs: 30_000,
-    env: options.demoNow ? { NAIL_DEMO_NOW: options.demoNow.toISOString() } : {},
+    env: {
+      ...(options.demoNow ? { NAIL_DEMO_NOW: options.demoNow.toISOString() } : {}),
+      ...(options.log ? { NAIL_LOG: options.log } : {}),
+    },
   });
   return {
     url: serve.url,

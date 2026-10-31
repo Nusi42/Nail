@@ -795,6 +795,18 @@ export const WIRE_DIRECTION_VALUES = ["sent","received","info"] as const satisfi
 /** Every `ErrorStep`, in the contract's order. */
 export const ERROR_STEP_VALUES = ["connect","tls","login","token","list","select","search","fetch","flags","store","write","send","idle","discover","other"] as const satisfies readonly ErrorStep[];
 
+/** Longest text of a UI report the core logs (characters). */
+export const UI_REPORT_MAX_CHARS = 2000 as const;
+
+/** The tracing target of the page's lines in app.log. */
+export const UI_LOG_TARGET = "nail_ui" as const;
+
+/** Uncaught problems a page reports per minute at most. */
+export const UI_PROBLEMS_PER_MINUTE = 10 as const;
+
+/** Minutes between two memory samples a page reports. */
+export const UI_MEMORY_SAMPLE_MINUTES = 30 as const;
+
 /** Every `CryptoTechnology`, in the contract's order. */
 export const CRYPTO_TECHNOLOGY_VALUES = ["openpgp","smime"] as const satisfies readonly CryptoTechnology[];
 

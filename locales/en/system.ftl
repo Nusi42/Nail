@@ -18,6 +18,7 @@ system-action-about = About Nail
 system-action-check-updates = Check for updates
 system-action-first-run = Welcome screen
 system-action-default-apps = Choose default apps
+system-action-reload = Reload window
 window-about-nail = { system-action-about }
 window-first-run = { system-first-run-title }
 

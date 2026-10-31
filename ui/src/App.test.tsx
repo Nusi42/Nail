@@ -1,5 +1,7 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { overridesFromUrl } from "./App";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { App, overridesFromUrl } from "./App";
+import { appRegistry } from "./features/registry";
+import { expectConsole } from "./test/console";
 import { defaultTheme } from "./api/mockData";
 import { appWindowEachTest, renderApp } from "./test/app";
 import { createEnv } from "./test/harness";
@@ -211,5 +213,38 @@ describe("App", () => {
       modeOverride: "dark",
     });
     expect(overridesFromUrl("?mode=neon")).toEqual({ localeOverride: null, modeOverride: null });
+  });
+
+  // ADR 0207: the page reports its start, and a failed render shows the
+  // error screen (not a white window) and reaches the core's log.
+  it("reports its start and catches a failed render", async () => {
+    expectConsole(/status bar broke/);
+    const env = createEnv();
+    const Broken = () => {
+      throw new Error("status bar broke");
+    };
+    render(
+      <App
+        client={env.client}
+        queryClient={env.queryClient}
+        store={env.store}
+        widgets={{ ...appRegistry.widgets, "status-bar": Broken }}
+      />,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Something in this window failed to show. Reload it to continue.",
+    );
+    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
+    const reports = env.transport.requests.flatMap((r) =>
+      r.type === "ReportUiDiagnostics" ? [r.report] : [],
+    );
+    expect(reports[0]).toMatchObject({ type: "started" });
+    expect(reports).toContainEqual(
+      expect.objectContaining({
+        type: "problem",
+        kind: "render-error",
+        message: "Error: status bar broke",
+      }),
+    );
   });
 });

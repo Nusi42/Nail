@@ -24,6 +24,8 @@ export const CHECK_UPDATES_ACTION = "system.check-updates";
 export const FIRST_RUN_ACTION = "system.first-run";
 /** Action: opens Windows Settings → Default apps. */
 export const DEFAULT_APPS_ACTION = "system.default-apps";
+/** Action: reloads the window's page (ADR 0207). */
+export const RELOAD_ACTION = "system.reload";
 
 /**
  * The import wizard's action id (M4c WP124). The first-run screen offers

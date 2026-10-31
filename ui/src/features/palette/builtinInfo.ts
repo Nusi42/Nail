@@ -96,6 +96,7 @@ const ROWS: readonly Row[] = [
   ["system.check-updates", DESKTOP, true],
   ["system.default-apps", DESKTOP, true],
   ["system.first-run", DESKTOP, false],
+  ["system.reload", ANY, true],
   ["tasks.from-message", MAIL, false],
   ["tasks.new", ANY, true],
   ["window.close", ANY, false],

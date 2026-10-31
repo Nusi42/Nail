@@ -1365,3 +1365,12 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   licenses`; plain clone = guard + `npm run check`; anything else is refused. The master's rustc wrapper lets
   `rustc -vV` and the target query through for `cargo metadata`; `guard-master` sets its `core.hooksPath`.
   `release:publish` pushes through the master (`publishPushes`).
+- The desktop window stays alive (ADR 0207): `app/src-tauri/src/webview_health.rs` subscribes to WebView2
+  `ProcessFailed` for every webview (from `on_page_load`, once per label; `forget` on `Destroyed`), logs kind / reason /
+  exit code, reloads a dead or hung page with back-off (0 / 5 / 30 s, at most 3 per 15 min; `Recovery`), gives up with
+  a native message (`shell-window-failed`, `error_box` in `lib.rs`); pings the main page with `eval_with_callback` when
+  the window comes up or gets the focus (10 s, at most once a minute); shell test control `webview-health`. The page
+  reports to `app.log` through `ReportUiDiagnostics` (`UiReport`: `started`, `problem`, `memory`;
+  `ui/src/state/pageDiagnostics.ts`, `crates/nail-core/src/ui_log.rs`, target `nail_ui`, capped per minute on both
+  sides); `ui/src/PageErrorBoundary.tsx` around the shell; action `system.reload` (Ctrl+Shift+R); bounded page lists
+  through `ui/src/state/bounded.ts` `pushBounded` (plug-in and PIM toasts).

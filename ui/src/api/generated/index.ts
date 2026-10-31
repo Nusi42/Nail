@@ -686,6 +686,8 @@ export type * from "./TrustDecision";
 export type * from "./TrustLevel";
 export type * from "./UiContext";
 export type * from "./UiEndpointFile";
+export type * from "./UiProblemKind";
+export type * from "./UiReport";
 export type * from "./UiStateIssue";
 export type * from "./UpdateChannel";
 export type * from "./UpdateDisabledReason";

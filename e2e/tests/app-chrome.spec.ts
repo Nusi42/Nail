@@ -1,6 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
 import {
+  runFromPalette,
   accountSectionNamed,
   composerWindow,
   newMessageButton,
@@ -13,6 +16,7 @@ import {
   type ViewName,
 } from "../support/views";
 import { defined } from "../support/defined";
+import { UI_LOG_TARGET as PAGE_LOG_TARGET } from "../../ui/src/api/generated/constants";
 
 /**
  * The app's chrome as reviewed in the desktop app (2026-10-08):
@@ -23,7 +27,9 @@ import { defined } from "../support/defined";
  * - only the user's data is selectable, never Nail's labels (ADR 0182);
  * - Check for new mail beside New message, F5 / Ctrl+R (ADR 0183);
  * - a right-click opens Nail's menu for the place or nothing, never the
- *   browser's; text gets Cut / Copy / Paste / Select all (ADR 0184).
+ *   browser's; text gets Cut / Copy / Paste / Select all (ADR 0184);
+ * - Ctrl+Shift+R and "Reload window" reload the page, which reports its
+ *   start to the core's app.log (ADR 0207).
  *
  * Each test has its own `nail serve` (windows remember their geometry).
  */
@@ -342,5 +348,54 @@ test.describe("Check for new mail (ADR 0183)", () => {
     await expect(check).toBeDisabled();
     await page.context().setOffline(false);
     await expect(check).toBeEnabled();
+  });
+});
+
+test.describe("Reload window (ADR 0207)", () => {
+  test.beforeEach(async () => {
+    // The page's reports are info lines (ADR 0207).
+    server = await startNail({ seed: "demo", log: `warn,${PAGE_LOG_TARGET}=info` });
+  });
+
+  /** The page's lines of the server's app.log. */
+  function pageLines(): string[] {
+    const file = path.join(server.dataDir, "logs", "app.log");
+    if (!existsSync(file)) return [];
+    return readFileSync(file, "utf8")
+      .split(/\r?\n/)
+      .filter((line) => line.includes(PAGE_LOG_TARGET));
+  }
+  const starts = () => pageLines().filter((line) => line.includes("page started")).length;
+
+  test("Ctrl+Shift+R and the palette reload the window; each start is logged", async ({ page }) => {
+    await openApp(page, server.url);
+    await expect(rows(page).first()).toBeVisible();
+    await expect.poll(starts).toBe(1);
+
+    /** Runs `reload` and checks that the page was loaded again and logged its start. */
+    const reloads = async (reload: () => Promise<void>, expectedStarts: number) => {
+      await page.evaluate(() => Reflect.set(window, "nailStillHere", true));
+      await reload();
+      await expect
+        .poll(() =>
+          // The page may be mid-reload: no answer yet counts as "still here".
+          page.evaluate(() => Reflect.get(window, "nailStillHere") === true).catch(() => true),
+        )
+        .toBe(false);
+      await expect(rows(page).first()).toBeVisible();
+      await expect.poll(starts).toBe(expectedStarts);
+    };
+    await reloads(() => page.keyboard.press("Control+Shift+R"), 2);
+    await reloads(() => runFromPalette(page, "reload", "Reload window"), 3);
+
+    // An uncaught error reaches the log too.
+    await page.evaluate(() => {
+      setTimeout(() => {
+        throw new Error("thrown on purpose by the test");
+      }, 0);
+    });
+    await expect
+      .poll(() => pageLines().some((line) => line.includes("thrown on purpose by the test")))
+      .toBe(true);
   });
 });

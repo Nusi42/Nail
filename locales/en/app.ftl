@@ -57,6 +57,9 @@ sync-action-now = Check for new mail
 ## App shell
 
 app-loading = { common-loading }
+# The screen of a window whose content failed to show (with a Reload button).
+app-render-failed = Something in this window failed to show. Reload it to continue.
+app-reload = Reload
 
 ## Layout engine
 

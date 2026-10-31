@@ -1392,6 +1392,8 @@ impl Service {
             | Request::ReportSystemAppearance { .. }) => {
                 crate::appearance::handle(self, request).await?
             }
+            // ADR 0207: the page's own diagnostics for app.log.
+            request @ Request::ReportUiDiagnostics { .. } => crate::ui_log::handle(request),
             // M5a WP155: attachments of received mail.
             request @ (Request::GetMessageAttachment { .. } | Request::SaveAttachment { .. }) => {
                 crate::attachments::handle(self, request).await?
