@@ -37,6 +37,12 @@
  * account dots); the list header (`list-header.*`, filter chips); the focus
  * ring on the active list row.
  *
+ * ADR 0206: the warnings banner's list scrolls past a height and its
+ * "Show all" toggle (`security-warnings.toggle`); the hovered link's status overlay (`message-view.link-status`)
+ * sits in a zero-height sticky dock at the reader's bottom edge
+ * (`message-view.link-dock`), over the content; a flagged link's status has
+ * `data-state~="warning"`.
+ *
  * P1 (WP190), P3 (WP-card-height, ADR 0164): the HTML body's frame is as
  * tall as its mail (a geometry rule from the measured height; until then a
  * placeholder height) and the reader scrolls as a whole. A column with an
@@ -51,6 +57,7 @@
  */
 import { HC, p, ps, pss } from "./selectors";
 import {
+  ACCENT_BAR,
   AVATAR_FG,
   CAPS_TIGHT,
   HC_RING,
@@ -349,6 +356,8 @@ ${p("window.body")} { padding: ${T.pane}; }
 ${p("mail-confirm")} { display: grid; gap: ${T.md}; align-content: start; }
 ${p("mail-confirm.question")}, ${p("mail-confirm.note")} { margin: 0; overflow-wrap: anywhere; }
 ${p("mail-confirm.note")} { color: ${T.muted}; }
+${p("mail-confirm.warning")} { margin: 0; padding-inline-start: ${T.sm}; border-inline-start: ${ACCENT_BAR} solid ${T.warning}; font-weight: ${T.medium}; overflow-wrap: anywhere; }
+${p("mail-confirm.target")} { margin: 0; font-family: ${T.fontMono}; font-size: ${T.small}; color: ${T.muted}; overflow-wrap: anywhere; }
 ${p("mail-confirm.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
 ${p("wizard.buttons")}, ${p("pim.editor.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }`;
 
@@ -409,6 +418,17 @@ ${p("message-view.header.value")} { min-width: 0; overflow-wrap: anywhere; }
 ${p("message-view.text")} { max-width: ${READER_MEASURE}; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
 ${p("message-view.body")} { display: block; flex: 0 0 auto; box-sizing: border-box; width: 100%; height: calc(12 * ${T.lg}); border: none; background-color: ${T.bg}; }
 ${p("message-view.column")}:has(> ${p("message-view.body")}) { max-width: none; }
+${p("message-view.link-dock")} { position: sticky; bottom: 0; z-index: 1; flex: 0 0 auto; height: 0; overflow: visible; pointer-events: none; }
+${p("message-view.link-status")} {
+  position: absolute; inset-inline-start: 0; bottom: 0; box-sizing: border-box; display: grid; gap: ${T.xxs};
+  max-width: min(100%, calc(${READER_MEASURE} + 2 * ${T.xxl})); padding: ${T.xxs} ${T.sm};
+  border: 1px solid ${T.border}; border-inline-start: none; border-bottom: none; border-start-end-radius: ${T.rSm};
+  background-color: ${T.raised}; color: ${T.fg}; font-family: ${T.fontUi}; font-size: ${T.small}; line-height: ${T.normal};
+}
+${p("message-view.link-status")}[data-state~="warning"] { border-color: ${T.warning}; border-inline-start: ${ACCENT_BAR} solid ${T.warning}; }
+${p("message-view.link-status.url")} { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: ${T.fontMono}; }
+${p("message-view.link-status.full")} { ${VISUALLY_HIDDEN} }
+${p("message-view.link-status.warning")} { font-weight: ${T.medium}; overflow-wrap: anywhere; }
 @container nail-reader (max-width: ${READER_NARROW}) {
   ${p("message-view.column")} { padding: ${T.lg} ${T.pane} 0; }
   ${ps(...READER_SLOTS)} { width: calc(100% - 2 * ${T.pane}); }
@@ -421,6 +441,15 @@ ${p("message-view.attachments.toggle")} {
   border: none; border-radius: ${T.rMd}; background-color: transparent; cursor: default;
   font-family: ${T.fontUi}; font-size: ${T.small}; font-weight: ${T.medium}; color: ${T.accent};
 }
+${p("security-warnings.list")} { max-height: calc(16 * ${T.lg}); overflow-y: auto; }
+${p("security-warnings.item")} { min-width: 0; }
+${p("security-warnings.toggle")} {
+  display: inline-flex; align-items: center; min-height: ${T.control}; padding: 0 ${T.sm}; margin-inline-start: calc(-1 * ${T.sm});
+  border: none; border-radius: ${T.rMd}; background-color: transparent; cursor: default;
+  font-family: ${T.fontUi}; font-size: ${T.small}; font-weight: ${T.medium}; color: ${T.accent};
+}
+${p("security-warnings.toggle")}:hover { background-color: ${T.accentSoft}; }
+${p("security-warnings.toggle")}:focus-visible { ${focusRing} }
 ${p("message-view.attachments.toggle")}:hover { background-color: ${T.accentSoft}; }
 ${p("message-view.attachments.toggle")}:focus-visible { ${focusRing} }
 ${p("message-view.attachments.toggle.icon")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }

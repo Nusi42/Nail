@@ -66,6 +66,7 @@ import type { KeyImportResult } from "./KeyImportResult";
 import type { KeyLookupCandidate } from "./KeyLookupCandidate";
 import type { KeyLookupFailure } from "./KeyLookupFailure";
 import type { LaunchRequest } from "./LaunchRequest";
+import type { LinkOutcome } from "./LinkOutcome";
 import type { LocalizedMessage } from "./LocalizedMessage";
 import type { MailActionResult } from "./MailActionResult";
 import type { MailTargetResolution } from "./MailTargetResolution";
@@ -634,7 +635,11 @@ entries: Array<RemoteContentAllow>, } | { "type": "LaunchRequests",
 /**
  * Oldest first.
  */
-requests: Array<LaunchRequest>, } | { "type": "MessageImported", 
+requests: Array<LaunchRequest>, } | { "type": "LinkOpened", 
+/**
+ * What the core did, or what the UI does next.
+ */
+outcome: LinkOutcome, } | { "type": "MessageImported", 
 /**
  * The imported message.
  */

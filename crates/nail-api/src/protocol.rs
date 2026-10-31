@@ -65,6 +65,7 @@ use crate::ids::{
     RemoteUserId, RuleId, RuleRunId, SavedSearchId, SendVetoId, TaskId, ThreadId,
 };
 use crate::launch::LaunchRequest;
+use crate::links::LinkOutcome;
 use crate::localized::LocalizedMessage;
 use crate::mail_actions::{MailAction, MailActionResult, MailTargetResolution, MessageTarget};
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpRateLimits, McpServerInfo, McpSettings};
@@ -1159,6 +1160,18 @@ pub enum Request {
     ImportMessageFile {
         /// Absolute path of the file.
         path: String,
+    },
+
+    // --- Links in mail (ADR 0206) ---
+    /// Follow a link the user clicked in a message
+    /// ([`crate::links`]): the desktop app opens `http:` / `https:` /
+    /// `tel:` with the system, web mode and remote sessions get it back to
+    /// open in a browser tab, `mailto:` comes back decoded for the
+    /// composer. Answered with [`Response::LinkOpened`]; `invalid_request`
+    /// for another scheme or a malformed link.
+    OpenLink {
+        /// The link's `href`.
+        url: String,
     },
 
     // --- Server-side rules and vacation (M2c WP50, ADR 0043) ---
@@ -3674,6 +3687,11 @@ pub enum Response {
     LaunchRequests {
         /// Oldest first.
         requests: Vec<LaunchRequest>,
+    },
+    /// Answer to [`Request::OpenLink`].
+    LinkOpened {
+        /// What the core did, or what the UI does next.
+        outcome: LinkOutcome,
     },
     /// Answer to [`Request::ImportMessageFile`].
     MessageImported {

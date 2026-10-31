@@ -196,6 +196,27 @@ the message. Pictures from the internet stay blocked until you allow them
 (see [Remote content in messages](remote-access.md#remote-content-in-messages)); until then a frame with the picture's
 description shows where each one goes.
 
+### Links in messages
+
+When you point at a link in a message (or move to it with the keyboard),
+a small bar at the bottom edge of the reader shows where it goes, like a
+browser's status bar. A very long address is shortened in the middle;
+screen readers read it in full.
+
+Clicking a link (also a middle click, or Enter on a focused link) never
+opens the page inside the message:
+
+- In the desktop app, web links open in your default browser.
+- In a browser (web mode or the remote UI), they open in a new tab.
+- An email address (`mailto:`) opens a new message in Nail, addressed to
+  it.
+
+When Nail found something wrong with the link (it shows one address but
+goes to another, or uses look-alike characters; see
+[Warnings in the reader](security.md#warnings-in-the-reader)), the bar
+shows the warning, and a click first asks **Open this link?**: **Open
+anyway** opens it, **Cancel** (the default) does not.
+
 Attachments are cards with the file type, name and size. **Save** asks
 where to save the file in the desktop app (the Save dialog asks before
 replacing a file); in a browser the file is downloaded. The card then says

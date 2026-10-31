@@ -120,6 +120,8 @@ impl Service {
                 }
             }
             Request::Search { query } => self.remote_search(&access, query).await?,
+            // ADR 0206: the session's own browser opens its links.
+            Request::OpenLink { url } => crate::links::open_remote(&url)?,
             // M5b (ADR 0109): a remote session follows its own browser's
             // light / dark mode; the host's selection stays as it is.
             Request::ReportSystemAppearance { system } => {
@@ -291,6 +293,9 @@ impl Service {
             | Request::ClearRecentActions
             | Request::GetPrintJob { .. }
             | Request::PrintViewReady { .. }
+            // ADR 0206: a clicked link is checked and handed back (no mail
+            // data; never the desktop's browser).
+            | Request::OpenLink { .. }
             // M5a: the theme list and selection (no mail data).
             | Request::ListThemes
             // The browser's colour scheme: applied only when the core has no

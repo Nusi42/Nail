@@ -552,6 +552,8 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::CreatePrintJob { .. } => ("CreatePrintJob", Scope(S::Read)),
         Request::GetPrintJob { .. } => ("GetPrintJob", Scope(S::Read)),
         Request::PrintViewReady { .. } => ("PrintViewReady", Scope(S::Read)),
+        // ADR 0206: a link the session clicked, opened in its own browser.
+        Request::OpenLink { .. } => ("OpenLink", Session),
     };
     RequestAccess { name, access }
 }
@@ -1062,6 +1064,15 @@ mod m4a_tests {
             .access,
             Access::Admin
         );
+    }
+
+    #[test]
+    fn a_clicked_link_needs_only_a_session() {
+        let request = Request::OpenLink {
+            url: "https://example.com/".into(),
+        };
+        assert_eq!(required_access(&request).access, Access::Session);
+        assert_eq!(required_access(&request).name, "OpenLink");
     }
 
     #[test]

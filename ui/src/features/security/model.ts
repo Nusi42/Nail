@@ -232,6 +232,79 @@ export function attachmentWarning(
   return attachmentWarnings(warnings ?? []).find((w) => w.index === index) ?? null;
 }
 
+/**
+ * How many entries the reader's warnings banner shows before "Show all"
+ * (a newsletter whose every link goes through a tracker must not fill the
+ * reader).
+ */
+export const MAX_SHOWN_WARNINGS = 3;
+
+/** One entry of the warnings banner: identical link warnings share one. */
+export type WarningEntry =
+  | { type: "sender"; key: string; warning: SenderWarning }
+  | { type: "link"; key: string; warning: LinkWarning; links: number }
+  | { type: "file"; key: string; warning: AttachmentWarning };
+
+/** The host of a URL (the URL itself when it has none). */
+function hostOf(href: string): string {
+  try {
+    return new URL(href).host || href;
+  } catch {
+    return href;
+  }
+}
+
+/** What makes two link warnings the same entry: kind, shown and target domain. */
+function linkGroupKey(w: LinkWarning): string {
+  switch (w.kind) {
+    case "link-mismatch":
+      return `${w.kind} ${w.shown_host} ${w.target_host}`;
+    case "lookalike-domain":
+      return `${w.kind} ${w.ascii_host}`;
+    case "suspicious-link":
+      return `${w.kind} ${hostOf(w.href)}`;
+  }
+}
+
+/**
+ * The banner's entries in order (senders, links, attachments); identical
+ * link warnings are grouped, the first one standing for its group.
+ */
+export function warningEntries(warnings: readonly MessageWarning[]): WarningEntry[] {
+  const links = new Map<string, Extract<WarningEntry, { type: "link" }>>();
+  for (const w of linkWarnings(warnings)) {
+    const key = linkGroupKey(w);
+    const group = links.get(key);
+    if (group) group.links += 1;
+    else links.set(key, { type: "link", key: `link ${key}`, warning: w, links: 1 });
+  }
+  return [
+    ...senderWarnings(warnings).map((w) => ({
+      type: "sender" as const,
+      key: `sender ${w.address}`,
+      warning: w,
+    })),
+    ...links.values(),
+    ...attachmentWarnings(warnings).map((w) => ({
+      type: "file" as const,
+      key: `file ${String(w.index)}`,
+      warning: w,
+    })),
+  ];
+}
+
+/** The entries the banner shows (all when `expanded`) and how many it hides. */
+export function shownWarningEntries(
+  entries: readonly WarningEntry[],
+  expanded: boolean,
+): { shown: readonly WarningEntry[]; hidden: number } {
+  if (expanded || entries.length <= MAX_SHOWN_WARNINGS) return { shown: entries, hidden: 0 };
+  return {
+    shown: entries.slice(0, MAX_SHOWN_WARNINGS),
+    hidden: entries.length - MAX_SHOWN_WARNINGS,
+  };
+}
+
 /** All warnings of one link (by its number in document order). */
 export function warningsForLink(
   warnings: readonly MessageWarning[] | undefined,

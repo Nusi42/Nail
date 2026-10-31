@@ -149,6 +149,7 @@ pub mod hosts;
 pub mod icons;
 pub mod ids;
 pub mod launch;
+pub mod links;
 pub mod localized;
 pub mod mail_actions;
 pub mod mapi;
@@ -232,6 +233,7 @@ pub use ids::{
 };
 pub use ids::{JobId, MailBatchId, PinPromptId, PrintJobId};
 pub use launch::{LaunchRequest, MailtoLink};
+pub use links::LinkOutcome;
 pub use localized::{LocalizedMessage, MessageArg};
 pub use mail_actions::{
     ConversationReach, ConversationRef, MailAction, MailActionKind, MailActionResult,

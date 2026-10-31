@@ -444,7 +444,7 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        events.rs (edit scopes, instances, free time, tasks), contacts.rs,
                        import.rs (imports, event / task from email), reminders.rs (scheduler + task),
                        search.rs (in-memory PimIndex)); launch_args.rs (launch-argument parser, shared with
-                       app/src-tauri and `nail serve --launch`);
+                       app/src-tauri and `nail serve --launch`); links.rs (`OpenLink`: links clicked in mail, ADR 0206);
                        M3b (ADR 0070): scheduling.rs (cards on GetMessage / GetInvitation, arrival processing
                        in the rule-inbox pipeline, answers / organizer flows, iMIP through the outbox as
                        `AutomaticMail::Itip` prepared mail or server scheduling — never both, free/busy own +
@@ -560,8 +560,9 @@ crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (dem
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
                        lan.rs: LAN address from the interfaces, no socket (ADR 0057);
                        M2c: render tokens bound to the session (sandbox.rs), proxy_limit.rs (ADR 0048);
-                       P3 (ADR 0168): sandbox.rs HEIGHT_SCRIPT (hash-pinned script-src, posts the height to `parent`,
-                       which must be a frame-ancestor, else 400)
+                       P3 (ADR 0168): sandbox.rs FRAME_SCRIPT (hash-pinned script-src, posts the height to `parent`,
+                       which must be a frame-ancestor, else 400; ADR 0206: also the hovered / clicked link, links never
+                       navigate the frame)
 crates/nail-cli        `nail` binary; messages.rs (localized stderr), headless `nail mcp`
                        (`--config-dir`, `--no-start`, `--mcp-port`; prints waiting confirmations to stderr, M4a),
                        serve holds the data-dir lock (its clock-set / clock-advance controls run due plug-in jobs);
@@ -711,7 +712,9 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        theme/compile.ts; one ApplyMailAction per action, undo toast + `mail.undo` = z, card More menus;
                        ADR 0167), widgets/DeletePermanently.tsx asks with the count; widgets/MailFrame.tsx
                        (LocalMailFrame / RemoteMailFrame sized by a geometry rule; FrameHeightGuard in theme/frameHeight.ts,
-                       frameHeightOf accepts origin "null" from the opaque sandbox origin; ADR 0168);
+                       frameHeightOf accepts origin "null" from the opaque sandbox origin; ADR 0168); ADR 0206:
+                       widgets/mailLinks.ts (watchLinks / frameLinkOf: links never navigate a mail frame),
+                       widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -1358,6 +1361,15 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`ui/src/layout/settingsIndex.ts`); every Fluent message gets `$os` (`nail-config` `fluent_args`, the UI's
   `createLocalizer`); `DesktopHost::pick_path` / `print_to_pdf` exist in the shell on Windows only; Linux / macOS
   bundles in `app/src-tauri/tauri.{linux,macos}.conf.json`; Linux checks in WSL2 (`docs/dev-setup.md`).
+- Links in mail (ADR 0206): no click navigates a mail frame. Local frames are watched by the reader
+  (`ui/src/widgets/mailLinks.ts` `watchLinks`), remote frames post `FRAME_LINK_MESSAGE` from the sandbox route's
+  hash-pinned `FRAME_SCRIPT`. `OpenLink` (`nail_api::links`, `nail_core::links`) answers `Opened` (the desktop host's
+  `open_link`, `ShellExecuteW`; test runs record links for the `opened-links` test control), `OpenInBrowser` (web mode,
+  every remote session: a new tab with `noopener,noreferrer`) or `Compose` (`mailto:`, the composer). The reader's
+  status overlay (`message-view.link-dock` / `.link-status`, `ui/src/widgets/ReaderLinks.tsx`) shows the hovered
+  link's target and its `MessageWarning`; a flagged link asks first (`mail-open-link`). The warnings banner
+  (`features/security/Warnings.tsx`, `model.ts` `warningEntries` / `shownWarningEntries`, `MAX_SHOWN_WARNINGS`)
+  groups identical link warnings and shows a few entries until "Show all".
 - Only the master publishes (ADR 0205): `.githooks/pre-push` runs `scripts/pre-push.mjs`, which asks
   `scripts/lib/push-plan.mjs` `pushPlan` (checkout role: master / work folder / plain clone, remote URL: local path or
   network) what to run: work folder to master = guard on the pushed commits + `npm run check`; master to the public

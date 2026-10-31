@@ -163,6 +163,14 @@ security-warning-lookalike-resembles = A link goes to { $host } ({ $ascii }), wh
 security-warning-suspicious-link = A link looks suspicious.
 security-warning-real-target = Real target: { $href }
 security-warnings-link-hint = Hover over a link to see where it really goes before you click.
+# After a warning that several links share (ADR 0206).
+security-warning-links = { $count ->
+    [one] (1 link)
+   *[other] ({ $count } links)
+}
+# The banner shows a few warnings; $count = all of them, $hidden = those not shown.
+security-warnings-show-all = Show all { $count } warnings ({ $hidden } more)
+security-warnings-show-fewer = Show fewer
 security-risk-executable = “{ $name }” is a program. Opening it can run code on your computer.
 security-risk-macro = “{ $name }” is an Office document that can contain macros.
 security-risk-disguised-name = “{ $name }” hides its real file type.

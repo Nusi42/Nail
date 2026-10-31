@@ -83,7 +83,7 @@ fn split_scheme(argument: &str) -> Option<(String, &str)> {
 /// RFC 6068: `mailto:[addr,…][?hfname=hfvalue&…]`, percent-encoded UTF-8.
 /// Unknown header fields are ignored, like `attach=`, `from=` and other
 /// fields a web page must not be able to set.
-fn parse_mailto(rest: &str) -> MailtoLink {
+pub(crate) fn parse_mailto(rest: &str) -> MailtoLink {
     let (path, query) = rest.split_once('?').unwrap_or((rest, ""));
     let mut link = MailtoLink {
         to: split_addresses(&percent_decode(path)),

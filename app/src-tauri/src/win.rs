@@ -261,30 +261,70 @@ pub fn open_settings_uri(uri: &str) -> Result<(), String> {
     }
     #[cfg(windows)]
     {
-        use windows::Win32::UI::Shell::ShellExecuteW;
-        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        use windows::core::{HSTRING, PCWSTR, w};
-        // SAFETY: valid NUL-terminated strings; no owner window.
-        let result = unsafe {
-            ShellExecuteW(
-                None,
-                w!("open"),
-                &HSTRING::from(uri),
-                PCWSTR::null(),
-                PCWSTR::null(),
-                SW_SHOWNORMAL,
-            )
-        };
-        // ShellExecuteW reports success with a value above 32.
-        if result.0 as usize > 32 {
-            Ok(())
-        } else {
-            Err(format!("ShellExecuteW failed with {}", result.0 as usize))
-        }
+        shell_open(uri)
     }
     #[cfg(not(windows))]
     {
         Err("no Settings app on this system".into())
+    }
+}
+
+/// Whether `url` has one of the schemes links in mail open outside Nail
+/// ([`nail_api::links::EXTERNAL_LINK_SCHEMES`]; the core normalized it).
+pub fn is_external_link(url: &str) -> bool {
+    url.split_once(':')
+        .is_some_and(|(scheme, _)| nail_api::links::EXTERNAL_LINK_SCHEMES.contains(&scheme))
+}
+
+/// Opens a link the user clicked in a message with the system's handler
+/// (the default browser for `http:` / `https:`; ADR 0206). Anything but
+/// [`is_external_link`] is refused, so no path or other protocol reaches
+/// the shell.
+pub fn open_link(url: &str) -> Result<(), String> {
+    if !is_external_link(url) {
+        return Err(format!("not a web or phone link: {url}"));
+    }
+    #[cfg(windows)]
+    {
+        shell_open(url)
+    }
+    #[cfg(not(windows))]
+    {
+        let opener = if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        };
+        std::process::Command::new(opener)
+            .arg(url)
+            .spawn()
+            .map(drop)
+            .map_err(|e| format!("cannot run {opener}: {e}"))
+    }
+}
+
+/// `ShellExecuteW(open)` of a URI the caller checked.
+#[cfg(windows)]
+fn shell_open(uri: &str) -> Result<(), String> {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use windows::core::{HSTRING, PCWSTR, w};
+    // SAFETY: valid NUL-terminated strings; no owner window.
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &HSTRING::from(uri),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    // ShellExecuteW reports success with a value above 32.
+    if result.0 as usize > 32 {
+        Ok(())
+    } else {
+        Err(format!("ShellExecuteW failed with {}", result.0 as usize))
     }
 }
 
@@ -312,6 +352,24 @@ mod tests {
     fn only_settings_uris_are_opened() {
         assert!(open_settings_uri("https://evil.example/").is_err());
         assert!(open_settings_uri("file:///C:/Windows/notepad.exe").is_err());
+    }
+
+    #[test]
+    fn only_web_and_phone_links_are_opened() {
+        assert!(is_external_link("https://example.com/"));
+        assert!(is_external_link("http://example.com/"));
+        assert!(is_external_link("tel:+1-555-0100"));
+        for url in [
+            "file:///C:/Windows/notepad.exe",
+            "ms-settings:defaultapps",
+            r"C:\Windows\notepad.exe",
+            "notepad.exe",
+            "javascript:alert(1)",
+            "mailto:a@example.com",
+        ] {
+            assert!(!is_external_link(url), "{url}");
+            assert!(open_link(url).is_err(), "{url}");
+        }
     }
 
     #[cfg(windows)]

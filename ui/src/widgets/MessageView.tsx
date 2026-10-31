@@ -16,6 +16,8 @@ import { isDesignedMail, proxyBase, readerDocument } from "../theme/reader";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
 import { AttachmentList } from "./AttachmentList";
 import { LocalMailFrame, RemoteMailFrame } from "./MailFrame";
+import type { MailLinkReport } from "./mailLinks";
+import { useMailLinks } from "./ReaderLinks";
 import { splitQuotes } from "./ThreadViewModel";
 import { cardShowsSubject, useReaderCard } from "./ThreadViewScope";
 
@@ -55,9 +57,18 @@ function headerValue(message: MessageBody, field: HeaderField, locale: string): 
  * sandbox origin when the core names one (`render_url`), else as `srcdoc`
  * (set through the Trusted Types policy). The reader (or the card feed)
  * scrolls as a whole; mail with its own design (`data-state~="designed"`)
- * gets a wider column than the reading width.
+ * gets a wider column than the reading width. Its links never navigate the
+ * frame: `onLink` follows them (ADR 0206, `ReaderLinks.tsx`).
  */
-function Body({ message, quotesFold }: { message: MessageBody; quotesFold: boolean }) {
+function Body({
+  message,
+  quotesFold,
+  onLink,
+}: {
+  message: MessageBody;
+  quotesFold: boolean;
+  onLink: (report: MailLinkReport) => void;
+}) {
   const t = useT();
   // The reader's form (inline images embedded as data: URLs) when the core sends one.
   const html = message.reader_html ?? message.sanitized_html;
@@ -70,10 +81,18 @@ function Body({ message, quotesFold }: { message: MessageBody; quotesFold: boole
   );
   const title = t("message-view-body-title", { subject: message.headers.subject });
   if (html !== null && renderUrl !== null) {
-    return <RemoteMailFrame renderUrl={renderUrl} css={css} title={title} designed={designed} />;
+    return (
+      <RemoteMailFrame
+        renderUrl={renderUrl}
+        css={css}
+        title={title}
+        designed={designed}
+        onLink={onLink}
+      />
+    );
   }
   if (srcDoc !== null) {
-    return <LocalMailFrame srcDoc={srcDoc} title={title} designed={designed} />;
+    return <LocalMailFrame srcDoc={srcDoc} title={title} designed={designed} onLink={onLink} />;
   }
   if (!quotesFold) return <pre data-part="message-view.text">{message.text}</pre>;
   // In a card of the conversation feed (P2): quoted lines fold away — the
@@ -133,6 +152,8 @@ export function MessageView({ node }: WidgetProps) {
   const card = useReaderCard();
   const inCard = card !== null;
   const accountId = message ? (findSummary(ctx.queryClient, message.id)?.account_id ?? null) : null;
+  // ADR 0206: the hovered link's status overlay, clicks followed by the reader.
+  const links = useMailLinks(message?.id ?? null, message?.warnings);
 
   // Reading a message marks it as read (a queued write, like any other).
   const loadedId = message?.id ?? null;
@@ -180,7 +201,7 @@ export function MessageView({ node }: WidgetProps) {
         <InvitationCard messageId={message.id} invitation={message.invitation ?? null} />
         <PluginBanners messageId={message.id} />
         <AttachmentList message={message} accountId={accountId} previewId={previewId} />
-        <Body message={message} quotesFold={inCard} />
+        <Body message={message} quotesFold={inCard} onLink={links.onLink} />
         {message.attachments
           .filter((a) => !a.inline)
           .map((a) => (
@@ -207,6 +228,7 @@ export function MessageView({ node }: WidgetProps) {
         aria-busy={query.isFetching}
       >
         {content}
+        {links.status}
       </div>
     );
   }
@@ -222,6 +244,7 @@ export function MessageView({ node }: WidgetProps) {
       aria-busy={query.isFetching}
     >
       {content}
+      {links.status}
     </article>
   );
 }

@@ -40,11 +40,20 @@ pub const RENDER_PATH: &str = "/render/";
 /// there.
 pub const RENDER_PARENT_PARAM: &str = "parent";
 
-/// `type` of the only message a sandbox-origin mail document posts to its
-/// parent (P3, ADR 0164): `{"type": "nail-frame-height", "height": <CSS
-/// px>}`. The parent accepts it only from its own frame's window and the
-/// sandbox origin, and clamps the height to [`MAX_FRAME_HEIGHT`].
+/// `type` of the message a sandbox-origin mail document posts to its
+/// parent with its height (P3, ADR 0164): `{"type": "nail-frame-height",
+/// "height": <CSS px>}`. The parent accepts it only from its own frame's
+/// window and the sandbox origin, and clamps the height to
+/// [`MAX_FRAME_HEIGHT`].
 pub const FRAME_HEIGHT_MESSAGE: &str = "nail-frame-height";
+
+/// `type` of the message a sandbox-origin mail document posts when a link
+/// is hovered, focused or clicked (ADR 0206): `{"type": "nail-frame-link",
+/// "open", "href", "index"}` — `open` for a click, the link's `href` (null
+/// when no link is hovered) and its number among the document's links
+/// (`-1` for none). Accepted like [`FRAME_HEIGHT_MESSAGE`]; the document
+/// itself never navigates.
+pub const FRAME_LINK_MESSAGE: &str = "nail-frame-link";
 
 /// Tallest mail frame the reader sizes to its content (CSS px); a taller
 /// document scrolls inside the frame.

@@ -1,7 +1,9 @@
 import { act, screen, within } from "@testing-library/react";
-import type { MessageBody } from "../../api/generated";
+import userEvent from "@testing-library/user-event";
+import type { MessageBody, MessageWarning } from "../../api/generated";
 import { createEnv, renderNode, renderWithProviders, widget } from "../../test/harness";
 import { securityDemoBySender } from "./mockSeed";
+import { MAX_SHOWN_WARNINGS, shownWarningEntries, warningEntries } from "./model";
 import { AttachmentWarningMark, MessageWarnings } from "./Warnings";
 import { must } from "../../test/must";
 
@@ -165,5 +167,79 @@ describe("reader warnings", () => {
       env.store.getState().selectMessage(first.id);
     });
     expect(await screen.findByRole("region", { name: "Warnings" })).toBeInTheDocument();
+  });
+
+  describe("many link warnings (ADR 0206)", () => {
+    const TRACKER = "https://tracker.example.net/c/" + "x".repeat(400);
+    /** `n` links that show `shown` but go to the tracker. */
+    const mismatches = (shown: string, n: number, from = 0): MessageWarning[] =>
+      Array.from({ length: n }, (_, i) => ({
+        kind: "link-mismatch" as const,
+        link: from + i,
+        href: `${TRACKER}${String(i)}`,
+        shown_host: shown,
+        target_host: "tracker.example.net",
+      }));
+
+    it("groups identical warnings and caps the entries", () => {
+      const all = [
+        ...mismatches("www.shop.example.com", 3),
+        ...mismatches("help.example.org", 2, 3),
+        ...mismatches("a.example.com", 1, 5),
+        ...mismatches("b.example.com", 1, 6),
+        ...mismatches("c.example.com", 1, 7),
+      ];
+      const entries = warningEntries(all);
+      expect(entries.map((e) => (e.type === "link" ? e.links : 0))).toEqual([3, 2, 1, 1, 1]);
+      const collapsed = shownWarningEntries(entries, false);
+      expect(collapsed.shown).toHaveLength(MAX_SHOWN_WARNINGS);
+      expect(collapsed.hidden).toBe(entries.length - MAX_SHOWN_WARNINGS);
+      expect(shownWarningEntries(entries, true)).toEqual({ shown: entries, hidden: 0 });
+      expect(shownWarningEntries(entries.slice(0, 2), false).hidden).toBe(0);
+    });
+
+    it("shows a few entries with their link counts, one-line targets and a Show all toggle", async () => {
+      const all = [
+        ...mismatches("www.shop.example.com", 4),
+        ...mismatches("a.example.com", 2, 4),
+        ...mismatches("b.example.com", 1, 6),
+        ...mismatches("c.example.com", 1, 7),
+        ...mismatches("d.example.com", 1, 8),
+      ];
+      renderWithProviders(<MessageWarnings message={body({ warnings: all })} />, createEnv());
+      const region = screen.getByRole("region", { name: "Warnings" });
+      // The total stays visible.
+      expect(
+        within(region).getByText("Nail found 9 things to be careful about in this message."),
+      ).toBeInTheDocument();
+      expect(within(region).getAllByRole("listitem")).toHaveLength(MAX_SHOWN_WARNINGS);
+      const first = must(within(region).getAllByRole("listitem")[0]);
+      expect(first).toHaveTextContent(
+        "A link shows www.shop.example.com but goes to tracker.example.net. (4 links)",
+      );
+      const target = must(first.querySelector('[data-part="security-warnings.target"]'));
+      expect(target).toHaveAttribute("title", `${TRACKER}0`);
+      expect(target).toHaveTextContent(`Real target: ${TRACKER}0`);
+
+      const toggle = within(region).getByRole("button", { name: "Show all 5 warnings (2 more)" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await userEvent.click(toggle);
+      expect(within(region).getAllByRole("listitem")).toHaveLength(5);
+      const fewer = within(region).getByRole("button", { name: "Show fewer" });
+      expect(fewer).toHaveAttribute("aria-expanded", "true");
+      expect(region).toHaveAttribute("data-state", "expanded");
+      await userEvent.click(fewer);
+      expect(within(region).getAllByRole("listitem")).toHaveLength(MAX_SHOWN_WARNINGS);
+    });
+
+    it("has no toggle when every entry fits", () => {
+      renderWithProviders(
+        <MessageWarnings message={body({ warnings: mismatches("www.shop.example.com", 7) })} />,
+        createEnv(),
+      );
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(screen.getByText("(7 links)")).toBeInTheDocument();
+    });
   });
 });
