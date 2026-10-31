@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: Where the project stands and what to do next — read first when continuing in a new session (0.8.0 public; only the master publishes since 2026-10-31, ADR 0205)
+description: Where the project stands and what to do next — read first when continuing in a new session (0.8.1 released 2026-10-31; next: link status bar in warning colours, no gap)
 metadata:
   type: project
 ---
@@ -31,13 +31,18 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
+**Released 0.8.1 (2026-10-31):** GitHub release `v0.8.1` (Latest) with the installer, zip, signature,
+checksums and SBOMs; the `stable` and `beta` channels announce 0.8.1; the maintainer runs it (installed over
+0.8.0, page logging works). Next version, maintainer's wish: the link status bar of the reader (ADR 0206) shows a
+mismatched / warned link in warning colours (warning background and border, an icon), and the bar sits flush on
+the window's bottom edge (no gap). Logging stays as it is (always on, `info`, 3 × 5 MB; maintainer's decision).
+
 **Latest (2026-10-31, evening), published to GitHub:** links in HTML mail open outside the reader, with the
 target in a status bar, a confirmation for warned links and a capped, grouped warnings list (ADR 0206); a crashed or
 hung window is logged and reloaded, page errors and memory go to `app.log`, an error screen replaces a blank window
 (ADR 0207; the cause of the maintainer's blank window is still unproven, look for `webview page failed` or `page …`
 lines in `app.log` next time); remote-content buttons fit a narrow reader. Branches are now rebased, never merged
-(ADR 0208, [[rebase-not-merge]]). The maintainer's installed Nail is still 0.8.0: a new installer or release is needed
-for the fixes to reach it.
+(ADR 0208, [[rebase-not-merge]]). Released as 0.8.1.
 
 **Latest (2026-10-31): only the master publishes (ADR 0205).** The remote `github` moved from the lead's
 work folder to the master; publishing is `git -C <master> push github main` after the fast-forward (exact command in
