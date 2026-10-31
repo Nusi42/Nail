@@ -332,6 +332,8 @@ layout "default" {
         action "system.check-updates" label="@system.action.check-updates" icon="refresh-cw"
         action "system.first-run" label="@system.action.first-run" icon="sparkles"
         action "system.default-apps" label="@system.action.default-apps" icon="app-window"
+        // ADR 0207: reload the window (F5 and Ctrl+R check for new mail).
+        action "system.reload"    label="@system.action.reload" icon="rotate-ccw"
         // The command palette, printing, import / export / backup,
         // diagnostics (M4c).
         action "palette.open"     label="@palette.action.open"     icon="search"
@@ -573,6 +575,7 @@ layout "default" {
         bind "f5" "sync.now"
         // ADR 0183: Ctrl+R checks for new mail too (never reloads the app).
         bind "ctrl+r" "sync.now"
+        bind "ctrl+shift+r" "system.reload"
         bind "ctrl+b" "view.toggle \"sidebar\""
         bind "g r" "view.toggle \"reader\""
         // Views (M5b; the rail's tooltips name the first key of a view).

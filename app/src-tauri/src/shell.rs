@@ -163,11 +163,14 @@ pub fn desktop_host<R: Runtime>(
 /// Shows, restores and focuses the main window (test runs: shows it
 /// without activating it, ADR 0146).
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW)
-        && let Err(err) = crate::background::bring_up(&window)
-    {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
+        return;
+    };
+    if let Err(err) = crate::background::bring_up(&window) {
         tracing::warn!(%err, "cannot show the main window");
     }
+    // ADR 0207: the page may have died while the window was hidden.
+    crate::webview_health::ping(window.as_ref());
 }
 
 /// What a second start hands the running app: its launch requests and
@@ -231,6 +234,9 @@ pub enum TestControl {
     /// The links a test run was asked to open in the browser (ADR 0206),
     /// oldest first: `["https://…"]`.
     OpenedLinks,
+    /// Reports the webviews' recovery state (ADR 0207): `{label: {reloads,
+    /// gave_up}}`.
+    WebviewHealth,
     /// Resizes the main window (`resize-main:<w>x<h>`) or every pop-out OS
     /// window (`resize-pop-outs:<w>x<h>`) to an inner size in logical
     /// pixels, as the user dragging its border does (ADR 0181).
@@ -244,7 +250,7 @@ pub enum TestControl {
 
 impl TestControl {
     /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"`, `"windows"`,
-    /// `"default-context-menus"`, `"opened-links"` or
+    /// `"default-context-menus"`, `"opened-links"`, `"webview-health"` or
     /// a tray menu item id
     /// (`"tray-new-message"`, …).
     pub fn parse(op: &str) -> Option<Self> {
@@ -255,6 +261,7 @@ impl TestControl {
             "windows" => Some(Self::Windows),
             "default-context-menus" => Some(Self::DefaultContextMenus),
             "opened-links" => Some(Self::OpenedLinks),
+            "webview-health" => Some(Self::WebviewHealth),
             other => {
                 Self::parse_resize(other).or_else(|| TrayAction::from_id(other).map(Self::Tray))
             }
@@ -321,6 +328,7 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
         TestControl::Windows => Ok(crate::background::report(app)),
         TestControl::DefaultContextMenus => Ok(serde_json::json!(crate::webview_menus::reported())),
         TestControl::OpenedLinks => Ok(serde_json::json!(*lock_links())),
+        TestControl::WebviewHealth => Ok(crate::webview_health::report()),
         TestControl::Resize {
             pop_outs,
             width,
@@ -518,6 +526,10 @@ mod tests {
         assert_eq!(
             TestControl::parse("opened-links"),
             Some(TestControl::OpenedLinks)
+        );
+        assert_eq!(
+            TestControl::parse("webview-health"),
+            Some(TestControl::WebviewHealth)
         );
         assert_eq!(
             TestControl::parse("resize-main:900x640"),

@@ -130,6 +130,7 @@ import type { ThemePreferences } from "./ThemePreferences";
 import type { ThreadId } from "./ThreadId";
 import type { TrustDecision } from "./TrustDecision";
 import type { UiContext } from "./UiContext";
+import type { UiReport } from "./UiReport";
 import type { UpdateSettings } from "./UpdateSettings";
 import type { VacationSettings } from "./VacationSettings";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
@@ -2454,4 +2455,8 @@ settings: ConnectionLogSettings, } | { "type": "ListSyncErrors",
 /**
  * The account, `null` = every account the session may see.
  */
-account_id?: AccountId, } | { "type": "GetAppLog" };
+account_id?: AccountId, } | { "type": "GetAppLog" } | { "type": "ReportUiDiagnostics", 
+/**
+ * What the page reports.
+ */
+report: UiReport, };

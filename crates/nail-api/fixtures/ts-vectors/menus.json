@@ -6095,6 +6095,36 @@
     {
       "args": [
         "default-layout",
+        "system.reload",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "system.reload",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+r"
+    },
+    {
+      "args": [
+        "default-layout",
+        "system.reload",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+shift+r"
+    },
+    {
+      "args": [
+        "default-layout",
         "view.toggle",
         [
           "sidebar"

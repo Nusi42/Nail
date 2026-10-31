@@ -330,7 +330,8 @@ Actions in the default layout:
 | `account.add`, `settings.open` | Add an account; open the settings |
 | `window.open`, `window.close` | Open a window by name (argument); close the topmost window |
 | `view.toggle` | Show or hide a pane; argument: its `id`, e.g. `"sidebar"` |
-| `sync.now` | Check for new mail: every account, or the account whose folder pane menu it was chosen from (default keys `f5` and `ctrl+r`; F5, Ctrl+R and the other reload keys never reload Nail) |
+| `sync.now` | Check for new mail: every account, or the account whose folder pane menu it was chosen from (default keys `f5` and `ctrl+r`; F5, Ctrl+R and the other reload keys never reload Nail by themselves) |
+| `system.reload` | Reload the window, for a window that shows nothing or seems stuck (default key `ctrl+shift+r`). The desktop app also reloads a window whose content stopped working by itself |
 | `edit.cut`, `edit.copy`, `edit.paste`, `edit.select-all` | Cut, Copy, Paste and Select all on the text the `context:text` menu was opened on |
 | `menu.context` | Open the context menu of the focused item (default keys `shift+f10` and `contextmenu`, the menu key) |
 | `junk.mark`, `junk.not-junk` | Mark the selected message as junk / not junk (trains the junk filter, moves the message) |

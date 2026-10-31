@@ -22,6 +22,13 @@ import type {
 } from "../../api/generated";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 import type { ViewKind } from "./time";
+import { pushBounded } from "../../state/bounded";
+
+/**
+ * Reminder and problem toasts kept at most (the oldest go first): a window
+ * hidden for days collects one per reminder and failed change (ADR 0207).
+ */
+export const MAX_PIM_TOASTS = 10;
 
 /** What the event editor edits. */
 export type EventEditorTarget =
@@ -87,6 +94,7 @@ export interface PimState {
   mergeIds: ContactId[];
   taskId: TaskId | null;
   taskEditor: TaskEditorTarget | null;
+  /** At most [`MAX_PIM_TOASTS`], newest last. */
   toasts: PimToast[];
   /** A desktop file to import (a launch argument), taken by the import dialog. */
   importPath: string | null;
@@ -181,7 +189,7 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
       set({ taskEditor });
     },
     pushToast: (toast) => {
-      set((s) => ({ toasts: [...s.toasts.filter((t) => t.id !== toast.id), toast] }));
+      set((s) => ({ toasts: pushBounded(s.toasts, toast, MAX_PIM_TOASTS) }));
     },
     dismissToast: (id) => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));

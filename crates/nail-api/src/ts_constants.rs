@@ -1068,6 +1068,27 @@ fn contract_enums(c: Constants) -> Result<Constants, serde_json::Error> {
     .enum_values("WireLevel", crate::connlog::WireLevel::ALL)?
     .enum_values("WireDirection", crate::connlog::WireDirection::ALL)?
     .enum_values("ErrorStep", crate::connlog::ErrorStep::ALL)?
+    // ADR 0207: the page's diagnostics for app.log.
+    .add(
+        "UI_REPORT_MAX_CHARS",
+        "Longest text of a UI report the core logs (characters).",
+        &crate::connlog::UI_REPORT_MAX_CHARS,
+    )?
+    .add(
+        "UI_LOG_TARGET",
+        "The tracing target of the page's lines in app.log.",
+        &crate::connlog::UI_LOG_TARGET,
+    )?
+    .add(
+        "UI_PROBLEMS_PER_MINUTE",
+        "Uncaught problems a page reports per minute at most.",
+        &crate::connlog::UI_PROBLEMS_PER_MINUTE,
+    )?
+    .add(
+        "UI_MEMORY_SAMPLE_MINUTES",
+        "Minutes between two memory samples a page reports.",
+        &crate::connlog::UI_MEMORY_SAMPLE_MINUTES,
+    )?
     .enum_values("CryptoTechnology", &CryptoTechnology::ALL)?
     .enum_values(
         "KeyLookupSource",

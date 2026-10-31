@@ -10,7 +10,8 @@
  * Contributions: widgets `update-settings` (option `show-installation`),
  * `desktop-settings` (option `show-dev-endpoint`), `default-apps` (option
  * `show-mapi`); dialogs `about-nail`, `first-run`; actions `system.about`,
- * `system.check-updates`, `system.first-run`, `system.default-apps`; the
+ * `system.check-updates`, `system.first-run`, `system.default-apps`,
+ * `system.reload`; the
  * effect `FirstRunGate`; for other slots `openProgramDraft` (launch) and
  * `ProgramDraftNotice` (composer). Theme base CSS: `SYSTEM_BASE_CSS`.
  *
@@ -34,8 +35,10 @@ import {
   DESKTOP_SETTINGS_WIDGET,
   FIRST_RUN_ACTION,
   FIRST_RUN_DIALOG,
+  RELOAD_ACTION,
   UPDATE_SETTINGS_WIDGET,
 } from "./names";
+import { reloadPage } from "../../state/pageDiagnostics";
 import { hasFeature, loadedPlatform } from "../../state/platform";
 import { systemKeys } from "./queries";
 import { UpdateSettingsWidget } from "./UpdateSettings";
@@ -91,6 +94,16 @@ export const actions: Feature["actions"] = {
         // Disabled, busy or not the desktop app: "About" shows why.
         ctx.store.getState().openWindow(ABOUT_DIALOG);
       }
+    },
+  },
+  /**
+   * Reloads the window (ADR 0207): for a page that still runs but shows
+   * nothing. F5 and Ctrl+R check for new mail (ADR 0183); a dead page is
+   * reloaded by the desktop shell itself.
+   */
+  [RELOAD_ACTION]: {
+    run: () => {
+      reloadPage();
     },
   },
   /** Opens Windows Settings → Default apps on Nail's page. */

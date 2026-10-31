@@ -321,6 +321,81 @@ pub struct AppLog {
     pub lines: Vec<String>,
 }
 
+/// Longest text of a [`UiReport`] the core logs (characters; longer text
+/// is cut).
+pub const UI_REPORT_MAX_CHARS: usize = 2000;
+
+/// The `tracing` target of the page's lines in `app.log`.
+pub const UI_LOG_TARGET: &str = "nail_ui";
+
+/// Problems a page reports per minute at most; the rest are only counted
+/// (`suppressed` of the next [`UiReport::Problem`]).
+pub const UI_PROBLEMS_PER_MINUTE: u32 = 10;
+
+/// Minutes between two memory samples a page reports.
+pub const UI_MEMORY_SAMPLE_MINUTES: u32 = 30;
+
+/// What went wrong in the page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiProblemKind {
+    /// An uncaught error (`window` `error` event).
+    Error,
+    /// A promise rejected without a handler (`unhandledrejection`).
+    UnhandledRejection,
+    /// A component failed to render (an error boundary caught it).
+    RenderError,
+}
+
+/// What a page reports for the application log
+/// ([`crate::Request::ReportUiDiagnostics`], ADR 0207): its start, its
+/// uncaught problems and, now and then, its memory use. The core writes it
+/// to `app.log` (redacted like every line) and keeps nothing else.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum UiReport {
+    /// The page (re)started: a reload shows in the log.
+    Started {
+        /// The page's route (`#/…`), without query values.
+        route: String,
+    },
+    /// An uncaught problem.
+    Problem {
+        /// What kind.
+        kind: UiProblemKind,
+        /// The error's message.
+        message: String,
+        /// Its stack, if any.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        stack: Option<String>,
+        /// Problems left out before this one (rate limit).
+        #[serde(default)]
+        suppressed: u32,
+    },
+    /// The page's memory use.
+    Memory {
+        /// Minutes since the page started.
+        uptime_minutes: u32,
+        /// Whether the page is hidden (window hidden or minimized).
+        hidden: bool,
+        /// JavaScript heap in use (KiB), where the engine tells.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        heap_used_kib: Option<u32>,
+        /// JavaScript heap reserved (KiB), where the engine tells.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        heap_total_kib: Option<u32>,
+        /// The heap's limit (KiB), where the engine tells.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        heap_limit_kib: Option<u32>,
+        /// Elements in the document.
+        dom_nodes: u32,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

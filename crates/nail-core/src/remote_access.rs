@@ -301,6 +301,8 @@ impl Service {
             // The browser's colour scheme: applied only when the core has no
             // OS source of its own (no mail data).
             | Request::ReportSystemAppearance { .. }
+            // ADR 0207: the page's diagnostics for app.log (no mail data).
+            | Request::ReportUiDiagnostics { .. }
             // M5b: remembered UI state (no mail data).
             | Request::GetUiState
             | Request::SetUiState { .. }

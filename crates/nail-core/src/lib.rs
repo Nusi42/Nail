@@ -86,6 +86,7 @@ mod sync_policy;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 mod triage;
+mod ui_log;
 mod ui_state;
 mod vault;
 mod virtuals;

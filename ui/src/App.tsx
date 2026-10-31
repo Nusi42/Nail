@@ -43,6 +43,8 @@ import { PopOutHost } from "./features/popout";
 import { UiStoreContext, createUiStore, useUi, useUiStoreApi, type UiStore } from "./state/uiStore";
 import { BootTheme } from "./theme/BootTheme";
 import { ThemeProvider } from "./theme/ThemeProvider";
+import { PageErrorBoundary } from "./PageErrorBoundary";
+import { installPageDiagnostics, reloadPage, reportRenderError } from "./state/pageDiagnostics";
 
 export interface AppProps {
   /** Client to use; by default one is created for the environment. */
@@ -146,34 +148,46 @@ export function App({
   if (gate === "login") {
     // Before a session there is no configuration: the default theme styles it.
     content = (
-      <I18nProvider locale={store.getState().localeOverride}>
-        <BootTheme modeOverride={store.getState().modeOverride}>
-          <div data-part="app" data-state="login">
-            <RemoteLoginPage
-              onLoggedIn={() => {
-                setGate("open");
-              }}
-            />
-          </div>
-        </BootTheme>
-      </I18nProvider>
+      <BootFrame>
+        <div data-part="app" data-state="login">
+          <RemoteLoginPage
+            onLoggedIn={() => {
+              setGate("open");
+            }}
+          />
+        </div>
+      </BootFrame>
     );
   } else if (client) {
     content = (
       <ClientContext.Provider value={client}>
-        <Shell widgets={widgets ?? appRegistry.widgets} windowName={windowName ?? "main"} />
+        <PageDiagnostics />
+        <PageErrorBoundary
+          onError={reportRenderError}
+          fallback={
+            <BootFrame>
+              <AppStatus
+                state="error"
+                messageId="app-render-failed"
+                onReload={() => {
+                  reloadPage();
+                }}
+              />
+            </BootFrame>
+          }
+        >
+          <Shell widgets={widgets ?? appRegistry.widgets} windowName={windowName ?? "main"} />
+        </PageErrorBoundary>
       </ClientContext.Provider>
     );
   } else {
     content = (
-      <I18nProvider locale={store.getState().localeOverride}>
-        <BootTheme modeOverride={store.getState().modeOverride}>
-          <AppStatus
-            state={failed ? "error" : "loading"}
-            messageId={failed ? "error-unavailable" : "app-loading"}
-          />
-        </BootTheme>
-      </I18nProvider>
+      <BootFrame>
+        <AppStatus
+          state={failed ? "error" : "loading"}
+          messageId={failed ? "error-unavailable" : "app-loading"}
+        />
+      </BootFrame>
     );
   }
 
@@ -184,15 +198,47 @@ export function App({
   );
 }
 
-function AppStatus({ state, messageId }: { state: string; messageId: string }) {
+/** The language and theme before the configuration is loaded (the URL's overrides). */
+function BootFrame({ children }: { children: ReactNode }) {
+  const store = useUiStoreApi();
+  const { localeOverride, modeOverride } = store.getState();
+  return (
+    <I18nProvider locale={localeOverride}>
+      <BootTheme modeOverride={modeOverride}>{children}</BootTheme>
+    </I18nProvider>
+  );
+}
+
+function AppStatus({
+  state,
+  messageId,
+  onReload,
+}: {
+  state: string;
+  messageId: string;
+  /** Offers "Reload" (the error screen of a failed render). */
+  onReload?: () => void;
+}) {
   const t = useT();
   return (
     <main data-part="app" data-state={state}>
       <div data-part="app.status" role={state === "error" ? "alert" : "status"}>
         {t(messageId)}
       </div>
+      {onReload && (
+        <button type="button" data-part="form.button" onClick={onReload}>
+          {t("app-reload")}
+        </button>
+      )}
     </main>
   );
+}
+
+/** The page's own diagnostics for the core's log (ADR 0207). */
+function PageDiagnostics() {
+  const client = useClient();
+  useEffect(() => installPageDiagnostics(client), [client]);
+  return null;
 }
 
 /** Applies events pushed by the core to the query cache and UI state. */

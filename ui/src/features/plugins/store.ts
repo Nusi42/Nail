@@ -19,6 +19,7 @@ import type {
   SendVetoId,
 } from "../../api/generated";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { pushBounded } from "../../state/bounded";
 
 /** A notification on screen: a plug-in's own, or one about a stopped plug-in. */
 export type Toast =
@@ -115,7 +116,7 @@ export function createPluginsStore(): StoreApi<PluginsState> {
     },
     pushToast: (toast) => {
       set((s) => ({
-        toasts: [...s.toasts.filter((t) => t.id !== toast.id), toast].slice(-MAX_TOASTS),
+        toasts: pushBounded(s.toasts, toast, MAX_TOASTS),
       }));
     },
     dismissToast: (id) => {

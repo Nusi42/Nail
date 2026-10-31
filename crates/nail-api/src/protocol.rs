@@ -36,7 +36,7 @@ use crate::config::theme::ResolvedTheme;
 // ADR 0190: the connection log and error details.
 use crate::connlog::{
     AppLog, ConnectionLog, ConnectionLogScope, ConnectionLogSettings, ErrorDetails, SkippedMessage,
-    SyncErrorRecord,
+    SyncErrorRecord, UiReport,
 };
 use crate::context::UiContext;
 use crate::customize::{
@@ -3168,6 +3168,13 @@ pub enum Request {
     /// Where the application log is written and its recent lines (redacted).
     /// Answered with [`Response::AppLog`].
     GetAppLog,
+    /// The page's own diagnostics for `app.log` (ADR 0207): its start,
+    /// uncaught errors and rejections, and its memory use now and then.
+    /// Answered with [`Response::Done`].
+    ReportUiDiagnostics {
+        /// What the page reports.
+        report: UiReport,
+    },
 }
 
 /// The largest attachment [`Request::GetMessageAttachment`] returns

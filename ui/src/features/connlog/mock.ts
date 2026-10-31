@@ -37,6 +37,7 @@ export const CONNLOG_REQUESTS = [
   "SetConnectionLogSettings",
   "ListSyncErrors",
   "GetAppLog",
+  "ReportUiDiagnostics",
 ] as const satisfies readonly Request["type"][];
 
 export type ConnlogRequest = Extract<Request, { type: (typeof CONNLOG_REQUESTS)[number] }>;
@@ -313,5 +314,8 @@ export function answerConnlog(core: MockCore, request: ConnlogRequest): Response
     }
     case "GetAppLog":
       return { type: "AppLog", log: structuredClone(state.appLog) };
+    // ADR 0207: the core writes the page's reports to app.log; the mock drops them.
+    case "ReportUiDiagnostics":
+      return { type: "Done" };
   }
 }

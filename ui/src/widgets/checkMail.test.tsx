@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { createEnv, renderNode, widget } from "../test/harness";
 import { RELOAD_KEYS } from "../actions/ActionsProvider";
+import { pageControls } from "../state/pageDiagnostics";
 
 function setOnline(online: boolean): void {
   Object.defineProperty(navigator, "onLine", { configurable: true, value: online });
@@ -79,7 +80,7 @@ describe("Check for new mail (ADR 0183)", () => {
       await waitFor(() => {
         expect(env.transport.requests.filter((r) => r.type === "SyncNow")).toHaveLength(2);
       });
-      // Shift+F5 / Ctrl+F5 / Ctrl+Shift+R have no binding: nothing, and no reload.
+      // Shift+F5 / Ctrl+F5 have no binding: nothing, and no reload.
       const event = new KeyboardEvent("keydown", {
         key: "F5",
         shiftKey: true,
@@ -93,6 +94,34 @@ describe("Check for new mail (ADR 0183)", () => {
       expect([...RELOAD_KEYS]).toEqual(["f5", "shift+f5", "ctrl+f5", "ctrl+r", "ctrl+shift+r"]);
     } finally {
       input.remove();
+    }
+  });
+
+  // ADR 0207: Ctrl+Shift+R is "Reload window", an action of Nail's own
+  // (for a page that still runs but shows nothing), not the browser's reload.
+  it("reloads the window with Ctrl+Shift+R through the action", async () => {
+    const reload = vi.spyOn(pageControls, "reload").mockImplementation(() => undefined);
+    try {
+      const env = createEnv();
+      renderNode(widget("folder-tree", { options: { sections: "favorites" } }), env);
+      await screen.findByRole("button", { name: "New message" });
+      const event = new KeyboardEvent("keydown", {
+        key: "R",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        document.body.dispatchEvent(event);
+      });
+      expect(event.defaultPrevented).toBe(true);
+      await waitFor(() => {
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+      expect(env.transport.requests.some((r) => r.type === "SyncNow")).toBe(false);
+    } finally {
+      reload.mockRestore();
     }
   });
 });

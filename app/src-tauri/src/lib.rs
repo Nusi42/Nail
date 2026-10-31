@@ -57,6 +57,7 @@ pub mod startup;
 pub mod tray;
 pub mod updater;
 pub mod updater_tauri;
+pub mod webview_health;
 pub mod webview_menus;
 pub mod win;
 
@@ -554,10 +555,16 @@ async fn show_notifications(app: AppHandle, service: Service) {
 
 /// Tells the user why the app does not start (another Nail process holds
 /// the data directory).
-#[cfg_attr(windows, expect(unsafe_code, reason = "one MessageBoxW call"))]
 fn refuse_start(message: &str) {
     tracing::error!("{message}");
-    // Test runs (ADR 0146): no message box on the user's screen.
+    error_box(message);
+}
+
+/// A modal error message box without an owner window (Windows; blocks until
+/// closed). Test runs (ADR 0146) show none: no message box on the user's
+/// screen.
+#[cfg_attr(windows, expect(unsafe_code, reason = "one MessageBoxW call"))]
+pub(crate) fn error_box(message: &str) {
     #[cfg(windows)]
     if !background::active() {
         use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
@@ -573,6 +580,8 @@ fn refuse_start(message: &str) {
             );
         }
     }
+    #[cfg(not(windows))]
+    drop(message);
 }
 
 /// Builds and runs the Tauri application.
@@ -635,7 +644,14 @@ pub fn run() {
     builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     let builder = builder
         // ADR 0184: no WebView2 context menus in any window (Nail's own or none).
-        .on_page_load(|webview, _payload| webview_menus::disable(webview))
+        .on_page_load(|webview, payload| {
+            webview_menus::disable(webview);
+            // ADR 0207: watch the webview's processes, end a pending reload.
+            webview_health::page_load(
+                webview,
+                payload.event() == tauri::webview::PageLoadEvent::Finished,
+            );
+        })
         .register_asynchronous_uri_scheme_protocol(PROXY_PROTOCOL, |ctx, request, responder| {
             let proxy = ctx
                 .app_handle()
@@ -779,6 +795,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                webview_health::forget(window.label());
+            }
             if window.label() != MAIN_WINDOW {
                 return;
             }
@@ -796,7 +815,13 @@ pub fn run() {
                     }
                 }
                 tauri::WindowEvent::Destroyed => shell.host.main_window_closing(),
-                tauri::WindowEvent::Focused(true) => shell.host.window_focused(),
+                tauri::WindowEvent::Focused(true) => {
+                    shell.host.window_focused();
+                    // ADR 0207: a page that died while hidden is found here.
+                    if let Some(webview) = window.get_webview_window(MAIN_WINDOW) {
+                        webview_health::ping(webview.as_ref());
+                    }
+                }
                 _ => {}
             }
         });

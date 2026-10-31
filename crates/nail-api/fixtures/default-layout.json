@@ -1389,6 +1389,12 @@
       "alias_of": null,
       "args": []
     },
+    "system.reload": {
+      "label": "@system.action.reload",
+      "icon": "rotate-ccw",
+      "alias_of": null,
+      "args": []
+    },
     "palette.open": {
       "label": "@palette.action.open",
       "icon": "search",
@@ -1943,6 +1949,12 @@
       "context": "global",
       "key": "ctrl+r",
       "action": "sync.now",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+shift+r",
+      "action": "system.reload",
       "args": []
     },
     {

@@ -78,6 +78,8 @@ tray-open = Open Nail
 tray-new-message = { common-new-message }
 tray-check-mail = Check mail
 tray-quit = Quit Nail
+# The window's content stopped working and reloading it did not help (ADR 0207).
+shell-window-failed = Nail’s window stopped working and could not be restored. Quit Nail from its icon in the notification area and start it again. Your mail keeps syncing until then.
 desktop-run-key-failed = Nail could not change “Start with Windows”.
 desktop-open-settings-failed = Nail could not open Settings → Default apps.
 
