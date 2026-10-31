@@ -85,6 +85,38 @@ export function allowValueFor(
   }
 }
 
+/**
+ * A button of the bar. Its label ends in an ellipsis when the reader is too
+ * narrow (a sender address can be long); the full text is its tooltip.
+ */
+function BarButton({
+  action,
+  label,
+  primary = false,
+  disabled,
+  onClick,
+}: {
+  action: string;
+  label: string;
+  primary?: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-part="form.button"
+      data-variant={primary ? "primary" : undefined}
+      data-action={action}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span data-part="form.button.label">{label}</span>
+    </button>
+  );
+}
+
 /** The bar for one message; nothing when it has no remote content. */
 export function RemoteContentBar({ message }: { message: MessageBody }) {
   const t = useT();
@@ -159,57 +191,42 @@ export function RemoteContentBar({ message }: { message: MessageBody }) {
         aria-label={t("remote-action-load-content")}
       >
         {allowed ? (
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="block-remote-content"
+          <BarButton
+            action="block-remote-content"
+            label={t(`remote-content-block-${view.allowedBy ?? "message"}`)}
             disabled={busy}
             onClick={() => void block()}
-          >
-            {t(`remote-content-block-${view.allowedBy ?? "message"}`)}
-          </button>
+          />
         ) : (
           <>
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="primary"
-              data-action="allow-message"
+            <BarButton
+              action="allow-message"
+              primary
+              label={t("remote-content-allow-message")}
               disabled={busy}
               onClick={() => void allow("message")}
-            >
-              {t("remote-content-allow-message")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="allow-once"
+            />
+            <BarButton
+              action="allow-once"
+              label={t("remote-content-allow-once")}
               disabled={busy}
               onClick={() => void allow("once")}
-            >
-              {t("remote-content-allow-once")}
-            </button>
+            />
             {view.sender !== null && (
-              <button
-                type="button"
-                data-part="form.button"
-                data-action="allow-sender"
+              <BarButton
+                action="allow-sender"
+                label={t("remote-content-allow-sender", { sender: view.sender })}
                 disabled={busy}
                 onClick={() => void allow("sender")}
-              >
-                {t("remote-content-allow-sender", { sender: view.sender })}
-              </button>
+              />
             )}
             {view.domain !== null && (
-              <button
-                type="button"
-                data-part="form.button"
-                data-action="allow-domain"
+              <BarButton
+                action="allow-domain"
+                label={t("remote-content-allow-domain", { domain: view.domain })}
                 disabled={busy}
                 onClick={() => void allow("domain")}
-              >
-                {t("remote-content-allow-domain", { domain: view.domain })}
-              </button>
+              />
             )}
           </>
         )}

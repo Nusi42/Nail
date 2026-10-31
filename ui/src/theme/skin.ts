@@ -12,7 +12,8 @@
  * here — this is the default, not a lock. Primitives:
  *
  * - buttons: `form.button` with `data-variant` = (none) default, `primary`,
- *   `danger`, `ghost`, `icon`; `toolbar.button` (ghost); `form.button.icon`
+ *   `danger`, `ghost`, `icon`; `toolbar.button` (ghost); `form.button.icon`; `form.button.label` (a label that
+ *   ends in an ellipsis when the button is narrower than it)
  * - inputs and selects: `form.input`, `form.select`, `form.textarea`,
  *   `search-bar.field`; they fill their field's column or row (ADR 0160)
  *   unless `data-width` sizes them ({@link CONTROL_WIDTHS})
@@ -137,7 +138,7 @@ const BUTTONS = `${p("form.button")} {
   border: 1px solid ${T.border}; border-radius: ${T.rMd};
   font-family: ${T.fontUi}; font-size: ${T.body}; font-weight: ${T.medium}; line-height: ${T.tight};
   color: ${T.fg}; background-color: ${T.bg};
-  white-space: nowrap; cursor: default;
+  white-space: nowrap; cursor: default; max-width: 100%; min-width: 0;
   transition: background-color ${T.fast} ${T.ease}, border-color ${T.fast} ${T.ease};
 }
 ${p("form.button")}:hover { background-color: ${T.subtle}; }
@@ -158,6 +159,7 @@ ${p("form.button")}[data-state~="selected"], ${p("form.button")}[aria-pressed="t
   color: ${T.accent}; background-color: ${T.accentSoft}; border-color: transparent; font-weight: ${T.semibold};
 }
 ${p("form.button.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
+${p("form.button.label")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 ${p("toolbar")} { display: flex; align-items: center; flex-wrap: wrap; gap: ${T.xs}; min-width: 0; min-height: calc(${T.control} + 2 * ${T.sm}); padding: ${T.sm} ${T.pane}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
 ${p("toolbar")}[data-overflow="more"] { flex-wrap: nowrap; overflow: hidden; }
 ${ps("toolbar.button", "toolbar.more")} {

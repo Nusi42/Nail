@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { nailPerTest, control } from "../support/nail";
 import { openSettingsTab, showView, viewRegion, messageRows } from "../support/views";
 
@@ -88,25 +88,12 @@ test("remote images load through the proxy after allowing the sender; private ta
 });
 
 test("remote content can be loaded once without remembering the sender", async ({ page }) => {
-  const hosts = await control<RemoteHosts>(server, "remote-content");
-  const raw = [
-    "From: Tea Club <hello@tea.example>",
-    "To: ada@work.example",
-    "Subject: Our autumn blends",
-    "Message-ID: <blends@tea.example>",
-    "Date: Tue, 29 Sep 2026 09:30:00 +0000",
-    "MIME-Version: 1.0",
-    "Content-Type: text/html; charset=utf-8",
-    "",
-    `<p>Blends</p><img alt="logo" src="${hosts.images}/logo.png">`,
-    "",
-  ].join("\n");
-  await control(server, "imap-deliver", { raw });
-  await page.goto(server.url);
-  const row = messageRows(page).filter({ hasText: "Our autumn blends" });
-  await expect(row).toBeVisible({ timeout: 20_000 });
-  await row.click();
-  const bar = page.getByRole("region", { name: "Remote content" });
+  const bar = await openNewsletter(page, {
+    from: "Tea Club <hello@tea.example>",
+    subject: "Our autumn blends",
+    id: "blends@tea.example",
+    body: "<p>Blends</p>",
+  });
   await bar.getByRole("button", { name: "Load once" }).click();
   await expect(bar).toContainText("Remote content is loaded this time only.");
   await expectLogoLoaded(page);
@@ -116,3 +103,57 @@ test("remote content can be loaded once without remembering the sender", async (
   await openSettingsTab(page, "Privacy");
   await expect(settings.getByText("hello@tea.example")).toHaveCount(0);
 });
+
+test("when the reader is narrower than a label, the bar's buttons stay inside it and shorten their labels", async ({
+  page,
+}) => {
+  // Longer than the reader is wide at any window size the layout shows it in.
+  const sender = `${"newsletter-for-our-most-valued-customers".repeat(2)}@${"a-very-long-garden-shop-name".repeat(3)}.example`;
+  const bar = await openNewsletter(page, {
+    from: `Garden Shop <${sender}>`,
+    subject: "Spring seeds",
+    id: "seeds@a-very-long-garden-shop-name.example",
+    body: "<p>Seeds</p>",
+  });
+  const button = bar.getByRole("button", { name: `Always load from ${sender}` });
+  await expect(button).toBeVisible();
+  await expect(button).toHaveAttribute("title", `Always load from ${sender}`);
+  const barBox = await bar.boundingBox();
+  expect(barBox).not.toBeNull();
+  for (const each of await bar.getByRole("button").all()) {
+    const box = await each.boundingBox();
+    expect(box).not.toBeNull();
+    if (box === null || barBox === null) continue;
+    expect(box.x + box.width).toBeLessThanOrEqual(barBox.x + barBox.width + 0.5);
+  }
+  // The label is cut with an ellipsis, not the button pushed out.
+  const label = button.locator('[data-part="form.button.label"]');
+  expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  expect(await label.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+});
+
+/** Delivers an HTML newsletter with the remote logo, opens it and answers its remote-content bar. */
+async function openNewsletter(
+  page: Page,
+  mail: { from: string; subject: string; id: string; body: string },
+): Promise<Locator> {
+  const hosts = await control<RemoteHosts>(server, "remote-content");
+  const raw = [
+    `From: ${mail.from}`,
+    "To: ada@work.example",
+    `Subject: ${mail.subject}`,
+    `Message-ID: <${mail.id}>`,
+    "Date: Tue, 29 Sep 2026 09:30:00 +0000",
+    "MIME-Version: 1.0",
+    "Content-Type: text/html; charset=utf-8",
+    "",
+    `${mail.body}<img alt="logo" src="${hosts.images}/logo.png">`,
+    "",
+  ].join("\n");
+  await control(server, "imap-deliver", { raw });
+  await page.goto(server.url);
+  const row = messageRows(page).filter({ hasText: mail.subject });
+  await expect(row).toBeVisible({ timeout: 20_000 });
+  await row.click();
+  return page.getByRole("region", { name: "Remote content" });
+}

@@ -2174,7 +2174,7 @@ theme "default" mode="system" {
     }
     part "remote-content:blocked" { border-left "3px solid $color.warning"; }
     part "remote-content:allowed" { border-left "3px solid $color.success"; }
-    part "remote-content.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-content.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; min-width "0"; max-width "100%"; }
     part "remote-content.error" { color "$color.danger"; }
     part "remote-allows.list" {
         display "flex"
