@@ -210,6 +210,27 @@ test("pre-push: a work folder's push to the master runs the guard on the pushed 
   });
 });
 
+test("pre-push: a merge commit never reaches the master (ADR 0208)", () => {
+  withTempDir("nail-hooks-", (base) => {
+    const { master, work, hooked } = hookedRepos(base);
+    const off = ["-c", "core.hooksPath=no-hooks"];
+    git(work, ["switch", "-q", "-c", "side"]);
+    fs.writeFileSync(path.join(work, "s.txt"), "side\n");
+    git(work, ["add", "s.txt"]);
+    git(work, [...off, "commit", "-q", "-m", "feat: side"]);
+    git(work, ["switch", "-q", "main"]);
+    fs.writeFileSync(path.join(work, "m.txt"), "main\n");
+    git(work, ["add", "m.txt"]);
+    git(work, [...off, "commit", "-q", "-m", "feat: main"]);
+    git(work, [...off, "merge", "-q", "--no-ff", "-m", "Merge the side", "side"]);
+    const push = hooked(work, ["push", "origin", "HEAD:refs/heads/work-1"]);
+    assert.notEqual(push.status, 0);
+    assert.match(push.stderr, /^merge commit [0-9a-f]+ Merge the side$/m);
+    assert.match(push.stderr, /pre-push: linear failed/);
+    assert.equal(git(master, ["branch", "--list", "work-1"]), "");
+  });
+});
+
 test("pre-push: a work folder never pushes to a network remote", () => {
   withTempDir("nail-hooks-", (base) => {
     const { master, work, prePush } = hookedRepos(base);

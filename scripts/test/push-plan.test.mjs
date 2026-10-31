@@ -18,6 +18,7 @@ import {
   publishCommand,
   publishPushes,
   pushPlan,
+  pushedRange,
 } from "../lib/push-plan.mjs";
 import { NETWORK_URL, ZERO_SHA, git, initRepo, withTempDir } from "./temp-repo.mjs";
 
@@ -79,6 +80,27 @@ test("git's ref lines on stdin are parsed, incomplete lines skipped", () => {
   );
 });
 
+test("a push selects the commits on no remote-tracking branch and not under the old value", () => {
+  assert.equal(
+    pushedRange({ ...MAIN, localSha: ZERO_SHA }, () => true),
+    undefined,
+  );
+  assert.deepEqual(
+    pushedRange(MAIN, () => true),
+    [SHA, "--not", "--remotes"],
+  );
+  const update = { ...MAIN, remoteSha: "2".repeat(40) };
+  assert.deepEqual(
+    pushedRange(update, () => true),
+    [SHA, "--not", "--remotes", "2".repeat(40)],
+  );
+  // An old value this repository never saw cannot be excluded.
+  assert.deepEqual(
+    pushedRange(update, () => false),
+    [SHA, "--not", "--remotes"],
+  );
+});
+
 test("release tags are v<semantic version> under refs/tags", () => {
   assert.equal(isReleaseTagRef("refs/tags/v0.8.0"), true);
   assert.equal(isReleaseTagRef("refs/tags/v1.2.3-beta.1"), true);
@@ -87,14 +109,15 @@ test("release tags are v<semantic version> under refs/tags", () => {
   assert.equal(isReleaseTagRef("refs/heads/v0.8.0"), false);
 });
 
-test("a work folder pushes to the master with the full check", () => {
+test("a work folder pushes to the master with the full check, never a merge commit", () => {
   assert.deepEqual(stepIds(pushPlan({ role: "work", url: LOCAL, refs: [MAIN] })), [
     "private-push",
+    "linear",
     "check",
   ]);
   assert.deepEqual(
     stepIds(pushPlan({ role: "work", url: "../master", refs: [ref("refs/heads/work-3")] })),
-    ["private-push", "check"],
+    ["private-push", "linear", "check"],
   );
 });
 
@@ -111,12 +134,12 @@ test("the master publishes main and release tags with checks that build nothing"
   const steps = stepIds(
     pushPlan({ role: "master", url: NETWORK_URL, refs: [MAIN, ref("refs/tags/v0.8.0")] }),
   );
-  assert.deepEqual(steps, ["private-push", "private", "licenses"]);
+  assert.deepEqual(steps, ["private-push", "linear", "private", "licenses"]);
   const plan = pushPlan({ role: "master", url: NETWORK_URL, refs: [MAIN] });
   assert.ok("steps" in plan);
   // The guard reads git's ref lines; the licence check is cargo deny's alone.
   assert.equal(plan.steps[0]?.stdin, true);
-  assert.deepEqual(plan.steps[2]?.args, ["--locked", "check", "licenses"]);
+  assert.deepEqual(plan.steps[3]?.args, ["--locked", "check", "licenses"]);
   assert.ok(plan.steps.every((s) => !s.args.includes("scripts/check.mjs")));
 });
 

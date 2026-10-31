@@ -8,14 +8,17 @@
  * - The master (`NAIL_CHECKOUT_ROLE=master`) is the only checkout that
  *   publishes: it pushes `main` (and release tags) to a network remote and
  *   runs only checks that build nothing (the private-data guard on the
- *   pushed commits and on every tracked file, the dependency licences).
+ *   pushed commits and on every tracked file, no merge commits (ADR 0208),
+ *   the dependency licences).
  *   `main` only moves to a commit that passed the full check in a work
  *   folder, so the full check is not repeated.
  * - A work folder (its `origin` is a master checkout) pushes only to a
- *   local path: the guard on the pushed commits, then `npm run check`.
+ *   local path: the guard on the pushed commits, no merge commits, then
+ *   `npm run check`.
  * - A plain clone (no master) keeps the full checks for every push.
  * - Every other combination is refused.
  */
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -148,6 +151,41 @@ export function parsePushLines(text) {
     }));
 }
 
+/** The object id git's pre-push hook reports for "no object" (a deletion, a new ref). */
+const NO_OBJECT = /^0+$/;
+
+/**
+ * Whether the repository at `root` has the commit `sha`.
+ *
+ * @param {string} root
+ * @param {string} sha
+ * @returns {boolean}
+ */
+export function hasCommit(root, sha) {
+  try {
+    execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], { cwd: root, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The revision arguments (`git log` / `git rev-list`) that select the
+ * commits a ref line pushes: those on no remote-tracking branch and not
+ * under the remote's old value. `undefined` for a deletion.
+ *
+ * @param {PushRef} ref
+ * @param {(sha: string) => boolean} known whether the repository has that commit
+ * @returns {string[] | undefined}
+ */
+export function pushedRange(ref, known) {
+  if (NO_OBJECT.test(ref.localSha)) return undefined;
+  const range = [ref.localSha, "--not", "--remotes"];
+  if (!NO_OBJECT.test(ref.remoteSha) && known(ref.remoteSha)) range.push(ref.remoteSha);
+  return range;
+}
+
 /**
  * Whether `ref` is a release tag (`refs/tags/v<version>`, ADR 0203).
  *
@@ -192,6 +230,16 @@ const PRIVATE_PUSHED = {
 };
 
 /** @type {PushStep} */
+const LINEAR = {
+  id: "linear",
+  title: "No merge commits in the pushed history (ADR 0208)",
+  tool: "node",
+  args: ["scripts/check-linear.mjs"],
+  stdin: true,
+  install: INSTALL.npm,
+};
+
+/** @type {PushStep} */
 const PRIVATE_TREE = {
   id: "private",
   title: "No private data in the tracked files",
@@ -229,7 +277,7 @@ export function pushPlan({ role, url, refs, master = "<master>" }) {
   const local = isLocalUrl(url);
   if (role === "plain") return { steps: [PRIVATE_PUSHED, FULL_CHECK] };
   if (role === "work") {
-    if (local) return { steps: [PRIVATE_PUSHED, FULL_CHECK] };
+    if (local) return { steps: [PRIVATE_PUSHED, LINEAR, FULL_CHECK] };
     return {
       refusal:
         `a work folder pushes only to the master, not to ${url}.\n` +
@@ -252,5 +300,5 @@ export function pushPlan({ role, url, refs, master = "<master>" }) {
         `${other.map((r) => `${r.localRef} -> ${r.remoteRef}`).join(", ")}.`,
     };
   }
-  return { steps: [PRIVATE_PUSHED, PRIVATE_TREE, LICENSES] };
+  return { steps: [PRIVATE_PUSHED, LINEAR, PRIVATE_TREE, LICENSES] };
 }

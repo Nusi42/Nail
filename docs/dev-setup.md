@@ -46,7 +46,7 @@ Settings come from the environment or from a checkout's gitignored
 node scripts/work-folders.mjs guard-master    # once, from a work folder: mark origin as the master, Cargo refuses there, its hooks on
 node scripts/work-folders.mjs create 6        # clone the master into nail-work-6 (branch work-6), copy its identity, npm ci
 git fetch origin && git reset --hard origin/main  # a package folder starts from main (clean tree first)
-git push --force-with-lease origin work-3       # a package is done (pre-push runs npm run check); the lead merges origin/work-3 into work-1
+git push --force-with-lease origin work-3       # a package is done (pre-push runs npm run check); the lead rebases origin/work-3 onto work-1 (no merge commits, ADR 0208)
 git push origin work-1 && git -C <master> merge --ff-only work-1   # after each green lead stage: main = work-1
 git -C <master> push github main               # publish main: only the master pushes to the public remote (ADR 0205)
 ```
@@ -60,8 +60,8 @@ URL (a path is local, anything else a network remote):
 
 | Push | Runs |
 | --- | --- |
-| work folder → master (local path) | the private-data guard on the pushed commits, then `npm run check` |
-| master → public remote (`main` and release tags only) | the guard on the pushed commits and on every tracked file, `cargo deny check licenses`; nothing is built |
+| work folder → master (local path) | the private-data guard on the pushed commits, no merge commits (ADR 0208), then `npm run check` |
+| master → public remote (`main` and release tags only) | the guard on the pushed commits, no merge commits, the guard on every tracked file, `cargo deny check licenses`; nothing is built |
 | plain clone (no master) → any remote | the guard on the pushed commits, then `npm run check` |
 | work folder → network remote, master → local path, master → other refs | refused, with the command to use |
 
@@ -304,7 +304,8 @@ working-tree copy of each staged file, so stage the whole file you fixed.
 Conventional Commits in plain English (ADR 0200): `<type>(<scope>): <subject>`
 with a type of feat, fix, perf, refactor, test, docs, build, ci, chore,
 style or revert, an imperative subject of at most 72 characters, and a body
-that says what changed and why; merges read `Merge <what it brought>`.
+that says what changed and why. There are no merge commits: branches are
+rebased (ADR 0208).
 Commits an agent wrote end with one `Co-Authored-By: Claude <model>
 <noreply@anthropic.com>` line. Never a `Claude-Session` line or a claude.ai
 link, and none of the internal vocabulary (work-folder and branch names,

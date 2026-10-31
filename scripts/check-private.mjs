@@ -27,12 +27,11 @@ import {
   scanText,
 } from "./lib/private-patterns.mjs";
 import { messageText } from "./lib/commit-message.mjs";
-import { parsePushLines } from "./lib/push-plan.mjs";
+import { hasCommit, parsePushLines, pushedRange } from "./lib/push-plan.mjs";
 import { STAGED_FILES_ARGS, parseStaged } from "./lib/staged.mjs";
 
 // The repository the hook or check runs in (its working directory).
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
-const ZERO = /^0+$/;
 
 /** @param {string[]} args */
 const git = (args, input = "") =>
@@ -105,11 +104,10 @@ switch (mode) {
   case "--push": {
     let commits = 0;
     const refs = parsePushLines(fs.readFileSync(0, "utf8"));
-    for (const { localRef, localSha, remoteRef, remoteSha } of refs) {
-      if (ZERO.test(localSha)) continue;
-      checkName(`${localRef} ${remoteRef}`);
-      const range = [localSha, "--not", "--remotes"];
-      if (!ZERO.test(remoteSha) && known(remoteSha)) range.push(remoteSha);
+    for (const ref of refs) {
+      const range = pushedRange(ref, (sha) => hasCommit(root, sha));
+      if (range === undefined) continue;
+      checkName(`${ref.localRef} ${ref.remoteRef}`);
       const log = git([
         "log",
         "--no-color",
@@ -166,14 +164,4 @@ function readStaged(files) {
     at = headerEnd + 1 + size + 1;
   }
   return blobs;
-}
-
-/** @param {string} sha */
-function known(sha) {
-  try {
-    git(["cat-file", "-e", `${sha}^{commit}`]);
-    return true;
-  } catch {
-    return false;
-  }
 }

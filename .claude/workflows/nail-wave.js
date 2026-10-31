@@ -92,7 +92,7 @@ if (!contract || (!contract.allTestsPass && !A.acceptContract)) {
 const RULES = (key, dirs, npm, n) => `
 YOUR WORK FOLDER: ${folder(n)} (branch ${branchOf(n)}). Four agents work at the same time, each in its own work folder.
 - Start: cd there; the tree must be clean (\`git status --porcelain\` empty, else stop and report); \`git fetch origin && git switch ${branchOf(n)} && git reset --hard origin/main\` (= the contract); \`npm ci\` (npm install if files are locked; say so).
-- Finish: commit your work on ${branchOf(n)} (a Conventional Commits message that says in plain English what changed, CLAUDE.md "Git"; trailer below; the pre-commit hook must pass, never --no-verify), then \`git push --force-with-lease origin ${branchOf(n)}\`. The integrator merges ${branchOf(n)} into ${LEAD_BRANCH}. No other git writes.
+- Finish: commit your work on ${branchOf(n)} (a Conventional Commits message that says in plain English what changed, CLAUDE.md "Git"; trailer below; the pre-commit hook must pass, never --no-verify), then \`git push --force-with-lease origin ${branchOf(n)}\`. The integrator rebases ${branchOf(n)} onto ${LEAD_BRANCH}. No other git writes.
 ${TRAILER}
 - You own ONLY: ${dirs}. Do not edit anything else (not crates/nail-api, not crates/nail-core, not shared registries, defaults/*.kdl, nail-api fixtures, root Cargo.toml/package.json, or other agents' files). Register UI only through your feature's index.ts; strings only in your own locale file. Everything else goes into apiRequests with exact details for the integrator.
 - Dependencies only in your own crates' Cargo.toml (workspace = true where declared). ${npm ? 'You MAY add npm packages to ui with npm install -w ui <pkg>.' : 'Do NOT change package.json/package-lock.json.'}
@@ -124,7 +124,7 @@ YOUR TASK: integration of ${A.wave} in YOUR WORK FOLDER ${REPO} (branch ${LEAD_B
 Reports from the parallel packages (each committed on its branch and pushed to origin):
 ${buildReport}
 
-0. \`git fetch origin\`, then merge every package branch into ${LEAD_BRANCH}: ${A.build.map((b, i) => `origin/${branchOf(slotOf(b, i))} (${b.key})`).join(', ')}. A branch that was not pushed means that package failed: say so and finish its work yourself.
+0. \`git fetch origin\`, then rebase every package branch onto ${LEAD_BRANCH}, one after the other, never with a merge commit (ADR 0208; the pre-push hook refuses them): \`git switch -C integrate origin/<branch> && git rebase ${LEAD_BRANCH} && git switch ${LEAD_BRANCH} && git merge --ff-only integrate\`, resolving conflicts per commit. The branches: ${A.build.map((b, i) => `origin/${branchOf(slotOf(b, i))} (${b.key})`).join(', ')}. A branch that was not pushed means that package failed: say so and finish its work yourself.
 1. Get everything green first (npm run build, cargo fmt/clippy -D warnings/test --workspace, npm run lint, npm test, npm run e2e:only). Resolve all apiRequests, renumber ADRs consistently, regenerate TS types. Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) (trailer below).
 2. ${A.integrate}
 3. Update userDocs/en, docs/dev-setup.md, docs/architecture.md (code map, milestone notes), CLAUDE.md (rules only), and docs/plan.md (status line for this wave, follow-ups/deferrals). Add a memory file .claude/memory/${A.memoryName}.md (frontmatter name/description/metadata.type project; what was integrated, pitfalls) and a line in .claude/memory/MEMORY.md.

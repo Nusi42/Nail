@@ -31,14 +31,13 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
-**Running (2026-10-31, afternoon):** two packages from maintainer bug reports, each with an agent of the
-session that started them: `nail.win2` / `WIN2` = links in HTML mail (a click loaded the link inside the sandboxed
-mail frame, where sites that forbid framing show WebView2's "content blocked" page; now: open in the browser, show the
-target on hover / focus, warn on mismatched links); `nail.win3` / `WIN3` = the desktop window going white (the
-backend log stayed clean; WebView2 renderer alive with little memory when it happened, so likely a UI render error;
-now: catch WebView2 process failures, log UI errors and memory, recover, hunt leaks). If no agent is running, check
-those branches in their folders, then merge into `WIN1`. Done on `main`: remote-content buttons fit a narrow reader
-(`5c5e5c20`). Not yet published to GitHub (wait for the maintainer's "push").
+**Latest (2026-10-31, evening), published to GitHub:** links in HTML mail open outside the reader, with the
+target in a status bar, a confirmation for warned links and a capped, grouped warnings list (ADR 0206); a crashed or
+hung window is logged and reloaded, page errors and memory go to `app.log`, an error screen replaces a blank window
+(ADR 0207; the cause of the maintainer's blank window is still unproven, look for `webview page failed` or `page …`
+lines in `app.log` next time); remote-content buttons fit a narrow reader. Branches are now rebased, never merged
+(ADR 0208, [[rebase-not-merge]]). The maintainer's installed Nail is still 0.8.0: a new installer or release is needed
+for the fixes to reach it.
 
 **Latest (2026-10-31): only the master publishes (ADR 0205).** The remote `github` moved from the lead's
 work folder to the master; publishing is `git -C <master> push github main` after the fast-forward (exact command in

@@ -1376,7 +1376,8 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   remote (`main` and release tags only) = guard on the pushed commits and every tracked file + `cargo deny check
   licenses`; plain clone = guard + `npm run check`; anything else is refused. The master's rustc wrapper lets
   `rustc -vV` and the target query through for `cargo metadata`; `guard-master` sets its `core.hooksPath`.
-  `release:publish` pushes through the master (`publishPushes`).
+  `release:publish` pushes through the master (`publishPushes`). ADR 0208: branches are rebased; the `linear` step
+  (`scripts/check-linear.mjs`) refuses merge commits on pushes to and from the master.
 - The desktop window stays alive (ADR 0207): `app/src-tauri/src/webview_health.rs` subscribes to WebView2
   `ProcessFailed` for every webview (from `on_page_load`, once per label; `forget` on `Destroyed`), logs kind / reason /
   exit code, reloads a dead or hung page with back-off (0 / 5 / 30 s, at most 3 per 15 min; `Recovery`), gives up with

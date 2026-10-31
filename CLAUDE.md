@@ -98,10 +98,10 @@ are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the wo
    `docs/plan.md`.
 2. `git fetch` in the lead's work folder, then check the package branches: `git log --oneline main..origin/work-<N>`.
    Agents belong to the session that started them: a package with commits on its branch and no running agent is
-   finished or half-finished — check it in its folder (`npm run check`, its tests), then merge it or let an agent
+   finished or half-finished — check it in its folder (`npm run check`, its tests), then rebase it onto the lead's branch or let an agent
    finish it.
 3. Run waves with the `nail-wave` workflow (`.claude/workflows/README.md`; its args name the folders): packages in
-   work folders 2 and up, reset to `main`; reviewers with a fresh context; merge into the lead's branch, full suite,
+   work folders 2 and up, reset to `main`; reviewers with a fresh context; rebase onto the lead's branch, full suite,
    push it, fast-forward the master's `main`, then publish `main` from the master (`git -C <master> push github main`).
 4. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
    their results.
@@ -114,7 +114,7 @@ are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the wo
 ## Git
 
 - `main` moves only by fast-forward to the lead's branch after a green lead stage. Work folders commit on their own
-  branch. Commit only when asked, or as part of an agreed workflow stage.
+  branch. Branches are combined by rebasing, never with a merge commit (ADR 0208; the pre-push hook refuses them). Commit only when asked, or as part of an agreed workflow stage.
 - Every commit uses a public identity from the checkout's local git config (e.g. a GitHub noreply address, ADR 0198),
   never a real name or private address; the commit-msg and pre-push hooks check it against the private patterns.
 - License: AGPL-3.0-or-later with a contributor license agreement (dual licensing, `CONTRIBUTING.md`); the plug-in kit
