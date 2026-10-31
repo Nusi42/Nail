@@ -218,6 +218,12 @@ describe("calendar widget", () => {
   it("opens the editor on an event and moves events between days in the month view", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
+    // The seed has three events today only on a weekday (the stand-up runs
+    // Monday to Friday): two more copies of the lunch make today overflow
+    // "max-events": 2 on any day, also after the planning moved away.
+    const events = env.transport.data.features.pim.events;
+    const lunch = must(eventOf(env, "ev-lunch"));
+    events.push({ ...lunch, id: "ev-lunch-2" }, { ...lunch, id: "ev-lunch-3" });
     renderNode(widget("calendar", { options: { view: "month", "max-events": 2 } }), env);
     const planning = await screen.findByRole("button", { name: /Sprint planning/ });
     await user.click(planning);
@@ -240,7 +246,11 @@ describe("calendar widget", () => {
     act(() => {
       cell.focus();
     });
-    await user.keyboard("{ArrowRight}");
+    // A move past the grid opens that day instead: stay inside it when the
+    // focused day (today) is the grid's last cell.
+    const cells = [...document.querySelectorAll('[data-part="calendar.month.day"]')];
+    const last = cells.indexOf(cell) === cells.length - 1;
+    await user.keyboard(last ? "{ArrowLeft}" : "{ArrowRight}");
     const next = document.activeElement as HTMLElement;
     expect(next.getAttribute("data-day")).not.toBe(cell.getAttribute("data-day"));
     await user.keyboard("{Enter}");
