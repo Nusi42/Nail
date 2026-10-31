@@ -31,12 +31,11 @@ with ×, it comes back at the next start. To see it again, use the
 *About Nail* (press **F1**) shows the version, how Nail was installed (with
 `Nail-setup.exe`, by your organization, as a portable copy or as a
 development build), for whom (just you or all users of the PC), the
-architecture, the update channel, the folder and the WebView2 version.
+architecture, the folder and the WebView2 version.
 Below that is the update status.
 
 In **Settings → Desktop app** you choose:
 
-- **Update channel.** *Stable* or *Beta (early versions)*.
 - **Check for updates automatically.** At start and once a day.
 - **Download updates in the background.** Otherwise Nail tells you about
   a new version and waits for *Download*.
@@ -65,8 +64,9 @@ anything. Your mail and settings stay as they are.
   replace the folder.
 - *Development builds do not update themselves.*
 
-An organization can also fix the update channel; the channel list is then
-locked and says so.
+Nail is offered the newest release. Pre-releases (beta versions) are never
+offered as updates; to try one, download it from its release page and
+install it by hand.
 
 ## Tray and startup
 

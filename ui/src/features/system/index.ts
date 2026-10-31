@@ -1,7 +1,6 @@
 /**
  * Feature slot of M4b WP114 (contract ADR 0087): the Windows desktop app's
- * own settings and screens — updates and "About" (version, channel, check
- * now, release notes, download / restart-to-install, policy-disabled
+ * own settings and screens — updates and "About" (version, check now, release notes, download / restart-to-install, policy-disabled
  * state), tray and startup settings, the `nail plugin dev` endpoint switch,
  * default apps (status and the button to Settings → Default apps), the
  * first-run screen and the composer notice for mail from other programs
@@ -164,7 +163,6 @@ export const settings: NonNullable<Feature["settings"]> = {
       "system-settings-tab-updates",
       "system-updates-title",
       "system-update-options",
-      "system-update-channel",
       "system-update-auto-check",
       "system-update-auto-download",
     ],

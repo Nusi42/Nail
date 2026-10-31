@@ -6,12 +6,12 @@
  * `data.features.system`; the host's side (installation facts, updater,
  * update server, Run key, default apps) is simulated there too. The policy
  * wins (a disabled updater reports `disabled` and refuses checks with
- * `forbidden`; a forced channel cannot be changed), checks / downloads /
+ * `forbidden`), checks / downloads /
  * installs follow the state machine (`conflict` otherwise).
  *
  * The simulated updater moves on by itself like the shell's: a check finds
- * the newest release of the channel on the simulated update server
- * (`releases`), downloads it in steps (automatically with `auto_download`)
+ * the newest release on the simulated update server (`release`, GitHub's
+ * latest release; ADR 0210), downloads it in steps (automatically with `auto_download`)
  * and becomes "ready to install"; `failNext` makes the next check or
  * download fail. Tests and demos also move it by hand with
  * `setUpdateState`, which cancels the steps under way. With
@@ -33,7 +33,6 @@ import {
   type MapiResult,
   type Request,
   type Response,
-  type UpdateChannel,
   type UpdateFailure,
   type UpdateInfo,
   type UpdateSettings,
@@ -81,8 +80,8 @@ export interface SystemMockState {
   firstRun: FirstRunState;
   /** Host calls, in order (`check`, `download`, `install`, `open-settings`). */
   calls: string[];
-  /** The newest release per channel on the simulated update server. */
-  releases: Partial<Record<UpdateChannel, UpdateInfo>>;
+  /** The newest release on the simulated update server (`null` = none). */
+  release: UpdateInfo | null;
   /** The next check / download fails this way (then it is cleared). */
   failNext: UpdateFailure | null;
   /** Whether checks and downloads move on by themselves (off = by hand). */
@@ -109,11 +108,10 @@ export function createSystemMockState(): SystemMockState {
       architecture: "x64",
       install_dir: "C:\\Users\\ada\\AppData\\Local\\Programs\\Nail",
       updates_disabled: null,
-      forced_channel: null,
       mapi_installed: true,
       webview_version: "131.0.2903.70",
     },
-    updateSettings: { channel: "stable", auto_check: true, auto_download: true },
+    updateSettings: { auto_check: true, auto_download: true },
     updateState: { state: "idle" },
     lastCheckedAt: null,
     desktopSettings: {
@@ -140,21 +138,11 @@ export function createSystemMockState(): SystemMockState {
       completed_version: "1.0.0",
     },
     calls: [],
-    releases: {
-      stable: {
-        version: "1.1.0",
-        channel: "stable",
-        published_at: "2026-09-30T09:00:00Z",
-        notes: RELEASE_NOTES,
-        size_bytes: 48_000_000,
-      },
-      beta: {
-        version: "1.2.0-beta.1",
-        channel: "beta",
-        published_at: "2026-10-01T09:00:00Z",
-        notes: "- Try the new command palette",
-        size_bytes: 49_000_000,
-      },
+    release: {
+      version: "1.1.0",
+      published_at: "2026-09-30T09:00:00Z",
+      notes: RELEASE_NOTES,
+      size_bytes: 48_000_000,
     },
     failNext: null,
     autoProgress: true,
@@ -168,11 +156,7 @@ export function updateStatusOf(state: SystemMockState): UpdateStatus {
   const { installation } = state;
   return {
     current_version: installation.version,
-    settings: {
-      ...state.updateSettings,
-      channel: installation.forced_channel ?? state.updateSettings.channel,
-    },
-    forced_channel: installation.forced_channel,
+    settings: structuredClone(state.updateSettings),
     state:
       installation.updates_disabled === null
         ? structuredClone(state.updateState)
@@ -207,17 +191,13 @@ function later(core: MockCore, step: () => void): void {
   });
 }
 
-/** The newest release for the effective channel, when newer than this one. */
+/** The newest release on the update server, when newer than this one. */
 function newerRelease(state: SystemMockState): UpdateInfo | null {
-  const channel = state.installation.forced_channel ?? state.updateSettings.channel;
-  const candidates = [state.releases.stable, channel === "beta" ? state.releases.beta : undefined];
-  let best: UpdateInfo | null = null;
-  for (const release of candidates) {
-    if (release === undefined) continue;
-    if (compareVersions(release.version, state.installation.version) <= 0) continue;
-    if (best === null || compareVersions(release.version, best.version) > 0) best = release;
+  const { release } = state;
+  if (release === null || compareVersions(release.version, state.installation.version) <= 0) {
+    return null;
   }
-  return best === null ? null : structuredClone(best);
+  return structuredClone(release);
 }
 
 function takeFailure(state: SystemMockState): UpdateFailure | null {
@@ -328,10 +308,6 @@ export function answerSystem(core: MockCore, request: SystemRequest): Response {
     case "GetUpdateStatus":
       return status();
     case "SetUpdateSettings": {
-      const forced = state.installation.forced_channel;
-      if (forced !== null && forced !== request.settings.channel) {
-        return error("forbidden", "the channel is set by policy", "update-channel-locked");
-      }
       state.updateSettings = structuredClone(request.settings);
       core.emit({ type: "UpdateStatusChanged", status: updateStatusOf(state) });
       return status();

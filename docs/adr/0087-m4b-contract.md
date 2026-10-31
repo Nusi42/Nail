@@ -1,6 +1,6 @@
 # ADR 0087: M4b contract — installation facts, updater, tray and startup, default apps, Simple MAPI, `nail plugin dev` on the desktop, first run, slots
 
-Status: accepted · 2026-10-02 · M4b WP110
+Status: accepted · 2026-10-02 · M4b WP110 · update channels (`UpdateChannel`, `forced_channel`) removed by ADR 0210
 
 ## Context
 

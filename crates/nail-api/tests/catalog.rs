@@ -12,8 +12,8 @@ use nail_api::agents::{
     ACTION_FIELD_IDS, ActionKind, ActionPolicyIssue, CONFIRMATION_SUMMARY_IDS, ConfirmationState,
 };
 use nail_api::desktop::{
-    DefaultAppState, DefaultAppTarget, InstallKind, InstallScope, UpdateChannel,
-    UpdateDisabledReason, UpdateFailure,
+    DefaultAppState, DefaultAppTarget, InstallKind, InstallScope, UpdateDisabledReason,
+    UpdateFailure,
 };
 use nail_api::editing::{EditIssue, EditKind, HistoryScope};
 use nail_api::exchange::oof::AutomaticRepliesIssue;
@@ -249,11 +249,10 @@ fn contract_message_ids_exist_in_english() {
         .iter()
         .map(|o| o.message_id()),
     );
-    // M4b (ADR 0087): installation facts, update channels / failures /
+    // M4b (ADR 0087): installation facts, update failures /
     // disabled reasons, default apps, MAPI results, core-built desktop texts.
     wanted.extend(InstallKind::ALL.iter().map(|k| k.message_id()));
     wanted.extend(InstallScope::ALL.iter().map(|s| s.message_id()));
-    wanted.extend(UpdateChannel::ALL.iter().map(|c| c.message_id()));
     wanted.extend(
         UpdateDisabledReason::ALL
             .iter()
@@ -271,14 +270,7 @@ fn contract_message_ids_exist_in_english() {
             .map(|s| s.message_id().to_owned()),
     );
     wanted.extend(MapiResult::ALL.iter().map(|r| r.message_id()));
-    wanted.extend(
-        [
-            "update-channel-locked",
-            "desktop-unavailable",
-            "mapi-draft-from-program",
-        ]
-        .map(str::to_owned),
-    );
+    wanted.extend(["desktop-unavailable", "mapi-draft-from-program"].map(str::to_owned));
     // M4c (ADR 0094): portability, backups, diagnostics, recovery key,
     // smartcards, palette, printing, core-built texts.
     macro_rules! labels {

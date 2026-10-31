@@ -1,7 +1,7 @@
 # Releasing, signing and the update key
 
 Internal procedures for Windows releases (plan M4b WP112; ADRs 0089, 0093,
-0201, 0203). The tools and file formats are described in `packaging/README.md` and
+0201, 0203, 0210). The tools and file formats are described in `packaging/README.md` and
 `scripts/README.md`; this page is about the keys and the steps. Nail has no
 hosted CI (ADR 0201): a release is built, signed and published locally.
 
@@ -102,8 +102,10 @@ commands in the lead's work folder, on a clean checkout of its branch:
    checks (ADR 0209: no open Dependabot alert, read with `gh`; `cargo deny`
    advisories; `npm audit --omit=dev`), builds
    the x64 NSIS installer and the portable zip with update signatures and
-   the update base `<repository>/releases/download`, writes
-   `<channel>/latest.json` (every signature checked against
+   the update base `<repository>/releases/latest/download` (ADR 0210: the
+   app asks `<repository>/releases/latest/download/latest.json`, the
+   newest release; there are no update channels), writes
+   `latest.json` (every signature checked against
    `packaging/updater/release.pub`) and the release text, and commits
    `chore(release): release X.Y.Z`. Output: `.nail-build/release/X.Y.Z/`.
    `--dry-run` does all of it without committing (the version files are
@@ -115,9 +117,10 @@ commands in the lead's work folder, on a clean checkout of its branch:
    and the tag to the public remote (`--remote`, default `github`; only the
    master publishes, ADR 0205); a plain clone pushes the branch as `main`
    and the tag itself. Then it creates the GitHub release
-   with every built file (a pre-release for a `-beta` version), and
-   replaces `latest.json` on the rolling release of the channel, `stable`
-   or `beta` (a stable release also refreshes `beta` unless beta is newer).
+   with every built file and `latest.json` and marks it Latest, so
+   installed copies find it at the update address. A `-beta` version
+   becomes a pre-release that is never marked Latest, so installed copies
+   are never offered it (testers install it by hand from its release page).
    Needs the GitHub CLI, signed in once (`gh auth login`). A re-run goes on
    where a failure stopped.
 

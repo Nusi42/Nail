@@ -1,7 +1,7 @@
 /**
  * Widget `update-settings`: the running version and how it was installed,
- * the update channel (locked when policy forces one), automatic checks /
- * downloads, and the updater's state with "Check now", release notes,
+ * automatic checks / downloads (of the newest release; no update channels,
+ * ADR 0210), and the updater's state with "Check now", release notes,
  * progress and "Restart to install". When the updater is off (MSI managed
  * by IT, policy, portable or development copy) it says why and offers no
  * update buttons.
@@ -10,27 +10,25 @@
  * installer line at the top.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId } from "react";
 import type { UpdateSettings as Settings } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
-import { UPDATE_CHANNELS, channelMessageId, installKindMessageId } from "./model";
+import { installKindMessageId } from "./model";
 import { systemKeys, useInstallation, useUpdateStatus } from "./queries";
 import { QueryProblem } from "./QueryProblem";
 import { UpdateStatusPanel } from "./UpdateStatus";
 import { useBusyAction } from "../../state/busyAction";
 
-/** Channel and automatic checks / downloads; every change is saved at once. */
+/** Automatic checks / downloads; every change is saved at once. */
 function UpdateOptions() {
   const t = useT();
-  const ids = { channel: useId(), channelHint: useId() };
   const client = useClient();
   const queryClient = useQueryClient();
   const status = useUpdateStatus();
   const { busy, problem, run } = useBusyAction();
   if (!status.data) return null;
-  const { settings, forced_channel: forced } = status.data;
+  const { settings } = status.data;
   const off = status.data.state.state === "disabled";
 
   const save = async (next: Settings) => {
@@ -46,32 +44,6 @@ function UpdateOptions() {
   return (
     <fieldset data-part="form.section" data-section="update-options" disabled={busy}>
       <legend data-part="form.section.title">{t("system-update-options")}</legend>
-      <div data-part="form.field" data-field="channel">
-        <label data-part="form.label" htmlFor={ids.channel}>
-          {t("system-update-channel")}
-        </label>
-        <select
-          id={ids.channel}
-          data-part="form.select"
-          value={settings.channel}
-          disabled={forced !== null || off}
-          aria-describedby={forced !== null ? ids.channelHint : undefined}
-          onChange={(e) =>
-            void save({ ...settings, channel: e.target.value as Settings["channel"] })
-          }
-        >
-          {UPDATE_CHANNELS.map((channel) => (
-            <option key={channel} value={channel}>
-              {t(channelMessageId(channel))}
-            </option>
-          ))}
-        </select>
-        {forced !== null && (
-          <p data-part="form.hint" id={ids.channelHint} data-tone="policy">
-            {t("update-channel-locked")}
-          </p>
-        )}
-      </div>
       <label data-part="form.check" data-field="auto-check">
         <input
           data-part="form.checkbox"

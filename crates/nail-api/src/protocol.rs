@@ -2500,9 +2500,7 @@ pub enum Request {
     /// [`Response::UpdateStatus`].
     GetUpdateStatus,
     /// Store the update settings. Answered with [`Response::UpdateStatus`],
-    /// followed by [`Event::UpdateStatusChanged`]; `forbidden`
-    /// (`update-channel-locked`) for another channel than the one policy
-    /// forces.
+    /// followed by [`Event::UpdateStatusChanged`].
     SetUpdateSettings {
         /// The new settings.
         settings: UpdateSettings,

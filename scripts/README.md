@@ -12,12 +12,12 @@ every work folder.
 | `installer-smoke.ps1` | install → launch → update (loopback server) → uninstall of the NSIS installer in a temp directory, per user |
 | `installer-payload-smoke.ps1` | beside an installed Nail (ADR 0186): checks the NSIS setup and runs exactly the files it installs (CLI, `nail serve`, seeded `Nail.exe`) without running the setup |
 | `msi-smoke.ps1` | silent MSI install with properties → launch → upgrade → uninstall (elevated; CI) |
-| `update-manifest.mjs` | per-channel update manifests (`<channel>/latest.json`) from a release, signatures checked |
+| `update-manifest.mjs` | the update manifest (`latest.json`) of a release, signatures checked |
 | `update-server.mjs` | loopback (127.0.0.1) static server for manifests and installers |
 | `update-check.mjs` | the app updater's check + verified download, for the smoke tests |
 | `winget-manifest.mjs` | winget manifests from the NSIS installers |
 | `updater-key.mjs` | create / check the development update key (private half outside the repository) |
-| `release-version.mjs` | the app version (`Cargo.toml` `[workspace.package]`), the next patch version, tag check, channel |
+| `release-version.mjs` | the app version (`Cargo.toml` `[workspace.package]`), the next patch version, tag check |
 | `release.mjs` | `npm run release:prepare` / `release:publish`: version, checks, installers, manifests, GitHub release (ADR 0203) |
 | `import-signing-cert.ps1` | CI: Authenticode certificate from secrets → `NAIL_SIGN_THUMBPRINT` (skipped without) |
 | `verify-signatures.ps1` | CI: every exe / msi signed and timestamped |

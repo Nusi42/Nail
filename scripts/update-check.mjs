@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Checks a channel manifest for an update and downloads it, verified, the
+ * Checks the update manifest for an update and downloads it, verified, the
  * way the app's updater does (scripts/lib/update-check.mjs). Used by the
  * installer smoke tests.
  *

@@ -417,8 +417,7 @@ mod tests {
     use crate::registry::{Hive, MemoryRegistry};
     use crate::updater::testing::{FakeBackend, FakeUpdate};
     use nail_api::desktop::{
-        InstallKind, InstallScope, UpdateChannel, UpdateDisabledReason, UpdateState, WindowsArch,
-        registry as keys,
+        InstallKind, InstallScope, UpdateDisabledReason, UpdateState, WindowsArch, registry as keys,
     };
     use nail_api::{Event, Request, Response};
     use pretty_assertions::assert_eq;
@@ -431,7 +430,6 @@ mod tests {
             architecture: WindowsArch::X64,
             install_dir: Some(r"C:\Nail".into()),
             updates_disabled: disabled,
-            forced_channel: None,
             mapi_installed: false,
             webview_version: None,
         }
@@ -461,7 +459,7 @@ mod tests {
         let host = Arc::new(ShellHost::new(HostParts {
             registry: registry.clone(),
             installation: installation(disabled),
-            updater: Updater::new(backend.clone(), runtime.clone(), disabled.is_none(), None),
+            updater: Updater::new(backend.clone(), runtime.clone(), disabled.is_none()),
             exe: PathBuf::from(r"C:\Nail\Nail.exe"),
             data_dir: data.path().to_path_buf(),
             runtime,
@@ -506,8 +504,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn the_core_drives_the_updater_through_the_host() {
         let f = fixture(None);
-        f.backend
-            .answer(Ok(Some(FakeUpdate::new("1.1.0", UpdateChannel::Stable))));
+        f.backend.answer(Ok(Some(FakeUpdate::new("1.1.0"))));
         let mut events = f.service.subscribe();
         let Response::Installation { info } = f.service.handle(Request::GetInstallation).await
         else {
@@ -561,7 +558,7 @@ mod tests {
             ),
             "{response:?}"
         );
-        assert!(f.backend.asked.lock().unwrap().is_empty());
+        assert_eq!(*f.backend.asked.lock().unwrap(), 0);
         f.service.shutdown().await;
     }
 

@@ -16,7 +16,7 @@
      directory, never in the real profile. Nail.exe "mailto:..." must start
      the core (the MCP endpoint file appears), stay up, and log the pending
      launch request.
-  5. Update (with -UpdateEndpoint): the channel manifest on the loopback
+  5. Update (with -UpdateEndpoint): the update manifest on the loopback
      update server is read the way the app's updater does
      (scripts/update-check.mjs: newer version, windows-<arch>-nsis entry,
      signature of the update key for that version), the verified installer
@@ -34,7 +34,7 @@
   Path to the setup .exe. Default: the newest in <build dir>\dist.
 
 .PARAMETER UpdateEndpoint
-  A channel manifest URL (http://127.0.0.1:<port>/stable/latest.json) that
+  The update manifest URL (http://127.0.0.1:<port>/latest.json) that
   announces a newer version; enables step 5.
 
 .PARAMETER UpdatePubkey

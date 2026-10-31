@@ -297,16 +297,6 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         Request::SetUpdateSettings { settings } => {
             let host = host(service)?;
-            let installation = host.installation();
-            if let Some(forced) = installation.forced_channel
-                && forced != settings.channel
-            {
-                return Err(
-                    ApiError::new(ErrorCode::Forbidden, "the channel is set by policy")
-                        .with_localized(LocalizedMessage::new("update-channel-locked"))
-                        .into(),
-                );
-            }
             let saved = settings.clone();
             service
                 .store()

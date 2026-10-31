@@ -27,8 +27,8 @@ use std::time::Duration;
 
 use futures_util::future::BoxFuture;
 use nail_api::desktop::{
-    DesktopChange, DesktopNotifier, HostUpdateState, UPDATE_CHECK_INTERVAL_SECS, UpdateChannel,
-    UpdateFailure, UpdateInfo, UpdateSettings, UpdateState,
+    DesktopChange, DesktopNotifier, HostUpdateState, UPDATE_CHECK_INTERVAL_SECS, UpdateFailure,
+    UpdateInfo, UpdateSettings, UpdateState,
 };
 use nail_api::{ApiError, ErrorCode};
 
@@ -51,11 +51,8 @@ pub trait PendingUpdate: Send + Sync {
 
 /// Where updates come from.
 pub trait UpdateBackend: Send + Sync {
-    /// Asks the channel's manifest for a newer release (`None` = up to date).
-    fn check(
-        &self,
-        channel: UpdateChannel,
-    ) -> BoxFuture<'static, Result<Option<Arc<dyn PendingUpdate>>, BackendError>>;
+    /// Asks the update manifest for a newer release (`None` = up to date).
+    fn check(&self) -> BoxFuture<'static, Result<Option<Arc<dyn PendingUpdate>>, BackendError>>;
 }
 
 /// Timing of the automatic checks.
@@ -88,15 +85,12 @@ struct State {
     settings: UpdateSettings,
     pending: Option<Arc<dyn PendingUpdate>>,
     bytes: Option<Arc<Vec<u8>>>,
-    /// Bumped when the channel changes: results of older work are dropped.
-    generation: u64,
 }
 
 struct Shared {
     backend: Arc<dyn UpdateBackend>,
     runtime: tokio::runtime::Handle,
     enabled: bool,
-    forced_channel: Option<UpdateChannel>,
     state: Mutex<State>,
     notify: OnceLock<DesktopNotifier>,
     /// Held while announcing a change, so announcements never overtake
@@ -125,25 +119,22 @@ fn conflict(what: &str) -> ApiError {
 
 impl Updater {
     /// A new updater. `enabled` = the installation allows updates (else it
-    /// never checks); `forced_channel` = the policy's channel.
+    /// never checks).
     pub fn new(
         backend: Arc<dyn UpdateBackend>,
         runtime: tokio::runtime::Handle,
         enabled: bool,
-        forced_channel: Option<UpdateChannel>,
     ) -> Self {
         Self {
             shared: Arc::new(Shared {
                 backend,
                 runtime,
                 enabled,
-                forced_channel,
                 state: Mutex::new(State {
                     host: HostUpdateState::default(),
                     settings: UpdateSettings::default(),
                     pending: None,
                     bytes: None,
-                    generation: 0,
                 }),
                 notify: OnceLock::new(),
                 notify_order: Mutex::new(()),
@@ -187,43 +178,9 @@ impl Updater {
         self.shared.enabled
     }
 
-    /// The channel in effect (the policy's, else the user's).
-    pub fn channel(&self) -> UpdateChannel {
-        self.shared
-            .forced_channel
-            .unwrap_or(self.lock().settings.channel)
-    }
-
-    /// New settings from the core. A changed channel drops what the old
-    /// one found and checks again (when automatic checks are on).
+    /// New settings from the core (automatic checks and downloads).
     pub fn apply_settings(&self, settings: &UpdateSettings) {
-        let recheck = {
-            let mut state = self.lock();
-            let before = self.shared.forced_channel.unwrap_or(state.settings.channel);
-            state.settings = settings.clone();
-            let after = self.shared.forced_channel.unwrap_or(settings.channel);
-            let busy = matches!(
-                state.host.state,
-                UpdateState::Checking
-                    | UpdateState::Downloading { .. }
-                    | UpdateState::Installing { .. }
-            );
-            if before != after && !busy {
-                state.generation += 1;
-                state.pending = None;
-                state.bytes = None;
-                state.host.state = UpdateState::Idle;
-                true
-            } else {
-                false
-            }
-        };
-        if recheck {
-            self.changed();
-            if settings.auto_check && self.shared.enabled {
-                drop(self.check());
-            }
-        }
+        self.lock().settings = settings.clone();
     }
 
     /// Starts a check (`conflict` while one runs or when disabled).
@@ -231,37 +188,26 @@ impl Updater {
         if !self.shared.enabled {
             return Err(conflict("CheckForUpdates"));
         }
-        let (channel, generation) = {
+        {
             let mut state = self.lock();
             if !state.host.state.can_check() {
                 return Err(conflict("CheckForUpdates"));
             }
             state.host.state = UpdateState::Checking;
-            (
-                self.shared.forced_channel.unwrap_or(state.settings.channel),
-                state.generation,
-            )
-        };
+        }
         self.changed();
         let this = self.clone();
-        let check = self.shared.backend.check(channel);
+        let check = self.shared.backend.check();
         self.shared.runtime.spawn(async move {
             let result = check.await;
-            this.check_finished(generation, result);
+            this.check_finished(result);
         });
         Ok(())
     }
 
-    fn check_finished(
-        &self,
-        generation: u64,
-        result: Result<Option<Arc<dyn PendingUpdate>>, BackendError>,
-    ) {
+    fn check_finished(&self, result: Result<Option<Arc<dyn PendingUpdate>>, BackendError>) {
         let download = {
             let mut state = self.lock();
-            if state.generation != generation {
-                return;
-            }
             state.host.last_checked_at = Some(nail_util::time::rfc3339_now());
             // A release already downloaded stays ready unless the check
             // found a different version: never download it again.
@@ -319,7 +265,7 @@ impl Updater {
 
     /// Starts downloading the available release.
     pub fn download(&self) -> Result<(), ApiError> {
-        let (pending, generation) = {
+        let pending = {
             let mut state = self.lock();
             let (UpdateState::Available { update }, Some(pending)) =
                 (&state.host.state, state.pending.clone())
@@ -331,7 +277,7 @@ impl Updater {
                 downloaded_bytes: 0,
                 total_bytes: update.size_bytes,
             };
-            (pending, state.generation)
+            pending
         };
         self.changed();
         let this = self.clone();
@@ -344,22 +290,19 @@ impl Updater {
             let step = total.map_or(256 * 1024, |t| (t / 100).max(1));
             if downloaded - reported >= step || total == Some(downloaded) {
                 reported = downloaded;
-                progress_target.progress(generation, downloaded, total);
+                progress_target.progress(downloaded, total);
             }
         }));
         self.shared.runtime.spawn(async move {
             let result = download.await;
-            this.download_finished(generation, &pending, result);
+            this.download_finished(&pending, result);
         });
         Ok(())
     }
 
-    fn progress(&self, generation: u64, downloaded: u64, total: Option<u64>) {
+    fn progress(&self, downloaded: u64, total: Option<u64>) {
         {
             let mut state = self.lock();
-            if state.generation != generation {
-                return;
-            }
             let UpdateState::Downloading { update, .. } = &state.host.state else {
                 return;
             };
@@ -374,15 +317,11 @@ impl Updater {
 
     fn download_finished(
         &self,
-        generation: u64,
         pending: &Arc<dyn PendingUpdate>,
         result: Result<Vec<u8>, BackendError>,
     ) {
         {
             let mut state = self.lock();
-            if state.generation != generation {
-                return;
-            }
             let update = pending.info().clone();
             match result {
                 Ok(bytes) => {
@@ -505,11 +444,10 @@ pub(crate) mod testing {
     }
 
     impl FakeUpdate {
-        pub(crate) fn new(version: &str, channel: UpdateChannel) -> Arc<Self> {
+        pub(crate) fn new(version: &str) -> Arc<Self> {
             Arc::new(Self {
                 info: UpdateInfo {
                     version: version.into(),
-                    channel,
                     published_at: None,
                     notes: Some("Fixes".into()),
                     size_bytes: Some(1000),
@@ -557,11 +495,11 @@ pub(crate) mod testing {
         }
     }
 
-    /// Answers checks from a script; records the channels asked.
+    /// Answers checks from a script; counts the checks.
     #[derive(Default)]
     pub(crate) struct FakeBackend {
         pub answers: Mutex<VecDeque<Result<Option<Arc<FakeUpdate>>, BackendError>>>,
-        pub asked: Mutex<Vec<UpdateChannel>>,
+        pub asked: Mutex<usize>,
     }
 
     impl FakeBackend {
@@ -573,9 +511,8 @@ pub(crate) mod testing {
     impl UpdateBackend for FakeBackend {
         fn check(
             &self,
-            channel: UpdateChannel,
         ) -> BoxFuture<'static, Result<Option<Arc<dyn PendingUpdate>>, BackendError>> {
-            self.asked.lock().unwrap().push(channel);
+            *self.asked.lock().unwrap() += 1;
             let answer = self
                 .answers
                 .lock()
@@ -608,12 +545,7 @@ mod tests {
     }
 
     fn updater(backend: &Arc<FakeBackend>, enabled: bool) -> (Updater, Arc<Mutex<u32>>) {
-        let updater = Updater::new(
-            backend.clone(),
-            tokio::runtime::Handle::current(),
-            enabled,
-            None,
-        );
+        let updater = Updater::new(backend.clone(), tokio::runtime::Handle::current(), enabled);
         let changes = Arc::new(Mutex::new(0u32));
         let counter = Arc::clone(&changes);
         updater.attach(Arc::new(move |change| {
@@ -640,7 +572,7 @@ mod tests {
     #[tokio::test]
     async fn check_download_and_install_on_restart() {
         let backend = Arc::new(FakeBackend::default());
-        let release = FakeUpdate::new("1.1.0", UpdateChannel::Stable);
+        let release = FakeUpdate::new("1.1.0");
         backend.answer(Ok(Some(Arc::clone(&release))));
         let (updater, changes) = updater(&backend, true);
         updater.apply_settings(&UpdateSettings::default());
@@ -678,19 +610,18 @@ mod tests {
     #[tokio::test]
     async fn without_auto_download_the_user_starts_it() {
         let backend = Arc::new(FakeBackend::default());
-        let mut release = FakeUpdate::new("1.1.0", UpdateChannel::Beta);
+        let mut release = FakeUpdate::new("1.1.0");
         let gate = Arc::new(tokio::sync::Notify::new());
         Arc::get_mut(&mut release).unwrap().gate = Some(Arc::clone(&gate));
         backend.answer(Ok(Some(Arc::clone(&release))));
         let (updater, _) = updater(&backend, true);
         updater.apply_settings(&UpdateSettings {
-            channel: UpdateChannel::Beta,
             auto_check: false,
             auto_download: false,
         });
         updater.check().unwrap();
         wait_for(&updater, |s| matches!(s, UpdateState::Available { .. })).await;
-        assert_eq!(*backend.asked.lock().unwrap(), [UpdateChannel::Beta]);
+        assert_eq!(*backend.asked.lock().unwrap(), 1);
         updater.download().unwrap();
         // Progress while downloading.
         let state = wait_for(&updater, |s| {
@@ -723,7 +654,7 @@ mod tests {
     async fn failures_are_reported_and_the_next_check_starts_over() {
         let backend = Arc::new(FakeBackend::default());
         backend.answer(Err((UpdateFailure::Network, "offline".into())));
-        let broken = FakeUpdate::new("1.1.0", UpdateChannel::Stable);
+        let broken = FakeUpdate::new("1.1.0");
         *broken.download.lock().unwrap() = Some(Err((UpdateFailure::Signature, "bad sig".into())));
         backend.answer(Ok(Some(Arc::clone(&broken))));
         backend.answer(Ok(None));
@@ -766,7 +697,7 @@ mod tests {
     #[tokio::test]
     async fn a_ready_release_stays_ready_and_is_never_downloaded_again() {
         let backend = Arc::new(FakeBackend::default());
-        let release = FakeUpdate::new("1.1.0", UpdateChannel::Stable);
+        let release = FakeUpdate::new("1.1.0");
         backend.answer(Ok(Some(Arc::clone(&release))));
         // Later checks: the same version, a failure, nothing found.
         backend.answer(Ok(Some(Arc::clone(&release))));
@@ -785,7 +716,7 @@ mod tests {
                 "still ready, not {state:?}"
             );
         }
-        assert_eq!(backend.asked.lock().unwrap().len(), 4);
+        assert_eq!(*backend.asked.lock().unwrap(), 4);
         assert!(updater.install_on_exit());
         assert_eq!(*release.installs.lock().unwrap(), [(1000, false)]);
     }
@@ -793,8 +724,8 @@ mod tests {
     #[tokio::test]
     async fn a_different_version_replaces_the_ready_one() {
         let backend = Arc::new(FakeBackend::default());
-        let first = FakeUpdate::new("1.1.0", UpdateChannel::Stable);
-        let second = FakeUpdate::new("1.2.0", UpdateChannel::Stable);
+        let first = FakeUpdate::new("1.1.0");
+        let second = FakeUpdate::new("1.2.0");
         backend.answer(Ok(Some(Arc::clone(&first))));
         backend.answer(Ok(Some(Arc::clone(&second))));
         let updater = with_defaults(&backend);
@@ -819,7 +750,7 @@ mod tests {
     async fn announcements_never_overtake_each_other() {
         use std::sync::mpsc;
         let backend = Arc::new(FakeBackend::default());
-        let updater = Updater::new(backend, tokio::runtime::Handle::current(), true, None);
+        let updater = Updater::new(backend, tokio::runtime::Handle::current(), true);
         let broadcasts = Arc::new(Mutex::new(Vec::<UpdateState>::new()));
         let (entered_tx, entered_rx) = mpsc::channel::<()>();
         let (release_tx, release_rx) = mpsc::channel::<()>();
@@ -836,7 +767,7 @@ mod tests {
             }
             record.lock().unwrap().push(state);
         }));
-        let update = FakeUpdate::new("1.1.0", UpdateChannel::Stable).info.clone();
+        let update = FakeUpdate::new("1.1.0").info.clone();
         let announce = |state: UpdateState| {
             updater.lock().host.state = state;
             updater.changed();
@@ -870,7 +801,7 @@ mod tests {
     #[tokio::test]
     async fn a_failed_installer_is_reported() {
         let backend = Arc::new(FakeBackend::default());
-        let release = FakeUpdate::new("1.1.0", UpdateChannel::Stable);
+        let release = FakeUpdate::new("1.1.0");
         *release.install_result.lock().unwrap() =
             Some((UpdateFailure::Install, "cancelled".into()));
         backend.answer(Ok(Some(Arc::clone(&release))));
@@ -894,41 +825,27 @@ mod tests {
         updater.apply_settings(&UpdateSettings::default());
         assert!(updater.check().is_err());
         assert!(updater.spawn_schedule(Schedule::default()).is_none());
-        assert!(backend.asked.lock().unwrap().is_empty());
+        assert_eq!(*backend.asked.lock().unwrap(), 0);
     }
 
     #[tokio::test]
-    async fn the_policy_channel_wins_and_a_channel_change_rechecks() {
+    async fn new_settings_keep_what_was_found() {
         let backend = Arc::new(FakeBackend::default());
-        let forced = Updater::new(
-            backend.clone(),
-            tokio::runtime::Handle::current(),
-            true,
-            Some(UpdateChannel::Stable),
-        );
-        forced.apply_settings(&UpdateSettings {
-            channel: UpdateChannel::Beta,
+        backend.answer(Ok(Some(FakeUpdate::new("1.1.0"))));
+        let (updater, _) = updater(&backend, true);
+        updater.apply_settings(&UpdateSettings {
+            auto_download: false,
             ..UpdateSettings::default()
         });
-        assert_eq!(forced.channel(), UpdateChannel::Stable);
-        forced.check().unwrap();
-        wait_for(&forced, |s| *s == UpdateState::UpToDate).await;
-        assert_eq!(*backend.asked.lock().unwrap(), [UpdateChannel::Stable]);
-
-        let backend = Arc::new(FakeBackend::default());
-        let (free, _) = updater(&backend, true);
-        free.apply_settings(&UpdateSettings::default());
-        free.check().unwrap();
-        wait_for(&free, |s| *s == UpdateState::UpToDate).await;
-        free.apply_settings(&UpdateSettings {
-            channel: UpdateChannel::Beta,
-            ..UpdateSettings::default()
-        });
-        wait_for(&free, |s| *s == UpdateState::UpToDate).await;
-        assert_eq!(
-            *backend.asked.lock().unwrap(),
-            [UpdateChannel::Stable, UpdateChannel::Beta]
-        );
+        updater.check().unwrap();
+        wait_for(&updater, |s| matches!(s, UpdateState::Available { .. })).await;
+        // Changing the settings neither drops the release nor checks again.
+        updater.apply_settings(&UpdateSettings::default());
+        assert!(matches!(
+            updater.state().state,
+            UpdateState::Available { .. }
+        ));
+        assert_eq!(*backend.asked.lock().unwrap(), 1);
     }
 
     #[tokio::test(start_paused = true)]
@@ -936,7 +853,7 @@ mod tests {
         let backend = Arc::new(FakeBackend::default());
         let updater = with_defaults(&backend);
         let task = updater.spawn_schedule(Schedule::default()).unwrap();
-        let asked = || backend.asked.lock().unwrap().len();
+        let asked = || *backend.asked.lock().unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert_eq!(asked(), 0);
         tokio::time::sleep(Duration::from_secs(20)).await;

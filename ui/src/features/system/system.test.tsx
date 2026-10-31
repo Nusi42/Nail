@@ -55,7 +55,6 @@ function sent(env: Env, type: string) {
 
 const release = {
   version: "1.1.0",
-  channel: "stable",
   published_at: null,
   notes: "## New\n\n- Faster search\n- <script>alert(1)</script>",
   size_bytes: 48_000_000,
@@ -144,22 +143,24 @@ describe("update-settings widget", () => {
     expect(container.querySelector("script")).toBeNull();
   });
 
-  it("saves the channel and the automatic options", async () => {
+  it("saves the automatic options; there is no channel to choose", async () => {
     const env = createEnv();
     const user = userEvent.setup();
     renderWithProviders(<NodeView node={widget("update-settings")} path="t/0" />, env);
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: "Update channel" }),
-      "beta",
-    );
+    await user.click(await screen.findByRole("checkbox", { name: /Check for updates/ }));
     await waitFor(() => {
-      expect(env.transport.data.features.system.updateSettings.channel).toBe("beta");
+      expect(env.transport.data.features.system.updateSettings.auto_check).toBe(false);
     });
     await user.click(screen.getByRole("checkbox", { name: /Download updates/ }));
     await waitFor(() => {
       expect(env.transport.data.features.system.updateSettings.auto_download).toBe(false);
     });
     expect(sent(env, "SetUpdateSettings")).toHaveLength(2);
+    expect(sent(env, "SetUpdateSettings").at(-1)).toEqual({
+      type: "SetUpdateSettings",
+      settings: { auto_check: false, auto_download: false },
+    });
+    expect(screen.queryByRole("combobox")).toBeNull();
   });
 
   it("explains why updates are off and offers no update buttons (MSI policy)", async () => {
@@ -168,13 +169,10 @@ describe("update-settings widget", () => {
       kind: "msi",
       scope: "per-machine",
       updates_disabled: "msi-managed",
-      forced_channel: "stable",
     });
     renderWithProviders(<NodeView node={widget("update-settings")} path="t/0" />, env);
     expect(await screen.findByText("Your organization installs updates for Nail.")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
-    expect(screen.getByRole("combobox", { name: "Update channel" })).toBeDisabled();
-    expect(screen.getByText("Your organization chose the update channel.")).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Check for updates/ })).toBeDisabled();
   });
 
@@ -214,10 +212,9 @@ describe("About Nail", () => {
     expect(within(facts).getByText("For you only")).toBeVisible();
     expect(within(facts).getByText("x64")).toBeVisible();
     expect(within(facts).getByText("131.0.2903.70")).toBeVisible();
-    expect(await within(facts).findByText("Stable")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Check now" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Check now" })).toBeVisible();
     // No options in "About": they live in the settings.
-    expect(screen.queryByRole("combobox", { name: "Update channel" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Check for updates/ })).toBeNull();
   });
 
   it("says it is desktop only outside the desktop app", async () => {

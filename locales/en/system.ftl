@@ -4,7 +4,7 @@
 #
 # Owned by WP114; message ids start with the prefixes listed in
 # ui/src/features/system/messages.ts. Texts the contract names
-# (installation kinds, update channels / failures / policy reasons,
+# (installation kinds, update failures / policy reasons,
 # default-app targets, MAPI results) are in core-desktop.ftl.
 
 system-settings-title = Desktop
@@ -28,7 +28,6 @@ system-updates-title = { common-updates }
 # $version = e.g. 1.0.0; $kind = how Nail was installed (install-kind-*)
 system-version-line = Nail { $version } · { $kind }
 system-update-options = Update options
-system-update-channel = { system-about-channel }
 system-update-auto-check = Check for updates automatically (at start and once a day)
 system-update-auto-download = Download updates in the background
 system-update-idle-auto = Nail checks for updates automatically.
@@ -64,7 +63,6 @@ system-about-version = Version
 system-about-installer = Installed by
 system-about-scope = Installed for
 system-about-architecture = Architecture
-system-about-channel = Update channel
 system-about-webview = WebView2 runtime
 system-about-mapi = “Send to → Mail recipient”
 system-about-mapi-yes = Installed

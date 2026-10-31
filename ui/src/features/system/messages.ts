@@ -2,7 +2,7 @@
  * Fluent message ids of this feature for the catalog coverage test
  * (`../../i18n/coverage.test.ts`): literal ids in the sources starting with
  * one of `prefixes` must exist in `locales/en/system.ftl` (texts the
- * contract names — installation kinds, update channels / failures / policy
+ * contract names — installation kinds, update failures / policy
  * reasons, default apps, MAPI results — are in
  * `locales/en/core-desktop.ftl`); ids built at runtime are listed by
  * `runtimeIds`.
@@ -13,10 +13,8 @@ import {
   INSTALL_KINDS,
   INSTALL_SCOPES,
   MAPI_RESULTS,
-  UPDATE_CHANNELS,
   UPDATE_DISABLED_REASONS,
   UPDATE_FAILURES,
-  channelMessageId,
   defaultAppMessageId,
   defaultAppStateMessageId,
   disabledReasonMessageId,
@@ -36,7 +34,6 @@ export const notMessages: readonly string[] = [];
 export function runtimeIds(): string[] {
   return [
     "system-settings-title",
-    "update-channel-locked",
     "desktop-unavailable",
     "mapi-draft-from-program",
     "system-program-draft-unknown",
@@ -53,7 +50,6 @@ export function runtimeIds(): string[] {
     "system-action-default-apps",
     ...INSTALL_KINDS.map(installKindMessageId),
     ...INSTALL_SCOPES.map(installScopeMessageId),
-    ...UPDATE_CHANNELS.map(channelMessageId),
     ...UPDATE_DISABLED_REASONS.map(disabledReasonMessageId),
     ...UPDATE_FAILURES.map(failureMessageId),
     ...DEFAULT_APP_TARGETS.map(defaultAppMessageId),

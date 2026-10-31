@@ -51,9 +51,9 @@ the Tauri updater's plain `msiexec /i … /passive` changes nothing.
 - Uninstall removes all of it; user data (`%APPDATA%\Nail`,
   `%LOCALAPPDATA%\Nail` of each user) is never touched by the MSI.
 
-Group Policy can still force updates off or a channel through
-`HKLM\Software\Policies\Nail` (`DisableUpdates`, `UpdateChannel`); the app
-lets the policy win over everything.
+Group Policy can still force updates off through
+`HKLM\Software\Policies\Nail` (`DisableUpdates`); the app lets the policy
+win over everything. The former `UpdateChannel` value is ignored (ADR 0210).
 
 `../../tests/installer.rs` checks this fragment against `nail_api` and the
 per-user installer; `scripts/msi-smoke.ps1` installs, upgrades and removes

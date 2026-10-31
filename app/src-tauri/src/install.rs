@@ -9,8 +9,9 @@
 //! its marker file ([`crate::portable`]).
 //!
 //! The update source is the `plugins.updater` section of `tauri.conf.json`
-//! (endpoints with a `{{channel}}` placeholder, and the minisign public
-//! key); the release pipeline fills it in. `NAIL_UPDATE_ENDPOINT` /
+//! (the manifest URL, `<repository>/releases/latest/download/latest.json`
+//! for a release build (ADR 0210), and the minisign public key); the
+//! release pipeline fills it in. `NAIL_UPDATE_ENDPOINT` /
 //! `NAIL_UPDATE_PUBKEY` replace it for tests, but only in builds with the
 //! `test-overrides` feature ([`crate::shell::test_env`]; never an installer
 //! build), only with a loopback endpoint (the e2e update server), and the
@@ -23,25 +24,22 @@
 use std::path::{Path, PathBuf};
 
 use nail_api::desktop::{
-    InstallKind, InstallScope, InstallationInfo, UpdateChannel, UpdateDisabledReason, WindowsArch,
+    InstallKind, InstallScope, InstallationInfo, UpdateDisabledReason, WindowsArch,
     registry as keys,
 };
 
 use crate::registry::{Hive, Registry};
 
-/// Test override of the update endpoint (loopback only; may contain
-/// `{{channel}}`).
+/// Test override of the update manifest URL (loopback only).
 pub const UPDATE_ENDPOINT_ENV: &str = "NAIL_UPDATE_ENDPOINT";
 /// Test override of the update public key (only with
 /// [`UPDATE_ENDPOINT_ENV`]).
 pub const UPDATE_PUBKEY_ENV: &str = "NAIL_UPDATE_PUBKEY";
-/// The placeholder for the channel in an update endpoint.
-pub const CHANNEL_PLACEHOLDER: &str = "{{channel}}";
 
 /// Where updates come from.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UpdateSource {
-    /// Manifest URLs; `{{channel}}` stands for `stable` / `beta`.
+    /// Manifest URLs.
     pub endpoints: Vec<String>,
     /// The minisign public key (base64, as `tauri signer generate` prints it).
     pub pubkey: String,
@@ -85,7 +83,7 @@ impl UpdateSource {
         let (Some(endpoint), Some(pubkey)) = (endpoint, pubkey) else {
             return self;
         };
-        if !is_loopback_url(&endpoint.replace(CHANNEL_PLACEHOLDER, "stable")) {
+        if !is_loopback_url(&endpoint) {
             tracing::warn!(
                 endpoint,
                 "ignoring {UPDATE_ENDPOINT_ENV}: only loopback endpoints are accepted"
@@ -104,28 +102,11 @@ impl UpdateSource {
         !self.endpoints.is_empty() && !self.pubkey.is_empty()
     }
 
-    /// The manifest URLs of a channel: `{{channel}}` replaced, or a
-    /// channel manifest (`<base>/stable/latest.json`, how the release
-    /// pipeline writes it) switched to this channel's
-    /// ([`UpdateChannel::manifest_path`]). Invalid URLs are dropped.
-    pub fn endpoints_for(&self, channel: UpdateChannel) -> Vec<tauri::Url> {
+    /// The manifest URLs, as configured. Invalid URLs are dropped.
+    pub fn urls(&self) -> Vec<tauri::Url> {
         self.endpoints
             .iter()
-            .filter_map(|endpoint| {
-                let text = if endpoint.contains(CHANNEL_PLACEHOLDER) {
-                    endpoint.replace(CHANNEL_PLACEHOLDER, channel.as_str())
-                } else {
-                    UpdateChannel::ALL
-                        .into_iter()
-                        .find_map(|c| endpoint.strip_suffix(&c.manifest_path()))
-                        .filter(|base| base.ends_with('/'))
-                        .map_or_else(
-                            || endpoint.clone(),
-                            |base| format!("{base}{}", channel.manifest_path()),
-                        )
-                };
-                tauri::Url::parse(&text).ok()
-            })
+            .filter_map(|endpoint| tauri::Url::parse(endpoint).ok())
             .collect()
     }
 }
@@ -238,8 +219,6 @@ pub fn installation(
     let policy_disables = policy(registry, keys::POLICY_DISABLE_UPDATES_VALUE)
         .and_then(|v| v.as_flag())
         .unwrap_or(false);
-    let forced_channel = policy(registry, keys::POLICY_UPDATE_CHANNEL_VALUE)
-        .and_then(|v| UpdateChannel::parse(&v.as_string()));
     let updates_disabled = if policy_disables {
         Some(UpdateDisabledReason::Policy)
     } else if msi_disables {
@@ -260,7 +239,6 @@ pub fn installation(
         architecture: WindowsArch::current().unwrap_or(WindowsArch::X64),
         install_dir,
         updates_disabled,
-        forced_channel,
         mapi_installed,
         webview_version: local.webview_version.clone(),
     }
@@ -285,7 +263,9 @@ mod tests {
 
     fn configured() -> UpdateSource {
         UpdateSource {
-            endpoints: vec!["https://updates.nail.example/{{channel}}/latest.json".into()],
+            endpoints: vec![
+                "https://updates.nail.example/releases/latest/download/latest.json".into(),
+            ],
             pubkey: "KEY".into(),
             test_override: false,
         }
@@ -403,15 +383,15 @@ mod tests {
             keys::POLICY_DISABLE_UPDATES_VALUE,
             RegValue::Num(0),
         );
+        // The update channel policy of 0.8 is gone (ADR 0210): ignored.
         reg.put(
             Hive::LocalMachine,
             keys::POLICY_KEY,
-            keys::POLICY_UPDATE_CHANNEL_VALUE,
+            "UpdateChannel",
             RegValue::Str("Beta".into()),
         );
         let info = installation(&reg, &local(DIR), &configured());
         assert_eq!(info.updates_disabled, None);
-        assert_eq!(info.forced_channel, Some(UpdateChannel::Beta));
         // HKLM's policy beats HKCU's.
         reg.put(
             Hive::LocalMachine,
@@ -423,7 +403,7 @@ mod tests {
         assert_eq!(info.updates_disabled, Some(UpdateDisabledReason::Policy));
         // Even a test endpoint does not get past the policy.
         let source = configured().with_test_override(
-            Some("http://127.0.0.1:9/{{channel}}/latest.json".into()),
+            Some("http://127.0.0.1:9/latest.json".into()),
             Some("K".into()),
         );
         let info = installation(&reg, &local(DIR), &source);
@@ -446,7 +426,7 @@ mod tests {
         assert_eq!(info.install_dir.as_deref(), Some(r"D:\build\debug"));
         // The e2e update server enables a development build.
         let source = UpdateSource::default().with_test_override(
-            Some("http://127.0.0.1:4999/{{channel}}/latest.json".into()),
+            Some("http://127.0.0.1:4999/latest.json".into()),
             Some("K".into()),
         );
         assert!(source.test_override);
@@ -465,38 +445,24 @@ mod tests {
     fn the_update_source_comes_from_the_plugin_config() {
         let config = serde_json::json!({
             "pubkey": " KEY ",
-            "endpoints": ["https://updates.nail.example/{{channel}}/latest.json", 7]
+            "endpoints": [
+                "https://github.example/o/nail/releases/latest/download/latest.json",
+                7,
+                "not a url",
+                "https://mirror.nail.example/latest.json"
+            ]
         });
         let source = UpdateSource::from_plugin_config(Some(&config));
         assert!(source.is_configured());
         assert_eq!(source.pubkey, "KEY");
-        assert_eq!(
-            source.endpoints_for(UpdateChannel::Beta)[0].as_str(),
-            "https://updates.nail.example/beta/latest.json"
-        );
-        // The release pipeline writes the stable manifest; beta swaps it.
-        let pipeline = UpdateSource {
-            endpoints: vec![
-                "https://updates.nail.example/nail/stable/latest.json".into(),
-                "https://mirror.nail.example/latest.json".into(),
-            ],
-            ..source.clone()
-        };
-        let urls: Vec<String> = pipeline
-            .endpoints_for(UpdateChannel::Beta)
-            .iter()
-            .map(ToString::to_string)
-            .collect();
+        // One address, used as configured (no channel part to swap).
+        let urls: Vec<String> = source.urls().iter().map(ToString::to_string).collect();
         assert_eq!(
             urls,
             [
-                "https://updates.nail.example/nail/beta/latest.json",
+                "https://github.example/o/nail/releases/latest/download/latest.json",
                 "https://mirror.nail.example/latest.json"
             ]
-        );
-        assert_eq!(
-            pipeline.endpoints_for(UpdateChannel::Stable)[0].as_str(),
-            "https://updates.nail.example/nail/stable/latest.json"
         );
         let empty = UpdateSource::from_plugin_config(Some(&serde_json::json!({"pubkey": ""})));
         assert!(!empty.is_configured());
@@ -511,7 +477,7 @@ mod tests {
         assert!(!is_loopback_url("http://updates.evil.example/x"));
         assert!(!is_loopback_url("file:///C:/x"));
         let source = configured().with_test_override(
-            Some("https://updates.evil.example/{{channel}}/latest.json".into()),
+            Some("https://updates.evil.example/latest.json".into()),
             Some("EVIL".into()),
         );
         assert_eq!(source, configured());

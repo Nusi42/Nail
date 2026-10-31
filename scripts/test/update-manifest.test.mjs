@@ -6,13 +6,11 @@ import { test } from "node:test";
 import { testKey } from "../lib/minisign.mjs";
 import {
   buildManifest,
-  CHANNELS,
   classifyArtifact,
   collectPlatforms,
   compareVersions,
+  MANIFEST_FILE,
   manifestJson,
-  manifestPath,
-  manifestsForRelease,
   parseVersion,
   updaterArch,
   verifyPlatforms,
@@ -39,11 +37,8 @@ const files = () => [
   { name: "Nail_0.2.0_x64-SHA256SUMS.txt", signature: null },
 ];
 
-test("channels and manifest paths match nail_api::desktop::UpdateChannel", () => {
-  assert.deepEqual(CHANNELS, ["stable", "beta"]);
-  assert.equal(manifestPath("stable"), "stable/latest.json");
-  assert.equal(manifestPath("beta"), "beta/latest.json");
-  assert.throws(() => manifestPath("nightly"), /unknown channel/);
+test("the manifest's file name is nail_api::desktop::UPDATE_MANIFEST_FILE", () => {
+  assert.equal(MANIFEST_FILE, "latest.json");
 });
 
 test("semantic versions compare by precedence", () => {
@@ -166,7 +161,6 @@ test("the manifest: Tauri's static format, plain targets name NSIS", () => {
   const entries = collectPlatforms({ files: files(), version: "0.2.0", downloadBase: "https://d" });
   const manifest = buildManifest({
     version: "0.2.0",
-    channel: "stable",
     notes: "## Fixed\n- things",
     pubDate: "2026-10-02T08:00:00.123Z",
     entries,
@@ -193,54 +187,19 @@ test("the manifest: Tauri's static format, plain targets name NSIS", () => {
   assert.deepEqual(JSON.parse(manifestJson(manifest)), manifest);
 });
 
-test("manifest rules: pre-releases only on beta, notes limited, dates valid", () => {
+test("manifest rules: pre-releases get one too, notes limited, dates valid", () => {
   const entries = collectPlatforms({
     files: [{ name: "Nail_1.0.0-beta.1_x64-setup.exe", signature: "s" }],
     version: "1.0.0-beta.1",
     downloadBase: "https://d",
   });
   const base = { version: "1.0.0-beta.1", pubDate: "2026-10-02T00:00:00Z", entries };
-  assert.throws(() => buildManifest({ ...base, channel: "stable" }), /pre-release/);
-  assert.equal(buildManifest({ ...base, channel: "beta" }).version, "1.0.0-beta.1");
-  assert.throws(
-    () => buildManifest({ ...base, channel: "beta", notes: "x".repeat(70000) }),
-    /larger than/,
-  );
-  assert.throws(() => buildManifest({ ...base, channel: "beta", pubDate: "soon" }), /date/);
-  assert.throws(() => buildManifest({ ...base, channel: "nightly" }), /unknown channel/);
+  // Never offered: a pre-release is never GitHub's latest release (ADR 0210).
+  assert.equal(buildManifest(base).version, "1.0.0-beta.1");
+  assert.throws(() => buildManifest({ ...base, notes: "x".repeat(70000) }), /larger than/);
+  assert.throws(() => buildManifest({ ...base, pubDate: "soon" }), /date/);
   const [first] = entries;
   assert.ok(first);
   const twice = [...entries, { ...first, name: "b" }];
-  assert.throws(
-    () => buildManifest({ ...base, channel: "beta", entries: twice }),
-    /two nsis installers/,
-  );
-});
-
-test("a stable release refreshes beta unless the beta is newer", () => {
-  const manifest = { version: "1.0.0" };
-  assert.deepEqual(
-    manifestsForRelease({ manifest, channel: "stable" }).map((m) => m.path),
-    ["stable/latest.json", "beta/latest.json"],
-  );
-  assert.deepEqual(
-    manifestsForRelease({ manifest, channel: "stable", existingBeta: { version: "0.9.0" } }).map(
-      (m) => m.path,
-    ),
-    ["stable/latest.json", "beta/latest.json"],
-  );
-  assert.deepEqual(
-    manifestsForRelease({
-      manifest,
-      channel: "stable",
-      existingBeta: { version: "1.1.0-beta.1" },
-    }).map((m) => m.path),
-    ["stable/latest.json"],
-  );
-  assert.deepEqual(
-    manifestsForRelease({ manifest: { version: "1.1.0-beta.1" }, channel: "beta" }).map(
-      (m) => m.path,
-    ),
-    ["beta/latest.json"],
-  );
+  assert.throws(() => buildManifest({ ...base, entries: twice }), /two nsis installers/);
 });

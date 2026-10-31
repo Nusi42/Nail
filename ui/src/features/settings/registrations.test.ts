@@ -84,7 +84,7 @@ describe("settings search over the shipped texts", () => {
     ["backup", "data"],
     ["thunderbird", "data"],
     ["start with windows", "desktop"],
-    ["update channel", "desktop"],
+    ["download updates", "desktop"],
     ["mcp", "agents"],
     ["plug-ins", "plugins"],
   ])("“%s” finds %s first", (query, section) => {

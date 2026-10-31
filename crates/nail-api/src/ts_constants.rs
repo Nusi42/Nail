@@ -781,11 +781,6 @@ fn desktop(c: Constants) -> Result<Constants, serde_json::Error> {
         &d::InstallScope::ALL,
         d::InstallScope::message_id,
     )?
-    .enum_table(
-        "UpdateChannel",
-        &d::UpdateChannel::ALL,
-        d::UpdateChannel::message_id,
-    )?
     .enum_table("UpdateDisabledReason", &d::UpdateDisabledReason::ALL, |r| {
         r.message_id().to_owned()
     })?
@@ -805,7 +800,7 @@ fn desktop(c: Constants) -> Result<Constants, serde_json::Error> {
     )?
     .add(
         "UPDATE_MANIFEST_FILE",
-        "File name of an update channel's manifest (`<channel>/latest.json`).",
+        "File name of the update manifest, an asset of every release (`<repository>/releases/latest/download/latest.json`).",
         &crate::desktop::UPDATE_MANIFEST_FILE,
     )
 }

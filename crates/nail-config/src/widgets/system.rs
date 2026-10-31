@@ -11,7 +11,7 @@ use super::{WidgetSpec, widget};
 
 /// Widgets of this feature.
 pub(crate) const WIDGETS: &[WidgetSpec] = &[
-    // Version, installer, channel, check now, release notes, download /
+    // Version, installer, check now, release notes, download /
     // restart to install, the policy-disabled state. `show-installation`
     // (default #true): the version and installer line.
     widget(

@@ -1,31 +1,29 @@
 #!/usr/bin/env node
 /**
- * Writes the signed per-channel update manifests of a release (plan M4b
- * WP112; format in scripts/lib/update-manifest.mjs):
+ * Writes the signed update manifest of a release (plan M4b WP112; format
+ * in scripts/lib/update-manifest.mjs):
  *
- *   node scripts/update-manifest.mjs --version 0.2.0 --channel stable \
+ *   node scripts/update-manifest.mjs --version 0.2.0 \
  *     --artifacts <dir> [--artifacts <dir> …] --download-base <url> \
- *     --out <dir> [--notes <file.md>] [--pub-date <RFC 3339>] \
- *     [--existing-beta <beta/latest.json>]
+ *     --out <dir> [--notes <file.md>] [--pub-date <RFC 3339>]
  *
  * The update key's public half comes from NAIL_UPDATER_PUBKEY or
  * NAIL_UPDATER_PUBKEY_FILE (or --pubkey-file). Every installer's `.sig` is
  * checked against it and against the version before anything is written.
- * Output: <out>/<channel>/latest.json (a stable release also refreshes
- * <out>/beta/latest.json unless the existing beta is newer). Publish the
- * folder at the base URL the app was built with (--update-base).
+ * Output: <out>/latest.json. Publish it at the base URL the app was built
+ * with (--update-base; a release: an asset of the version's GitHub
+ * release, ADR 0210).
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  MANIFEST_FILE,
   buildManifest,
   collectPlatforms,
   manifestJson,
-  manifestsForRelease,
   verifyPlatforms,
 } from "./lib/update-manifest.mjs";
-import { readJson } from "./lib/json.mjs";
 import { forEachArg } from "./lib/args.mjs";
 import { runMain } from "./lib/program.mjs";
 
@@ -34,44 +32,39 @@ import { runMain } from "./lib/program.mjs";
  */
 function parse(argv) {
   /**
-   * @type {{ artifacts: string[], version?: string, channel?: string, downloadBase?: string,
-   *   out?: string, notes?: string, pubDate?: string, existingBeta?: string,
-   *   pubkeyFile?: string }}
+   * @type {{ artifacts: string[], version?: string, downloadBase?: string,
+   *   out?: string, notes?: string, pubDate?: string, pubkeyFile?: string }}
    */
   const o = { artifacts: [] };
   forEachArg(argv, (arg, { value }) => {
-    if (arg === "--version") o.version = value();
-    else if (arg === "--channel") o.channel = value();
-    else if (arg === "--artifacts") o.artifacts.push(value());
+    if (arg === "--artifacts") o.artifacts.push(value());
+    else if (arg === "--version") o.version = value();
     else if (arg === "--download-base") o.downloadBase = value();
     else if (arg === "--out") o.out = value();
     else if (arg === "--notes") o.notes = value();
     else if (arg === "--pub-date") o.pubDate = value();
-    else if (arg === "--existing-beta") o.existingBeta = value();
     else if (arg === "--pubkey-file") o.pubkeyFile = value();
     else throw new Error(`unknown option ${arg}`);
   });
-  const { version, channel, downloadBase, out } = o;
+  const { version, downloadBase, out } = o;
   /** @param {string} key */
   const missing = (key) =>
     new Error(`--${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)} is required`);
   if (!version) throw missing("version");
-  if (!channel) throw missing("channel");
   if (!downloadBase) throw missing("downloadBase");
   if (!out) throw missing("out");
   if (!o.artifacts.length) throw new Error("--artifacts is required");
-  return { ...o, version, channel, downloadBase, out };
+  return { ...o, version, downloadBase, out };
 }
 
 /**
- * Writes the channel manifests of a release (`<out>/<channel>/latest.json`)
- * after checking every installer's signature; answers the files written.
+ * Writes the manifest of a release (`<out>/latest.json`) after checking
+ * every installer's signature; answers the file written.
  *
- * @param {{ version: string, channel: string, artifacts: string[], downloadBase: string,
- *   out: string, notes: string, pubDate: string, existingBeta: string | null,
- *   publicKey: string }} o
+ * @param {{ version: string, artifacts: string[], downloadBase: string,
+ *   out: string, notes: string, pubDate: string, publicKey: string }} o
  */
-export function writeUpdateManifests(o) {
+export function writeUpdateManifest(o) {
   /** @type {Map<string, string>} */
   const located = new Map();
   for (const dir of o.artifacts) {
@@ -95,29 +88,15 @@ export function writeUpdateManifests(o) {
   });
   const manifest = buildManifest({
     version: o.version,
-    channel: o.channel,
     notes: o.notes,
     pubDate: o.pubDate,
     entries,
   });
-  const existingBeta =
-    o.existingBeta && existsSync(o.existingBeta)
-      ? /** @type {{ version: string }} */ (readJson(o.existingBeta))
-      : null;
-  /** @type {string[]} */
-  const written = [];
-  for (const { path: rel, manifest: m } of manifestsForRelease({
-    manifest,
-    channel: o.channel,
-    existingBeta,
-  })) {
-    const file = path.join(o.out, ...rel.split("/"));
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, manifestJson(m));
-    console.log(`${file}: ${Object.keys(m.platforms).join(", ")}`);
-    written.push(file);
-  }
-  return written;
+  const file = path.join(o.out, MANIFEST_FILE);
+  mkdirSync(o.out, { recursive: true });
+  writeFileSync(file, manifestJson(manifest));
+  console.log(`${file}: ${Object.keys(manifest.platforms).join(", ")}`);
+  return file;
 }
 
 /** @param {string[]} argv */
@@ -128,11 +107,10 @@ function main(argv) {
   let publicKey = process.env.NAIL_UPDATER_PUBKEY;
   if (!publicKey && pubkeyFile) publicKey = readFileSync(pubkeyFile, "utf8");
   if (!publicKey) throw new Error("no update public key (NAIL_UPDATER_PUBKEY or --pubkey-file)");
-  writeUpdateManifests({
+  writeUpdateManifest({
     ...o,
     notes: o.notes ? readFileSync(o.notes, "utf8") : "",
     pubDate: o.pubDate ?? new Date().toISOString(),
-    existingBeta: o.existingBeta ?? null,
     publicKey,
   });
 }

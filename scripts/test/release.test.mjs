@@ -11,12 +11,12 @@ import {
   RELEASE_NOTES,
   RELEASE_PUBKEY,
   absoluteLinks,
-  channelAsset,
-  channelOf,
   dependabotAlertsArgs,
   downloadBase,
   githubNotes,
+  githubReleaseCommands,
   githubSlug,
+  isPrerelease,
   openAlerts,
   plainLinks,
   releasePage,
@@ -24,9 +24,10 @@ import {
   releasedChangelog,
   unwrapped,
   updateBase,
+  updateManifestUrl,
   updateNotes,
 } from "../lib/release.mjs";
-import { CHANNELS, manifestPath } from "../lib/update-manifest.mjs";
+import { MANIFEST_FILE } from "../lib/update-manifest.mjs";
 import { CARGO_TOML, workspaceRepository, workspaceVersion } from "../lib/version.mjs";
 
 const REPO = "https://github.com/example/nail";
@@ -126,24 +127,88 @@ test("the changelog's unreleased entries move under the version", () => {
   assert.ok(read(CHANGELOG).includes("## [Unreleased]\n"), `${CHANGELOG} keeps the heading`);
 });
 
-test("each channel's manifest is the latest.json of the release named like the channel", () => {
-  // The app reads <base>/<channel>/latest.json; a release's asset is
-  // <repository>/releases/download/<tag>/<name>.
-  for (const channel of CHANNELS) {
-    const { tag, name } = channelAsset(channel);
-    assert.equal(`${tag}/${name}`, manifestPath(channel));
-    assert.equal(
-      `${updateBase(REPO)}/${tag}/${name}`,
-      `${REPO}/releases/download/${manifestPath(channel)}`,
-    );
-  }
+test("the app asks one address: latest.json of GitHub's latest release", () => {
+  // The app reads <update base>/latest.json (scripts/lib/build.mjs); GitHub
+  // serves the asset <name> of the release marked Latest at
+  // <repository>/releases/latest/download/<name>.
+  assert.equal(updateBase(REPO), `${REPO}/releases/latest/download`);
+  assert.equal(updateManifestUrl(REPO), `${REPO}/releases/latest/download/${MANIFEST_FILE}`);
+  assert.equal(updateManifestUrl(REPO), `${updateBase(REPO)}/latest.json`);
+  // The manifest points at the version's own downloads.
   assert.equal(downloadBase(REPO, "0.9.0"), `${REPO}/releases/download/v0.9.0`);
 });
 
-test("a pre-release goes to beta, a release to stable", () => {
-  assert.equal(channelOf("0.9.0"), "stable");
-  assert.equal(channelOf("0.9.0-beta.1"), "beta");
-  assert.throws(() => channelOf("nine"));
+test("a pre-release is a -beta… version", () => {
+  assert.equal(isPrerelease("0.9.0"), false);
+  assert.equal(isPrerelease("0.9.0-beta.1"), true);
+  assert.throws(() => isPrerelease("nine"));
+});
+
+test("publishing: the release holds latest.json and is marked Latest", () => {
+  const release = {
+    slug: "example/nail",
+    files: ["x64/Nail_0.9.0_x64-setup.exe", "x64/Nail_0.9.0_x64-setup.exe.sig"],
+    manifest: "updates/latest.json",
+    notes: "notes.md",
+  };
+  assert.deepEqual(githubReleaseCommands({ ...release, version: "0.9.0", exists: false }), [
+    [
+      "release",
+      "create",
+      "v0.9.0",
+      "x64/Nail_0.9.0_x64-setup.exe",
+      "x64/Nail_0.9.0_x64-setup.exe.sig",
+      "updates/latest.json",
+      "--repo",
+      "example/nail",
+      "--verify-tag",
+      "--title",
+      "Nail 0.9.0",
+      "--notes-file",
+      "notes.md",
+      "--latest",
+    ],
+  ]);
+  // A re-run replaces the files and marks the release Latest again.
+  assert.deepEqual(githubReleaseCommands({ ...release, version: "0.9.0", exists: true }), [
+    [
+      "release",
+      "upload",
+      "v0.9.0",
+      "x64/Nail_0.9.0_x64-setup.exe",
+      "x64/Nail_0.9.0_x64-setup.exe.sig",
+      "updates/latest.json",
+      "--repo",
+      "example/nail",
+      "--clobber",
+    ],
+    ["release", "edit", "v0.9.0", "--repo", "example/nail", "--latest"],
+  ]);
+  // Only the version's own release: no channel releases any more (ADR 0210).
+  for (const exists of [false, true]) {
+    for (const args of githubReleaseCommands({ ...release, version: "0.9.0", exists })) {
+      assert.equal(args[2], "v0.9.0");
+    }
+  }
+});
+
+test("a pre-release is never marked Latest, so it is never offered", () => {
+  const release = {
+    slug: "example/nail",
+    files: ["x64/Nail_1.0.0-beta.1_x64-setup.exe"],
+    manifest: "updates/latest.json",
+    notes: "notes.md",
+    version: "1.0.0-beta.1",
+  };
+  const [create, ...rest] = githubReleaseCommands({ ...release, exists: false });
+  assert.deepEqual(rest, []);
+  assert.ok(create);
+  assert.ok(create.includes("updates/latest.json"));
+  assert.deepEqual(create.slice(-2), ["--prerelease", "--latest=false"]);
+  assert.ok(!create.includes("--latest"));
+  const again = githubReleaseCommands({ ...release, exists: true });
+  assert.equal(again.length, 1);
+  assert.ok(!again.flat().some((arg) => arg.startsWith("--latest")));
 });
 
 test("the repository is a GitHub repository with a release key", () => {

@@ -16,7 +16,6 @@ import { ProgramDraftNotice } from "./ProgramDraft";
 
 const update = {
   version: "1.1.0",
-  channel: "stable",
   published_at: "2026-09-30T09:00:00Z",
   notes: "## New\n\n- Faster search\n\nMore fixes.",
   size_bytes: 48_000_000,
@@ -61,7 +60,6 @@ describe("axe: desktop settings", () => {
       kind: "msi",
       scope: "per-machine",
       updates_disabled: "msi-managed",
-      forced_channel: "stable",
       mapi_installed: false,
     });
     const { container } = renderWithProviders(widgets(), env);

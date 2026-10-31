@@ -1,6 +1,6 @@
 /**
  * Dialog `about-nail` ("About Nail", action `system.about`): the version,
- * how and where Nail is installed, the update channel, and the updater's
+ * how and where Nail is installed, and the updater's
  * state with "Check now", release notes, progress, "Restart to install" —
  * or why updates are off (policy). Outside the desktop app (remote UI,
  * `nail serve`) it says that these facts exist only there.
@@ -9,8 +9,8 @@ import { errorMessageOf } from "../../api/client";
 import type { InstallationInfo } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { usePlatformFeature } from "../../state/platform";
-import { channelMessageId, installKindMessageId, installScopeMessageId } from "./model";
-import { useInstallation, useUpdateStatus } from "./queries";
+import { installKindMessageId, installScopeMessageId } from "./model";
+import { useInstallation } from "./queries";
 import { UpdateSection } from "./UpdateSettings";
 
 function Fact({ name, label, value }: { name: string; label: string; value: string }) {
@@ -24,8 +24,6 @@ function Fact({ name, label, value }: { name: string; label: string; value: stri
 
 function Facts({ info }: { info: InstallationInfo }) {
   const t = useT();
-  const status = useUpdateStatus();
-  const channel = status.data?.settings.channel ?? info.forced_channel;
   const mapi = usePlatformFeature("simple-mapi");
   return (
     <ul data-part="about-nail.facts" aria-label={t("system-about-facts")}>
@@ -43,13 +41,6 @@ function Facts({ info }: { info: InstallationInfo }) {
         />
       )}
       <Fact name="architecture" label={t("system-about-architecture")} value={info.architecture} />
-      {channel !== null && (
-        <Fact
-          name="channel"
-          label={t("system-about-channel")}
-          value={t(channelMessageId(channel))}
-        />
-      )}
       {info.install_dir !== null && (
         <Fact name="folder" label={t("common-disk-folder")} value={info.install_dir} />
       )}

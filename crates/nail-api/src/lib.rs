@@ -69,7 +69,7 @@
 //!   background jobs ([`plugins::jobs`]).
 //! * M4b (ADR 0087): [`desktop`] — Windows integration of the desktop app:
 //!   installation facts (installer, scope, architecture, update policy),
-//!   updater settings and state (channels, check, download, restart to
+//!   updater settings and state (check, download, restart to
 //!   install, policy-disabled), tray / startup settings, the `nail plugin
 //!   dev` endpoint, default-app status, first run, and the
 //!   [`desktop::DesktopHost`] trait the shell implements; [`mapi`] — Simple

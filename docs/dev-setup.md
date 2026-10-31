@@ -511,7 +511,7 @@ node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,
 powershell -File scripts/installer-smoke.ps1      # silent per-user install to a temp dir, start, [update,] uninstall
 powershell -File scripts/installer-payload-smoke.ps1   # beside an installed Nail: setup checks + its payload run seeded (ADR 0186)
 powershell -File scripts/msi-smoke.ps1            # elevated: silent MSI install with properties, start, upgrade, uninstall
-node scripts/update-manifest.mjs --version V --channel stable --artifacts DIR --download-base URL --out DIR   # <channel>/latest.json, signatures checked first
+node scripts/update-manifest.mjs --version V --artifacts DIR --download-base URL --out DIR   # <out>/latest.json, signatures checked first
 node scripts/update-server.mjs --root DIR [--port N]   # loopback update server (127.0.0.1 only)
 node scripts/update-check.mjs …                   # checks an endpoint and a download like the app does
 node scripts/updater-key.mjs                      # the development update key (%LOCALAPPDATA%\nail-dev\keys; only packaging/updater/dev.pub is committed)
@@ -1175,7 +1175,7 @@ the real registry, Run key or pipe. Test variables of the shell:
 | Variable | Effect |
 | --- | --- |
 | `NAIL_REGISTRY_ROOT=Software\NailTests\<name>` | Both hives below that `HKCU` key (`<root>\HKCU\…`, `<root>\HKLM\…`): stage installation facts (`Software\Nail\Install`) and policies (`Software\Policies\Nail`) without touching HKLM; seeded runs otherwise use an in-memory registry |
-| `NAIL_UPDATE_ENDPOINT=http://127.0.0.1:<port>/{{channel}}/latest.json` + `NAIL_UPDATE_PUBKEY=<minisign public key>` | A loopback update source (other hosts are refused); enables the updater in development builds; plain `http` needs a debug build (or the release overlay's `dangerousInsecureTransportProtocol`); policies still win |
+| `NAIL_UPDATE_ENDPOINT=http://127.0.0.1:<port>/latest.json` (the manifest URL) + `NAIL_UPDATE_PUBKEY=<minisign public key>` | A loopback update source (other hosts are refused); enables the updater in development builds; plain `http` needs a debug build (or the release overlay's `dangerousInsecureTransportProtocol`); policies still win |
 | `NAIL_MAPI_PIPE=\\.\pipe\<name>` | The Simple MAPI pipe name (seeded runs serve a pipe only with it); the DLL and `nail-mapi-harness` read it too, and `NAIL_MAPI_APP` (only together with it) names the app the DLL may start |
 | `NAIL_TEST_BACKGROUND_WINDOWS=1` | Test runs (ADR 0146; set by `startDesktop`): every window (main, pop-outs, print) is DWM-cloaked (shown as far as Windows and the shell know, never drawn, no mouse input), not activatable (`WS_EX_NOACTIVATE`, shown with `SW_SHOWNOACTIVATE`, never `set_focus`) and off the taskbar; no OS notifications, file dialogs (a pick is cancelled), Settings app or start-refusal message box |
 
@@ -1312,7 +1312,7 @@ For M4b:
   x64 / x86 / ARM64) and `nail-mapi-harness`.
 - **0089 (WP112):** the per-machine MSI (WiX fragment, `AUTOSTART` / `ADDTOPATH` /
   `DISABLEUPDATES` / `MAPI`), the NSIS MAPI option, signing when configured, update manifests
-  per channel (own minisign check), winget manifests, the installer CI jobs and `release.yml`.
+  (per channel until ADR 0210; own minisign check), winget manifests, the installer CI jobs and `release.yml`.
 - **0090 (WP113):** the desktop shell — `DesktopHost`, tray, close to tray / start hidden, the
   Run key, installation facts and policies from the registry, the updater over
   tauri-plugin-updater (install on restart and on quit), default apps, the Simple MAPI pipe

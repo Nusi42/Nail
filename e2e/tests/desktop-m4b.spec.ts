@@ -181,7 +181,13 @@ test("the updater finds a newer version on a loopback server and installs it on 
     if (await check.isVisible()) await check.click();
     await expect(status).toHaveAttribute("data-state", "ready-to-install", { timeout: 60_000 });
     await expect(status).toContainText("Version 1.0.1 is ready.");
-    expect(server.requests).toContain("/stable/latest.json");
+    // The one update address: latest.json of the latest release (ADR 0210).
+    expect(server.manifestPath).toBe("/releases/latest/download/latest.json");
+    expect(server.requests).toContain(server.manifestPath);
+    // No update channel to choose.
+    await expect(
+      settings.locator('[data-part="update-settings"]').getByRole("combobox"),
+    ).toHaveCount(0);
     expect(existsSync(record)).toBe(false);
 
     await settings.getByRole("button", { name: "Restart to install" }).click();
@@ -217,7 +223,7 @@ test("an MSI installation (DISABLEUPDATES=1) hides the updater", async () => {
       // Even with an update source, the MSI's policy wins.
       env: {
         NAIL_REGISTRY_ROOT: root,
-        NAIL_UPDATE_ENDPOINT: "http://127.0.0.1:9/{{channel}}/latest.json",
+        NAIL_UPDATE_ENDPOINT: "http://127.0.0.1:9/releases/latest/download/latest.json",
         NAIL_UPDATE_PUBKEY: key.publicKey,
       },
     });

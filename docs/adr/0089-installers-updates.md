@@ -1,6 +1,6 @@
 # ADR 0089 (WP112): per-machine MSI, MAPI option, signing, update manifests, winget, installer CI
 
-Status: accepted · 2026-10-02 · M4b WP112 (number to be assigned by the integrator) · amended by ADR 0093
+Status: accepted · 2026-10-02 · M4b WP112 (number to be assigned by the integrator) · amended by ADR 0093; per-channel manifests replaced by one manifest per release (ADR 0210)
 (the NSIS MAPI option registers a protected copy in Program Files through one
 elevated cmd.exe instead of a `.reg` import naming the per-user DLL; the
 release update key reaches only `tauri bundle`; key handling moved to

@@ -104,8 +104,9 @@ described in [Deploying Nail](deploying-nail.md).
 The setup program's Nail updates itself: it checks when it starts and once
 a day, downloads a new version in the background and installs it when you
 restart Nail (or when you quit it). Every update is checked against Nail's
-update signature first. You choose the channel (stable or beta) in
-**Settings → Desktop app**; see [Updates and About Nail](desktop-app.md#updates-and-about-nail).
+update signature first. Pre-releases (beta versions) are never offered as
+updates. Automatic checks and downloads are set in **Settings → Desktop
+app**; see [Updates and About Nail](desktop-app.md#updates-and-about-nail).
 Installations from the MSI are updated by your IT department; the portable
 version is updated by replacing the folder.
 

@@ -135,8 +135,6 @@
   "INSTALL_KIND_MESSAGE_IDS": {"development":"install-kind-development","msi":"install-kind-msi","nsis":"install-kind-nsis","portable":"install-kind-portable"},
   "INSTALL_SCOPE_VALUES": ["per-user","per-machine"],
   "INSTALL_SCOPE_MESSAGE_IDS": {"per-machine":"install-scope-per-machine","per-user":"install-scope-per-user"},
-  "UPDATE_CHANNEL_VALUES": ["stable","beta"],
-  "UPDATE_CHANNEL_MESSAGE_IDS": {"beta":"update-channel-beta","stable":"update-channel-stable"},
   "UPDATE_DISABLED_REASON_VALUES": ["msi-managed","policy","portable","development","not-configured"],
   "UPDATE_DISABLED_REASON_MESSAGE_IDS": {"development":"update-disabled-development","msi-managed":"update-disabled-msi-managed","not-configured":"update-disabled-not-configured","policy":"update-disabled-policy","portable":"update-disabled-portable"},
   "UPDATE_FAILURE_VALUES": ["network","manifest","signature","download","install"],

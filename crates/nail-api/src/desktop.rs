@@ -9,12 +9,11 @@
 //!   ([`InstallKind`] NSIS per user / MSI per machine / portable /
 //!   development), scope, architecture, whether the in-app updater is
 //!   disabled and why ([`UpdateDisabledReason`]: MSI-managed, group
-//!   policy, portable, development build, no update key in the build), a
-//!   channel forced by policy, whether the Simple MAPI provider is
-//!   installed. The shell reads them from the registry values the
+//!   policy, portable, development build, no update key in the build),
+//!   whether the Simple MAPI provider is installed. The shell reads them from the registry values the
 //!   installers write ([`registry`]).
-//! * **Updates** ([`UpdateSettings`]: channel stable / beta, automatic
-//!   checks and downloads; [`UpdateStatus`] with the [`UpdateState`]
+//! * **Updates** ([`UpdateSettings`]: automatic checks and downloads of
+//!   the newest release (ADR 0210: one update address, no channels); [`UpdateStatus`] with the [`UpdateState`]
 //!   machine: checking, up to date, available with version and release
 //!   notes, downloading with progress, ready to install on restart,
 //!   failed, disabled by policy). The Tauri updater runs in the shell; the
@@ -218,9 +217,6 @@ pub struct InstallationInfo {
     pub install_dir: Option<String>,
     /// Why the in-app updater is off; `null` = it runs.
     pub updates_disabled: Option<UpdateDisabledReason>,
-    /// A channel forced by policy (`UpdateChannel` under
-    /// `Software\Policies\Nail`); the user cannot change it.
-    pub forced_channel: Option<UpdateChannel>,
     /// Whether the Simple MAPI provider was installed (optional
     /// component; per-machine registration).
     pub mapi_installed: bool,
@@ -238,52 +234,11 @@ impl InstallationInfo {
 // ---------------------------------------------------------------------------
 // Updates
 
-/// Which releases the updater offers.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
-#[serde(rename_all = "kebab-case")]
-pub enum UpdateChannel {
-    /// Releases only.
-    #[default]
-    Stable,
-    /// Releases and pre-releases (betas).
-    Beta,
-}
-
-impl UpdateChannel {
-    /// Both channels.
-    pub const ALL: [UpdateChannel; 2] = [Self::Stable, Self::Beta];
-
-    /// The wire / registry / manifest name (`stable`, `beta`).
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Stable => "stable",
-            Self::Beta => "beta",
-        }
-    }
-
-    /// Parses [`Self::as_str`] (case-insensitive; the policy value
-    /// `UpdateChannel`).
-    pub fn parse(text: &str) -> Option<Self> {
-        let text = text.trim();
-        Self::ALL
-            .into_iter()
-            .find(|c| c.as_str().eq_ignore_ascii_case(text))
-    }
-
-    /// Fluent id of its display name (`update-channel-*`).
-    pub fn message_id(self) -> String {
-        format!("update-channel-{}", self.as_str())
-    }
-
-    /// The update manifest of this channel below the release host's base
-    /// URL: `<base>/<channel>/latest.json` (WP112 publishes them, the
-    /// shell's updater reads them).
-    pub fn manifest_path(self) -> String {
-        format!("{}/{UPDATE_MANIFEST_FILE}", self.as_str())
-    }
-}
-
-/// File name of a channel's signed update manifest (Tauri updater format).
+/// File name of the signed update manifest (Tauri updater format). The
+/// release pipeline publishes it as an asset of each release; the app
+/// reads the one of the newest release, `<base>/latest.json` with the base
+/// `<repository>/releases/latest/download` (ADR 0210). A pre-release is
+/// never GitHub's latest release, so it is never offered.
 pub const UPDATE_MANIFEST_FILE: &str = "latest.json";
 
 /// How often the updater checks while the app runs (seconds; plus one
@@ -293,9 +248,6 @@ pub const UPDATE_CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 /// The user's update settings (stored by the core).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct UpdateSettings {
-    /// Stable or beta.
-    #[serde(default)]
-    pub channel: UpdateChannel,
     /// Check on start and daily ([`UPDATE_CHECK_INTERVAL_SECS`]).
     #[serde(default = "default_true")]
     pub auto_check: bool,
@@ -308,7 +260,6 @@ pub struct UpdateSettings {
 impl Default for UpdateSettings {
     fn default() -> Self {
         Self {
-            channel: UpdateChannel::Stable,
             auto_check: true,
             auto_download: true,
         }
@@ -320,8 +271,6 @@ impl Default for UpdateSettings {
 pub struct UpdateInfo {
     /// Its version (semver).
     pub version: String,
-    /// The channel it came from.
-    pub channel: UpdateChannel,
     /// Publication time (RFC 3339), when the manifest says.
     pub published_at: Option<String>,
     /// Release notes from the manifest (Markdown; untrusted text: the UI
@@ -378,7 +327,7 @@ pub enum UpdateState {
     Idle,
     /// Asking the update host.
     Checking,
-    /// The newest release of the channel is installed.
+    /// The newest release is installed.
     UpToDate,
     /// A newer release exists (not downloaded yet: `auto_download` off,
     /// or about to start).
@@ -466,10 +415,8 @@ impl UpdateState {
 pub struct UpdateStatus {
     /// The running version.
     pub current_version: String,
-    /// The effective settings (a forced channel replaces the stored one).
+    /// The stored settings.
     pub settings: UpdateSettings,
-    /// The channel policy forces, if any (the UI locks the choice).
-    pub forced_channel: Option<UpdateChannel>,
     /// Where the updater is; [`UpdateState::Disabled`] whenever
     /// [`InstallationInfo::updates_disabled`] is set.
     pub state: UpdateState,
@@ -481,16 +428,12 @@ impl UpdateStatus {
     /// Composes the status from the stored settings, the installation
     /// facts and the host's updater state: the policy wins over both (a
     /// disabled updater is [`UpdateState::Disabled`] whatever the host
-    /// reports; a forced channel replaces the stored one).
+    /// reports).
     pub fn compose(
-        stored: UpdateSettings,
+        settings: UpdateSettings,
         installation: &InstallationInfo,
         host: HostUpdateState,
     ) -> Self {
-        let mut settings = stored;
-        if let Some(channel) = installation.forced_channel {
-            settings.channel = channel;
-        }
         let state = match installation.updates_disabled {
             Some(reason) => UpdateState::Disabled { reason },
             None => host.state,
@@ -498,7 +441,6 @@ impl UpdateStatus {
         Self {
             current_version: installation.version.clone(),
             settings,
-            forced_channel: installation.forced_channel,
             state,
             last_checked_at: host.last_checked_at,
         }
@@ -818,8 +760,6 @@ pub mod registry {
     pub const POLICY_KEY: &str = r"Software\Policies\Nail";
     /// `REG_DWORD` 1 under [`POLICY_KEY`]: no in-app updates.
     pub const POLICY_DISABLE_UPDATES_VALUE: &str = "DisableUpdates";
-    /// `REG_SZ` `stable` / `beta` under [`POLICY_KEY`]: forced channel.
-    pub const POLICY_UPDATE_CHANNEL_VALUE: &str = "UpdateChannel";
     /// The per-user Run key ("Start with Windows").
     pub const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
     /// Nail's value under [`RUN_KEY`]: `"<Nail.exe>" --autostart`.
@@ -1026,7 +966,6 @@ mod tests {
             architecture: WindowsArch::X64,
             install_dir: Some(r"C:\Users\a\AppData\Local\Programs\Nail".into()),
             updates_disabled: None,
-            forced_channel: None,
             mapi_installed: false,
             webview_version: None,
         }
@@ -1035,7 +974,6 @@ mod tests {
     fn update() -> UpdateInfo {
         UpdateInfo {
             version: "1.1.0".into(),
-            channel: UpdateChannel::Stable,
             published_at: Some("2026-10-01T10:00:00Z".into()),
             notes: Some("Fixes".into()),
             size_bytes: Some(1000),
@@ -1050,7 +988,7 @@ mod tests {
                 "version": "1.0.0", "kind": "nsis", "scope": "per-user",
                 "architecture": "x64",
                 "install_dir": r"C:\Users\a\AppData\Local\Programs\Nail",
-                "updates_disabled": null, "forced_channel": null,
+                "updates_disabled": null,
                 "mapi_installed": false, "webview_version": null
             })
         );
@@ -1089,7 +1027,20 @@ mod tests {
         let settings: UpdateSettings = serde_json::from_value(json!({})).unwrap();
         assert_eq!(settings, UpdateSettings::default());
         assert!(settings.auto_check && settings.auto_download);
-        assert_eq!(settings.channel, UpdateChannel::Stable);
+        // Settings stored before ADR 0210 still carry a channel: ignored.
+        let old: UpdateSettings =
+            serde_json::from_value(json!({"channel": "beta", "auto_download": false})).unwrap();
+        assert_eq!(
+            old,
+            UpdateSettings {
+                auto_download: false,
+                ..UpdateSettings::default()
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&old).unwrap(),
+            json!({"auto_check": true, "auto_download": false})
+        );
         let desktop: DesktopSettings = serde_json::from_value(json!({})).unwrap();
         assert_eq!(desktop, DesktopSettings::default());
         assert!(desktop.close_to_tray && desktop.start_hidden);
@@ -1103,11 +1054,11 @@ mod tests {
             last_checked_at: Some("2026-10-02T08:00:00Z".into()),
         };
         let stored = UpdateSettings {
-            channel: UpdateChannel::Beta,
+            auto_download: false,
             ..UpdateSettings::default()
         };
         let free = UpdateStatus::compose(stored.clone(), &installation(), host.clone());
-        assert_eq!(free.settings.channel, UpdateChannel::Beta);
+        assert_eq!(free.settings, stored);
         assert_eq!(free.state, host.state);
         assert_eq!(free.current_version, "1.0.0");
 
@@ -1115,17 +1066,15 @@ mod tests {
         managed.kind = InstallKind::Msi;
         managed.scope = Some(InstallScope::PerMachine);
         managed.updates_disabled = Some(UpdateDisabledReason::MsiManaged);
-        managed.forced_channel = Some(UpdateChannel::Stable);
         assert!(managed.is_msi_managed());
-        let status = UpdateStatus::compose(stored, &managed, host);
+        let status = UpdateStatus::compose(stored.clone(), &managed, host);
         assert_eq!(
             status.state,
             UpdateState::Disabled {
                 reason: UpdateDisabledReason::MsiManaged
             }
         );
-        assert_eq!(status.settings.channel, UpdateChannel::Stable);
-        assert_eq!(status.forced_channel, Some(UpdateChannel::Stable));
+        assert_eq!(status.settings, stored);
         assert!(!status.state.can_check());
     }
 
@@ -1155,9 +1104,6 @@ mod tests {
         for scope in InstallScope::ALL {
             assert_eq!(InstallScope::parse(scope.as_str()), Some(scope));
         }
-        assert_eq!(UpdateChannel::parse(" Beta "), Some(UpdateChannel::Beta));
-        assert_eq!(UpdateChannel::parse("nightly"), None);
-        assert_eq!(UpdateChannel::Beta.manifest_path(), "beta/latest.json");
         assert_eq!(DefaultAppTarget::Eml.windows_name(), ".eml");
         assert!(DefaultAppTarget::Mailto.is_scheme() && !DefaultAppTarget::Vcf.is_scheme());
         assert!(WindowsArch::current().is_some());

@@ -155,10 +155,13 @@ test("loopback URLs", () => {
 
 test("the updater config: https, loopback http only on request, signed versions", () => {
   assert.deepEqual(
-    updaterPluginConfig({ pubkey: " KEY\n", updateBase: "https://u.example/nail/" }),
+    updaterPluginConfig({
+      pubkey: " KEY\n",
+      updateBase: "https://u.example/o/nail/releases/latest/download/",
+    }),
     {
       pubkey: "KEY",
-      endpoints: ["https://u.example/nail/stable/latest.json"],
+      endpoints: ["https://u.example/o/nail/releases/latest/download/latest.json"],
       requireSignedVersion: true,
       windows: { installMode: "passive" },
     },
@@ -189,7 +192,7 @@ test("the updater config: https, loopback http only on request, signed versions"
     insecureLoopback: true,
   });
   assert.equal(loopback.dangerousInsecureTransportProtocol, true);
-  assert.deepEqual(loopback.endpoints, ["http://127.0.0.1:47811/stable/latest.json"]);
+  assert.deepEqual(loopback.endpoints, ["http://127.0.0.1:47811/latest.json"]);
 });
 
 test("overlays combine and keep null (Tauri removes those keys)", () => {

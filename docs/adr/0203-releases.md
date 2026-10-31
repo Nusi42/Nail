@@ -1,6 +1,6 @@
 # 0203 — Releases on GitHub, prepared and published by script
 
-Status: accepted (2026-10-25); the pushes of `release:publish`: revised by ADR 0205
+Status: accepted (2026-10-25); the pushes of `release:publish`: revised by ADR 0205; the update channels and their rolling releases: revised by ADR 0210
 
 ## Context
 
@@ -31,11 +31,14 @@ repository is public on GitHub.
   their `package-lock.json` entries are copies that `release:prepare` sets
   and a script test pins. The version does not move to a `-dev` suffix
   after a release: an MSI needs a plain number, and a pre-release version
-  would put development builds on the beta channel.
+  would put development builds on the beta channel (ADR 0210 removed the
+  channels; a plain number stays).
 - **One public repository.** `[workspace.package] repository` names it; the
   release URLs derive from it.
 - **GitHub Releases only.** Each version is a release `vX.Y.Z` with its
-  files. In-app updates read `<base>/<channel>/latest.json`; with the base
+  files. *Revised by ADR 0210: there are no channels; `latest.json` is an
+  asset of each release, and the app reads
+  `<repository>/releases/latest/download/latest.json`.* Originally: in-app updates read `<base>/<channel>/latest.json`; with the base
   `<repository>/releases/download`, the manifest of each channel is the
   asset `latest.json` of a rolling release tagged with the channel's name
   (`stable`, `beta`), marked as a pre-release so a numbered release stays
@@ -63,6 +66,7 @@ repository is public on GitHub.
 - The version can no longer drift between the Rust, Tauri and npm copies.
 - An installed copy updates from GitHub; anyone who can replace release
   assets still cannot ship an update without the update key.
-- The rolling `stable` and `beta` tags exist in the public repository.
+- The rolling `stable` and `beta` tags exist in the public repository
+  (until ADR 0210; the maintainer deletes them after 0.8.2).
 - winget manifests are not part of the scripts yet (`winget-manifest.mjs`
   stays a separate step).

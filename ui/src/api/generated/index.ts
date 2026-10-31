@@ -690,7 +690,6 @@ export type * from "./UiEndpointFile";
 export type * from "./UiProblemKind";
 export type * from "./UiReport";
 export type * from "./UiStateIssue";
-export type * from "./UpdateChannel";
 export type * from "./UpdateDisabledReason";
 export type * from "./UpdateFailure";
 export type * from "./UpdateInfo";

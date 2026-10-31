@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use nail_api::desktop::{
     DefaultAppState, DefaultAppsStatus, DesktopChange, DesktopHost, DesktopNotifier,
-    DesktopSettings, HostUpdateState, InstallKind, InstallScope, InstallationInfo, UpdateChannel,
+    DesktopSettings, HostUpdateState, InstallKind, InstallScope, InstallationInfo,
     UpdateDisabledReason, UpdateInfo, UpdateSettings, UpdateState, WindowsArch,
 };
 use nail_api::mapi::{
@@ -141,7 +141,6 @@ fn nsis() -> InstallationInfo {
         architecture: WindowsArch::X64,
         install_dir: None,
         updates_disabled: None,
-        forced_channel: None,
         mapi_installed: true,
         webview_version: None,
     }
@@ -152,7 +151,6 @@ fn msi() -> InstallationInfo {
         kind: InstallKind::Msi,
         scope: Some(InstallScope::PerMachine),
         updates_disabled: Some(UpdateDisabledReason::MsiManaged),
-        forced_channel: Some(UpdateChannel::Stable),
         ..nsis()
     }
 }
@@ -160,7 +158,6 @@ fn msi() -> InstallationInfo {
 fn update() -> UpdateInfo {
     UpdateInfo {
         version: "1.1.0".into(),
-        channel: UpdateChannel::Stable,
         published_at: None,
         notes: Some("Faster search".into()),
         size_bytes: None,
@@ -245,26 +242,25 @@ async fn the_updater_follows_settings_and_states() {
     assert_eq!(status.current_version, "1.0.0");
 
     let mut events = service.subscribe();
-    let beta = UpdateSettings {
-        channel: UpdateChannel::Beta,
+    let manual = UpdateSettings {
         auto_download: false,
         ..UpdateSettings::default()
     };
     let status = status_of(
         service
             .handle(Request::SetUpdateSettings {
-                settings: beta.clone(),
+                settings: manual.clone(),
             })
             .await,
     );
-    assert_eq!(status.settings, beta);
+    assert_eq!(status.settings, manual);
     assert!(matches!(
         next_event(&mut events).await,
         Event::UpdateStatusChanged { .. }
     ));
     assert_eq!(
         host.state.lock().unwrap().applied_updates.last(),
-        Some(&beta)
+        Some(&manual)
     );
 
     // Nothing to download or install yet.
@@ -290,7 +286,7 @@ async fn the_updater_follows_settings_and_states() {
         panic!()
     };
     assert_eq!(status.state, UpdateState::Available { update: update() });
-    assert_eq!(status.settings.channel, UpdateChannel::Beta);
+    assert_eq!(status.settings, manual);
     status_of(service.handle(Request::DownloadUpdate).await);
     host.set_update(UpdateState::ReadyToInstall { update: update() });
     assert_eq!(service.handle(Request::InstallUpdate).await, Response::Done);
@@ -298,7 +294,7 @@ async fn the_updater_follows_settings_and_states() {
 }
 
 #[tokio::test]
-async fn policy_disables_the_updater_and_locks_the_channel() {
+async fn policy_disables_the_updater() {
     let host = FakeHost::with(msi());
     host.set_update(UpdateState::Available { update: update() });
     let (service, _d, _c) = desktop_service(Some(host.clone()));
@@ -309,7 +305,6 @@ async fn policy_disables_the_updater_and_locks_the_channel() {
             reason: UpdateDisabledReason::MsiManaged
         }
     );
-    assert_eq!(status.forced_channel, Some(UpdateChannel::Stable));
     for request in [
         Request::CheckForUpdates,
         Request::DownloadUpdate,
@@ -323,19 +318,20 @@ async fn policy_disables_the_updater_and_locks_the_channel() {
             )
         );
     }
-    assert_eq!(
-        error_of(
-            service
-                .handle(Request::SetUpdateSettings {
-                    settings: UpdateSettings {
-                        channel: UpdateChannel::Beta,
-                        ..UpdateSettings::default()
-                    }
-                })
-                .await
-        ),
-        (ErrorCode::Forbidden, Some("update-channel-locked".into()))
+    // The settings are still stored; the updater stays off.
+    let quiet = UpdateSettings {
+        auto_check: false,
+        ..UpdateSettings::default()
+    };
+    let status = status_of(
+        service
+            .handle(Request::SetUpdateSettings {
+                settings: quiet.clone(),
+            })
+            .await,
     );
+    assert_eq!(status.settings, quiet);
+    assert!(matches!(status.state, UpdateState::Disabled { .. }));
     assert_eq!(host.calls().len(), 0);
 }
 

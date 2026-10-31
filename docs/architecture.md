@@ -578,9 +578,9 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        (M4b WP112, ADR 0089); tests/installer.rs checks them);
                        M4b shell (WP113, ADR 0090): registry.rs (Registry trait; WindowsRegistry with
                        NAIL_REGISTRY_ROOT; MemoryRegistry for seeded runs), install.rs (InstallationInfo, HKLM
-                       facts before HKCU, UpdateSource from plugins.updater with {{channel}} or
-                       <channel>/latest.json, NAIL_UPDATE_ENDPOINT / NAIL_UPDATE_PUBKEY loopback-only test
-                       override); every test variable only with the feature `test-overrides`
+                       facts before HKCU, UpdateSource from plugins.updater: the manifest URL as configured,
+                       <repository>/releases/latest/download/latest.json in a release (ADR 0210: no channels),
+                       NAIL_UPDATE_ENDPOINT / NAIL_UPDATE_PUBKEY loopback-only test override); every test variable only with the feature `test-overrides`
                        (shell::test_env; e2e desktop build only, ADR 0093), default_apps.rs,
                        startup.rs (Run key; the MSI's machine-wide entry counts, never duplicated),
                        updater.rs + updater_tauri.rs (update states over tauri-plugin-updater; installs a
@@ -784,7 +784,7 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        (WP92), exchange.ftl (WP94); M4a: core-agents.ftl (contract ids: kinds, states,
                        summaries, fields), core-mcp.ftl (WP101: prompts, tool fields / values, elicitation,
                        audit texts), agents.ftl (WP104), core-plugins.ftl (WP102 host texts, plugin-write-log);
-                       M4b: core-desktop.ftl (contract ids: install kinds, update channels / failures / reasons,
+                       M4b: core-desktop.ftl (contract ids: install kinds, update failures / reasons,
                        default apps, mapi-result-*; WP113 shell texts), system.ftl (WP114);
                        M4c: core-portability.ftl (WP121 + contract ids), core-vault.ftl (WP122 + contract ids),
                        portability.ftl / palette.ftl / print.ftl (WP124; palette / print contract ids);
@@ -1376,7 +1376,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   remote (`main` and release tags only) = guard on the pushed commits and every tracked file + `cargo deny check
   licenses`; plain clone = guard + `npm run check`; anything else is refused. The master's rustc wrapper lets
   `rustc -vV` and the target query through for `cargo metadata`; `guard-master` sets its `core.hooksPath`.
-  `release:publish` pushes through the master (`publishPushes`). ADR 0208: branches are rebased; the `linear` step
+  `release:publish` pushes through the master (`publishPushes`). ADR 0210: one update address, GitHub's latest
+  release (`<repository>/releases/latest/download/latest.json`); `release:publish` creates the release `vX.Y.Z` with
+  every built file and `latest.json` and marks it Latest (`lib/release.mjs` `githubReleaseCommands`; a pre-release
+  never is); no update channels (setting, policy value, rolling releases) any more. ADR 0208: branches are rebased; the `linear` step
   (`scripts/check-linear.mjs`) refuses merge commits on pushes to and from the master.
 - Dependency advisories (ADR 0209): zip 9.2; `PluginPackage::read` (`crates/nail-plugins/src/package.rs`) and
   `BackupArchive::open` (`crates/nail-portability/src/backup/restore.rs`) refuse `has_duplicate_names()` and call

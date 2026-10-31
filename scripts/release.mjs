@@ -11,7 +11,7 @@
  * `[Unreleased]` entries under it, runs the local verification with the
  * advisory checks (unless --skip-checks; ADR 0209: no open Dependabot
  * alert, `cargo deny` advisories, `npm audit --omit=dev`), builds the x64 NSIS installer and the portable
- * zip with update signatures, writes the channel's `latest.json` (every
+ * zip with update signatures, writes the update manifest `latest.json` (every
  * signature checked against packaging/updater/release.pub) and the GitHub
  * release's text, then commits `chore(release): release X.Y.Z` and writes
  * `<build dir>/release/X.Y.Z/release.json`. The update key comes from
@@ -24,13 +24,14 @@
  * `vX.Y.Z`, pushes the branch and the tag to origin; with a master checkout
  * there it fast-forwards the master and the master pushes `main` and the
  * tag to the public remote (ADR 0205), else this checkout pushes the branch
- * as `main` and the tag, creates the GitHub release with every built file, and
- * replaces `latest.json` on the rolling release of the channel (and of
- * beta for a stable release, unless beta is newer). Every step checks
- * first, so a re-run after a failure goes on where it stopped. Needs the
- * GitHub CLI (`gh auth login` once).
+ * as `main` and the tag, and creates the GitHub release with every built
+ * file and `latest.json`, marked Latest (a pre-release never is), which
+ * makes it the one the app's update address
+ * `<repository>/releases/latest/download/latest.json` names (ADR 0210).
+ * Every step checks first, so a re-run after a failure goes on where it
+ * stopped. Needs the GitHub CLI (`gh auth login` once).
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { forEachArg } from "./lib/args.mjs";
@@ -43,12 +44,12 @@ import {
   RECORD_FILE,
   RELEASE_NOTES,
   RELEASE_PUBKEY,
-  channelAsset,
-  channelOf,
   dependabotAlertsArgs,
   downloadBase,
   githubNotes,
+  githubReleaseCommands,
   githubSlug,
+  isPrerelease,
   openAlerts,
   releasePage,
   releaseSection,
@@ -58,12 +59,12 @@ import {
   updateNotes,
 } from "./lib/release.mjs";
 import { output, run } from "./lib/run.mjs";
-import { CHANNELS, compareVersions, MANIFEST_FILE, parseVersion } from "./lib/update-manifest.mjs";
+import { compareVersions, parseVersion } from "./lib/update-manifest.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 import { CARGO_TOML, setVersion, workspaceRepository } from "./lib/version.mjs";
 import { masterOf, publishPushes } from "./lib/push-plan.mjs";
 import { assertWorkFolder, originOf } from "./lib/work-folder.mjs";
-import { writeUpdateManifests } from "./update-manifest.mjs";
+import { writeUpdateManifest } from "./update-manifest.mjs";
 
 /** The architecture and installers of a release (ADR 0203). */
 const ARCH = "x64";
@@ -232,24 +233,28 @@ function prepare(argv) {
       // the bundler.
       { env: key.env, shell: false },
     );
-    const channel = channelOf(version);
-    const updates = path.join(dir, "updates");
-    writeUpdateManifests({
+    const manifest = writeUpdateManifest({
       version,
-      channel,
       artifacts: [artifacts],
       downloadBase: downloadBase(repo, version),
-      out: updates,
+      out: path.join(dir, "updates"),
       notes: updateNotes(section, page),
       pubDate: new Date().toISOString(),
-      existingBeta: null,
       publicKey: key.publicKey,
     });
     const notes = path.join(dir, "notes.md");
     writeFileSync(notes, githubNotes(section, repo, version));
 
     /** @type {import("./lib/release.mjs").ReleaseRecord} */
-    const record = { version, tag, channel, commit: null, artifacts, notes, updates };
+    const record = {
+      version,
+      tag,
+      prerelease: isPrerelease(version),
+      commit: null,
+      artifacts,
+      notes,
+      manifest,
+    };
     if (o.dryRun) {
       restore();
       console.log(`\nDry run: built into ${dir}; nothing committed, the version files restored.`);
@@ -320,33 +325,6 @@ function succeeds(command, args) {
   }
 }
 
-/**
- * The version of a channel's published manifest, or null.
- *
- * @param {string} slug
- * @param {string} channel
- * @param {string} scratch
- */
-function publishedVersion(slug, channel, scratch) {
-  const { tag, name } = channelAsset(channel);
-  const file = path.join(scratch, channel, name);
-  mkdirSync(path.dirname(file), { recursive: true });
-  rmSync(file, { force: true });
-  const args = [
-    "release",
-    "download",
-    tag,
-    "--repo",
-    slug,
-    "--pattern",
-    name,
-    "--dir",
-    path.dirname(file),
-  ];
-  if (!succeeds("gh", args)) return null;
-  return /** @type {{ version: string }} */ (readJson(file)).version;
-}
-
 /** @param {string[]} argv */
 async function publish(argv) {
   assertWorkFolder("npm run release:publish");
@@ -391,68 +369,18 @@ async function publish(argv) {
   });
   for (const args of pushes) run("git", args, { shell: false });
 
-  // 3. The GitHub release with every built file.
-  const files = readdirSync(record.artifacts).map((f) => path.join(record.artifacts, f));
-  const pre = record.channel === "stable" ? ["--latest"] : ["--prerelease", "--latest=false"];
-  if (succeeds("gh", ["release", "view", tag, "--repo", slug])) {
-    run("gh", ["release", "upload", tag, ...files, "--repo", slug, "--clobber"], { shell: false });
-  } else {
-    run(
-      "gh",
-      [
-        "release",
-        "create",
-        tag,
-        ...files,
-        "--repo",
-        slug,
-        "--verify-tag",
-        "--title",
-        `Nail ${version}`,
-        "--notes-file",
-        record.notes,
-        ...pre,
-      ],
-      { shell: false },
-    );
-  }
-
-  // 4. The channels' manifests on their rolling releases.
-  const scratch = path.join(releaseDir(version), "published");
-  for (const channel of CHANNELS) {
-    const manifest = path.join(record.updates, channel, MANIFEST_FILE);
-    if (!existsSync(manifest)) continue;
-    const published = publishedVersion(slug, channel, scratch);
-    if (published && compareVersions(published, version) > 0) {
-      console.log(`${channel}: keeps ${published} (newer than ${version})`);
-      continue;
-    }
-    const { tag: channelTag } = channelAsset(channel);
-    if (!succeeds("gh", ["release", "view", channelTag, "--repo", slug])) {
-      run(
-        "gh",
-        [
-          "release",
-          "create",
-          channelTag,
-          "--repo",
-          slug,
-          "--target",
-          commit,
-          "--title",
-          `Update channel: ${channel}`,
-          "--notes",
-          `Nail's in-app updates of the ${channel} channel read ${MANIFEST_FILE} from here. Download Nail from the numbered releases.`,
-          "--prerelease",
-          "--latest=false",
-        ],
-        { shell: false },
-      );
-    }
-    run("gh", ["release", "upload", channelTag, manifest, "--repo", slug, "--clobber"], {
-      shell: false,
-    });
-  }
+  // 3. The GitHub release with every built file and the update manifest,
+  // marked Latest unless it is a pre-release (ADR 0210).
+  if (!existsSync(record.manifest)) throw new Error(`no update manifest ${record.manifest}`);
+  const commands = githubReleaseCommands({
+    slug,
+    version,
+    files: readdirSync(record.artifacts).map((f) => path.join(record.artifacts, f)),
+    manifest: record.manifest,
+    notes: record.notes,
+    exists: succeeds("gh", ["release", "view", tag, "--repo", slug]),
+  });
+  for (const args of commands) run("gh", args, { shell: false });
   console.log(`\nPublished: ${releasePage(repo, version)}`);
   return 0;
 }

@@ -4,7 +4,7 @@
  * `window-<name>` in `system.ftl`) and action ids.
  */
 
-/** Widget: updates (version, channel, check now, release notes, install). */
+/** Widget: updates (version, check now, release notes, install). */
 export const UPDATE_SETTINGS_WIDGET = "update-settings";
 /** Widget: tray and startup, the `nail plugin dev` endpoint. */
 export const DESKTOP_SETTINGS_WIDGET = "desktop-settings";

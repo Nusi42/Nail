@@ -127,7 +127,6 @@ pub fn desktop_host<R: Runtime>(
         Arc::new(TauriBackend::new(app.clone(), source)),
         runtime.clone(),
         installation.updates_disabled.is_none(),
-        installation.forced_channel,
     );
     Arc::new(ShellHost::new(HostParts {
         registry,

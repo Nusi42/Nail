@@ -1,5 +1,5 @@
 /**
- * What the app's updater does with a channel manifest, outside the app
+ * What the app's updater does with the update manifest, outside the app
  * (plan M4b WP112): the installer smoke test uses it to update an
  * installed build through the loopback update server exactly as
  * tauri-plugin-updater would — pick `windows-<arch>-<installer>`, else

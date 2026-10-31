@@ -1,6 +1,6 @@
 //! The real update backend (M4b WP113, ADR 0087): tauri-plugin-updater
-//! reads the channel's signed manifest (`<base>/<channel>/latest.json`,
-//! written by the release pipeline, WP112), downloads the package and
+//! reads the signed manifest (`latest.json` of the newest release, ADR
+//! 0210; written by the release pipeline), downloads the package and
 //! verifies its minisign signature against the build's public key before
 //! anything runs. TLS is rustls with ring (ADR 0014); the installer is the
 //! NSIS / MSI package itself.
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::future::BoxFuture;
-use nail_api::desktop::{UpdateChannel, UpdateFailure, UpdateInfo};
+use nail_api::desktop::{UpdateFailure, UpdateInfo};
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -60,10 +60,9 @@ pub fn failure_of(err: &tauri_plugin_updater::Error, phase: Phase) -> UpdateFail
 }
 
 /// The UI's view of a release.
-pub fn update_info(update: &tauri_plugin_updater::Update, channel: UpdateChannel) -> UpdateInfo {
+pub fn update_info(update: &tauri_plugin_updater::Update) -> UpdateInfo {
     UpdateInfo {
         version: update.version.clone(),
-        channel,
         published_at: update
             .raw_json
             .get("pub_date")
@@ -94,11 +93,8 @@ impl<R: Runtime> TauriBackend<R> {
 }
 
 impl<R: Runtime> UpdateBackend for TauriBackend<R> {
-    fn check(
-        &self,
-        channel: UpdateChannel,
-    ) -> BoxFuture<'static, Result<Option<Arc<dyn PendingUpdate>>, BackendError>> {
-        let endpoints = self.source.endpoints_for(channel);
+    fn check(&self) -> BoxFuture<'static, Result<Option<Arc<dyn PendingUpdate>>, BackendError>> {
+        let endpoints = self.source.urls();
         let built = self
             .app
             .updater_builder()
@@ -114,7 +110,7 @@ impl<R: Runtime> UpdateBackend for TauriBackend<R> {
                 .map_err(|e| (failure_of(&e, Phase::Check), e.to_string()))?;
             Ok(found.map(|update| -> Arc<dyn PendingUpdate> {
                 Arc::new(TauriUpdate {
-                    info: update_info(&update, channel),
+                    info: update_info(&update),
                     update,
                 })
             }))

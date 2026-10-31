@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
  * Loopback update server (plan M4b WP112): serves a folder of update
- * manifests (`<channel>/latest.json`) and installers on 127.0.0.1 until
- * stopped.
+ * manifest (`latest.json`) and installers on 127.0.0.1 until stopped.
  *
  *   node scripts/update-server.mjs --root <dir> [--port 47811] [--port-file <file>] [--log <file>]
  *

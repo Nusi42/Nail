@@ -142,7 +142,6 @@ import type { Transparency } from "./Transparency";
 import type { TrustDecision } from "./TrustDecision";
 import type { TrustLevel } from "./TrustLevel";
 import type { UiStateIssue } from "./UiStateIssue";
-import type { UpdateChannel } from "./UpdateChannel";
 import type { UpdateDisabledReason } from "./UpdateDisabledReason";
 import type { UpdateFailure } from "./UpdateFailure";
 import type { VacationIssue } from "./VacationIssue";
@@ -567,12 +566,6 @@ export const INSTALL_SCOPE_VALUES = ["per-user","per-machine"] as const satisfie
 /** The Fluent id of each `InstallScope`'s label. */
 export const INSTALL_SCOPE_MESSAGE_IDS = {"per-machine":"install-scope-per-machine","per-user":"install-scope-per-user"} as const satisfies Readonly<Record<InstallScope, string>>;
 
-/** Every `UpdateChannel`, in the contract's order. */
-export const UPDATE_CHANNEL_VALUES = ["stable","beta"] as const satisfies readonly UpdateChannel[];
-
-/** The Fluent id of each `UpdateChannel`'s label. */
-export const UPDATE_CHANNEL_MESSAGE_IDS = {"beta":"update-channel-beta","stable":"update-channel-stable"} as const satisfies Readonly<Record<UpdateChannel, string>>;
-
 /** Every `UpdateDisabledReason`, in the contract's order. */
 export const UPDATE_DISABLED_REASON_VALUES = ["msi-managed","policy","portable","development","not-configured"] as const satisfies readonly UpdateDisabledReason[];
 
@@ -603,7 +596,7 @@ export const MAPI_RESULT_VALUES = ["success","user-abort","failure","login-failu
 /** The Fluent id of each `MapiResult`'s label. */
 export const MAPI_RESULT_MESSAGE_IDS = {"access-denied":"mapi-result-access-denied","attachment-not-found":"mapi-result-attachment-not-found","attachment-open-failure":"mapi-result-attachment-open-failure","attachment-too-large":"mapi-result-attachment-too-large","bad-recip-type":"mapi-result-bad-recip-type","failure":"mapi-result-failure","insufficient-memory":"mapi-result-insufficient-memory","invalid-recips":"mapi-result-invalid-recips","login-failure":"mapi-result-login-failure","not-supported":"mapi-result-not-supported","success":"mapi-result-success","text-too-large":"mapi-result-text-too-large","too-many-files":"mapi-result-too-many-files","too-many-recipients":"mapi-result-too-many-recipients","unknown-recipient":"mapi-result-unknown-recipient","user-abort":"mapi-result-user-abort"} as const satisfies Readonly<Record<MapiResult, string>>;
 
-/** File name of an update channel's manifest (`<channel>/latest.json`). */
+/** File name of the update manifest, an asset of every release (`<repository>/releases/latest/download/latest.json`). */
 export const UPDATE_MANIFEST_FILE = "latest.json" as const;
 
 /** Longest category name Exchange accepts (characters). */

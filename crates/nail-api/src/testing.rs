@@ -152,7 +152,6 @@ pub fn dev_installation() -> crate::desktop::InstallationInfo {
         architecture: crate::desktop::WindowsArch::X64,
         install_dir: None,
         updates_disabled: None,
-        forced_channel: None,
         mapi_installed: false,
         webview_version: None,
     }

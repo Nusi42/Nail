@@ -7,6 +7,7 @@
  */
 import path from "node:path";
 import { forEachArg } from "./args.mjs";
+import { MANIFEST_FILE } from "./update-manifest.mjs";
 
 /**
  * A Tauri config overlay (JSON object; `null` values remove keys).
@@ -81,8 +82,9 @@ export const ARCHS = ["x64", "arm64"];
  * - `--no-mapi`: without the Simple MAPI DLLs.
  * - `--no-portable`: without the portable zip.
  * - `--version V`: build as version V (smoke tests build a newer version).
- * - `--update-base URL`: where the update manifests live
- *   (`<URL>/<channel>/latest.json`; or `NAIL_UPDATE_BASE_URL`).
+ * - `--update-base URL`: where the update manifest lives
+ *   (`<URL>/latest.json`; or `NAIL_UPDATE_BASE_URL`; a release:
+ *   `<repository>/releases/latest/download`, ADR 0210).
  * - `--insecure-loopback-updates`: allow `http://127.0.0.1` update URLs
  *   (the loopback smoke test only; refused for any other host).
  * - `--dev-updater-key`: sign updates with the local development key
@@ -232,9 +234,8 @@ export function isLoopbackUrl(text) {
 
 /**
  * `plugins.updater` of the app's config (tauri-plugin-updater):
- * the update key's public half, the stable manifest as the one endpoint
- * (`<base>/stable/latest.json`; the shell swaps the channel part for
- * `UpdateChannel::manifest_path`), passive install, and
+ * the update key's public half, the manifest as the one endpoint
+ * (`<base>/latest.json`, ADR 0210), passive install, and
  * `requireSignedVersion` (a manifest cannot pair a version with another
  * release's installer). Without a base URL there is no endpoint: the app
  * reports updates as not configured. Plain http is allowed only for a
@@ -257,7 +258,7 @@ export function updaterPluginConfig({ pubkey, updateBase = null, insecureLoopbac
   };
   if (updateBase) {
     const base = updateBase.replace(/\/+$/, "");
-    const url = new URL(`${base}/stable/latest.json`);
+    const url = new URL(`${base}/${MANIFEST_FILE}`);
     if (url.protocol !== "https:") {
       if (!(insecureLoopback && url.protocol === "http:" && isLoopbackUrl(base))) {
         throw new Error(

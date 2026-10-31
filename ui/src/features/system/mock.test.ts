@@ -29,7 +29,6 @@ import {
 
 const release = {
   version: "1.1.0",
-  channel: "stable",
   published_at: null,
   notes: "Faster search",
   size_bytes: null,
@@ -124,9 +123,9 @@ describe("system mock", () => {
     expect(
       await t.send({
         type: "SetUpdateSettings",
-        settings: { channel: "beta", auto_check: true, auto_download: false },
+        settings: { auto_check: true, auto_download: false },
       }),
-    ).toMatchObject({ status: { settings: { channel: "beta", auto_download: false } } });
+    ).toMatchObject({ status: { settings: { auto_check: true, auto_download: false } } });
     expect(t.data.features.system.calls).toEqual(["check", "install"]);
   });
 
@@ -136,21 +135,23 @@ describe("system mock", () => {
       kind: "msi",
       scope: "per-machine",
       updates_disabled: "msi-managed",
-      forced_channel: "stable",
     });
     expect(await t.send({ type: "GetUpdateStatus" })).toMatchObject({
-      status: { state: { state: "disabled", reason: "msi-managed" }, forced_channel: "stable" },
+      status: { state: { state: "disabled", reason: "msi-managed" } },
     });
     expect(await t.send({ type: "CheckForUpdates" })).toMatchObject({
       code: "forbidden",
       localized: { id: "update-disabled-msi-managed" },
     });
+    // The settings are still stored; the updater stays off.
     expect(
       await t.send({
         type: "SetUpdateSettings",
-        settings: { channel: "beta", auto_check: true, auto_download: true },
+        settings: { auto_check: false, auto_download: true },
       }),
-    ).toMatchObject({ code: "forbidden", localized: { id: "update-channel-locked" } });
+    ).toMatchObject({
+      status: { settings: { auto_check: false }, state: { state: "disabled" } },
+    });
     expect(await t.send({ type: "GetDefaultApps" })).toMatchObject({
       settings_uri: "ms-settings:defaultapps?registeredAppMachine=Nail",
     });
@@ -213,19 +214,15 @@ describe("simulated updater", () => {
     expect(updateStatusOf(t.data.features.system).state.state).toBe("installing");
   });
 
-  it("waits for Download without auto download; beta sees the beta release", async () => {
+  it("waits for Download without auto download", async () => {
     vi.useFakeTimers();
     const t = new MockTransport();
-    t.data.features.system.updateSettings = {
-      channel: "beta",
-      auto_check: true,
-      auto_download: false,
-    };
+    t.data.features.system.updateSettings = { auto_check: true, auto_download: false };
     await t.send({ type: "CheckForUpdates" });
     await steps(t);
     expect(updateStatusOf(t.data.features.system).state).toMatchObject({
       state: "available",
-      update: { version: "1.2.0-beta.1" },
+      update: { version: "1.1.0" },
     });
     await t.send({ type: "DownloadUpdate" });
     await steps(t);
@@ -235,7 +232,7 @@ describe("simulated updater", () => {
   it("is up to date without a newer release and fails when told to", async () => {
     vi.useFakeTimers();
     const t = new MockTransport();
-    t.data.features.system.releases = {};
+    t.data.features.system.release = null;
     await t.send({ type: "CheckForUpdates" });
     await steps(t);
     expect(updateStatusOf(t.data.features.system).state.state).toBe("up-to-date");

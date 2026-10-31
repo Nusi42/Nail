@@ -2,13 +2,15 @@
  * A loopback update server for the desktop updater scenario (M4b WP115):
  * a throwaway minisign key in the form the Tauri updater reads (same
  * format as `scripts/lib/minisign.mjs` / `tauri signer`), a signed
- * "installer" and `<channel>/latest.json` manifests, served on 127.0.0.1
- * only (ADR 0057).
+ * "installer" and the update manifest at the address a release build asks
+ * (`<base>/releases/latest/download/latest.json`, ADR 0210), served on
+ * 127.0.0.1 only (ADR 0057).
  */
 import { createHash, createPrivateKey, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { updateManifestUrl } from "../../scripts/lib/release.mjs";
 import { defined } from "./defined";
 
 const KEY_ID = Buffer.from("4e41494c45324531", "hex");
@@ -52,17 +54,16 @@ export function updateKey() {
 export interface UpdateServer {
   /** `http://127.0.0.1:<port>` */
   base: string;
-  /** The endpoint the app is given (`{{channel}}` is the shell's placeholder). */
+  /** The manifest URL the app is given (`NAIL_UPDATE_ENDPOINT`). */
   endpoint: string;
+  /** Its path, as it shows in `requests`. */
+  manifestPath: string;
   /** Paths requested so far. */
   requests: string[];
   close(): Promise<void>;
 }
 
-/**
- * Serves `installer` as version `version` on the stable channel (beta has
- * no newer version), signed with `key`.
- */
+/** Serves `installer` as the latest release `version`, signed with `key`. */
 export async function startUpdateServer(options: {
   installer: string;
   version: string;
@@ -74,6 +75,7 @@ export async function startUpdateServer(options: {
   const signature = options.key.sign(bytes, file, options.version);
   const requests: string[] = [];
   let base = "";
+  let manifestPath = "";
   const manifest = () => {
     const target = { signature, url: `${base}/files/${file}` };
     return JSON.stringify({
@@ -86,7 +88,7 @@ export async function startUpdateServer(options: {
   const server: Server = createServer((req, res) => {
     const url = req.url ?? "/";
     requests.push(url);
-    if (url === "/stable/latest.json") {
+    if (url === manifestPath) {
       res.writeHead(200, { "content-type": "application/json" }).end(manifest());
     } else if (url === `/files/${file}`) {
       res
@@ -96,15 +98,17 @@ export async function startUpdateServer(options: {
         })
         .end(bytes);
     } else {
-      // No beta release, nothing else.
       res.writeHead(404).end();
     }
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
+  const endpoint = updateManifestUrl(base);
+  manifestPath = new URL(endpoint).pathname;
   return {
     base,
-    endpoint: `${base}/{{channel}}/latest.json`,
+    endpoint,
+    manifestPath,
     requests,
     close: () =>
       new Promise((resolve) =>

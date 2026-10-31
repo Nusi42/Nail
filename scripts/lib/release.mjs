@@ -8,12 +8,14 @@
  *   introduction as plain text with a link to the release.
  * - `CHANGELOG.md` (Keep a Changelog) gets its `[Unreleased]` entries
  *   under the version and date.
- * - Each channel is a rolling GitHub release tagged with the channel's
- *   name holding that channel's `latest.json`, so the app's update base is
- *   `<repository>/releases/download` (`<base>/<channel>/latest.json`).
+ * - The update manifest `latest.json` is an asset of the version's own
+ *   release, and a release (not a pre-release) is marked Latest, so the
+ *   app's one update address is GitHub's latest release:
+ *   `<repository>/releases/latest/download/latest.json` (ADR 0210; no
+ *   channels). A pre-release is never marked Latest, so it is never offered.
  */
 import { parseJson } from "./json.mjs";
-import { CHANNELS, MANIFEST_FILE, parseVersion } from "./update-manifest.mjs";
+import { MANIFEST_FILE, parseVersion } from "./update-manifest.mjs";
 
 /** The user-facing release notes. */
 export const RELEASE_NOTES = "userDocs/en/release-notes.md";
@@ -33,11 +35,11 @@ export const RECORD_FILE = "release.json";
  * @typedef {object} ReleaseRecord
  * @property {string} version
  * @property {string} tag
- * @property {string} channel
+ * @property {boolean} prerelease a `-beta…` version: never marked Latest
  * @property {string | null} commit the release commit (null for a dry run)
  * @property {string} artifacts the folder with the files of the GitHub release
  * @property {string} notes the GitHub release's text (Markdown file)
- * @property {string} updates the folder with `<channel>/latest.json`
+ * @property {string} manifest the release's `latest.json` (an asset of it too)
  */
 
 /** @param {string} version */
@@ -46,14 +48,13 @@ export function releaseTag(version) {
 }
 
 /**
- * `beta` for a pre-release (`0.9.0-beta.1`), else `stable`.
+ * Whether a version is a pre-release (`0.9.0-beta.1`): its GitHub release
+ * is never marked Latest, so installed copies are never offered it.
  *
  * @param {string} version
  */
-export function channelOf(version) {
-  const channel = parseVersion(version).pre.length ? "beta" : "stable";
-  if (!CHANNELS.includes(channel)) throw new Error(`no update channel ${channel}`);
-  return channel;
+export function isPrerelease(version) {
+  return parseVersion(version).pre.length > 0;
 }
 
 /**
@@ -68,32 +69,69 @@ export function githubSlug(repository) {
 }
 
 /**
- * The update base built into the app: the channel releases' downloads.
+ * The update base built into the app (`build-installer.mjs --update-base`):
+ * the downloads of GitHub's latest release.
  *
  * @param {string} repository
  */
 export function updateBase(repository) {
-  return `${repository}/releases/download`;
+  return `${repository}/releases/latest/download`;
 }
 
 /**
- * Where a channel's manifest is published: the asset `latest.json` of
- * the release tagged with the channel's name.
+ * The one update address the app asks: `latest.json` of the latest release.
  *
- * @param {string} channel
+ * @param {string} repository
  */
-export function channelAsset(channel) {
-  return { tag: channel, name: MANIFEST_FILE };
+export function updateManifestUrl(repository) {
+  return `${updateBase(repository)}/${MANIFEST_FILE}`;
 }
 
 /**
- * The downloads of a version's release.
+ * The downloads of a version's release (where its manifest points).
  *
  * @param {string} repository
  * @param {string} version
  */
 export function downloadBase(repository, version) {
-  return `${updateBase(repository)}/${releaseTag(version)}`;
+  return `${repository}/releases/download/${releaseTag(version)}`;
+}
+
+/**
+ * The `gh` calls that publish a version's GitHub release: every built file
+ * and the update manifest as assets. A new release is created as Latest (a
+ * pre-release: as a pre-release, never Latest); an existing one (a re-run
+ * after a failure) gets its files replaced and, unless it is a
+ * pre-release, is marked Latest again.
+ *
+ * @param {{ slug: string, version: string, files: string[], manifest: string,
+ *   notes: string, exists: boolean }} release
+ * @returns {string[][]}
+ */
+export function githubReleaseCommands({ slug, version, files, manifest, notes, exists }) {
+  const tag = releaseTag(version);
+  const assets = [...files, manifest];
+  const pre = isPrerelease(version);
+  if (exists) {
+    const upload = ["release", "upload", tag, ...assets, "--repo", slug, "--clobber"];
+    return pre ? [upload] : [upload, ["release", "edit", tag, "--repo", slug, "--latest"]];
+  }
+  return [
+    [
+      "release",
+      "create",
+      tag,
+      ...assets,
+      "--repo",
+      slug,
+      "--verify-tag",
+      "--title",
+      `Nail ${version}`,
+      "--notes-file",
+      notes,
+      ...(pre ? ["--prerelease", "--latest=false"] : ["--latest"]),
+    ],
+  ];
 }
 
 /**

@@ -22,6 +22,16 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   checks the RustSec and npm advisories of what it ships (development
   setup only).
 
+### Changed (ADR 0210)
+
+- Update channels are gone: Nail asks one update address, the latest
+  release on GitHub (`releases/latest/download/latest.json`), and
+  `release:publish` adds `latest.json` to the version's own release and
+  marks it Latest. Pre-releases are never offered as updates. The channel
+  choice in Settings → Updates and "About Nail", the `UpdateChannel` policy
+  value (now ignored) and the rolling `stable` / `beta` releases are
+  removed.
+
 ## [0.8.1] — 2026-10-31
 
 ### Fixed (ADRs 0206, 0207)

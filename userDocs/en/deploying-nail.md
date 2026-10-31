@@ -60,9 +60,9 @@ mail data and settings stay on the computer.
 ## Updates
 
 Nail checks for updates when it starts and once a day, downloads them in
-the background and installs them when you restart it. There are two
-channels: **stable** and **beta** (earlier access; beta users also get
-every stable release). Every update is checked against Nail's own update
+the background and installs them when you restart it. It is offered the
+newest release from Nail's release page; pre-releases (beta versions) are
+never offered as updates. Every update is checked against Nail's own update
 signature before it is installed; an update that fails the check is
 refused.
 
@@ -72,7 +72,10 @@ Intune); they win over the user's settings:
 | Value under `HKLM\Software\Policies\Nail` (or `HKCU`) | Type | Meaning |
 | --- | --- | --- |
 | `DisableUpdates` | DWORD `1` | Nail never updates itself |
-| `UpdateChannel` | String `stable` or `beta` | The channel; users cannot change it |
+
+Nail 0.8 also read a value `UpdateChannel` (`stable` or `beta`). There are
+no update channels any more: newer versions ignore the value, so you can
+remove it. To hold updates back, use `DisableUpdates` (or the MSI).
 
 ## "Send to > Mail recipient" (Simple MAPI)
 

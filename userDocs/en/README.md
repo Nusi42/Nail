@@ -42,7 +42,7 @@ Guides and references for people using Nail.
 | [Plug-ins](plugins/README.md) | Installing and managing plug-ins, permissions, security, placing and styling them; writing plug-ins: getting started, the sandbox, manifest, writing data, mail hooks, composer, attachments and links, background jobs, tools for AI agents, translations, API and component references |
 | [Installing Nail on Windows](installing.md) | The downloads (x64 / ARM64, offline, MSI, portable), installer options, Default apps, silent install, updates, uninstall and your data, the portable version |
 | [The desktop app on Windows](desktop-app.md) | The welcome screen, updates and About Nail, tray and starting with Windows, default apps, mail from other programs ("Send to → Mail recipient"; never sent without you) |
-| [Deploying Nail](deploying-nail.md) | For IT: which package, silent per-user and per-machine (MSI) installs and their options, update channels and policies, "Send to > Mail recipient", winget |
+| [Deploying Nail](deploying-nail.md) | For IT: which package, silent per-user and per-machine (MSI) installs and their options, update policies, "Send to > Mail recipient", winget |
 | [Theme reference](theme-reference.md) | `theme.kdl`: the selection (`extends`, `appearance`), colours, fonts, the type scale and 4 px spacing grid, density, parts and states, icons (Lucide), message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |

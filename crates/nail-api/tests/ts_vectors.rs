@@ -923,7 +923,7 @@ fn print_vectors() {
 fn system_vectors() {
     use nail_api::desktop::UpdateState;
     let mut v = Vectors::default();
-    let update = json!({ "version": "1.2.0", "channel": "stable", "published_at": null,
+    let update = json!({ "version": "1.2.0", "published_at": null,
                          "notes": null, "size_bytes": 1000 });
     for state in [
         json!({ "state": "idle" }),

@@ -11,7 +11,6 @@ import {
   INSTALL_KIND_MESSAGE_IDS,
   INSTALL_SCOPE_MESSAGE_IDS,
   MAPI_RESULT_MESSAGE_IDS,
-  UPDATE_CHANNEL_MESSAGE_IDS,
   UPDATE_DISABLED_REASON_MESSAGE_IDS,
   UPDATE_FAILURE_MESSAGE_IDS,
   type DefaultAppState,
@@ -19,7 +18,6 @@ import {
   type InstallKind,
   type InstallScope,
   type MapiResult,
-  type UpdateChannel,
   type UpdateDisabledReason,
   type UpdateFailure,
   type UpdateInfo,
@@ -32,14 +30,12 @@ export {
   INSTALL_KIND_VALUES as INSTALL_KINDS,
   INSTALL_SCOPE_VALUES as INSTALL_SCOPES,
   MAPI_RESULT_VALUES as MAPI_RESULTS,
-  UPDATE_CHANNEL_VALUES as UPDATE_CHANNELS,
   UPDATE_DISABLED_REASON_VALUES as UPDATE_DISABLED_REASONS,
   UPDATE_FAILURE_VALUES as UPDATE_FAILURES,
 } from "../../api/generated";
 
 export const installKindMessageId = (kind: InstallKind) => INSTALL_KIND_MESSAGE_IDS[kind];
 export const installScopeMessageId = (scope: InstallScope) => INSTALL_SCOPE_MESSAGE_IDS[scope];
-export const channelMessageId = (channel: UpdateChannel) => UPDATE_CHANNEL_MESSAGE_IDS[channel];
 export const disabledReasonMessageId = (reason: UpdateDisabledReason) =>
   UPDATE_DISABLED_REASON_MESSAGE_IDS[reason];
 export const failureMessageId = (failure: UpdateFailure) => UPDATE_FAILURE_MESSAGE_IDS[failure];

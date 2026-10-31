@@ -1,6 +1,6 @@
 # Nail — English texts about the Windows desktop app built in Rust or named
 # by the contract (M4b; contract ADR 0087): installation facts, update
-# channels / failures / policy reasons, default apps, Simple MAPI results,
+# failures / policy reasons, default apps, Simple MAPI results,
 # and the shell's own texts (tray menu, OS dialogs).
 #
 # The ids named by the contract (nail_api::desktop, nail_api::mapi) are
@@ -17,11 +17,8 @@ install-kind-development = Development build
 install-scope-per-user = For you only
 install-scope-per-machine = For all users of this PC
 
-## Updates (UpdateChannel, UpdateDisabledReason, UpdateFailure)
+## Updates (UpdateDisabledReason, UpdateFailure)
 
-update-channel-stable = Stable
-update-channel-beta = Beta (early versions)
-update-channel-locked = Your organization chose the update channel.
 update-disabled-msi-managed = Your organization installs updates for Nail.
 update-disabled-policy = Updates are turned off by your organization’s policy.
 update-disabled-portable = The portable copy is updated by hand: download the new version.

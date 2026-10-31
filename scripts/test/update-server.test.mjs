@@ -3,7 +3,7 @@
 // updater's check / verified download against it. Binds 127.0.0.1 only.
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
@@ -51,13 +51,11 @@ before(async () => {
   const entries = collectPlatforms({ files, version: "0.2.0", downloadBase: base });
   const manifest = buildManifest({
     version: "0.2.0",
-    channel: "stable",
     notes: "notes",
     pubDate: "2026-10-02T00:00:00Z",
     entries,
   });
-  mkdirSync(path.join(root, "stable"));
-  writeFileSync(path.join(root, "stable", "latest.json"), manifestJson(manifest));
+  writeFileSync(path.join(root, "latest.json"), manifestJson(manifest));
 });
 
 after(() => {
@@ -67,7 +65,7 @@ after(() => {
 
 test("paths stay inside the root", () => {
   const r = path.resolve("srv");
-  assert.equal(resolveUnder(r, "/stable/latest.json?x=1"), path.join(r, "stable", "latest.json"));
+  assert.equal(resolveUnder(r, "/latest.json?x=1"), path.join(r, "latest.json"));
   assert.equal(resolveUnder(r, "/a%20b.exe"), path.join(r, "a b.exe"));
   for (const bad of ["/", "/../x", "/a/../../x", "/%2e%2e/x", "/a%5cb", "/%00", "/%zz"]) {
     assert.equal(resolveUnder(r, bad), null, bad);
@@ -75,13 +73,13 @@ test("paths stay inside the root", () => {
 });
 
 test("the server serves files, refuses the rest, and logs every request", async () => {
-  const res = await fetch(`${base}/stable/latest.json`);
+  const res = await fetch(`${base}/latest.json`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-type"), "application/json");
   assert.equal(/** @type {{ version?: string }} */ (await res.json()).version, "0.2.0");
   assert.equal((await fetch(`${base}/missing.json`)).status, 404);
   assert.equal((await fetch(`${base}/stable`)).status, 404);
-  assert.equal((await fetch(`${base}/stable/latest.json`, { method: "POST" })).status, 405);
+  assert.equal((await fetch(`${base}/latest.json`, { method: "POST" })).status, 405);
   const head = await fetch(`${base}/Nail_0.2.0_x64-setup.exe`, { method: "HEAD" });
   assert.equal(head.status, 200);
   assert.equal(head.headers.get("content-length"), String(installer.length));
@@ -91,7 +89,7 @@ test("the server serves files, refuses the rest, and logs every request", async 
 
 test("the updater finds the newer NSIS build and downloads it verified", async () => {
   const update = await checkForUpdate({
-    endpoint: `${base}/stable/latest.json`,
+    endpoint: `${base}/latest.json`,
     currentVersion: "0.1.0",
     arch: "x64",
     installer: "nsis",
@@ -109,7 +107,7 @@ test("the updater finds the newer NSIS build and downloads it verified", async (
 test("no update for the same or a newer version, or a missing manifest", async () => {
   for (const currentVersion of ["0.2.0", "0.3.0"]) {
     const update = await checkForUpdate({
-      endpoint: `${base}/stable/latest.json`,
+      endpoint: `${base}/latest.json`,
       currentVersion,
       arch: "x64",
       installer: "nsis",
@@ -127,7 +125,7 @@ test("no update for the same or a newer version, or a missing manifest", async (
 
 test("an MSI update signed for another version is refused; unknown targets fail", async () => {
   const msi = await checkForUpdate({
-    endpoint: `${base}/stable/latest.json`,
+    endpoint: `${base}/latest.json`,
     currentVersion: "0.1.0",
     arch: "x64",
     installer: "msi",
@@ -139,7 +137,7 @@ test("an MSI update signed for another version is refused; unknown targets fail"
   );
   await assert.rejects(
     checkForUpdate({
-      endpoint: `${base}/stable/latest.json`,
+      endpoint: `${base}/latest.json`,
       currentVersion: "0.1.0",
       arch: "arm64",
       installer: "nsis",
@@ -149,7 +147,10 @@ test("an MSI update signed for another version is refused; unknown targets fail"
 });
 
 test("endpoints: https, or http on loopback only", () => {
-  assert.equal(checkEndpoint("https://u.example/stable/latest.json").hostname, "u.example");
+  assert.equal(
+    checkEndpoint("https://u.example/releases/latest/download/latest.json").hostname,
+    "u.example",
+  );
   assert.equal(checkEndpoint("http://127.0.0.1:1/x").port, "1");
   assert.throws(() => checkEndpoint("http://u.example/x"), /https/);
   assert.throws(() => checkEndpoint("file:///c:/x"), /https/);
