@@ -3,6 +3,32 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.1 (`0.8.1`)
+
+A bug-fix update of the preview: links in mail, a window that turned white,
+and the warnings above a message.
+
+### Fixed
+
+- **Links in mail open in your browser** — clicking a link in an HTML
+  message used to load it inside the message, where most sites show only
+  "This content is blocked". Now a click opens your default browser
+  (`mailto:` links open the composer).
+- **See where a link goes** — while the pointer is over a link, or the
+  keyboard is on it, a small bar at the bottom of the reader shows its
+  target. When the link shows one address but leads to another, the bar
+  says so, and Nail asks before opening it. See [Mail](mail.md).
+- **Shorter warnings** — the list of things to be careful about shows at
+  most three entries (with **Show all**), joins identical warnings into one
+  with a count, and keeps long addresses on one line.
+- **No more white window** — when the page inside Nail's window crashes or
+  stops responding, Nail now reloads it by itself and writes what happened
+  to its log; an error while drawing shows a screen with **Reload** instead
+  of a white window. `Ctrl+Shift+R` reloads the window.
+- **Narrow windows** — the buttons for pictures from the internet no
+  longer run past the edge of a narrow reader; long labels end in "…".
+- Calendar reminders can no longer pile up without end.
+
 ## Nail 0.8 (`0.8.0`)
 
 This is a preview of Nail for Windows: mail,

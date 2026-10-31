@@ -8,6 +8,25 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Fixed (ADRs 0206, 0207)
+
+- Links in HTML mail open outside the reader (the system browser in the
+  desktop app, a new tab in the browser) instead of loading inside the
+  message frame; the reader shows a hovered or focused link's target and
+  asks before opening a link Nail warns about (ADR 0206).
+- The message warnings list shows at most three entries, groups identical
+  link warnings and keeps long targets on one line (ADR 0206).
+- The desktop app reloads a window whose page crashed or hung, logs the
+  failure and the page's errors and memory use, and shows an error screen
+  instead of a blank window (ADR 0207).
+- The remote-content buttons fit a narrow reader (labels end in an
+  ellipsis); calendar reminder notices are capped.
+
+### Changed (ADRs 0205, 0208)
+
+- Only the master checkout publishes `main`, and branches are rebased,
+  never merged (ADRs 0205, 0208; development setup only).
+
 ## [0.8.0] — 2026-10-26
 
 The version is 0.8.0: the internal candidate `1.0.0-rc.1` was
