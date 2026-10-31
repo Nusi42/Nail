@@ -637,6 +637,11 @@ fn remote(c: Constants) -> Result<Constants, serde_json::Error> {
         &rc::FRAME_HEIGHT_MESSAGE,
     )?
     .add(
+        "FRAME_LINK_MESSAGE",
+        "`type` of the message a sandbox-origin mail document posts about a hovered or clicked link.",
+        &rc::FRAME_LINK_MESSAGE,
+    )?
+    .add(
         "MAX_FRAME_HEIGHT",
         "Tallest mail frame the reader sizes to its content (CSS px).",
         &rc::MAX_FRAME_HEIGHT,

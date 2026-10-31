@@ -316,6 +316,7 @@ export type * from "./LayoutNodeRef";
 export type * from "./LayoutPatch";
 export type * from "./LayoutPlacement";
 export type * from "./LayoutPreset";
+export type * from "./LinkOutcome";
 export type * from "./ListFilter";
 export type * from "./LocalizedMessage";
 export type * from "./LoginMethods";

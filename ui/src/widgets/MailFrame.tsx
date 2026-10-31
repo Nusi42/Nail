@@ -14,6 +14,11 @@
  *   opaque origin; the route's hash-pinned script posts the height, which
  *   the reader accepts only from this frame's window (`frameHeightOf`).
  *
+ * Links (ADR 0206, `mailLinks.ts`): neither frame ever navigates. The
+ * local frame's links are watched by the reader ({@link watchLinks}); the
+ * remote frame's script posts the hovered and clicked link, accepted only
+ * from that frame's window ({@link frameLinkOf}). Both report to `onLink`.
+ *
  * The measured height reaches the frame as a geometry rule (`useGeometry`),
  * never an inline style; `data-state~="measured"` lets the skin drop the
  * placeholder height the frame has until then. Heights pass a
@@ -32,6 +37,7 @@ import {
 } from "../theme/frameHeight";
 import { useGeometry } from "../theme/ThemeProvider";
 import { setSrcdoc } from "../theme/trustedHtml";
+import { frameLinkOf, watchLinks, type MailLinkReport } from "./mailLinks";
 
 /** What both frames share. */
 interface FrameProps {
@@ -39,6 +45,22 @@ interface FrameProps {
   title: string;
   /** `designed` for mail with its own design (the skin widens the column). */
   designed: boolean;
+  /** A link was hovered, focused, left or clicked (ADR 0206). */
+  onLink: (report: MailLinkReport) => void;
+}
+
+/** The latest `onLink`, for listeners that outlive a render. */
+function useLinkReporter(onLink: (report: MailLinkReport) => void) {
+  const latest = useRef(onLink);
+  useLayoutEffect(() => {
+    latest.current = onLink;
+  }, [onLink]);
+  return useMemo(
+    () => (report: MailLinkReport) => {
+      latest.current(report);
+    },
+    [],
+  );
 }
 
 /** Events inside a local mail document after which its height may differ. */
@@ -81,9 +103,15 @@ function useFrameGeometry(height: number | null, designed: boolean) {
 }
 
 /** A local (`srcdoc`) mail frame that measures its document. */
-export function LocalMailFrame({ srcDoc, title, designed }: FrameProps & { srcDoc: string }) {
+export function LocalMailFrame({
+  srcDoc,
+  title,
+  designed,
+  onLink,
+}: FrameProps & { srcDoc: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const { height, guard, apply } = useMeasuredHeight(frame);
+  const report = useLinkReporter(onLink);
   useLayoutEffect(() => {
     if (frame.current) setSrcdoc(frame.current, srcDoc);
   }, [srcDoc]);
@@ -115,8 +143,11 @@ export function LocalMailFrame({ srcDoc, title, designed }: FrameProps & { srcDo
       // Web fonts change line heights after the first layout.
       if ("fonts" in doc) void doc.fonts.ready.then(measure);
       measure();
+      // Links never navigate the frame; the reader follows them.
+      const unwatch = watchLinks(doc, report);
       detach = () => {
         live = false;
+        unwatch();
         for (const type of REMEASURE_EVENTS) doc.removeEventListener(type, measure, true);
         view?.removeEventListener("resize", measure);
         observer?.disconnect();
@@ -128,7 +159,7 @@ export function LocalMailFrame({ srcDoc, title, designed }: FrameProps & { srcDo
       el.removeEventListener("load", attach);
       detach();
     };
-  }, [guard, apply]);
+  }, [guard, apply, report]);
   const { geom, state } = useFrameGeometry(height, designed);
   return (
     <iframe
@@ -151,27 +182,32 @@ export function renderSrc(renderUrl: string, css: string, parent: string): strin
   return url.toString();
 }
 
-/** A remote UI mail frame on the sandbox origin; its route's script posts the height. */
+/** A remote UI mail frame on the sandbox origin; its route's script posts the height and links. */
 export function RemoteMailFrame({
   renderUrl,
   css,
   title,
   designed,
+  onLink,
 }: FrameProps & { renderUrl: string; css: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const { height, guard, apply } = useMeasuredHeight(frame);
+  const report = useLinkReporter(onLink);
   const src = renderSrc(renderUrl, css, window.location.origin);
   const sandboxOrigin = new URL(renderUrl).origin;
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      const posted = frameHeightOf(event, frame.current?.contentWindow ?? null, sandboxOrigin);
+      const source = frame.current?.contentWindow ?? null;
+      const posted = frameHeightOf(event, source, sandboxOrigin);
       if (posted !== null) apply(posted);
+      const link = frameLinkOf(event, source, sandboxOrigin);
+      if (link !== null) report(link);
     };
     window.addEventListener("message", onMessage);
     return () => {
       window.removeEventListener("message", onMessage);
     };
-  }, [sandboxOrigin, apply]);
+  }, [sandboxOrigin, apply, report]);
   // A new document starts over.
   useEffect(() => {
     guard.reset();

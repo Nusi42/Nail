@@ -564,6 +564,7 @@ describe("window model", () => {
     "folder-delete",
     "gmail-label-delete",
     "mail-delete-permanently",
+    "mail-open-link",
     "theme-delete",
     "plugin-modal-small",
     "plugin-modal-medium",

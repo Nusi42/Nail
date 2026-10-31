@@ -30,6 +30,7 @@ import {
   mockConfigTheme,
 } from "../features/appearance/mock";
 import { answerAttachment, isAttachmentRequest } from "./mockAttachments";
+import { answerOpenLink } from "./mockLinks";
 import { answerMailAction, isMailActionRequest } from "./mockMailActions";
 import { answerUiState, isUiStateRequest } from "./uiStateMock";
 import { answerWindowState, isWindowStateRequest } from "./windowStateMock";
@@ -295,6 +296,9 @@ export class MockTransport extends ClosableTransport implements MockCore {
         return { type: "Done" };
       case "GetUiContext":
         return { type: "UiContext", context: structuredClone(d.uiContext) };
+      // ADR 0206: a link clicked in a message.
+      case "OpenLink":
+        return answerOpenLink(request.url);
       case "TakeLaunchRequests":
         return { type: "LaunchRequests", requests: d.launches.splice(0) };
       case "ImportMessageFile": {

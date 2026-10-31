@@ -50,24 +50,42 @@ export function clampFrameHeight(height: number): number {
  */
 export const OPAQUE_ORIGIN = "null";
 
+/** A message event as the reader's frames see it. */
+export type FrameMessageEvent = Pick<MessageEvent, "data" | "origin" | "source">;
+
 /**
- * The height a sandbox-origin frame posted, or `null` unless the message
- * comes from `frame`'s own window — on `sandboxOrigin`, or the opaque origin
- * the sandbox gives that document ({@link OPAQUE_ORIGIN}) — and has the
- * contract's shape.
+ * The fields of a message a sandbox-origin frame posted with `type`, or
+ * `null` unless it comes from `frame`'s own window — on `sandboxOrigin`, or
+ * the opaque origin the sandbox gives that document ({@link OPAQUE_ORIGIN})
+ * — and is an object of that type. Shared by the height and the link
+ * messages (ADR 0206).
  */
-export function frameHeightOf(
-  event: Pick<MessageEvent, "data" | "origin" | "source">,
+export function framePosted(
+  event: FrameMessageEvent,
   frame: Window | null,
   sandboxOrigin: string,
-): number | null {
+  type: string,
+): Record<string, unknown> | null {
   if (frame === null || event.source !== frame) return null;
   if (event.origin !== sandboxOrigin && event.origin !== OPAQUE_ORIGIN) return null;
   const data: unknown = event.data;
   if (typeof data !== "object" || data === null) return null;
-  const { type, height } = data as { type?: unknown; height?: unknown };
-  if (type !== FRAME_HEIGHT_MESSAGE || typeof height !== "number") return null;
-  return clampFrameHeight(height);
+  const fields = data as Record<string, unknown>;
+  return fields.type === type ? fields : null;
+}
+
+/**
+ * The height a sandbox-origin frame posted, or `null` unless the message
+ * comes from `frame`'s own window ({@link framePosted}) and has the
+ * contract's shape.
+ */
+export function frameHeightOf(
+  event: FrameMessageEvent,
+  frame: Window | null,
+  sandboxOrigin: string,
+): number | null {
+  const height = framePosted(event, frame, sandboxOrigin, FRAME_HEIGHT_MESSAGE)?.height;
+  return typeof height === "number" ? clampFrameHeight(height) : null;
 }
 
 /**

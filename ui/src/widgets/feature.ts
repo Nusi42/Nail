@@ -19,6 +19,7 @@ import { toggleCollapsedSection } from "./folderPaneState";
 import { ListHeader } from "./ListHeader";
 import { isListFilter } from "./listFilter";
 import { DELETE_PERMANENTLY_DIALOG, DeletePermanentlyDialog } from "./DeletePermanently";
+import { MAIL_OPEN_LINK_DIALOG, OpenLinkDialog } from "./ReaderLinks";
 import { FOLDER_SECTION_TOGGLE_ACTION, LIST_FILTER_ACTION } from "../api/generated";
 export { FOLDER_SECTION_TOGGLE_ACTION, LIST_FILTER_ACTION } from "../api/generated";
 
@@ -71,9 +72,14 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 /** Dialog names → components. */
 export const dialogs: NonNullable<Feature["dialogs"]> = {
   [DELETE_PERMANENTLY_DIALOG]: DeletePermanentlyDialog,
+  [MAIL_OPEN_LINK_DIALOG]: OpenLinkDialog,
 };
 
-/** "Delete permanently?" is a confirmation: modal (M5c, ADR 0116). */
+/**
+ * "Delete permanently?" and "Open this link?" (ADR 0206) are confirmations:
+ * modal (M5c, ADR 0116).
+ */
 export const windows: NonNullable<Feature["windows"]> = {
   [DELETE_PERMANENTLY_DIALOG]: { confirmation: true },
+  [MAIL_OPEN_LINK_DIALOG]: { confirmation: true },
 };

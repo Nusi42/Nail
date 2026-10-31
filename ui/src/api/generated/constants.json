@@ -109,6 +109,7 @@
   "PROXY_PATH": "/api/proxy/",
   "RENDER_PARENT_PARAM": "parent",
   "FRAME_HEIGHT_MESSAGE": "nail-frame-height",
+  "FRAME_LINK_MESSAGE": "nail-frame-link",
   "MAX_FRAME_HEIGHT": 200000,
   "LOCAL_FOLDERS_ACCOUNT_ID": "local-folders",
   "BACKUP_FILE_EXTENSION": "nailbackup",

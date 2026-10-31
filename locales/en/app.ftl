@@ -154,6 +154,14 @@ mail-delete-permanently-question = { $count ->
 }
 mail-delete-permanently-note = This cannot be undone.
 
+## Links in mail (ADR 0206): the reader's link status and "Open this link?"
+
+window-mail-open-link = Open this link?
+# The status overlay's accessible text while a link is hovered or focused.
+mail-link-status = Link to { $href }
+mail-open-link-question = This link may not go where it seems to.
+mail-open-link-open = Open anyway
+
 ## Message view
 
 message-view-empty = Select a message to read it.

@@ -80,3 +80,8 @@ tray-check-mail = Check mail
 tray-quit = Quit Nail
 desktop-run-key-failed = Nail could not change “Start with Windows”.
 desktop-open-settings-failed = Nail could not open Settings → Default apps.
+
+## Links in mail (ADR 0206)
+
+link-unsupported = Nail does not open links of this kind.
+link-open-failed = Nail could not open the link in your browser.

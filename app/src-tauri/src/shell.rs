@@ -145,6 +145,18 @@ pub fn desktop_host<R: Runtime>(
         } else {
             Arc::new(crate::win::open_settings_uri)
         },
+        link_opener: if crate::background::active() {
+            // Test runs: no browser on the user's screen; the link is
+            // recorded for the `opened-links` test control.
+            Arc::new(|url: &str| {
+                tracing::info!(url, "test run: not opening a link");
+                crate::win::is_external_link(url)
+                    .then(|| lock_links().push(url.to_owned()))
+                    .ok_or_else(|| format!("not a web or phone link: {url}"))
+            })
+        } else {
+            Arc::new(crate::win::open_link)
+        },
     }))
 }
 
@@ -216,6 +228,9 @@ pub enum TestControl {
     /// Reports WebView2's default context menus per window label after
     /// Nail turned them off (ADR 0184): `{label: enabled}`.
     DefaultContextMenus,
+    /// The links a test run was asked to open in the browser (ADR 0206),
+    /// oldest first: `["https://…"]`.
+    OpenedLinks,
     /// Resizes the main window (`resize-main:<w>x<h>`) or every pop-out OS
     /// window (`resize-pop-outs:<w>x<h>`) to an inner size in logical
     /// pixels, as the user dragging its border does (ADR 0181).
@@ -229,7 +244,7 @@ pub enum TestControl {
 
 impl TestControl {
     /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"`, `"windows"`,
-    /// `"default-context-menus"` or
+    /// `"default-context-menus"`, `"opened-links"` or
     /// a tray menu item id
     /// (`"tray-new-message"`, …).
     pub fn parse(op: &str) -> Option<Self> {
@@ -239,6 +254,7 @@ impl TestControl {
             "close-pop-outs" => Some(Self::ClosePopOuts),
             "windows" => Some(Self::Windows),
             "default-context-menus" => Some(Self::DefaultContextMenus),
+            "opened-links" => Some(Self::OpenedLinks),
             other => {
                 Self::parse_resize(other).or_else(|| TrayAction::from_id(other).map(Self::Tray))
             }
@@ -304,6 +320,7 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
         }
         TestControl::Windows => Ok(crate::background::report(app)),
         TestControl::DefaultContextMenus => Ok(serde_json::json!(crate::webview_menus::reported())),
+        TestControl::OpenedLinks => Ok(serde_json::json!(*lock_links())),
         TestControl::Resize {
             pop_outs,
             width,
@@ -321,6 +338,15 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
             Ok(serde_json::Value::Null)
         }
     }
+}
+
+/// The links a test run did not open ([`TestControl::OpenedLinks`]).
+static TEST_RUN_LINKS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn lock_links() -> std::sync::MutexGuard<'static, Vec<String>> {
+    TEST_RUN_LINKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Creates the tray icon with its menu in the core's language.
@@ -488,6 +514,10 @@ mod tests {
         assert_eq!(
             TestControl::parse("default-context-menus"),
             Some(TestControl::DefaultContextMenus)
+        );
+        assert_eq!(
+            TestControl::parse("opened-links"),
+            Some(TestControl::OpenedLinks)
         );
         assert_eq!(
             TestControl::parse("resize-main:900x640"),

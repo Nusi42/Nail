@@ -489,6 +489,9 @@ export const RENDER_PARENT_PARAM = "parent" as const;
 /** `type` of the only message a sandbox-origin mail document posts to its parent. */
 export const FRAME_HEIGHT_MESSAGE = "nail-frame-height" as const;
 
+/** `type` of the message a sandbox-origin mail document posts about a hovered or clicked link. */
+export const FRAME_LINK_MESSAGE = "nail-frame-link" as const;
+
 /** Tallest mail frame the reader sizes to its content (CSS px). */
 export const MAX_FRAME_HEIGHT = 200000 as const;
 

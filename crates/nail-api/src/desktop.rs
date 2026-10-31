@@ -949,6 +949,16 @@ pub trait DesktopHost: Send + Sync + fmt::Debug {
         let _ = window;
         Err(desktop_unsupported())
     }
+
+    // --- Links in mail (ADR 0206); the default answers `unsupported` ---
+
+    /// Hands a link the user clicked in a message to the system (the
+    /// default browser, the phone app). `url` is normalized and has one of
+    /// [`crate::links::EXTERNAL_LINK_SCHEMES`] (the core checked it).
+    fn open_link(&self, url: &str) -> Result<(), ApiError> {
+        let _ = url;
+        Err(desktop_unsupported())
+    }
 }
 
 fn desktop_unsupported() -> ApiError {

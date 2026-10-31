@@ -47,6 +47,7 @@ mod ingest;
 mod junk;
 mod launch;
 pub mod launch_args;
+mod links;
 pub mod logs;
 mod mail;
 mod mail_actions;

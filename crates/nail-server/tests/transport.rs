@@ -443,20 +443,20 @@ async fn mail_html_is_served_only_on_the_sandbox_origin() {
         .map(str::trim)
         .find(|d| d.starts_with("sandbox"))
         .unwrap();
-    // P3 (ADR 0164): scripts run, but only the hash-pinned height script,
+    // P3 (ADR 0164): scripts run, but only the hash-pinned frame script,
     // and the document keeps an opaque origin.
     assert!(sandbox_directive.contains("allow-scripts"), "{csp}");
     assert!(!sandbox_directive.contains("allow-same-origin"), "{csp}");
     assert!(
         csp.contains(&format!(
             "script-src {};",
-            nail_server::sandbox::height_script_source()
+            nail_server::sandbox::frame_script_source()
         )),
         "{csp}"
     );
     assert!(body.contains(&format!(
         "<script>{}</script>",
-        nail_server::sandbox::HEIGHT_SCRIPT
+        nail_server::sandbox::FRAME_SCRIPT
     )));
     // The height goes only to an app origin that may frame the document.
     let app_origin = format!("http://127.0.0.1:{}", app.port());

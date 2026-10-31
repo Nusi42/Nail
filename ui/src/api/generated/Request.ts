@@ -923,7 +923,11 @@ value: string, } | { "type": "TakeLaunchRequests" } | { "type": "ImportMessageFi
 /**
  * Absolute path of the file.
  */
-path: string, } | { "type": "GetSieveStatus", 
+path: string, } | { "type": "OpenLink", 
+/**
+ * The link's `href`.
+ */
+url: string, } | { "type": "GetSieveStatus", 
 /**
  * One account; `null` = every account with a `sieve` node.
  */

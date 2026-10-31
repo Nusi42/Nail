@@ -217,7 +217,7 @@ export {
 export { IdentityCryptoFields } from "./IdentityCrypto";
 export { AuthBadge, MessageBadges, SecurityBadge, SecurityDetails } from "./MessageSecurity";
 export { attachmentWarning, warningsForLink } from "./model";
-export { AttachmentWarningMark, MessageWarnings } from "./Warnings";
+export { AttachmentWarningMark, linkWarningText, MessageWarnings } from "./Warnings";
 export { pinStoreFor, PIN_DIALOG } from "./PinPrompt";
 export { formatRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
 

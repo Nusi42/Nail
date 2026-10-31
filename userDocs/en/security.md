@@ -182,7 +182,16 @@ Nail lists what to be careful about above the message:
   that hide their real type (`invoice.pdf.exe`), disk images and
   shortcuts.
 
-Each link warning shows the link's **real target**.
+Each link warning shows the link's **real target** on one line (the whole
+address is in its tooltip and is copied whole). Links with the same
+warning, for example every link of a newsletter that goes through the same
+click-tracking address, share one entry that says how many links it covers.
+The list shows the first three entries; **Show all N warnings** lists the
+rest and **Show fewer** shortens it again, so the message stays in view.
+
+Pointing at a flagged
+link shows the warning at the bottom of the reader too, and clicking it
+asks before it opens (see [Links in messages](mail.md#links-in-messages)).
 
 ## Data protection
 

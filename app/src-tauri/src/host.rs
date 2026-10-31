@@ -33,7 +33,8 @@ use crate::popout::{PopOutManager, PopOutWindows, TauriPopOuts};
 use crate::registry::Registry;
 use crate::updater::Updater;
 
-/// Opens a Settings URI (the real one: [`crate::win::open_settings_uri`]).
+/// Opens a URI with the system (the real ones:
+/// [`crate::win::open_settings_uri`], [`crate::win::open_link`]).
 pub type Opener = Arc<dyn Fn(&str) -> Result<(), String> + Send + Sync>;
 
 /// The desktop shell's host.
@@ -45,6 +46,7 @@ pub struct ShellHost {
     data_dir: PathBuf,
     runtime: tokio::runtime::Handle,
     opener: Opener,
+    link_opener: Opener,
     notify: OnceLock<DesktopNotifier>,
     service: OnceLock<Service>,
     dev: Mutex<Option<DevEndpoint>>,
@@ -85,6 +87,8 @@ pub struct HostParts {
     pub runtime: tokio::runtime::Handle,
     /// Opens Settings URIs.
     pub opener: Opener,
+    /// Opens links clicked in mail (ADR 0206).
+    pub link_opener: Opener,
 }
 
 impl std::fmt::Debug for HostParts {
@@ -108,6 +112,7 @@ impl ShellHost {
             pop_outs: PopOutManager::new(parts.runtime.clone()),
             runtime: parts.runtime,
             opener: parts.opener,
+            link_opener: parts.link_opener,
             notify: OnceLock::new(),
             service: OnceLock::new(),
             dev: Mutex::new(None),
@@ -400,6 +405,10 @@ impl DesktopHost for ShellHost {
     fn focus_pop_out(&self, window: &str) -> Result<(), ApiError> {
         self.pop_outs.focus(window)
     }
+
+    fn open_link(&self, url: &str) -> Result<(), ApiError> {
+        (self.link_opener)(url).map_err(|e| ApiError::internal(format!("cannot open {url}: {e}")))
+    }
 }
 
 #[cfg(test)]
@@ -434,6 +443,7 @@ mod tests {
         registry: Arc<MemoryRegistry>,
         backend: Arc<FakeBackend>,
         opened: Arc<Mutex<Vec<String>>>,
+        links: Arc<Mutex<Vec<String>>>,
         data: tempfile::TempDir,
         _config: tempfile::TempDir,
     }
@@ -445,6 +455,8 @@ mod tests {
         let backend = Arc::new(FakeBackend::default());
         let opened = Arc::new(Mutex::new(Vec::new()));
         let sink = Arc::clone(&opened);
+        let links = Arc::new(Mutex::new(Vec::new()));
+        let link_sink = Arc::clone(&links);
         let runtime = tokio::runtime::Handle::current();
         let host = Arc::new(ShellHost::new(HostParts {
             registry: registry.clone(),
@@ -455,6 +467,13 @@ mod tests {
             runtime,
             opener: Arc::new(move |uri| {
                 sink.lock().unwrap().push(uri.to_owned());
+                Ok(())
+            }),
+            link_opener: Arc::new(move |url| {
+                if url.contains("refused.example") {
+                    return Err("no browser".into());
+                }
+                link_sink.lock().unwrap().push(url.to_owned());
                 Ok(())
             }),
         }));
@@ -469,6 +488,7 @@ mod tests {
             registry,
             backend,
             opened,
+            links,
             data,
             _config: config,
         }
@@ -863,6 +883,47 @@ mod tests {
             changes += usize::from(event == Event::DefaultAppsChanged);
         }
         assert_eq!(changes, 1);
+        f.service.shutdown().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn links_open_with_the_system_and_mailto_goes_to_the_composer() {
+        use nail_api::LinkOutcome;
+        let f = fixture(None);
+        let open = |url: &str| {
+            f.service.handle(Request::OpenLink {
+                url: url.to_owned(),
+            })
+        };
+        let response = open("https://track.example.net/e/1/click").await;
+        assert!(
+            matches!(
+                &response,
+                Response::LinkOpened {
+                    outcome: LinkOutcome::Opened
+                }
+            ),
+            "{response:?}"
+        );
+        assert_eq!(
+            *f.links.lock().unwrap(),
+            ["https://track.example.net/e/1/click"]
+        );
+        let response = open("mailto:ada@example.org").await;
+        assert!(
+            matches!(&response, Response::LinkOpened { outcome: LinkOutcome::Compose { mailto } } if mailto.to == ["ada@example.org"]),
+            "{response:?}"
+        );
+        // Refused schemes never reach the system; a failing system is reported.
+        let Response::Error { code, .. } = open("file:///C:/Windows/notepad.exe").await else {
+            panic!("a file link was accepted");
+        };
+        assert_eq!(code, ErrorCode::InvalidRequest);
+        let Response::Error { localized, .. } = open("https://refused.example/").await else {
+            panic!("a failure was hidden");
+        };
+        assert_eq!(localized.map(|l| l.id), Some("link-open-failed".to_owned()));
+        assert_eq!(f.links.lock().unwrap().len(), 1);
         f.service.shutdown().await;
     }
 }
