@@ -4703,9 +4703,41 @@
       "ancestors": [],
       "declarations": {
         "display": "block",
+        "overflow": "hidden",
+        "white-space": "nowrap",
+        "text-overflow": "ellipsis",
         "font-family": "var(--nail-font-mono)",
-        "font-size": "var(--nail-font-size-sm)",
-        "word-break": "break-all"
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "security-warnings.count",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
+      "selector": "security-warnings.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "security-warnings.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "var(--nail-space-xs) 0"
       },
       "source": null
     },
@@ -6246,7 +6278,9 @@
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
-        "gap": "var(--nail-space-sm)"
+        "gap": "var(--nail-space-sm)",
+        "min-width": "0",
+        "max-width": "100%"
       },
       "source": null
     },
