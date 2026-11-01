@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: Where the project stands and what to do next — read first when continuing in a new session (0.8.1 released 2026-10-31; next: link status bar in warning colours, no gap)
+description: Where the project stands and what to do next — read first when continuing in a new session (0.8.2 released 2026-11-01; next: link status bar in warning colours, no gap)
 metadata:
   type: project
 ---
@@ -30,6 +30,13 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 **Waiting for the maintainer to try** (newest installer in `<installer folder>\`, payload smoke passed): HTML mail
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
+
+**Released 0.8.2 (2026-11-01):** security update (zip 9.2 with Nail's own archive checks, rustls,
+ammonia and others; ADR 0209) and one update address instead of channels (GitHub's latest release,
+`releases/latest/download/latest.json`; ADR 0210). The rolling `stable` / `beta` releases are deleted;
+installed 0.8.0 / 0.8.1 copies need one manual install (accepted). `release:prepare` now stops while Dependabot
+alerts are open; glib (#1) and minimatch (#34) are dismissed as accepted risks (ADR 0209). On this machine run
+`release:prepare` with `CARGO_BUILD_JOBS=2`: with 4 jobs Claude Code stopped it twice for low memory.
 
 **Released 0.8.1 (2026-10-31):** GitHub release `v0.8.1` (Latest) with the installer, zip, signature,
 checksums and SBOMs; the `stable` and `beta` channels announce 0.8.1; the maintainer runs it (installed over
