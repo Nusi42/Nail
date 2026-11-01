@@ -149,11 +149,19 @@ fn plugin_bindings_hold_the_plugin_surface_only() {
 
 /// A doc comment containing `*/` (a cron step like `*/15`, a MIME pattern
 /// `type/*/`) would end the generated `TSDoc` comment early and break the
-/// TypeScript build (M4a).
+/// TypeScript build (M4a). Checks a fresh export, not the checked-in folders:
+/// `npm run gen:api` rewrites those while the tests run in parallel, and the
+/// up-to-date tests above already make them equal.
 #[test]
 fn doc_comments_never_close_the_tsdoc_comment_early() {
-    for dir in [checked_in_dir(), plugin_api_dir()] {
-        for (file, text) in read_tree(&dir) {
+    let exports: [Export; 2] = [
+        nail_api::export_typescript,
+        nail_api::export_plugin_typescript,
+    ];
+    for export in exports {
+        let dir = tempfile::tempdir().unwrap();
+        export(dir.path()).unwrap();
+        for (file, text) in read_tree(dir.path()) {
             for line in text.lines() {
                 let trimmed = line.trim();
                 if trimmed.contains("*/") {
