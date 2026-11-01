@@ -2,7 +2,7 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { strictBuild } from "./build/strictBuild.ts";
+import { DETERMINISTIC_CHECKS, strictBuild } from "./build/strictBuild.ts";
 
 const localesDir = fileURLToPath(new URL("../locales", import.meta.url));
 // Reference theme/layout fixtures of nail-api, used by the mock transport (`?mock=1`).
@@ -47,14 +47,9 @@ export default defineConfig(({ command }) => {
       outDir: "dist",
       emptyOutDir: true,
       rolldownOptions: {
-        // Rolldown's plugin-timing notice measures how long JavaScript plugin
-        // hooks ran relative to the whole build. It depends on machine load
-        // (it fires on a busy machine and not on an idle one for the same
-        // input; here: Vite's own asset loader reading the ~100 Fluent
-        // catalogs), so it reports nothing about the code and cannot be a
-        // deterministic zero-warnings gate (ADR 0129). Every other check
-        // stays on.
-        checks: { bundlerTimings: false },
+        // No load-dependent timing notice (here: Vite's own asset loader
+        // reading the ~100 Fluent catalogs); see DETERMINISTIC_CHECKS.
+        checks: DETERMINISTIC_CHECKS,
         output: {
           // The app's modules are spread over several chunks (groups below);
           // evaluate them in exactly the order of their imports, as without

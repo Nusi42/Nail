@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { build, type InlineConfig } from "vite";
 import { afterEach, describe, expect, it } from "vitest";
-import { largeChunks, strictBuild } from "./strictBuild";
+import { DETERMINISTIC_CHECKS, largeChunks, strictBuild } from "./strictBuild";
 
 const dirs: string[] = [];
 
@@ -36,7 +36,13 @@ function config(root: string, extra: InlineConfig["build"] = {}) {
     logLevel: "silent",
     customLogger: strict.logger,
     plugins: [strict.plugin],
-    build: { outDir: path.join(root, "dist"), emptyOutDir: true, ...extra },
+    build: {
+      outDir: path.join(root, "dist"),
+      emptyOutDir: true,
+      // As in vite.config.ts: no load-dependent timing notice.
+      rolldownOptions: { checks: DETERMINISTIC_CHECKS },
+      ...extra,
+    },
   };
   return { strict, inline };
 }

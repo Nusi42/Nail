@@ -66,6 +66,16 @@ function chunkSizeWarning(config: Pick<ResolvedConfig, "build"> | undefined, lar
 }
 
 /**
+ * Rolldown checks for every strict build (`build.rolldownOptions.checks`).
+ * Its plugin-timing notice measures how long JavaScript plugin hooks ran
+ * relative to the whole build. It depends on machine load (it fires on a
+ * busy machine and not on an idle one for the same input), so it reports
+ * nothing about the code and cannot be a deterministic zero-warnings gate
+ * (ADR 0129). Every other check stays on.
+ */
+export const DETERMINISTIC_CHECKS = { bundlerTimings: false } as const;
+
+/**
  * A logger + plugin pair that turns build warnings into a build error.
  *
  * @param logLevel what the logger prints (warnings are recorded at any level)
