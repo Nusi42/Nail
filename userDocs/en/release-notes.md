@@ -3,6 +3,25 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.2 (`0.8.2`)
+
+A security update of the preview.
+
+### Security
+
+- **Plug-in packages and backups** are checked more strictly: Nail refuses
+  an archive whose entries disagree with each other or that contains a
+  name twice, so a crafted file cannot hide content from Nail's checks.
+- **Mail with HTML** is cleaned with an updated sanitizer that closes two
+  ways to sneak scripts into a message.
+- **Secure connections** and other components are updated for published
+  security advisories.
+
+### Changed
+
+- **One update address** — Nail looks for updates in the latest release
+  on GitHub; the choice of an update channel in Settings → Updates is gone.
+
 ## Nail 0.8.1 (`0.8.1`)
 
 A bug-fix update of the preview: links in mail, a window that turned white,
