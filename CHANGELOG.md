@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-11-01
+
 ### Security (ADR 0209)
 
 - Plug-in packages and backups are read with `zip` 9.2 and refused when
@@ -229,6 +231,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.2]: https://github.com/Nusi42/Nail/releases/tag/v0.8.2
 [0.8.1]: https://github.com/Nusi42/Nail/releases/tag/v0.8.1
 [0.8.0]: https://github.com/Nusi42/Nail/releases/tag/v0.8.0
 [1.0.0-rc.1]: docs/release-checklist.md
