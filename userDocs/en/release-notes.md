@@ -3,6 +3,25 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.3 (`0.8.3`)
+
+Open attachments directly, and file dialogs on macOS and Linux.
+
+### Added
+
+- **Open an attachment** — click an attachment's name, or its new Open
+  button, to open the file with your system's program. An attachment Nail
+  flags as dangerous asks first. In a browser the file downloads.
+- **Links in plain-text mail** — web addresses in plain-text messages are
+  links now.
+
+### Corrected
+
+- **Save as on macOS and Linux** — saving an attachment shows the system's
+  file dialog, like on Windows.
+- **Links that could not be opened** on macOS are reported instead of being
+  dropped silently.
+
 ## Nail 0.8.2 (`0.8.2`)
 
 A security update of the preview.
