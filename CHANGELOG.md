@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-11-02
+
 ### Added (ADR 0211)
 
 - A click on an attachment's name (or its new Open button) opens the file
@@ -245,6 +247,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.3]: https://github.com/Nusi42/Nail/releases/tag/v0.8.3
 [0.8.2]: https://github.com/Nusi42/Nail/releases/tag/v0.8.2
 [0.8.1]: https://github.com/Nusi42/Nail/releases/tag/v0.8.1
 [0.8.0]: https://github.com/Nusi42/Nail/releases/tag/v0.8.0
