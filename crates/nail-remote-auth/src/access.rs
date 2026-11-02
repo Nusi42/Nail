@@ -546,6 +546,8 @@ pub fn required_access(request: &Request) -> RequestAccess {
         // M5a WP155: attachment downloads (web) and saves (desktop).
         Request::GetMessageAttachment { .. } => ("GetMessageAttachment", Scope(S::Attachments)),
         Request::SaveAttachment { .. } => ("SaveAttachment", DesktopOnly),
+        // ADR 0211: the desktop opens the file; a remote session downloads.
+        Request::OpenAttachment { .. } => ("OpenAttachment", DesktopOnly),
         // ADR 0194: "Show source" (the message as received).
         Request::GetMessageSource { .. } => ("GetMessageSource", Scope(S::RawSource)),
         Request::GetRecentActions => ("GetRecentActions", Session),

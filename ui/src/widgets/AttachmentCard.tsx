@@ -1,17 +1,26 @@
 /**
  * One attachment of the reader as a card (M5a WP153): a type badge, the
- * name, the size and the actions — preview (when a plug-in renders this
- * type), save, and the plug-ins' attachment actions. Replaces the chips
- * whose size ran into the name.
+ * name, the size and the actions — open, preview (when a plug-in renders
+ * this type), save, and the plug-ins' attachment actions. Replaces the chips
+ * whose size ran into the name. The badge and the name open the attachment
+ * too (ADR 0211): the desktop app hands it to the system's handler, anywhere
+ * else it downloads; a flagged attachment asks first (`OpenAttachment.tsx`).
  */
 import { useState } from "react";
 import type { AttachmentInfo, MessageId, MessageWarning } from "../api/generated";
-import { saveAttachment, type SaveOutcome } from "./attachmentSave";
-import { AttachmentWarningMark } from "../features/security";
+import {
+  openAttachment,
+  saveAttachment,
+  type OpenOutcome,
+  type SaveOutcome,
+} from "./attachmentSave";
+import { AttachmentWarningMark, attachmentWarning } from "../features/security";
 import { AttachmentActionMenu, useHasAttachmentPreview } from "../features/plugins";
 import { useLocale, useT } from "../i18n/I18nProvider";
+import { useComposeContext } from "../state/hooks";
 import { useClient } from "../state/queries";
 import { Icon } from "./Icon";
+import { askToOpenAttachment } from "./OpenAttachment";
 
 /** Size in kB / MB for the locale (at least 1 kB). */
 export function formatSize(bytes: number, locale: string): string {
@@ -82,12 +91,23 @@ export function fileType(filename: string | null, mime: string): { label: string
   return { label: key.slice(0, 4).toUpperCase(), kind };
 }
 
-/** What saving an attachment has come to. */
-export type SaveState = "idle" | "saving" | Exclude<SaveOutcome, "cancelled"> | "failed";
+/**
+ * What saving or opening an attachment has come to (the card's
+ * `data-state`): `saving` / `opening` while it runs, then the outcome.
+ */
+export type SaveState =
+  | "idle"
+  | "saving"
+  | "opening"
+  | Exclude<SaveOutcome, "cancelled">
+  | Exclude<OpenOutcome, "downloaded" | "unsupported">
+  | "failed"
+  | "open-failed"
+  | "open-unsupported";
 
 /**
  * The status line of a card: its Fluent id and icon, `null` while idle.
- * "Saving…" shows at once, the outcome replaces it.
+ * "Saving…" / "Opening…" show at once, the outcome replaces it.
  */
 export function saveStatus(state: SaveState): { id: string; icon: string } | null {
   switch (state) {
@@ -95,12 +115,19 @@ export function saveStatus(state: SaveState): { id: string; icon: string } | nul
       return null;
     case "saving":
       return { id: "attachment-card-saving", icon: "download" };
+    case "opening":
+      return { id: "attachment-card-opening", icon: "external-link" };
     case "saved":
     case "downloaded":
       return { id: `message-view-attachment-save-${state}`, icon: "check" };
+    case "opened":
+      return { id: "message-view-attachment-opened", icon: "check" };
     case "unsupported":
     case "failed":
       return { id: `message-view-attachment-save-${state}`, icon: "circle-alert" };
+    case "open-failed":
+    case "open-unsupported":
+      return { id: `message-view-attachment-${state}`, icon: "circle-alert" };
   }
 }
 
@@ -123,6 +150,7 @@ export function AttachmentCard({
   const t = useT();
   const locale = useLocale();
   const client = useClient();
+  const { store } = useComposeContext();
   const canPreview = useHasAttachmentPreview(attachment, accountId) && !attachment.inline;
   const [save, setSave] = useState<SaveState>("idle");
   const name = attachment.filename ?? t("common-unnamed-attachment");
@@ -138,6 +166,24 @@ export function AttachmentCard({
         setSave("failed");
       });
   };
+  // A flagged attachment (program, macros, …) asks before it opens.
+  const flagged = attachmentWarning(warnings, attachment.index);
+  const busy = save === "saving" || save === "opening";
+  const runOpen = () => {
+    setSave("opening");
+    openAttachment(client, messageId, attachment, name)
+      .then((outcome) => {
+        setSave(outcome === "unsupported" ? "open-unsupported" : outcome);
+      })
+      .catch(() => {
+        setSave("open-failed");
+      });
+  };
+  const onOpen = () => {
+    if (busy) return;
+    if (flagged === null) runOpen();
+    else askToOpenAttachment(store, { name: flagged.filename, risk: flagged.risk, run: runOpen });
+  };
   const onPreview = () => {
     const pane = document.getElementById(previewId);
     if (!pane) return;
@@ -152,13 +198,27 @@ export function AttachmentCard({
       data-embedded={attachment.shown_in_body ? "" : undefined}
       data-state={save === "idle" ? undefined : save}
     >
-      <span data-part="attachment-card.type" data-kind={type.kind} aria-hidden="true">
+      {/* A pointer shortcut for the name's button: out of the tab order and the tree. */}
+      <button
+        type="button"
+        data-part="attachment-card.type"
+        data-kind={type.kind}
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onOpen}
+      >
         {type.label}
-      </span>
+      </button>
       <span data-part="attachment-card.text">
-        <span data-part="attachment-card.name" title={name}>
+        <button
+          type="button"
+          data-part="attachment-card.name"
+          data-action="open"
+          title={name}
+          onClick={onOpen}
+        >
           {name}
-        </span>
+        </button>
         <span data-part="attachment-card.size">{formatSize(attachment.size, locale)}</span>
         {/*
           Next to the size, so the card keeps its height (M5a review). The
@@ -198,10 +258,22 @@ export function AttachmentCard({
           type="button"
           data-part="form.button"
           data-variant="icon"
+          data-action="open"
+          aria-label={t("message-view-attachment-open", { name })}
+          title={t("message-view-attachment-open", { name })}
+          disabled={busy || save === "open-unsupported"}
+          onClick={onOpen}
+        >
+          <Icon name="external-link" part="form.button.icon" />
+        </button>
+        <button
+          type="button"
+          data-part="form.button"
+          data-variant="icon"
           data-action="save"
           aria-label={t("message-view-attachment-save", { name })}
           title={t("message-view-attachment-save", { name })}
-          disabled={save === "saving" || save === "unsupported"}
+          disabled={busy || save === "unsupported"}
           onClick={onSave}
         >
           <Icon name="download" part="form.button.icon" />

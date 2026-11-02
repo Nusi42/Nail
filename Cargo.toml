@@ -428,6 +428,9 @@ tauri-build = { version = "2.7", features = [] }
 # A second start (a mailto: click while Nail runs) hands its arguments to
 # the running app (MIT / Apache-2.0; ADR 0041).
 tauri-plugin-single-instance = "2.5.1"
+# File dialogs off Windows (ADR 0211): NSOpenPanel on macOS, GTK 3 on Linux (the
+# toolkit Tauri already links there); no portal / async runtime.
+rfd = { version = "0.16.1", default-features = false, features = ["gtk3"] }
 
 # Testing
 tempfile = "3.27"

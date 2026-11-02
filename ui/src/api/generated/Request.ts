@@ -2307,7 +2307,15 @@ path: string,
  * Replace an existing file (atomically). Only set when the user
  * confirmed replacing it in the Save dialog.
  */
-overwrite?: boolean, } | { "type": "GetUiState" } | { "type": "SetUiState", 
+overwrite?: boolean, } | { "type": "OpenAttachment", 
+/**
+ * The message.
+ */
+message_id: MessageId, 
+/**
+ * The attachment's index.
+ */
+index: number, } | { "type": "GetUiState" } | { "type": "SetUiState", 
 /**
  * A dotted kebab-case key, e.g. `folder-pane.collapsed`.
  */

@@ -21,7 +21,8 @@ import {
  * desktop app, observed through its test control); `mailto:` links open
  * Nail's composer. While a link is hovered, a status overlay at the
  * reader's bottom edge shows its target; a link the core flagged shows its
- * warning there and asks before it opens.
+ * warning there and asks before it opens. Web links in a plain-text mail
+ * are clickable and go the same way (ADR 0211).
  */
 
 const server = nailOnDemand();
@@ -207,6 +208,45 @@ test.describe("web mode", () => {
   });
 });
 
+test.describe("plain-text mail", () => {
+  useServer();
+
+  test("a web link in the text opens in a new tab; the status shows its target", async ({
+    page,
+    context,
+  }) => {
+    await serveLinks(context);
+    await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
+    await control(server, "imap-deliver", {
+      raw: [
+        "From: Shop <news@shop.example.com>",
+        "To: ada@work.example",
+        "Subject: Your parcel",
+        "Message-ID: <parcel@shop.example.com>",
+        "Date: Mon, 26 Oct 2026 08:00:00 +0000",
+        "MIME-Version: 1.0",
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        `Track it here (${TRACKING}), thanks.`,
+        "",
+      ].join("\r\n"),
+    });
+    await refreshList(page);
+    const row = messageRow(page, "Your parcel").first();
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await row.click();
+    const link = page.locator('[data-part="message-view.text-link"]');
+    await expect(link).toHaveText(TRACKING);
+    await link.hover();
+    await expect(status(page)).toContainText(TRACKING);
+    const tab = await clickForTab(context, link);
+    expect(tab.url()).toBe(TRACKING);
+    await tab.close();
+    // The surrounding text stays text.
+    await expect(page.locator('[data-part="message-view.text"]')).toContainText("), thanks.");
+  });
+});
+
 test.describe("the warnings banner", () => {
   useServer();
 
@@ -313,5 +353,26 @@ test.describe("the desktop app", () => {
     await link.click();
     await expect.poll(() => shellControl(desktop, "opened-links")).toEqual([target]);
     await expect(frame.contentFrame().getByText("Autumn is here")).toBeVisible();
+  });
+
+  test("a click on an attachment hands the file to the system, not to the page", async () => {
+    const desktop = session.page;
+    await showView(desktop, "Mail");
+    await messageRows(desktop)
+      .filter({ hasText: "Your invoice for September 2026" })
+      .first()
+      .click();
+    const name = desktop.locator('[data-part="attachment-card.name"]').first();
+    await expect(name).toBeVisible();
+    const before = (await shellControl(desktop, "opened-files")) as string[];
+    await name.click();
+    await expect(desktop.locator('[data-part="attachment-card.status"]').first()).toHaveText(
+      "Opened.",
+    );
+    const after = (await shellControl(desktop, "opened-files")) as string[];
+    expect(after).toHaveLength(before.length + 1);
+    // A file in the core's private folder, named like the attachment.
+    const file = after[after.length - 1] ?? "";
+    expect(file).toContain("opened-attachments");
   });
 });

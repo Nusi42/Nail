@@ -77,6 +77,10 @@ windows-registry.workspace = true
 # version wry uses, so the interfaces match Tauri's webview handle).
 webview2-com.workspace = true
 
+# ADR 0211: the system's file dialogs off Windows (MIT / Apache-2.0).
+[target.'cfg(not(windows))'.dependencies]
+rfd.workspace = true
+
 [dev-dependencies]
 pretty_assertions.workspace = true
 # M4b WP115: tests/mapi_wired.rs drives the shell's pipe server with the

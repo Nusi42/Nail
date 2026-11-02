@@ -52,7 +52,7 @@ export function mailLinkOf(doc: Document, anchor: Element): MailLink {
 }
 
 /** The middle mouse button (`MouseEvent.button`). */
-const MIDDLE_BUTTON = 1;
+export const MIDDLE_BUTTON = 1;
 
 /**
  * Watches the links of a local mail document: clicks on a link (also

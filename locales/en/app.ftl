@@ -165,6 +165,11 @@ mail-link-status = Link to { $href }
 mail-open-link-question = This link may not go where it seems to.
 mail-open-link-open = Open anyway
 
+## Opening attachments (ADR 0211): "Open this attachment?"
+
+window-mail-open-attachment = Open this attachment?
+mail-open-attachment-question = Opening this attachment may harm your computer. Open it only if you trust the sender.
+
 ## Message view
 
 message-view-empty = Select a message to read it.
@@ -298,6 +303,7 @@ list-header-filters = Filter messages
 message-list-filter-empty = No messages match this filter.
 # An attachment card while the attachment is being saved.
 attachment-card-saving = { common-saving }
+attachment-card-opening = { common-opening }
 # Command-palette titles (actions with an argument, used through aliases).
 list-action-filter = Filter the message list
 list-action-filter-keywords = unread flagged attachments chips

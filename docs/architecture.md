@@ -591,7 +591,9 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        tests/mapi_wired.rs (DLL client → pipe server → core; ADR 0092);
                        M4c (ADR 0099): printing.rs (PDF: hidden window `print-<job>` on `#/print/<job>`, waits for
                        PrintViewReady, WebView2 PrintToPdf via webview2-com), dialog.rs (PickPath: Windows common item
-                       dialog on an STA thread); capabilities cover `print-*` windows;
+                       dialog on an STA thread, elsewhere `rfd` — NSOpenPanel / GTK 3, ADR 0211); capabilities
+                       cover `print-*` windows; ADR 0211: `DesktopHost::open_file` (win.rs `open_file`: ShellExecuteW /
+                       `open` / `xdg-open`; test runs record paths for the `opened-files` test control);
                        background.rs (ADR 0146): NAIL_TEST_BACKGROUND_WINDOWS=1 (startDesktop sets it) = every
                        window DWM-cloaked, WS_EX_NOACTIVATE, off the taskbar, never set_focus; no notifications /
                        file dialogs / Settings app; test control `windows` + e2e expectWindowsInBackground;
@@ -631,7 +633,11 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        theme/skin.ts (token-only default look of the primitives, between BASE_CSS and the theme's
                        part rules — the base theme has no rules for those parts), widgets/lucideIcons.ts + Icon.tsx
                        (theme icon → Lucide → nothing), widgets/primitives.tsx (Switch, Segmented, Tag, Avatar),
-                       widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download);
+                       widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download; name /
+                       badge / Open button → OpenAttachment, else download; ADR 0211) + OpenAttachment.tsx (the
+                       `mail-open-attachment` confirmation for flagged files) + MailConfirm.tsx (shared body of the
+                       link and attachment confirmations); widgets/plainTextLinks.ts + LinkedText.tsx (URLs of a
+                       plain-text body as anchors → OpenLink);
                        M5b (ADR 0109): features/shell/ (WP161: nav-rail, view-host, view.show / next / previous with
                        the open-the-window fallback), features/settings/ (WP163: settings-page, settings.section),
                        widgets/feature.ts (WP162's registrations, merged like a slot: list-header, list / folder actions),
@@ -1123,7 +1129,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `defaults/theme.kdl` has no rules for the parts `ui/src/theme/skin.ts` styles and no `icons` (Lucide) — a new
   default part rule's colours must be in the pair table of `tests/theme_contrast.rs`; input-like parts use
   `border "$border.control"`. `ReportSystemAppearance` is ignored while the core watches the OS.
-  `GetMessageAttachment` (base64, ≤ 64 MiB) / `SaveAttachment` (desktop only, absolute path).
+  `GetMessageAttachment` (base64, ≤ 64 MiB) / `SaveAttachment` (desktop only, absolute path) /
+  `OpenAttachment` (ADR 0211, desktop only: `attachments.rs` `OpenedFiles` writes `<data dir>/opened-attachments/
+  <unique>/<name>`, cleared at start and shutdown, pruned after a day; the host's `open_file` opens it).
 
 ### M5b
 
@@ -1359,8 +1367,8 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   in the `GetConfig` answer, desktop features only with a desktop host and never for remote sessions; the UI's
   `ui/src/state/platform.ts` (`usePlatformFeature`) and `SettingsWidgetInfo.requires` / `platformLabels`
   (`ui/src/layout/settingsIndex.ts`); every Fluent message gets `$os` (`nail-config` `fluent_args`, the UI's
-  `createLocalizer`); `DesktopHost::pick_path` / `print_to_pdf` exist in the shell on Windows only; Linux / macOS
-  bundles in `app/src-tauri/tauri.{linux,macos}.conf.json`; Linux checks in WSL2 (`docs/dev-setup.md`).
+  `createLocalizer`); `DesktopHost::print_to_pdf` exists in the shell on Windows only (`pick_path` everywhere, `rfd` off
+  Windows, ADR 0211); Linux / macOS bundles in `app/src-tauri/tauri.{linux,macos}.conf.json`; Linux checks in WSL2 (`docs/dev-setup.md`).
 - Links in mail (ADR 0206): no click navigates a mail frame. Local frames are watched by the reader
   (`ui/src/widgets/mailLinks.ts` `watchLinks`), remote frames post `FRAME_LINK_MESSAGE` from the sandbox route's
   hash-pinned `FRAME_SCRIPT`. `OpenLink` (`nail_api::links`, `nail_core::links`) answers `Opened` (the desktop host's
@@ -1369,7 +1377,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   status overlay (`message-view.link-dock` / `.link-status`, `ui/src/widgets/ReaderLinks.tsx`) shows the hovered
   link's target and its `MessageWarning`; a flagged link asks first (`mail-open-link`). The warnings banner
   (`features/security/Warnings.tsx`, `model.ts` `warningEntries` / `shownWarningEntries`, `MAX_SHOWN_WARNINGS`)
-  groups identical link warnings and shows a few entries until "Show all".
+  groups identical link warnings and shows a few entries until "Show all". ADR 0211: the URLs of a plain-text body
+  are anchors too (`plainTextLinks.ts`, `message-view.text-link`), numbered -1 and never flagged; `open` on macOS
+  is waited for and its failure reported.
 - Only the master publishes (ADR 0205): `.githooks/pre-push` runs `scripts/pre-push.mjs`, which asks
   `scripts/lib/push-plan.mjs` `pushPlan` (checkout role: master / work folder / plain clone, remote URL: local path or
   network) what to run: work folder to master = guard on the pushed commits + `npm run check`; master to the public

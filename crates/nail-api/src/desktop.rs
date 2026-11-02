@@ -899,6 +899,17 @@ pub trait DesktopHost: Send + Sync + fmt::Debug {
         let _ = url;
         Err(desktop_unsupported())
     }
+
+    // --- Opening attachments (ADR 0211); the default answers `unsupported` ---
+
+    /// Opens `path`, an absolute file the core just wrote into its private
+    /// folder for opened attachments, with the system's handler for its
+    /// type (`ShellExecuteW` on Windows, `open` on macOS, `xdg-open`
+    /// elsewhere).
+    fn open_file(&self, path: &std::path::Path) -> Result<(), ApiError> {
+        let _ = path;
+        Err(desktop_unsupported())
+    }
 }
 
 fn desktop_unsupported() -> ApiError {

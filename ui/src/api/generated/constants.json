@@ -46,6 +46,8 @@
   "MAIL_UNDO_SECS": 3600,
   "PLUGIN_ACTION_PREFIX": "plugin.",
   "MAX_PLUGIN_NAME_LEN": 64,
+  "EXTERNAL_LINK_SCHEMES": ["http","https","tel"],
+  "MAILTO_SCHEME": "mailto",
   "DEFAULT_LIGHT_THEME": "frost",
   "DEFAULT_DARK_THEME": "graphite",
   "HIGH_CONTRAST_THEME": "high-contrast",

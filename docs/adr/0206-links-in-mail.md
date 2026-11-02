@@ -77,4 +77,7 @@ although the core already flags disguised links (`MessageWarning`
 - A new browser tab is opened after the core's answer (a WebSocket round
   trip): within the browser's transient user activation, so popup blockers
   allow it.
-- Links in plain-text mail are not clickable today and are not affected.
+- Links in plain-text mail were not clickable in this ADR; ADR 0211 makes
+  the URLs of a plain-text body anchors that go through the same `OpenLink`
+  path (schemes of `nail_api::links` only), and reports a failing
+  `open` / `xdg-open` instead of dropping the error.

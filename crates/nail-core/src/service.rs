@@ -297,6 +297,8 @@ pub(crate) struct Inner {
     pub(crate) notify: crate::notify::NotifyCtl,
     /// The plug-in host, packages and catalogs (M2d).
     pub(crate) plugins: crate::plugin_host::PluginsCtl,
+    /// The private folder of attachments being opened (ADR 0211).
+    pub(crate) opened_files: Arc<crate::attachments::OpenedFiles>,
     /// Calendars, contacts and tasks: source engines, reminders, the PIM
     /// search index (M3a).
     pub(crate) pim: crate::pim::PimCtl,
@@ -509,6 +511,9 @@ impl Service {
                 sieve: crate::sieve::SieveCtl::default(),
                 snooze: crate::snooze::SnoozeCtl::default(),
                 notify: crate::notify::NotifyCtl::new(&options.timing),
+                opened_files: Arc::new(crate::attachments::OpenedFiles::new(
+                    (!options.data_dir.as_os_str().is_empty()).then(|| options.data_dir.clone()),
+                )),
                 plugins: crate::plugin_host::PluginsCtl::new(
                     (!options.data_dir.as_os_str().is_empty()).then(|| options.data_dir.clone()),
                     options.plugin_limits.clone(),
@@ -630,6 +635,7 @@ impl Service {
             task.abort();
         }
         crate::plugin_host::shutdown(self);
+        self.inner.opened_files.clear();
         crate::pim::stop(self);
         self.inner.smartcard.logout_all();
         self.inner.engines.stop_all().await;
@@ -1397,9 +1403,9 @@ impl Service {
             // ADR 0207: the page's own diagnostics for app.log.
             request @ Request::ReportUiDiagnostics { .. } => crate::ui_log::handle(request),
             // M5a WP155: attachments of received mail.
-            request @ (Request::GetMessageAttachment { .. } | Request::SaveAttachment { .. }) => {
-                crate::attachments::handle(self, request).await?
-            }
+            request @ (Request::GetMessageAttachment { .. }
+            | Request::SaveAttachment { .. }
+            | Request::OpenAttachment { .. }) => crate::attachments::handle(self, request).await?,
             // ADR 0196: folder management.
             request @ (Request::CreateFolder { .. }
             | Request::RenameFolder { .. }

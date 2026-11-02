@@ -290,17 +290,63 @@ pub fn open_link(url: &str) -> Result<(), String> {
     }
     #[cfg(not(windows))]
     {
-        let opener = if cfg!(target_os = "macos") {
-            "open"
-        } else {
-            "xdg-open"
-        };
-        std::process::Command::new(opener)
-            .arg(url)
-            .spawn()
-            .map(drop)
-            .map_err(|e| format!("cannot run {opener}: {e}"))
+        open_with_system(url.as_ref())
     }
+}
+
+/// Opens a file a clicked attachment was written to with the system's
+/// handler for its type (`ShellExecute` on Windows, `open` on macOS,
+/// `xdg-open` elsewhere; ADR 0211). Only an existing regular file with an
+/// absolute path is accepted, so no URL or program name reaches the shell.
+pub fn open_file(path: &std::path::Path) -> Result<(), String> {
+    if !path.is_absolute() || !path.is_file() {
+        return Err(format!("not an existing file: {}", path.display()));
+    }
+    #[cfg(windows)]
+    {
+        shell_open(&path.display().to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        open_with_system(path.as_os_str())
+    }
+}
+
+/// `open` (macOS) / `xdg-open` (elsewhere) with one argument the caller
+/// checked (a web / phone URL or an absolute path: never a leading dash). macOS waits for `open` (it returns at once) and reports its
+/// failure, e.g. "no application knows how to open"; `xdg-open` may stay
+/// until the program quits, so it is reaped on a thread and only a failed
+/// start is reported.
+#[cfg(not(windows))]
+fn open_with_system(target: &std::ffi::OsStr) -> Result<(), String> {
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let mut command = std::process::Command::new(opener);
+    if cfg!(target_os = "macos") {
+        let output = command
+            .arg(target)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|e| format!("cannot run {opener}: {e}"))?;
+        return if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{opener} failed ({}): {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            ))
+        };
+    }
+    let mut child = command
+        .arg(target)
+        .spawn()
+        .map_err(|e| format!("cannot run {opener}: {e}"))?;
+    std::thread::spawn(move || drop(child.wait()));
+    Ok(())
 }
 
 /// `ShellExecuteW(open)` of a URI the caller checked.
@@ -370,6 +416,14 @@ mod tests {
             assert!(!is_external_link(url), "{url}");
             assert!(open_link(url).is_err(), "{url}");
         }
+    }
+
+    #[test]
+    fn only_existing_absolute_files_are_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(open_file(dir.path()).is_err());
+        assert!(open_file(&dir.path().join("missing.pdf")).is_err());
+        assert!(open_file(std::path::Path::new("notepad.exe")).is_err());
     }
 
     #[cfg(windows)]

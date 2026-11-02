@@ -23,6 +23,7 @@ import type { DialogProps } from "../layout/dialogRegistry";
 import type { ComposeContext } from "../state/compose";
 import { useComposeContext } from "../state/hooks";
 import type { UiStore } from "../state/uiStore";
+import { MailConfirm, pendingSlot } from "./MailConfirm";
 import { shortenMiddle, type MailLink, type MailLinkReport } from "./mailLinks";
 
 /** The confirmation's window kind (dialog name). */
@@ -37,16 +38,11 @@ interface PendingLink {
   warnings: readonly MessageWarning[];
 }
 
-/**
- * Pending links by the app's store. A card of the reader's feed has a scoped
- * view of that store (`scopedUiStore`) that shares its `setState`, so that
- * is the key: the card asks, the window (outside the card) answers.
- */
-const pending = new WeakMap<UiStore["setState"], PendingLink>();
+const slot = pendingSlot<PendingLink>();
 
 /** The link the open confirmation is about (`null` = none). */
 export function pendingMailLink(store: UiStore): PendingLink | null {
-  return pending.get(store.setState) ?? null;
+  return slot.get(store);
 }
 
 /** Asks the core to open `url` and does what it answers; failures show in the toast. */
@@ -84,7 +80,7 @@ export async function followMailLink(
     await openMailLink(ctx, link.href);
     return;
   }
-  pending.set(ctx.store.setState, { link, warnings: flagged });
+  slot.set(ctx.store, { link, warnings: flagged });
   ctx.store.getState().openWindow(MAIL_OPEN_LINK_DIALOG);
 }
 
@@ -170,18 +166,21 @@ export function OpenLinkDialog({ close }: DialogProps) {
   const ctx = useComposeContext();
   const [what] = useState(() => pendingMailLink(ctx.store));
   const texts = useWarningTexts(what?.warnings ?? []);
-  const cancel = useRef<HTMLButtonElement>(null);
-  // The safe choice has the focus (after the frame focused its first button).
-  useEffect(() => {
-    queueMicrotask(() => cancel.current?.focus());
-  }, []);
   const done = () => {
-    pending.delete(ctx.store.setState);
+    slot.clear(ctx.store);
     close();
   };
   return (
-    <div data-part="mail-confirm" data-confirm="open-link">
-      <p data-part="mail-confirm.question">{t("mail-open-link-question")}</p>
+    <MailConfirm
+      kind="open-link"
+      question={t("mail-open-link-question")}
+      canOpen={what !== null}
+      onOpen={() => {
+        done();
+        if (what !== null) void openMailLink(ctx, what.link.href);
+      }}
+      onCancel={done}
+    >
       {texts.map((text) => (
         <p key={text} data-part="mail-confirm.warning">
           {text}
@@ -192,24 +191,6 @@ export function OpenLinkDialog({ close }: DialogProps) {
           {t("security-warning-real-target", { href: what.link.href })}
         </p>
       )}
-      <div data-part="mail-confirm.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="danger"
-          data-action="open-link"
-          disabled={what === null}
-          onClick={() => {
-            done();
-            if (what !== null) void openMailLink(ctx, what.link.href);
-          }}
-        >
-          {t("mail-open-link-open")}
-        </button>
-        <button ref={cancel} type="button" data-part="form.button" onClick={done}>
-          {t("common-cancel")}
-        </button>
-      </div>
-    </div>
+    </MailConfirm>
   );
 }

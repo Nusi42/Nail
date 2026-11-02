@@ -1,7 +1,8 @@
-//! The system's file dialogs for `PickPath` (M4c, ADRs 0094, 0099): open a
-//! file, open a folder, save a file — the Windows common item dialog
+//! The system's file dialogs for `PickPath` (M4c, ADRs 0094, 0099, 0211):
+//! open a file, open a folder, save a file — the Windows common item dialog
 //! (`IFileOpenDialog` / `IFileSaveDialog`) on a thread of its own with COM
-//! in single-threaded apartment mode, owned by the main window.
+//! in single-threaded apartment mode, owned by the main window; elsewhere
+//! the `rfd` crate (`NSOpenPanel` / `NSSavePanel` on macOS, GTK 3 on Linux).
 
 #![cfg_attr(
     windows,
@@ -12,6 +13,15 @@
 )]
 
 use nail_api::desktop::{PathPick, PathPickKind};
+
+/// What owns the dialog: the main window's handle on Windows, the window
+/// itself elsewhere (`rfd` takes its raw handle).
+#[cfg(windows)]
+pub type Owner = isize;
+/// What owns the dialog: the main window's handle on Windows, the window
+/// itself elsewhere (`rfd` takes its raw handle).
+#[cfg(not(windows))]
+pub type Owner = tauri::WebviewWindow;
 
 /// What the dialog shows, already localized.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,9 +83,9 @@ pub fn spec(pick: &PathPick, localize: impl Fn(&str) -> String) -> DialogSpec {
 }
 
 /// Shows the dialog (blocking; call on a thread of its own). `owner` is the
-/// main window's handle. `Ok(None)` = cancelled.
+/// main window. `Ok(None)` = cancelled.
 #[cfg(windows)]
-pub fn show(spec: &DialogSpec, owner: Option<isize>) -> Result<Option<String>, String> {
+pub fn show(spec: &DialogSpec, owner: Option<Owner>) -> Result<Option<String>, String> {
     use windows::Win32::Foundation::{ERROR_CANCELLED, HWND};
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
@@ -151,7 +161,7 @@ pub fn show(spec: &DialogSpec, owner: Option<isize>) -> Result<Option<String>, S
             if let Some(name) = &spec.file_name {
                 dialog.SetFileName(&HSTRING::from(name.as_str()))?;
             }
-            let owner = owner.map(|h| HWND(h as *mut core::ffi::c_void));
+            let owner = owner.map(|h: Owner| HWND(h as *mut core::ffi::c_void));
             if let Err(err) = dialog.Show(owner) {
                 if err.code() == ERROR_CANCELLED.to_hresult() {
                     return Ok(None);
@@ -171,10 +181,65 @@ pub fn show(spec: &DialogSpec, owner: Option<isize>) -> Result<Option<String>, S
     }
 }
 
+/// The extensions of a filter pattern (`*.mbox;*.mbx`): empty for all files
+/// (`*.*`), which `rfd` shows as no filter.
+#[cfg(any(not(windows), test))]
+fn pattern_extensions(pattern: &str) -> Vec<String> {
+    let extensions: Vec<String> = pattern
+        .split(';')
+        .filter_map(|p| p.trim().strip_prefix("*."))
+        .map(str::to_owned)
+        .collect();
+    if extensions.iter().any(|e| e == "*") {
+        Vec::new()
+    } else {
+        extensions
+    }
+}
+
+/// Shows the dialog with `rfd` (blocking; call on a thread of its own, not
+/// the UI thread: on macOS `rfd` dispatches to the main thread itself).
+/// `owner` is the main window. `Ok(None)` = cancelled.
+#[cfg(not(windows))]
+pub fn show(spec: &DialogSpec, owner: Option<Owner>) -> Result<Option<String>, String> {
+    let mut dialog = rfd::FileDialog::new().set_title(spec.title.as_str());
+    if let Some(owner) = owner {
+        dialog = dialog.set_parent(&owner);
+    }
+    if let Some(folder) = &spec.folder {
+        dialog = dialog.set_directory(folder);
+    }
+    if let Some(name) = &spec.file_name {
+        dialog = dialog.set_file_name(name.as_str());
+    }
+    if spec.kind != PathPickKind::OpenFolder {
+        for (name, pattern) in &spec.filters {
+            let extensions = pattern_extensions(pattern);
+            if !extensions.is_empty() {
+                dialog = dialog.add_filter(name.as_str(), &extensions);
+            }
+        }
+    }
+    let picked = match spec.kind {
+        PathPickKind::OpenFile => dialog.pick_file(),
+        PathPickKind::OpenFolder => dialog.pick_folder(),
+        PathPickKind::SaveFile => dialog.save_file(),
+    };
+    Ok(picked.map(|p| p.display().to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use nail_api::desktop::PathFilter;
+
+    #[test]
+    fn filter_patterns_become_extensions() {
+        assert_eq!(pattern_extensions("*.mbox;*.mbx"), ["mbox", "mbx"]);
+        assert_eq!(pattern_extensions("*.eml"), ["eml"]);
+        assert_eq!(pattern_extensions("*.*"), Vec::<String>::new());
+        assert_eq!(pattern_extensions(""), Vec::<String>::new());
+    }
 
     #[test]
     fn specs_carry_localized_texts_filters_and_start_folders() {

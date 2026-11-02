@@ -103,6 +103,7 @@ common-tooltip-shortcut = { $label } ({ $shortcut })
 common-message-list = Message list
 common-search-results = Search results
 common-saving = Saving…
+common-opening = Opening…
 common-appearance = Appearance
 common-apply = Apply
 common-redo = Redo

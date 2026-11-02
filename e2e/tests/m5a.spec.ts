@@ -11,7 +11,8 @@ import { openSettingsTab, showView, viewRegion, messageRows, openMail } from "..
  * control (light → Graphite, contrast theme → High contrast), the Compact
  * density (tag line hidden), the accent override, a user theme from
  * `themes/` picked up while running, and an attachment saved from the
- * reader (a download in the browser).
+ * reader (a download in the browser) or opened by a click on its name (the
+ * browser has no desktop app to hand it to, so it downloads, ADR 0211).
  */
 
 const server = nailPerTest({ seed: "demo-multi" });
@@ -231,6 +232,24 @@ test("a theme file added to themes/ is listed at once and can be used", async ({
   await expect(broken).toBeDisabled({ timeout: 15_000 });
   await expect(broken).toContainText("This theme file has an error");
   await expect(broken).toContainText("nowhere");
+});
+
+test("a click on an attachment's name opens it: in the browser it downloads", async ({ page }) => {
+  await open(page);
+  await messageRows(page).filter({ hasText: "Your invoice for September 2026" }).first().click();
+  const card = page.locator('[data-part="attachment-card"]').filter({ hasText: "usage.csv" });
+  const download = page.waitForEvent("download");
+  // The name is a button: Enter on it opens as well as a click.
+  const name = card.locator('[data-part="attachment-card.name"]');
+  await expect(name).toHaveRole("button");
+  await name.focus();
+  await page.keyboard.press("Enter");
+  expect((await download).suggestedFilename()).toBe("usage.csv");
+  await expect(card.getByRole("status")).toHaveText("Downloaded.");
+  // The explicit button does the same.
+  const again = page.waitForEvent("download");
+  await card.getByRole("button", { name: "Open usage.csv" }).click();
+  expect((await again).suggestedFilename()).toBe("usage.csv");
 });
 
 test("an attachment is downloaded from its card in the browser", async ({ page }) => {

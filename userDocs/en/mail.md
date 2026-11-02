@@ -211,16 +211,27 @@ opens the page inside the message:
 - An email address (`mailto:`) opens a new message in Nail, addressed to
   it.
 
+The same works for web addresses, phone links and `mailto:` addresses in a
+message that has only plain text: they are underlined links. If your system
+cannot open a link, Nail says so instead of doing nothing.
+
 When Nail found something wrong with the link (it shows one address but
 goes to another, or uses look-alike characters; see
 [Warnings in the reader](security.md#warnings-in-the-reader)), the bar
 shows the warning, and a click first asks **Open this link?**: **Open
 anyway** opens it, **Cancel** (the default) does not.
 
-Attachments are cards with the file type, name and size. **Save** asks
-where to save the file in the desktop app (the Save dialog asks before
-replacing a file); in a browser the file is downloaded. The card then says
-"Saved." or "Downloaded." next to the size. **Preview** appears
+Attachments are cards with the file type, name and size. Click the name
+(or the **Open** button) to open the file: in the desktop app Nail puts a
+copy in a private folder and opens it with the program your system uses for
+that type of file (Nail removes these copies when it starts and closes); in
+a browser the file is downloaded. If Nail flagged the attachment (a program,
+a document with macros, a disguised file type, …), it first asks **Open this
+attachment?**: **Open anyway** opens it, **Cancel** (the default) does not.
+**Save** asks where to save the file in the desktop app on Windows, macOS
+and Linux (the Save dialog asks before replacing a file); in a browser the
+file is downloaded. The card then says "Opened.", "Saved." or "Downloaded."
+next to the size. **Preview** appears
 when a plug-in can show that type, and the **…** button has the plug-ins'
 attachment actions.
 

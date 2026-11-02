@@ -15,6 +15,7 @@ import { useReaderCss } from "../theme/ThemeProvider";
 import { isDesignedMail, proxyBase, readerDocument } from "../theme/reader";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
 import { AttachmentList } from "./AttachmentList";
+import { LinkedText } from "./LinkedText";
 import { LocalMailFrame, RemoteMailFrame } from "./MailFrame";
 import type { MailLinkReport } from "./mailLinks";
 import { useMailLinks } from "./ReaderLinks";
@@ -94,7 +95,13 @@ function Body({
   if (srcDoc !== null) {
     return <LocalMailFrame srcDoc={srcDoc} title={title} designed={designed} onLink={onLink} />;
   }
-  if (!quotesFold) return <pre data-part="message-view.text">{message.text}</pre>;
+  if (!quotesFold) {
+    return (
+      <pre data-part="message-view.text">
+        <LinkedText text={message.text} onLink={onLink} />
+      </pre>
+    );
+  }
   // In a card of the conversation feed (P2): quoted lines fold away — the
   // feed shows the earlier messages themselves.
   return (
@@ -103,11 +110,13 @@ function Body({
         block.quoted ? (
           <details key={index} data-part="message-view.quote-block">
             <summary data-part="message-view.quote-toggle">{t("thread-view-show-quote")}</summary>
-            <pre data-part="message-view.quote">{block.text}</pre>
+            <pre data-part="message-view.quote">
+              <LinkedText text={block.text} onLink={onLink} />
+            </pre>
           </details>
         ) : (
           <pre key={index} data-part="message-view.text-block">
-            {block.text}
+            <LinkedText text={block.text} onLink={onLink} />
           </pre>
         ),
       )}

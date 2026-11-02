@@ -96,6 +96,25 @@ export function isUnsupported(response: Response): boolean {
   return response.type === "Error" && UNSUPPORTED_CODES.has(response.code);
 }
 
+/** Hands an attachment to the browser as a download (`null`: the core has nothing to download). */
+async function downloadAttachment(
+  client: NailClient,
+  messageId: MessageId,
+  attachment: AttachmentInfo,
+  name: string,
+  download: (name: string, mime: string, data: string) => boolean,
+): Promise<boolean | null> {
+  const content = await client.call({
+    type: "GetMessageAttachment",
+    message_id: messageId,
+    index: attachment.index,
+  });
+  if (isUnsupported(content)) return null;
+  if (content.type === "Error") fail(content);
+  if (content.type !== "AttachmentData") return null;
+  return download(name, content.mime, content.data);
+}
+
 export async function saveAttachment(
   client: NailClient,
   messageId: MessageId,
@@ -115,16 +134,37 @@ export async function saveAttachment(
         // The Save dialog asked before replacing a file.
         overwrite: true,
       }),
-    async () => {
-      const content = await client.call({
-        type: "GetMessageAttachment",
-        message_id: messageId,
-        index: attachment.index,
-      });
-      if (isUnsupported(content)) return null;
-      if (content.type === "Error") fail(content);
-      if (content.type !== "AttachmentData") return null;
-      return download(name, content.mime, content.data);
-    },
+    () => downloadAttachment(client, messageId, attachment, name, download),
   );
+}
+
+/** How opening an attachment ended. */
+export type OpenOutcome = "opened" | "downloaded" | "unsupported";
+
+/**
+ * Opens an attachment (ADR 0211): the desktop app writes it into a private
+ * folder and hands the file to the system's handler for its type. Without
+ * the desktop shell (`nail serve`, the remote UI) the core answers
+ * `unsupported`, and the browser downloads the content instead.
+ */
+export async function openAttachment(
+  client: NailClient,
+  messageId: MessageId,
+  attachment: AttachmentInfo,
+  name: string,
+  download: (name: string, mime: string, data: string) => boolean = downloadFile,
+): Promise<OpenOutcome> {
+  const opened = await client.call({
+    type: "OpenAttachment",
+    message_id: messageId,
+    index: attachment.index,
+  });
+  if (opened.type === "Done") return "opened";
+  if (!isUnsupported(opened)) {
+    if (opened.type === "Error") fail(opened);
+    return "unsupported";
+  }
+  return (await downloadAttachment(client, messageId, attachment, name, download)) === true
+    ? "downloaded"
+    : "unsupported";
 }

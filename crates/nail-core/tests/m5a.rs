@@ -1,7 +1,8 @@
 //! M5a integration (WP155): the appearance requests through
 //! `Service::handle`, Follow Windows from the service's OS source,
 //! `ReportSystemAppearance`, density, the resync events, and attachments of
-//! received mail (`GetMessageAttachment`, `SaveAttachment`) and "Show
+//! received mail (`GetMessageAttachment`, `SaveAttachment`,
+//! `OpenAttachment`) and "Show
 //! source" (`GetMessageSource`, ADR 0194).
 
 #![cfg(test)]
@@ -10,14 +11,16 @@
 mod common;
 use common::next_event;
 
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
 use nail_api::appearance::{
     Appearance, Density, ManualSystemAppearance, SystemAppearance, ThemePreferences,
 };
 use nail_api::config::theme::ThemeMode;
-use nail_api::{AccountId, ErrorCode, Event, MessageId, Request, Response, SourceChunk};
+use nail_api::desktop::{DesktopHost, DesktopNotifier};
+use nail_api::{AccountId, ApiError, ErrorCode, Event, MessageId, Request, Response, SourceChunk};
 use nail_core::demo::{DEMO_ACCOUNT_ID, seed_demo};
 use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
@@ -352,6 +355,131 @@ async fn the_source_is_the_message_as_received_and_decoded() {
     {
         Response::Error { code, .. } => assert_eq!(code, ErrorCode::NotFound),
         other => panic!("expected not_found, got {other:?}"),
+    }
+}
+
+/// A desktop host that records the files it was asked to open (with their
+/// content at that moment) and can refuse.
+#[derive(Debug, Default)]
+struct OpeningHost {
+    opened: Mutex<Vec<(PathBuf, Vec<u8>)>>,
+    refuse: bool,
+}
+
+impl DesktopHost for OpeningHost {
+    fn attach(&self, _notify: DesktopNotifier) {}
+    nail_api::inert_desktop_host!();
+    fn open_file(&self, path: &Path) -> Result<(), ApiError> {
+        if self.refuse {
+            return Err(ApiError::internal("no handler"));
+        }
+        self.opened
+            .lock()
+            .unwrap()
+            .push((path.to_path_buf(), std::fs::read(path).unwrap()));
+        Ok(())
+    }
+}
+
+fn open_with_host(host: Option<Arc<OpeningHost>>) -> (Service, TempDir, TempDir) {
+    let data_dir = tempfile::tempdir().unwrap();
+    let config_dir = tempfile::tempdir().unwrap();
+    let mut options = ServiceOptions::new(data_dir.path(), config_dir.path());
+    options.desktop = host.map(|h| -> Arc<dyn DesktopHost> { h });
+    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+    seed_demo(service.store(), service.blobs()).unwrap();
+    (service, data_dir, config_dir)
+}
+
+#[tokio::test]
+async fn attachments_open_through_a_private_folder_and_the_desktop_host() {
+    let host = Arc::new(OpeningHost::default());
+    let (service, data_dir, _config) = open_with_host(Some(host.clone()));
+    let id = receipt(&service).await;
+    let open = || Request::OpenAttachment {
+        message_id: id.clone(),
+        index: 0,
+    };
+    assert_eq!(service.handle(open()).await, Response::Done);
+    assert_eq!(service.handle(open()).await, Response::Done);
+    let opened = host.opened.lock().unwrap().clone();
+    assert_eq!(opened.len(), 2);
+    let root = data_dir.path().join("opened-attachments");
+    for (path, content) in &opened {
+        assert!(path.starts_with(&root), "{}", path.display());
+        assert_eq!(
+            String::from_utf8(content.clone()).unwrap().trim(),
+            RECEIPT_TEXT
+        );
+    }
+    // One subfolder per open, the same file name in each.
+    assert_ne!(opened[0].0.parent(), opened[1].0.parent());
+    assert_eq!(opened[0].0.file_name(), opened[1].0.file_name());
+    // Unknown message and index.
+    match service
+        .handle(Request::OpenAttachment {
+            message_id: id.clone(),
+            index: 99,
+        })
+        .await
+    {
+        Response::Error { code, .. } => assert_eq!(code, ErrorCode::NotFound),
+        other => panic!("expected not_found, got {other:?}"),
+    }
+    // The files go at shutdown.
+    service.shutdown().await;
+    assert!(!root.exists());
+}
+
+#[tokio::test]
+async fn opened_attachment_folders_start_empty_and_old_ones_are_pruned() {
+    let data_dir = tempfile::tempdir().unwrap();
+    let stale = data_dir.path().join("opened-attachments").join("left-over");
+    std::fs::create_dir_all(&stale).unwrap();
+    std::fs::write(stale.join("old.pdf"), "x").unwrap();
+    let config_dir = tempfile::tempdir().unwrap();
+    let mut options = ServiceOptions::new(data_dir.path(), config_dir.path());
+    options.desktop = Some(Arc::new(OpeningHost::default()));
+    let _service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+    // A previous run's files are removed when the service starts.
+    assert!(!stale.exists());
+}
+
+#[tokio::test]
+async fn attachments_are_not_opened_without_a_desktop_host_or_when_it_fails() {
+    let (service, _data, _config) = open_with_host(None);
+    let id = receipt(&service).await;
+    let open = Request::OpenAttachment {
+        message_id: id.clone(),
+        index: 0,
+    };
+    match service.handle(open.clone()).await {
+        Response::Error { code, .. } => assert_eq!(code, ErrorCode::Unsupported),
+        other => panic!("expected unsupported, got {other:?}"),
+    }
+    let refusing = Arc::new(OpeningHost {
+        refuse: true,
+        ..OpeningHost::default()
+    });
+    let (service, _data, _config) = open_with_host(Some(refusing));
+    let id = receipt(&service).await;
+    match service
+        .handle(Request::OpenAttachment {
+            message_id: id,
+            index: 0,
+        })
+        .await
+    {
+        Response::Error {
+            code, localized, ..
+        } => {
+            assert_eq!(code, ErrorCode::Internal);
+            assert_eq!(
+                localized.map(|l| l.id),
+                Some("attachment-open-failed".to_owned())
+            );
+        }
+        other => panic!("expected an error, got {other:?}"),
     }
 }
 

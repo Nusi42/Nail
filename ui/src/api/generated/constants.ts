@@ -299,6 +299,12 @@ export const PLUGIN_ACTION_PREFIX = "plugin." as const;
 /** Longest plug-in id and contribution name (`MAX_NAME_LEN`). */
 export const MAX_PLUGIN_NAME_LEN = 64 as const;
 
+/** Schemes `OpenLink` hands to the system or the browser (the reader makes only these links in plain text clickable, ADR 0206). */
+export const EXTERNAL_LINK_SCHEMES = ["http","https","tel"] as const;
+
+/** The scheme `OpenLink` answers with Nail's composer. */
+export const MAILTO_SCHEME = "mailto" as const;
+
 /** The light theme of a fresh install (and of Follow Windows by default). */
 export const DEFAULT_LIGHT_THEME = "frost" as const;
 

@@ -385,6 +385,7 @@ sync-error-folders =
 
 attachment-too-large = This attachment is too large to download here. Save it in the desktop app instead.
 attachment-path-not-absolute = Choose a full path for the attachment, including the drive or folder.
+attachment-open-failed = The attachment could not be opened. Check that an application for this file type is installed, or save the file instead.
 
 ## Views, the rail, toolbar overflow and the settings page (M5b, ADR 0109)
 

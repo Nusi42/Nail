@@ -156,6 +156,17 @@ pub fn desktop_host<R: Runtime>(
         } else {
             Arc::new(crate::win::open_link)
         },
+        file_opener: if crate::background::active() {
+            // Test runs: nothing is launched; the file is recorded for the
+            // `opened-files` test control.
+            Arc::new(|path: &Path| {
+                tracing::info!(path = %path.display(), "test run: not opening a file");
+                lock_files().push(path.display().to_string());
+                Ok(())
+            })
+        } else {
+            Arc::new(crate::win::open_file)
+        },
     }))
 }
 
@@ -233,6 +244,9 @@ pub enum TestControl {
     /// The links a test run was asked to open in the browser (ADR 0206),
     /// oldest first: `["https://…"]`.
     OpenedLinks,
+    /// The attachments a test run was asked to open (ADR 0211), oldest
+    /// first: `["<path>"]`.
+    OpenedFiles,
     /// Reports the webviews' recovery state (ADR 0207): `{label: {reloads,
     /// gave_up}}`.
     WebviewHealth,
@@ -249,7 +263,7 @@ pub enum TestControl {
 
 impl TestControl {
     /// `"window-visible"`, `"pop-outs"`, `"close-pop-outs"`, `"windows"`,
-    /// `"default-context-menus"`, `"opened-links"`, `"webview-health"` or
+    /// `"default-context-menus"`, `"opened-links"`, `"opened-files"`, `"webview-health"` or
     /// a tray menu item id
     /// (`"tray-new-message"`, …).
     pub fn parse(op: &str) -> Option<Self> {
@@ -260,6 +274,7 @@ impl TestControl {
             "windows" => Some(Self::Windows),
             "default-context-menus" => Some(Self::DefaultContextMenus),
             "opened-links" => Some(Self::OpenedLinks),
+            "opened-files" => Some(Self::OpenedFiles),
             "webview-health" => Some(Self::WebviewHealth),
             other => {
                 Self::parse_resize(other).or_else(|| TrayAction::from_id(other).map(Self::Tray))
@@ -327,6 +342,7 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
         TestControl::Windows => Ok(crate::background::report(app)),
         TestControl::DefaultContextMenus => Ok(serde_json::json!(crate::webview_menus::reported())),
         TestControl::OpenedLinks => Ok(serde_json::json!(*lock_links())),
+        TestControl::OpenedFiles => Ok(serde_json::json!(*lock_files())),
         TestControl::WebviewHealth => Ok(crate::webview_health::report()),
         TestControl::Resize {
             pop_outs,
@@ -352,6 +368,15 @@ static TEST_RUN_LINKS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec
 
 fn lock_links() -> std::sync::MutexGuard<'static, Vec<String>> {
     TEST_RUN_LINKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The files a test run did not open ([`TestControl::OpenedFiles`]).
+static TEST_RUN_FILES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn lock_files() -> std::sync::MutexGuard<'static, Vec<String>> {
+    TEST_RUN_FILES
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
@@ -525,6 +550,10 @@ mod tests {
         assert_eq!(
             TestControl::parse("opened-links"),
             Some(TestControl::OpenedLinks)
+        );
+        assert_eq!(
+            TestControl::parse("opened-files"),
+            Some(TestControl::OpenedFiles)
         );
         assert_eq!(
             TestControl::parse("webview-health"),

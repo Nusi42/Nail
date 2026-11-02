@@ -8,6 +8,20 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Added (ADR 0211)
+
+- A click on an attachment's name (or its new Open button) opens the file
+  with the system's program; a flagged attachment asks first. In a browser
+  the file downloads.
+- URLs in plain-text mail are links.
+
+### Fixed (ADR 0211)
+
+- "Save as" for attachments works on macOS and Linux (native file dialogs
+  through `rfd`).
+- A link or file the system could not open is reported on macOS instead of
+  being dropped silently.
+
 ## [0.8.2] — 2026-11-01
 
 ### Security (ADR 0209)

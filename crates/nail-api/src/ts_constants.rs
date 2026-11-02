@@ -247,7 +247,7 @@ pub fn plugin_constants() -> Result<Constants, serde_json::Error> {
 
 fn mail(c: Constants) -> Result<Constants, serde_json::Error> {
     use crate::accounts::{MailProtocol, TlsMode, default_port};
-    use crate::{mail_actions, plugins};
+    use crate::{links, mail_actions, plugins};
     let tls_modes = every!(TlsMode: Implicit, Starttls, Plaintext);
     let ports = every!(MailProtocol: Imap, Pop3, Smtp, Gmail, Graph, Ews)
         .iter()
@@ -285,6 +285,16 @@ fn mail(c: Constants) -> Result<Constants, serde_json::Error> {
         "MAX_PLUGIN_NAME_LEN",
         "Longest plug-in id and contribution name (`MAX_NAME_LEN`).",
         &plugins::MAX_NAME_LEN,
+    )?
+    .add(
+        "EXTERNAL_LINK_SCHEMES",
+        "Schemes `OpenLink` hands to the system or the browser (the reader makes only these links in plain text clickable, ADR 0206).",
+        &links::EXTERNAL_LINK_SCHEMES,
+    )?
+    .add(
+        "MAILTO_SCHEME",
+        "The scheme `OpenLink` answers with Nail's composer.",
+        &links::MAILTO_SCHEME,
     )
 }
 

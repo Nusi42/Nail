@@ -179,6 +179,11 @@ message-list-tag-attachments = { $count ->
 # $name (string) — the attachment's file name
 message-view-attachment-preview = Preview { $name }
 # $name (string) — the attachment's file name
+message-view-attachment-open = Open { $name }
+message-view-attachment-opened = Opened.
+message-view-attachment-open-failed = The attachment could not be opened. Is there an application for this file type?
+message-view-attachment-open-unsupported = This attachment cannot be opened here. Save it instead.
+# $name (string) — the attachment's file name
 message-view-attachment-save = Save { $name }
 message-view-attachment-save-saved = { common-saved }
 message-view-attachment-save-downloaded = Downloaded.

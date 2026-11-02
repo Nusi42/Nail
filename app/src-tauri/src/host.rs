@@ -10,17 +10,14 @@
 //! M5c (WP173): pop-out windows ([`crate::popout`]) — `open_pop_out` /
 //! `close_pop_out` / `focus_pop_out`, reported as `DesktopChange::PopOut`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-#[cfg(windows)]
-use nail_api::desktop::PathPick;
 use nail_api::desktop::{
     DefaultAppsStatus, DesktopChange, DesktopHost, DesktopNotifier, DesktopSettings,
-    HostUpdateState, InstallationInfo, UpdateSettings, default_apps_settings_uri,
+    HostUpdateState, InstallationInfo, PathPick, UpdateSettings, default_apps_settings_uri,
 };
-#[cfg(windows)]
 use nail_api::engine::BoxFuture;
 #[cfg(windows)]
 use nail_api::print::PrintJob;
@@ -37,6 +34,10 @@ use crate::updater::Updater;
 /// [`crate::win::open_settings_uri`], [`crate::win::open_link`]).
 pub type Opener = Arc<dyn Fn(&str) -> Result<(), String> + Send + Sync>;
 
+/// Opens a file with the system's handler for its type
+/// ([`crate::win::open_file`]).
+pub type FileOpener = Arc<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
+
 /// The desktop shell's host.
 pub struct ShellHost {
     registry: Arc<dyn Registry>,
@@ -47,6 +48,7 @@ pub struct ShellHost {
     runtime: tokio::runtime::Handle,
     opener: Opener,
     link_opener: Opener,
+    file_opener: FileOpener,
     notify: OnceLock<DesktopNotifier>,
     service: OnceLock<Service>,
     dev: Mutex<Option<DevEndpoint>>,
@@ -89,6 +91,8 @@ pub struct HostParts {
     pub opener: Opener,
     /// Opens links clicked in mail (ADR 0206).
     pub link_opener: Opener,
+    /// Opens attachments the user clicked (ADR 0211).
+    pub file_opener: FileOpener,
 }
 
 impl std::fmt::Debug for HostParts {
@@ -113,6 +117,7 @@ impl ShellHost {
             runtime: parts.runtime,
             opener: parts.opener,
             link_opener: parts.link_opener,
+            file_opener: parts.file_opener,
             notify: OnceLock::new(),
             service: OnceLock::new(),
             dev: Mutex::new(None),
@@ -150,13 +155,19 @@ impl ShellHost {
         self.pop_outs.close_all();
     }
 
-    /// The main window's handle (the owner of file dialogs).
-    #[cfg(windows)]
-    fn main_window_handle(&self) -> Option<isize> {
+    /// The main window (the owner of file dialogs): its handle on Windows.
+    fn main_window_owner(&self) -> Option<crate::dialog::Owner> {
         use tauri::Manager as _;
         let (app, _) = self.app.get()?;
         let window = app.get_webview_window(crate::shell::MAIN_WINDOW)?;
-        window.hwnd().ok().map(|h| h.0 as isize)
+        #[cfg(windows)]
+        {
+            window.hwnd().ok().map(|h| h.0 as isize)
+        }
+        #[cfg(not(windows))]
+        {
+            Some(window)
+        }
     }
 
     fn localize(&self, id: &str) -> String {
@@ -331,10 +342,10 @@ impl DesktopHost for ShellHost {
         self.lock_dev().as_ref().map(|d| d.url().to_owned())
     }
 
-    // The system's file dialog and PDF printing exist on Windows only
-    // (ADR 0202): elsewhere the trait's defaults answer `unsupported`, and
-    // the UI falls back to a typed path or a browser download.
-    #[cfg(windows)]
+    // The system's file dialog exists on every desktop system (Windows: the
+    // common item dialog, elsewhere `rfd`, ADR 0211). PDF printing is
+    // Windows only (ADR 0202): elsewhere the trait's default answers
+    // `unsupported`, and the UI falls back to a browser download.
     fn pick_path<'a>(
         &'a self,
         pick: &'a PathPick,
@@ -347,7 +358,7 @@ impl DesktopHost for ShellHost {
                 return Ok(None);
             }
             let spec = crate::dialog::spec(pick, |id| self.localize(id));
-            let owner = self.main_window_handle();
+            let owner = self.main_window_owner();
             let (tx, rx) = tokio::sync::oneshot::channel();
             std::thread::Builder::new()
                 .name("nail-file-dialog".into())
@@ -409,6 +420,11 @@ impl DesktopHost for ShellHost {
     fn open_link(&self, url: &str) -> Result<(), ApiError> {
         (self.link_opener)(url).map_err(|e| ApiError::internal(format!("cannot open {url}: {e}")))
     }
+
+    fn open_file(&self, path: &Path) -> Result<(), ApiError> {
+        (self.file_opener)(path)
+            .map_err(|e| ApiError::internal(format!("cannot open {}: {e}", path.display())))
+    }
 }
 
 #[cfg(test)]
@@ -442,6 +458,7 @@ mod tests {
         backend: Arc<FakeBackend>,
         opened: Arc<Mutex<Vec<String>>>,
         links: Arc<Mutex<Vec<String>>>,
+        files: Arc<Mutex<Vec<PathBuf>>>,
         data: tempfile::TempDir,
         _config: tempfile::TempDir,
     }
@@ -455,6 +472,8 @@ mod tests {
         let sink = Arc::clone(&opened);
         let links = Arc::new(Mutex::new(Vec::new()));
         let link_sink = Arc::clone(&links);
+        let files = Arc::new(Mutex::new(Vec::new()));
+        let file_sink = Arc::clone(&files);
         let runtime = tokio::runtime::Handle::current();
         let host = Arc::new(ShellHost::new(HostParts {
             registry: registry.clone(),
@@ -474,6 +493,13 @@ mod tests {
                 link_sink.lock().unwrap().push(url.to_owned());
                 Ok(())
             }),
+            file_opener: Arc::new(move |path| {
+                if path.extension().is_some_and(|e| e == "refused") {
+                    return Err("no handler".into());
+                }
+                file_sink.lock().unwrap().push(path.to_path_buf());
+                Ok(())
+            }),
         }));
         let args = crate::AppArgs::in_dirs(data.path(), config.path(), Some("demo"));
         let mut options = args.service_options().unwrap();
@@ -487,6 +513,7 @@ mod tests {
             backend,
             opened,
             links,
+            files,
             data,
             _config: config,
         }
@@ -880,6 +907,26 @@ mod tests {
             changes += usize::from(event == Event::DefaultAppsChanged);
         }
         assert_eq!(changes, 1);
+        f.service.shutdown().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn files_go_to_the_systems_handler_and_a_failure_is_reported() {
+        let f = fixture(None);
+        let path = f
+            .data
+            .path()
+            .join("opened-attachments")
+            .join("1")
+            .join("a.pdf");
+        f.host.open_file(&path).unwrap();
+        assert_eq!(*f.files.lock().unwrap(), [path]);
+        let error = f
+            .host
+            .open_file(&f.data.path().join("a.refused"))
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::Internal);
+        assert_eq!(f.files.lock().unwrap().len(), 1);
         f.service.shutdown().await;
     }
 

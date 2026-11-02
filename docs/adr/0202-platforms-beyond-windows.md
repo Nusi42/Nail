@@ -32,7 +32,8 @@ Linux build (Ubuntu 24.04 under WSL2) showed:
 - **Trait defaults instead of stubs.** The desktop shell implements
   `DesktopHost::pick_path` and `print_to_pdf` only on Windows; elsewhere the
   trait's defaults answer `unsupported`, and the UI falls back as in web
-  mode.
+  mode. (Since ADR 0211 `pick_path` exists on every system, through `rfd`
+  off Windows; `print_to_pdf` stays Windows only.)
 - **Platform report.** `nail_api::platform` defines `Os` (`windows`, `macos`,
   `linux`, `other`) and `PlatformFeature` (`windows-sign-in`,
   `windows-certificate-store` in the core; `start-with-system`,
@@ -68,11 +69,11 @@ Linux build (Ubuntu 24.04 under WSL2) showed:
 
 ## Consequences
 
-- Off Windows there is still no native file dialog and no PDF printing (the
-  UI's fallbacks apply), no LAN address list for the remote UI, and S/MIME
-  chains have no system trust anchors. Each is a follow-up with its own
-  decision (a portable dialog crate, WebKit printing, the platform's root
-  store).
+- Off Windows there is still no PDF printing (the UI's fallback applies), no
+  LAN address list for the remote UI, and S/MIME chains have no system trust
+  anchors. Each is a follow-up with its own decision (WebKit printing, the
+  platform's root store). The native file dialog off Windows came with ADR
+  0211 (`rfd`).
 - A new Windows-only setting needs a `PlatformFeature` and a `requires` /
   `platformLabels` entry; a new text naming a Windows part selects on `$os`.
 - The Playwright suite still assumes Windows wording in older scenarios;

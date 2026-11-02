@@ -1,5 +1,5 @@
 /** Links in mail (ADR 0206): the status overlay, following a link, the confirmation. */
-import { act, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MessageWarning } from "../api/generated";
@@ -7,7 +7,8 @@ import { mailActionsStoreFor } from "../features/mail-actions/store";
 import { actionContext, recordRequests } from "../test/env";
 import { createEnv, renderAsDialog, renderWithProviders } from "../test/harness";
 import { must } from "../test/must";
-import { LINK_STATUS_CHARS, shortenMiddle } from "./mailLinks";
+import { LinkedText } from "./LinkedText";
+import { LINK_STATUS_CHARS, shortenMiddle, type MailLinkReport } from "./mailLinks";
 import { scopedUiStore } from "./ThreadViewScope";
 import {
   followMailLink,
@@ -152,5 +153,69 @@ describe("following a link", () => {
     await followMailLink({ ...actionContext(env), store: card }, link, [MISMATCH]);
     expect(env.store.getState().windows).toContain(MAIL_OPEN_LINK_DIALOG);
     expect(pendingMailLink(env.store)?.link).toEqual(link);
+  });
+});
+
+describe("links in a plain-text mail", () => {
+  it("are anchors that report hovers and clicks without navigating", () => {
+    const reports: MailLinkReport[] = [];
+    const env = createEnv();
+    const { container } = renderWithProviders(
+      <pre>
+        <LinkedText
+          text={"Track it (https://track.example.net/e/1). Not a link: ftp://example.com"}
+          onLink={(r) => reports.push(r)}
+        />
+      </pre>,
+      env,
+    );
+    const anchors = container.querySelectorAll('a[data-part="message-view.text-link"]');
+    expect(anchors).toHaveLength(1);
+    const anchor = must(anchors[0]);
+    expect(anchor).toHaveTextContent("https://track.example.net/e/1");
+    expect(container.querySelector("pre")).toHaveTextContent(
+      "Track it (https://track.example.net/e/1). Not a link: ftp://example.com",
+    );
+    const link = { href: "https://track.example.net/e/1", index: -1 };
+    fireEvent.mouseEnter(anchor);
+    fireEvent.mouseLeave(anchor);
+    fireEvent.focus(anchor);
+    fireEvent.blur(anchor);
+    expect(reports).toEqual([
+      { link, open: false },
+      { link: null, open: false },
+      { link, open: false },
+      { link: null, open: false },
+    ]);
+    reports.length = 0;
+    // A click never navigates: the default is cancelled and the reader is told.
+    expect(fireEvent.click(anchor)).toBe(false);
+    expect(
+      fireEvent(anchor, new MouseEvent("auxclick", { button: 1, bubbles: true, cancelable: true })),
+    ).toBe(false);
+    expect(
+      fireEvent(anchor, new MouseEvent("auxclick", { button: 2, bubbles: true, cancelable: true })),
+    ).toBe(false);
+    expect(reports).toEqual([
+      { link, open: true },
+      { link, open: true },
+    ]);
+  });
+
+  it("follow the same OpenLink path as links of HTML mail", async () => {
+    const env = createEnv();
+    const requests = recordRequests(env);
+    // Plain-text links are never flagged (the core numbers HTML links only).
+    await followMailLink(
+      actionContext(env),
+      { href: "https://track.example.net/e/1", index: -1 },
+      [],
+    );
+    expect(requests).toContainEqual({ type: "OpenLink", url: "https://track.example.net/e/1" });
+    expect(open).toHaveBeenCalledWith(
+      "https://track.example.net/e/1",
+      "_blank",
+      "noopener,noreferrer",
+    );
   });
 });

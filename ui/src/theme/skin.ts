@@ -418,6 +418,8 @@ ${p("message-view.header.field")} { display: grid; grid-template-columns: calc(4
 ${p("message-view.header.label")} { min-width: 0; }
 ${p("message-view.header.value")} { min-width: 0; overflow-wrap: anywhere; }
 ${p("message-view.text")} { max-width: ${READER_MEASURE}; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
+${p("message-view.text-link")} { color: ${T.accent}; text-decoration: underline; overflow-wrap: anywhere; cursor: pointer; }
+${p("message-view.text-link")}:focus-visible { ${focusRing} }
 ${p("message-view.body")} { display: block; flex: 0 0 auto; box-sizing: border-box; width: 100%; height: calc(12 * ${T.lg}); border: none; background-color: ${T.bg}; }
 ${p("message-view.column")}:has(> ${p("message-view.body")}) { max-width: none; }
 ${p("message-view.link-dock")} { position: sticky; bottom: 0; z-index: 1; flex: 0 0 auto; height: 0; overflow: visible; pointer-events: none; }
@@ -461,19 +463,21 @@ ${p("attachment-card")} {
   border: 1px solid ${T.border}; border-radius: ${T.rMd}; background-color: ${T.subtle};
 }
 ${p("attachment-card.type")} {
-  display: grid; place-items: center; width: calc(${T.control} + ${T.xs}); height: calc(${T.control} + ${T.xs}); border-radius: ${T.rSm};
+  display: grid; place-items: center; padding: 0; border: 0; cursor: pointer; width: calc(${T.control} + ${T.xs}); height: calc(${T.control} + ${T.xs}); border-radius: ${T.rSm};
   font-size: ${TINY_TEXT}; font-weight: ${T.semibold}; ${INITIALS_TRACKING} color: ${AVATAR_FG}; background-color: var(--nail-color-file-other);
 }
 ${fileColors}
 ${p("attachment-card.text")} { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: ${T.sm}; min-width: 0; }
-${p("attachment-card.name")} { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; font-weight: ${T.semibold}; }
+${p("attachment-card.name")} { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; text-align: start; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; font-weight: ${T.semibold}; }
+${p("attachment-card.name")}:hover { text-decoration: underline; }
+${p("attachment-card.name")}:focus-visible { ${focusRing} }
 ${p("attachment-card.size")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
 ${p("attachment-card.status")} { grid-column: 2; display: flex; align-items: center; gap: ${T.xxs}; min-width: 0; overflow: hidden; white-space: nowrap; font-size: ${T.small}; color: ${T.muted}; }
 ${p("attachment-card.status")}[data-state~="empty"] { display: none; }
 ${p("attachment-card.status.icon")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }
 ${p("attachment-card.status.text")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-${p("attachment-card")}[data-state~="saved"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="downloaded"] ${p("attachment-card.status")} { color: ${T.success}; }
-${p("attachment-card")}[data-state~="failed"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="unsupported"] ${p("attachment-card.status")} { color: ${T.danger}; }
+${p("attachment-card")}[data-state~="saved"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="downloaded"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="opened"] ${p("attachment-card.status")} { color: ${T.success}; }
+${p("attachment-card")}[data-state~="failed"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="unsupported"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="open-failed"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="open-unsupported"] ${p("attachment-card.status")} { color: ${T.danger}; }
 ${p("attachment-card.actions")} { display: flex; align-items: center; gap: ${T.xxs}; }`;
 
 /** Folder pane, account switcher and status bar on the same grid. */

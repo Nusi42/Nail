@@ -581,7 +581,7 @@ pub(crate) fn error_box(message: &str) {
         }
     }
     #[cfg(not(windows))]
-    drop(message);
+    let _ = message;
 }
 
 /// Builds and runs the Tauri application.

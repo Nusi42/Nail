@@ -1,8 +1,10 @@
 /**
  * The mock core's attachments of received mail (M5a WP155):
- * `GetMessageAttachment` (the web UI's download) and `SaveAttachment` (the
- * desktop's save after `PickPath`). The mock has no message bytes, so the
- * content is a short made-up text naming the attachment.
+ * `GetMessageAttachment` (the web UI's download), `SaveAttachment` (the
+ * desktop's save after `PickPath`) and `OpenAttachment` (ADR 0211; only
+ * when the mock plays the desktop app, else `unsupported` like
+ * `nail serve`). The mock has no message bytes, so the content is a short
+ * made-up text naming the attachment.
  */
 import type { Request, Response } from "./generated";
 import type { MockCore } from "./mockMail";
@@ -13,15 +15,18 @@ export interface AttachmentsMockState {
   saved: string[];
   /** `message_id#index` of every downloaded attachment, in order. */
   downloaded: string[];
+  /** `message_id#index` of every attachment the desktop app opened, in order. */
+  opened: string[];
 }
 
 export function createAttachmentsMockState(): AttachmentsMockState {
-  return { saved: [], downloaded: [] };
+  return { saved: [], downloaded: [], opened: [] };
 }
 
 export const ATTACHMENT_REQUESTS = [
   "GetMessageAttachment",
   "SaveAttachment",
+  "OpenAttachment",
 ] as const satisfies readonly Request["type"][];
 
 export type AttachmentRequest = Extract<Request, { type: (typeof ATTACHMENT_REQUESTS)[number] }>;
@@ -56,6 +61,16 @@ export function answerAttachment(core: MockCore, request: AttachmentRequest): Re
       };
     case "SaveAttachment":
       state.saved.push(`${key} → ${request.path}`);
+      return { type: "Done" };
+    case "OpenAttachment":
+      if (!core.data.features.portability.desktop) {
+        return {
+          type: "Error",
+          code: "unsupported",
+          message: "attachments are opened by the desktop app only",
+        };
+      }
+      state.opened.push(key);
       return { type: "Done" };
   }
 }

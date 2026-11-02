@@ -2918,6 +2918,20 @@ pub enum Request {
         #[ts(as = "Option<bool>", optional)]
         overwrite: bool,
     },
+    /// Open attachment `index` of a message with the system's handler for
+    /// its type (desktop only, ADR 0211): the core writes it into a private
+    /// folder of its own (a new subfolder per call, pruned later) and the
+    /// desktop host opens that file. Answered with [`Response::Done`];
+    /// `not_found` for an unknown message or index, `unsupported` without a
+    /// desktop host (the UI downloads instead). The UI asks first for an
+    /// attachment the core flagged as dangerous
+    /// ([`crate::MessageWarning::DangerousAttachment`]).
+    OpenAttachment {
+        /// The message.
+        message_id: MessageId,
+        /// The attachment's index.
+        index: u32,
+    },
 
     // --- UI state (M5b, ADR 0109) ---
     /// Everything in `<config-dir>/ui-state.json` ([`crate::ui_state`]).
