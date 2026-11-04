@@ -47,10 +47,12 @@ calendar are printed.
 
 ## Saving as PDF
 
-In the desktop app, **Save as PDF…** asks where to save the file (type the
-path or choose **Browse…**) and writes the PDF directly, with the paper size
-and options you chose. Nail says where the file went and how big it is.
+In the desktop app on Windows, **Save as PDF…** asks where to save the file
+(type the path or choose **Browse…**) and writes the PDF directly, with the
+paper size and options you chose. Nail says where the file went and how big
+it is.
 
-In a browser (Nail's web mode), the browser cannot write files for Nail:
-use **Print** and choose **Save as PDF** (or **Microsoft Print to PDF**) as
-the printer in the print dialog.
+On macOS and Linux, and in a browser (Nail's web mode and the remote UI),
+Nail cannot write the PDF itself, so **Save as PDF…** asks for no file and
+says what to do instead: use **Print** and choose **Save as PDF** (or
+**Microsoft Print to PDF**) as the printer in the print dialog.

@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { WindowLayer } from "../../layout/WindowLayer";
-import { createEnv, renderWithProviders, type Env } from "../../test/harness";
+import { createEnv, onPlatform, renderWithProviders, type Env } from "../../test/harness";
 import {
   PRINT_AGENDA_ACTION,
   PRINT_DIALOG,
@@ -214,6 +214,23 @@ describe("printing", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save PDF" }));
     expect(await within(dialog).findByText(/choose “Save as PDF” as the printer/)).toBeVisible();
     expect(within(dialog).queryByRole("button", { name: "Save PDF" })).toBeNull();
+  });
+
+  it("offers no PDF file where the platform cannot write one", async () => {
+    const env = selected();
+    // macOS / Linux desktop or web mode: no `print-to-pdf` feature.
+    onPlatform(env, "macos");
+    const user = userEvent.setup();
+    render(env, [PRINT_SAVE_PDF_ACTION]);
+    await user.click(screen.getByRole("button", { name: `run ${PRINT_SAVE_PDF_ACTION}` }));
+    const dialog = await screen.findByRole("dialog", { name: "Print" });
+    expect(await within(dialog).findByText(/choose “Save as PDF” as the printer/)).toBeVisible();
+    expect(within(dialog).queryByLabelText("PDF file")).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Browse…" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Save PDF" })).toBeNull();
+    // Print stays, as the way to a PDF.
+    expect(within(dialog).getByRole("button", { name: "Print" })).toBeEnabled();
+    expect(env.transport.requests.some((r) => r.type === "PickPath")).toBe(false);
   });
 
   it("prints an agenda and refuses a bad range", async () => {

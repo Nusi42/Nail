@@ -4508,6 +4508,7 @@ dependencies = [
  "dirs",
  "hex",
  "iana-time-zone",
+ "libc",
  "nail-api",
  "nail-auth",
  "nail-compose",

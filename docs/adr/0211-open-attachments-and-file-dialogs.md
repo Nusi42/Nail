@@ -69,6 +69,43 @@ Three problems of the desktop app, found on macOS:
   handler is a toast and `link-open-failed`, not silence; `xdg-open` is
   started and reaped on a thread (it may stay until the program quits).
 
+### Review fixes (2026-11-04)
+
+- **Remote sessions download.** `DesktopOnly` requests from a remote session
+  are refused with `unsupported` (still audited as denials), the answer of a
+  core without a desktop host, instead of `forbidden`. The UI already takes
+  its browser path on `unsupported` (`PickPath` → download, `OpenAttachment`
+  → download, `SavePrintPdf` → the print dialog's PDF printer, pop-outs
+  off), so the remote UI behaves like web mode; `forbidden` stays for what a
+  grant does not allow.
+- **Long names keep their extension.** `nail_util::file_name` holds the one
+  file-name sanitizer: `safe_name` cuts at the end (export folders and
+  files, unchanged) and `safe_attachment_name` shortens the stem and keeps an
+  extension of up to 16 characters (opened attachments, 120 characters; the
+  Simple MAPI copies, 200 characters, which had their own copy of the rules).
+- **Opened attachments are marked as downloaded.** After writing the file
+  the core adds the mark a browser would: the `Zone.Identifier` alternate
+  data stream (`[ZoneTransfer]` / `ZoneId=3`) on Windows, so SmartScreen and
+  Office's Protected View apply, and the `com.apple.quarantine` extended
+  attribute (`0081;<hex Unix time>;Nail;`, through `setxattr` from `libc`,
+  already a workspace dependency, MIT OR Apache-2.0) on macOS, so Gatekeeper
+  asks before a program runs. Linux has no common mark. A failure to mark
+  (a file system without streams or attributes, e.g. FAT or some shares) is
+  logged and the file still opens: the mark is defence in depth on top of the
+  confirmation for flagged types, and refusing would leave the user with no
+  way to open the attachment but saving it, which marks nothing either.
+- **The host's open runs off the runtime.** `DesktopHost::open_file` and
+  `open_link` may wait for the system (`open` on macOS, the shell on
+  Windows); the core calls them through `spawn_blocking`, the errors are
+  reported as before.
+- **PDF printing is a platform feature.** `PlatformFeature::PrintToPdf`
+  (`print-to-pdf`, a desktop-app feature, Windows only) tells the print
+  dialog whether `SavePrintPdf` can work. Without it "Save as PDF…" asks for
+  no path (no native Save dialog for a file that cannot be written) and says
+  to use the print dialog's PDF printer.
+- **Apostrophes in plain-text links.** `'` no longer ends a URL
+  (`/it's-here`); a trailing one is trimmed like other punctuation.
+
 ## Consequences
 
 - Save as, Open and links work the same on Windows, macOS and Linux, as far
@@ -78,10 +115,13 @@ Three problems of the desktop app, found on macOS:
 - ADR 0202's "no native file dialog off Windows" is lifted; PDF printing and
   the LAN address list remain follow-ups.
 - Opened attachments are plaintext files in the user's data directory until
-  the next start, shutdown or prune; the confirmation for risky types is the
-  only guard (the system's own checks, e.g. Gatekeeper, apply on top).
+  the next start, shutdown or prune; the confirmation for risky types and the
+  downloaded mark (Windows, macOS) guard them; the system's own checks
+  (SmartScreen, Protected View, Gatekeeper) apply on top.
 - The blob-download fallback of the UI can still report a download that a
   webview ignored; it is now reached only without a desktop host (browsers
   honour it), so no cheaper signal was added.
+- The quarantine attribute and the macOS `open` path are written for macOS
+  and only compile there; they have not run on a Mac.
 - Links in plain text no longer open inside the page: they were text before
   and are anchors that never navigate now.

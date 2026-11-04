@@ -377,7 +377,7 @@ fn shell(c: Constants) -> Result<Constants, serde_json::Error> {
     )?
     .enum_values(
         "PlatformFeature",
-        &every!(crate::platform::PlatformFeature: WindowsSignIn, WindowsCertificateStore, StartWithSystem, DefaultApps, SimpleMapi),
+        &every!(crate::platform::PlatformFeature: WindowsSignIn, WindowsCertificateStore, StartWithSystem, DefaultApps, SimpleMapi, PrintToPdf),
     )?
     .add(
         "DESKTOP_APP_FEATURES",

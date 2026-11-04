@@ -16,7 +16,12 @@ import {
 export const prefixes: readonly string[] = ["print-"];
 
 /** Literals with those prefixes that are not message ids (part, widget, dialog names). */
-export const notMessages: readonly string[] = ["print-setup", "remote-images"];
+export const notMessages: readonly string[] = [
+  "print-setup",
+  "remote-images",
+  // The `PlatformFeature` of PDF printing (ADR 0211).
+  "print-to-pdf",
+];
 
 /** The contract's choices (generated from `nail_api::print`). */
 export {

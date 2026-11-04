@@ -3,4 +3,4 @@
 /**
  * A feature only some systems have.
  */
-export type PlatformFeature = "windows-sign-in" | "windows-certificate-store" | "start-with-system" | "default-apps" | "simple-mapi";
+export type PlatformFeature = "windows-sign-in" | "windows-certificate-store" | "start-with-system" | "default-apps" | "simple-mapi" | "print-to-pdf";

@@ -64,7 +64,7 @@ print-pdf-file = PDF file
 print-pdf-pick-title = Save as PDF
 print-pdf-default-name = Nail print
 print-pdf-save = Save PDF
-print-pdf-browser = Nail cannot write PDF files from the browser. Click Print and choose “Save as PDF” as the printer.
+print-pdf-browser = Nail cannot write PDF files itself here. Click Print and choose “Save as PDF” as the printer.
 print-filter-pdf = PDF documents
 
 ## The print view

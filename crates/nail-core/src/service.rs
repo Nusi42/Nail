@@ -1252,7 +1252,7 @@ impl Service {
                 crate::launch::handle(self, request).await?
             }
             // ADR 0206: links clicked in a message.
-            Request::OpenLink { url } => crate::links::open(self, &url)?,
+            Request::OpenLink { url } => crate::links::open(self, &url).await?,
             // M2c (ADR 0043).
             request @ (Request::GetSieveStatus { .. }
             | Request::SyncSieve { .. }

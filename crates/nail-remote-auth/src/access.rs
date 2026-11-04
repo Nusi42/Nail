@@ -30,7 +30,10 @@ pub enum Access {
     /// The session's own user, device or session (self-service, no
     /// re-authentication), else `admin` and a fresh (re-)authentication.
     AdminOrOwn(Own),
-    /// Never from a remote session (it acts on the desktop itself).
+    /// Never from a remote session (it acts on the desktop itself). Refused
+    /// with `unsupported`, the answer of a core without a desktop host, so
+    /// the remote UI takes the same browser path as `nail serve` (a
+    /// download instead of Save as / Open, ADR 0211).
     DesktopOnly,
 }
 
@@ -582,7 +585,8 @@ impl RemoteAuth {
     /// Checks that the session `ctx` may send `request` now: the scope (or
     /// `admin`) of its grant, a fresh re-authentication for admin and
     /// sensitive requests, ownership for self-service. Denials answer
-    /// `forbidden` or `reauth_required` and are always audited; allowed
+    /// `forbidden` or `reauth_required` (desktop-only requests:
+    /// `unsupported`) and are always audited; allowed
     /// writes are audited too.
     pub fn authorize(&self, ctx: &RemoteSessionCtx, request: &Request) -> Result<(), ApiError> {
         let now = self.now();
@@ -648,7 +652,7 @@ impl RemoteAuth {
                 }
             }
             Access::DesktopOnly => Err(denial(
-                ErrorCode::Forbidden,
+                ErrorCode::Unsupported,
                 format!("{} is only available on the desktop", required.name),
             )),
         };

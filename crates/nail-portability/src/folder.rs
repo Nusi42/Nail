@@ -179,33 +179,8 @@ pub fn encode_mutf7(name: &str) -> String {
 
 /// A file / directory name safe on Windows and elsewhere: reserved
 /// characters replaced, no trailing dots or spaces, no reserved device
-/// names, at most `max_chars` characters. Never empty.
-pub fn safe_file_name(name: &str, max_chars: usize) -> String {
-    let mut out: String = name
-        .chars()
-        .map(|c| {
-            if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
-                '_'
-            } else {
-                c
-            }
-        })
-        .take(max_chars.max(1))
-        .collect();
-    while out.ends_with(['.', ' ']) {
-        out.pop();
-    }
-    let out = out.trim_start().to_owned();
-    if out.is_empty() {
-        return "_".to_owned();
-    }
-    let stem = out.split('.').next().unwrap_or("").to_ascii_uppercase();
-    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
-            && stem.len() == 4
-            && stem.as_bytes()[3].is_ascii_digit());
-    if reserved { format!("_{out}") } else { out }
-}
+/// names, at most `max_chars` characters (cut at the end). Never empty.
+pub use nail_util::file_name::safe_name as safe_file_name;
 
 #[cfg(test)]
 mod tests {
@@ -273,16 +248,5 @@ mod tests {
         // Malformed parts stay as written.
         assert_eq!(decode_mutf7("a&b"), "a&b");
         assert_eq!(decode_mutf7("a&A-b"), "a&A-b");
-    }
-
-    #[test]
-    fn file_names_are_safe() {
-        assert_eq!(safe_file_name("Re: a/b?", 100), "Re_ a_b_");
-        assert_eq!(safe_file_name("x. ", 100), "x");
-        assert_eq!(safe_file_name("", 100), "_");
-        assert_eq!(safe_file_name("CON", 100), "_CON");
-        assert_eq!(safe_file_name("com1.txt", 100), "_com1.txt");
-        assert_eq!(safe_file_name("COMPUTER", 100), "COMPUTER");
-        assert_eq!(safe_file_name("abcdef", 3), "abc");
     }
 }

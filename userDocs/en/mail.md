@@ -225,12 +225,16 @@ Attachments are cards with the file type, name and size. Click the name
 (or the **Open** button) to open the file: in the desktop app Nail puts a
 copy in a private folder and opens it with the program your system uses for
 that type of file (Nail removes these copies when it starts and closes); in
-a browser the file is downloaded. If Nail flagged the attachment (a program,
+a browser, the remote UI included, the file is downloaded. The copy is
+marked as downloaded from the internet, as a browser would mark it, so
+Windows (SmartScreen, Office's Protected View) and macOS (Gatekeeper) apply
+their own checks to it. A very long file name is shortened in the middle
+and keeps its type (`.pdf`, `.docx`, …). If Nail flagged the attachment (a program,
 a document with macros, a disguised file type, …), it first asks **Open this
 attachment?**: **Open anyway** opens it, **Cancel** (the default) does not.
 **Save** asks where to save the file in the desktop app on Windows, macOS
-and Linux (the Save dialog asks before replacing a file); in a browser the
-file is downloaded. The card then says "Opened.", "Saved." or "Downloaded."
+and Linux (the Save dialog asks before replacing a file); in a browser (the
+remote UI too) the file is downloaded. The card then says "Opened.", "Saved." or "Downloaded."
 next to the size. **Preview** appears
 when a plug-in can show that type, and the **…** button has the plug-ins'
 attachment actions.

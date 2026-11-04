@@ -551,7 +551,9 @@ crates/nail-util       Q2 (ADRs 0171, 0173): shared helpers without dependencies
                        last_weekday_of_month, SECS_PER_DAY: the one civil-date and clock implementation), color.rs (WCAG
                        hex / luminance / contrast), snapshot.rs (write-or-compare of snapshot and golden files), batch (batched writes
                        with a one-by-one fallback), expiring (expiring map), group (grouping in first-seen order), ical_text, markup (HTML escaping), mime_text,
-                       named (case-insensitive pair lookups), percent, redact, sieve_lex (the Sieve lexer)
+                       named (case-insensitive pair lookups), percent, redact, sieve_lex (the Sieve lexer), file_name
+                       (safe file names: safe_name cut at the end for exports, safe_attachment_name keeping the
+                       extension for opened attachments and Simple MAPI copies; ADR 0211)
 crates/nail-net        Q2 (ADR 0173): shared plumbing of the protocol clients and mock servers, features http / io /
                        deflate / tls / xml: streams, TLS, line framing, HTTP client / retry / errors, one ApiClient for
                        Gmail and Graph, the poll timer, the XML tree, ports and status codes
@@ -1131,7 +1133,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `border "$border.control"`. `ReportSystemAppearance` is ignored while the core watches the OS.
   `GetMessageAttachment` (base64, ≤ 64 MiB) / `SaveAttachment` (desktop only, absolute path) /
   `OpenAttachment` (ADR 0211, desktop only: `attachments.rs` `OpenedFiles` writes `<data dir>/opened-attachments/
-  <unique>/<name>`, cleared at start and shutdown, pruned after a day; the host's `open_file` opens it).
+  <unique>/<name>` (`nail_util::file_name::safe_attachment_name`: ≤ 120 characters, the extension kept), marked
+  as downloaded (`Zone.Identifier` stream on Windows, `com.apple.quarantine` on macOS; a failure is logged), cleared
+  at start and shutdown, pruned after a day; the host's `open_file` / `open_link` run on a blocking thread). Remote
+  sessions get `unsupported` for every `DesktopOnly` request, so the UI takes its browser path (download).
 
 ### M5b
 
@@ -1367,7 +1372,8 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   in the `GetConfig` answer, desktop features only with a desktop host and never for remote sessions; the UI's
   `ui/src/state/platform.ts` (`usePlatformFeature`) and `SettingsWidgetInfo.requires` / `platformLabels`
   (`ui/src/layout/settingsIndex.ts`); every Fluent message gets `$os` (`nail-config` `fluent_args`, the UI's
-  `createLocalizer`); `DesktopHost::print_to_pdf` exists in the shell on Windows only (`pick_path` everywhere, `rfd` off
+  `createLocalizer`); `DesktopHost::print_to_pdf` exists in the shell on Windows only, announced by the
+  desktop feature `print-to-pdf` (the print dialog asks for no PDF path without it; `pick_path` everywhere, `rfd` off
   Windows, ADR 0211); Linux / macOS bundles in `app/src-tauri/tauri.{linux,macos}.conf.json`; Linux checks in WSL2 (`docs/dev-setup.md`).
 - Links in mail (ADR 0206): no click navigates a mail frame. Every frame posts `FRAME_LINK_MESSAGE` from the
   hash-pinned `FRAME_SCRIPT` (ADR 0212). `OpenLink` (`nail_api::links`, `nail_core::links`) answers `Opened` (the desktop host's

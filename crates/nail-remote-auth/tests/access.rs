@@ -284,9 +284,23 @@ async fn desktop_only_requests_are_refused_even_for_admins() {
             login_hint: None,
             protocol: None,
         },
+        Request::OpenAttachment {
+            message_id: "m1".into(),
+            index: 0,
+        },
+        Request::PickPath {
+            pick: nail_api::desktop::PathPick {
+                kind: nail_api::desktop::PathPickKind::SaveFile,
+                title_id: "t".into(),
+                filters: vec![],
+                default_path: None,
+            },
+        },
     ] {
         let error = h.auth.authorize(&ctx, &request).unwrap_err();
-        assert_eq!(error.code, ErrorCode::Forbidden, "{request:?}");
+        // The answer of a core without a desktop host: the UI falls back
+        // to its browser path (ADR 0211).
+        assert_eq!(error.code, ErrorCode::Unsupported, "{request:?}");
     }
 }
 

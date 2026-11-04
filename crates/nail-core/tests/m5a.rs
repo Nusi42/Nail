@@ -359,25 +359,90 @@ async fn the_source_is_the_message_as_received_and_decoded() {
 }
 
 /// A desktop host that records the files it was asked to open (with their
-/// content at that moment) and can refuse.
+/// content at that moment), the links, and the threads it was called on;
+/// it can refuse.
 #[derive(Debug, Default)]
 struct OpeningHost {
     opened: Mutex<Vec<(PathBuf, Vec<u8>)>>,
+    links: Mutex<Vec<String>>,
+    threads: Mutex<Vec<std::thread::ThreadId>>,
     refuse: bool,
+}
+
+impl OpeningHost {
+    /// Records the calling thread; `Err(why)` when refusing.
+    fn called(&self, why: &str) -> Result<(), ApiError> {
+        self.threads
+            .lock()
+            .unwrap()
+            .push(std::thread::current().id());
+        if self.refuse {
+            Err(ApiError::internal(why))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl DesktopHost for OpeningHost {
     fn attach(&self, _notify: DesktopNotifier) {}
     nail_api::inert_desktop_host!();
     fn open_file(&self, path: &Path) -> Result<(), ApiError> {
-        if self.refuse {
-            return Err(ApiError::internal("no handler"));
-        }
+        self.called("no handler")?;
         self.opened
             .lock()
             .unwrap()
             .push((path.to_path_buf(), std::fs::read(path).unwrap()));
         Ok(())
+    }
+    fn open_link(&self, url: &str) -> Result<(), ApiError> {
+        self.called("no browser")?;
+        self.links.lock().unwrap().push(url.to_owned());
+        Ok(())
+    }
+}
+
+/// The host waits for the system (`open` on macOS): the core calls it off
+/// the runtime's thread (the test's single-threaded runtime here), and its
+/// errors still arrive.
+#[tokio::test]
+async fn the_desktop_host_opens_files_and_links_off_the_runtime_thread() {
+    let host = Arc::new(OpeningHost::default());
+    let (service, _data, _config) = open_with_host(Some(host.clone()));
+    let id = receipt(&service).await;
+    let open = Request::OpenAttachment {
+        message_id: id,
+        index: 0,
+    };
+    assert_eq!(service.handle(open).await, Response::Done);
+    let link = Request::OpenLink {
+        url: "https://example.com/a".into(),
+    };
+    match service.handle(link.clone()).await {
+        Response::LinkOpened { outcome } => {
+            assert_eq!(outcome, nail_api::links::LinkOutcome::Opened);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(
+        host.links.lock().unwrap().as_slice(),
+        ["https://example.com/a"]
+    );
+    let runtime = std::thread::current().id();
+    let threads = host.threads.lock().unwrap().clone();
+    assert_eq!(threads.len(), 2);
+    assert!(threads.iter().all(|t| *t != runtime), "{threads:?}");
+
+    let refusing = Arc::new(OpeningHost {
+        refuse: true,
+        ..OpeningHost::default()
+    });
+    let (service, _data, _config) = open_with_host(Some(refusing));
+    match service.handle(link).await {
+        Response::Error { localized, .. } => {
+            assert_eq!(localized.map(|l| l.id), Some("link-open-failed".to_owned()));
+        }
+        other => panic!("{other:?}"),
     }
 }
 

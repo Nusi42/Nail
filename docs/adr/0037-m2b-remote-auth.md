@@ -141,7 +141,8 @@ authentication: settings, accounts, keys, MCP clients, customization,
 remote-UI administration), `AdminOrOwn` (self-service without
 re-authentication: own sessions/devices list, revoke own session/device)
 and `DesktopOnly` (`StartOAuth`, `CancelOAuth`, `OpenConfigFile`,
-`ReportUiContext`). "Fresh" = login or re-authentication within
+`ReportUiContext`; refused with `unsupported` since ADR 0211, `forbidden`
+before). "Fresh" = login or re-authentication within
 `reauth_minutes`. `authorize` audits every denial and every allowed
 non-read request. The grant's account list and folder exclusions are
 enforced by the core when answering (helpers `account_allowed`,

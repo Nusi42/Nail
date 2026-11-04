@@ -71,6 +71,10 @@ pub enum PlatformFeature {
     /// The Simple MAPI provider ("Send to → Mail recipient"). Desktop app
     /// only.
     SimpleMapi,
+    /// Writing the print view as a PDF file
+    /// ([`crate::Request::SavePrintPdf`], WebView2's `PrintToPdf`). Desktop
+    /// app only; elsewhere the print dialog's own PDF printer does it.
+    PrintToPdf,
 }
 
 impl PlatformFeature {
@@ -83,8 +87,12 @@ impl PlatformFeature {
 
     /// The features only the desktop app can have, on any system (`nail
     /// serve` and remote sessions never report them).
-    pub const OF_DESKTOP_APP: &[Self] =
-        &[Self::StartWithSystem, Self::DefaultApps, Self::SimpleMapi];
+    pub const OF_DESKTOP_APP: &[Self] = &[
+        Self::StartWithSystem,
+        Self::DefaultApps,
+        Self::SimpleMapi,
+        Self::PrintToPdf,
+    ];
 
     /// The features the desktop app adds on this system.
     pub const IN_DESKTOP_APP: &[Self] = if cfg!(windows) {
@@ -139,13 +147,15 @@ mod tests {
                 PlatformFeature::StartWithSystem,
                 PlatformFeature::DefaultApps,
                 PlatformFeature::SimpleMapi,
+                PlatformFeature::PrintToPdf,
             ],
         };
         assert_eq!(
             serde_json::to_value(&info).unwrap(),
             json!({"os": "macos", "features": [
                 "windows-sign-in", "windows-certificate-store",
-                "start-with-system", "default-apps", "simple-mapi"
+                "start-with-system", "default-apps", "simple-mapi",
+                "print-to-pdf"
             ]})
         );
     }

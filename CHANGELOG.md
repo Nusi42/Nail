@@ -21,6 +21,28 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 - Every mail frame runs one fixed script, by its hash, in an isolated origin;
   the remote UI gets Nail's text menu over mail as well.
 
+### Fixed (ADR 0211, follow-up)
+
+- Open and Save on an attachment in the remote UI download the file instead
+  of failing; every desktop-only request answers a remote session with
+  `unsupported`, so the browser's own way is taken.
+- An opened attachment with a very long name keeps its file type: the name
+  is shortened before the extension.
+- "Save as PDF…" in the print dialog asks for no file on macOS and Linux,
+  where Nail cannot write the PDF itself, and points to the print dialog's
+  PDF printer at once.
+- A web address with an apostrophe in plain-text mail (`/it's-here`) is one
+  link; an apostrophe around it is still left out.
+- Opening a link or an attachment no longer blocks one of the core's worker
+  threads while macOS starts the program.
+
+### Security (ADR 0211, follow-up)
+
+- An opened attachment is marked as downloaded from the internet (the
+  `Zone.Identifier` stream on Windows, the `com.apple.quarantine` attribute
+  on macOS), so SmartScreen, Office's Protected View and Gatekeeper check it
+  like a downloaded file.
+
 ## [0.8.3] — 2026-11-02
 
 ### Added (ADR 0211)

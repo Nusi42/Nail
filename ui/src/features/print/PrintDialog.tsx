@@ -8,10 +8,12 @@
  * - **Print** — `CreatePrintJob`, the print view opens and with it the
  *   system print dialog (in a browser "Save as PDF" is one of its
  *   printers);
- * - **Save as PDF** — on the desktop the file is written by the shell
- *   (`SavePrintPdf` → WebView2 `PrintToPdf`) to a path typed or chosen with
- *   the system dialog; elsewhere the core answers `unsupported` and the
- *   dialog says to use the print dialog's PDF printer instead.
+ * - **Save as PDF** — where the platform has `print-to-pdf` (the Windows
+ *   desktop app) the file is written by the shell (`SavePrintPdf` → WebView2
+ *   `PrintToPdf`) to a path typed or chosen with the system dialog;
+ *   elsewhere (and when the core answers `unsupported` all the same) the
+ *   dialog says to use the print dialog's PDF printer instead, without a
+ *   path to pick.
  */
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
@@ -32,6 +34,7 @@ import {
 } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
+import { usePlatformFeature } from "../../state/platform";
 import { useClient, useMessage, useThread } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { Check, CheckGroup, SelectField, WizardButtons } from "../portability/Fields";
@@ -281,6 +284,9 @@ export function PrintSetup({ close }: { close: () => void }) {
   const { path, overwrite, onChange: setPath } = useSavePath();
   const [saved, setSaved] = useState<PdfFile | null>(null);
   const [noDesktop, setNoDesktop] = useState(false);
+  // No PDF writer here (or the core said so): the print dialog's PDF printer.
+  const pdfWriter = usePlatformFeature("print-to-pdf");
+  const noPdf = noDesktop || !pdfWriter;
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const title = useTargetTitle(target);
@@ -346,7 +352,7 @@ export function PrintSetup({ close }: { close: () => void }) {
           <p data-part="print-setup.what">{t(`print-what-${target.type}`, { title })}</p>
           {target.type === "agenda" && <AgendaFields target={target} onChange={setTarget} />}
           <OptionFields options={options} onChange={setOptions} mail={mail} />
-          {pdfStep && !saved && (
+          {pdfStep && !noPdf && !saved && (
             <PathField
               labelId="print-pdf-file"
               field="pdf-path"
@@ -358,7 +364,7 @@ export function PrintSetup({ close }: { close: () => void }) {
               defaultPath={pdfName(title, t("print-pdf-default-name"))}
             />
           )}
-          {noDesktop && (
+          {pdfStep && noPdf && (
             <p data-part="form.hint" data-tone="warning" data-field="no-desktop" role="status">
               {t("print-pdf-browser")}
             </p>
@@ -384,14 +390,14 @@ export function PrintSetup({ close }: { close: () => void }) {
                 <button
                   type="button"
                   data-part="form.button"
-                  data-variant={pdfStep && !noDesktop ? undefined : "primary"}
+                  data-variant={pdfStep && !noPdf ? undefined : "primary"}
                   data-action="print"
                   disabled={busy || issue !== null}
                   onClick={() => void print()}
                 >
                   {t("common-print")}
                 </button>
-                {!noDesktop &&
+                {!(pdfStep && noPdf) &&
                   (pdfStep ? (
                     <button
                       type="button"

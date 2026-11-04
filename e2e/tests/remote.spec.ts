@@ -5,6 +5,7 @@ import {
   createUser,
   enableRemoteUi,
   pairBrowser,
+  pairedRemoteMail,
   pairingCode,
   remoteContext,
   rpcOk,
@@ -233,6 +234,25 @@ test("revoking a session on the desktop signs the browser out", async ({ page })
     timeout: 20_000,
   });
   await other.close();
+});
+
+test("the remote UI downloads an attachment it would open or save on the desktop", async ({
+  page,
+}) => {
+  const { context, phone } = await pairedRemoteMail(page, server);
+  await messageRows(phone).filter({ hasText: "Your invoice for September 2026" }).first().click();
+  const card = phone.locator('[data-part="attachment-card"]').filter({ hasText: "usage.csv" });
+  // Open: the desktop-only request answers `unsupported`, the browser downloads.
+  const opened = phone.waitForEvent("download");
+  await card.getByRole("button", { name: "Open usage.csv" }).click();
+  expect((await opened).suggestedFilename()).toBe("usage.csv");
+  await expect(card.getByRole("status")).toHaveText("Downloaded.");
+  // Save: no Save dialog of the desktop either.
+  const saved = phone.waitForEvent("download");
+  await card.getByRole("button", { name: "Save usage.csv" }).click();
+  expect((await saved).suggestedFilename()).toBe("usage.csv");
+  await expect(card.getByRole("status")).toHaveText("Downloaded.");
+  await context.close();
 });
 
 test("internet mode cannot be enabled", async ({ page }) => {

@@ -303,7 +303,18 @@ async fn remote_sessions_are_authorized_and_narrowed() {
             },
         )
         .await;
-    assert_eq!(error_code(&context), Some(ErrorCode::Forbidden));
+    // Desktop-only: `unsupported`, so the remote UI takes the browser path.
+    assert_eq!(error_code(&context), Some(ErrorCode::Unsupported));
+    let opened = service
+        .handle_remote(
+            &ctx,
+            Request::OpenAttachment {
+                message_id: message.id.clone(),
+                index: 0,
+            },
+        )
+        .await;
+    assert_eq!(error_code(&opened), Some(ErrorCode::Unsupported));
     // Self-service: the session's own sessions.
     let own = service
         .handle_remote(
@@ -1397,13 +1408,25 @@ async fn plugins_need_full_grants_remotely() {
         error_code(&service.handle_remote(&full, run()).await),
         Some(ErrorCode::NotFound)
     );
+    // A dev folder is the desktop's own: `unsupported`, like a core
+    // without a desktop host.
+    assert_eq!(
+        error_code(
+            &service
+                .handle_remote(
+                    &full,
+                    Request::LoadDevPlugin {
+                        folder: "C:/dev/x".into(),
+                        grants: vec![],
+                    },
+                )
+                .await
+        ),
+        Some(ErrorCode::Unsupported)
+    );
     for request in [
         Request::EnablePlugin {
             plugin_id: "x".into(),
-        },
-        Request::LoadDevPlugin {
-            folder: "C:/dev/x".into(),
-            grants: vec![],
         },
         Request::InstallPlugin {
             source: PluginPackageSource::File {

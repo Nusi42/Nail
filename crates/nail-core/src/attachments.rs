@@ -81,13 +81,18 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             let path =
                 tokio::task::spawn_blocking(move || opened.stage(name.as_deref(), &content.data))
                     .await??;
-            host.open_file(&path).map_err(|e| {
-                tracing::warn!(error = %e, "cannot open an attachment");
-                CoreError::from(
-                    ApiError::internal(format!("cannot open the attachment: {e}"))
-                        .with_localized(LocalizedMessage::new("attachment-open-failed")),
-                )
-            })?;
+            // The host may wait for the system (`open` on macOS, the shell
+            // on Windows): off the runtime's workers.
+            let host = host.clone();
+            tokio::task::spawn_blocking(move || host.open_file(&path))
+                .await?
+                .map_err(|e| {
+                    tracing::warn!(error = %e, "cannot open an attachment");
+                    CoreError::from(
+                        ApiError::internal(format!("cannot open the attachment: {e}"))
+                            .with_localized(LocalizedMessage::new("attachment-open-failed")),
+                    )
+                })?;
             Ok(Response::Done)
         }
         other => Err(ApiError::internal(format!(
@@ -105,11 +110,69 @@ const OPENED_DIR: &str = "opened-attachments";
 /// removes it.
 const OPENED_KEEP: Duration = Duration::from_hours(24);
 
-/// Longest file name written for an opened attachment (characters).
+/// Longest file name written for an opened attachment (characters; a long
+/// name keeps its extension).
 const OPENED_NAME_CHARS: usize = 120;
 
-/// The file name used for an attachment without one.
-const OPENED_FALLBACK_NAME: &str = "attachment";
+/// The `Zone.Identifier` stream of a file from the internet (zone 3), which
+/// Windows' `SmartScreen` and Office's Protected View check.
+#[cfg(windows)]
+const ZONE_IDENTIFIER: &str = "[ZoneTransfer]
+ZoneId=3
+";
+
+/// The name of the alternate data stream holding [`ZONE_IDENTIFIER`].
+#[cfg(windows)]
+const ZONE_IDENTIFIER_STREAM: &str = ":Zone.Identifier";
+
+/// Marks `path` as downloaded from the internet (ADR 0211), so the system's
+/// own checks treat an opened attachment like a downloaded file: the
+/// `Zone.Identifier` stream on Windows.
+#[cfg(windows)]
+fn mark_downloaded(path: &Path) -> std::io::Result<()> {
+    let mut stream = path.as_os_str().to_owned();
+    stream.push(ZONE_IDENTIFIER_STREAM);
+    std::fs::write(stream, ZONE_IDENTIFIER)
+}
+
+/// Marks `path` as downloaded from the internet (ADR 0211): the
+/// `com.apple.quarantine` attribute on macOS (Gatekeeper asks before a
+/// program in it runs).
+#[cfg(target_os = "macos")]
+#[expect(unsafe_code, reason = "setxattr(2) has no safe wrapper in std")]
+fn mark_downloaded(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt as _;
+    let seconds = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let value = quarantine_value(seconds);
+    let file = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    // SAFETY: `file` and the name are NUL-terminated and live for the call;
+    // the value pointer and length describe `value`; no position, no options.
+    let status = unsafe {
+        libc::setxattr(
+            file.as_ptr(),
+            c"com.apple.quarantine".as_ptr(),
+            value.as_ptr().cast(),
+            value.len(),
+            0,
+            0,
+        )
+    };
+    if status == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+/// The `com.apple.quarantine` value of a file Nail downloaded at
+/// `unix_seconds`: flags `0081` (downloaded, not yet opened by the user),
+/// the time in hex, the agent, no event id.
+#[cfg(any(target_os = "macos", test))]
+fn quarantine_value(unix_seconds: u64) -> String {
+    format!("0081;{unix_seconds:08x};Nail;")
+}
 
 /// The private folder of attachments being opened (ADR 0211):
 /// `<data dir>/opened-attachments/<unique>/<sanitized name>`. Each open gets
@@ -181,11 +244,8 @@ impl OpenedFiles {
         );
         let folder = root.join(unique);
         create_private_dir(&folder, false)?;
-        let file_name = nail_portability::folder::safe_file_name(
-            name.filter(|n| !n.trim().is_empty())
-                .unwrap_or(OPENED_FALLBACK_NAME),
-            OPENED_NAME_CHARS,
-        );
+        let file_name =
+            nail_util::file_name::safe_attachment_name(name.unwrap_or_default(), OPENED_NAME_CHARS);
         let path = folder.join(file_name);
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
@@ -197,6 +257,14 @@ impl OpenedFiles {
         let mut file = options.open(&path)?;
         file.write_all(data)?;
         file.sync_all()?;
+        drop(file);
+        // Defence in depth on top of the confirmation for risky types: a
+        // file system without streams or attributes (FAT, some shares)
+        // still opens the file, the failure is logged.
+        #[cfg(any(windows, target_os = "macos"))]
+        if let Err(e) = mark_downloaded(&path) {
+            tracing::warn!(error = %e, "cannot mark an opened attachment as downloaded");
+        }
         Ok(path)
     }
 }
@@ -275,8 +343,47 @@ mod tests {
         }
         assert_ne!(a.parent(), b.parent());
         assert_eq!(a.file_name().unwrap(), ".._evil_name.pdf");
-        assert_eq!(c.file_name().unwrap(), OPENED_FALLBACK_NAME);
+        assert_eq!(
+            c.file_name().unwrap(),
+            nail_util::file_name::FALLBACK_ATTACHMENT_NAME
+        );
         assert_eq!(std::fs::read(&b).unwrap(), b"b");
+    }
+
+    #[test]
+    fn a_long_name_keeps_its_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let opened = OpenedFiles::new(Some(dir.path().to_path_buf()));
+        let long = format!("{}.pdf", "report ".repeat(40));
+        let path = opened.stage(Some(&long), b"%PDF-").unwrap();
+        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+        assert_eq!(name.chars().count(), OPENED_NAME_CHARS);
+        assert_eq!(path.extension().unwrap(), "pdf", "{name}");
+        assert!(name.starts_with("report report"), "{name}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn staged_files_are_marked_as_downloaded_on_windows() {
+        let dir = tempfile::tempdir().unwrap();
+        let opened = OpenedFiles::new(Some(dir.path().to_path_buf()));
+        let path = opened.stage(Some("invoice.pdf"), b"%PDF-").unwrap();
+        let mut stream = path.as_os_str().to_owned();
+        stream.push(ZONE_IDENTIFIER_STREAM);
+        assert_eq!(
+            std::fs::read_to_string(stream).unwrap(),
+            "[ZoneTransfer]
+ZoneId=3
+"
+        );
+        // The file itself is untouched.
+        assert_eq!(std::fs::read(&path).unwrap(), b"%PDF-");
+    }
+
+    #[test]
+    fn the_quarantine_value_names_nail_and_the_time() {
+        assert_eq!(quarantine_value(0x6900_0000), "0081;69000000;Nail;");
+        assert_eq!(quarantine_value(1), "0081;00000001;Nail;");
     }
 
     #[test]

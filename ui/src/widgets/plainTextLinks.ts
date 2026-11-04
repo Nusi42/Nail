@@ -18,8 +18,12 @@ const AUTHORITY_SCHEMES: readonly string[] = ["http", "https"];
 
 const SCHEMES: readonly string[] = [...EXTERNAL_LINK_SCHEMES, MAILTO_SCHEME];
 
-/** A scheme at a word start, then everything up to white space, brackets and quotes. */
-const LINK_PATTERN = new RegExp(`\\b(?:${SCHEMES.join("|")}):[^\\s<>"'\\u0000-\\u001f]+`, "giu");
+/**
+ * A scheme at a word start, then everything up to white space, angle
+ * brackets and double quotes. An apostrophe belongs to a URL (`/it's-here`);
+ * one at the end is trimmed as punctuation (`'https://x.example'`).
+ */
+const LINK_PATTERN = new RegExp(`\\b(?:${SCHEMES.join("|")}):[^\\s<>"\\u0000-\\u001f]+`, "giu");
 
 /** Punctuation that ends a sentence rather than a link. */
 const TRAILING = /[.,;:!?'"»”’]$/u;

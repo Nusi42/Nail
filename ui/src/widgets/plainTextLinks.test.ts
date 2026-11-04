@@ -41,6 +41,18 @@ describe("linkify", () => {
     expect(links('"https://example.com/q?a=1&b=2";')).toEqual(["https://example.com/q?a=1&b=2"]);
   });
 
+  it("keeps an apostrophe inside a link and trims one around it", () => {
+    expect(links("See https://example.com/it's-here now")).toEqual([
+      "https://example.com/it's-here",
+    ]);
+    expect(links("Open 'https://x.example' first")).toEqual(["https://x.example"]);
+    expect(links("Open 'https://x.example/it's', then")).toEqual(["https://x.example/it's"]);
+    expect(links("‘https://x.example/a’ and https://x.example/b'.")).toEqual([
+      "https://x.example/a",
+      "https://x.example/b",
+    ]);
+  });
+
   it("only makes the schemes the core opens clickable", () => {
     expect(links("file:///C:/Windows/notepad.exe javascript:alert(1) ftp://example.com/x")).toEqual(
       [],

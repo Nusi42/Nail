@@ -58,16 +58,21 @@ fn answer(outcome: LinkOutcome) -> Response {
 
 /// `OpenLink` from the desktop UI or web mode: the desktop host opens
 /// external links; without one the UI does.
-pub(crate) fn open(service: &Service, url: &str) -> Result<Response> {
+///
+/// The host may wait for the system (`open` on macOS, the shell on
+/// Windows), so it runs off the runtime's workers.
+pub(crate) async fn open(service: &Service, url: &str) -> Result<Response> {
     Ok(answer(match classify(url)? {
         LinkTarget::Compose(mailto) => LinkOutcome::Compose { mailto },
-        LinkTarget::External(url) => match service.inner.desktop.as_ref() {
+        LinkTarget::External(url) => match service.inner.desktop.clone() {
             Some(host) => {
-                host.open_link(&url).map_err(|e| {
-                    tracing::warn!(error = %e, "cannot open a link");
-                    ApiError::internal(format!("cannot open the link: {e}"))
-                        .with_localized(LocalizedMessage::new("link-open-failed"))
-                })?;
+                tokio::task::spawn_blocking(move || host.open_link(&url))
+                    .await?
+                    .map_err(|e| {
+                        tracing::warn!(error = %e, "cannot open a link");
+                        ApiError::internal(format!("cannot open the link: {e}"))
+                            .with_localized(LocalizedMessage::new("link-open-failed"))
+                    })?;
                 LinkOutcome::Opened
             }
             None => LinkOutcome::OpenInBrowser { url },

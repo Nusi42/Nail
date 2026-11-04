@@ -113,6 +113,11 @@ windows-sys = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+# ADR 0211: the `com.apple.quarantine` attribute of opened attachments
+# (setxattr). MIT OR Apache-2.0, already in the lock.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc.workspace = true
+
 [dev-dependencies]
 # The crate's own test support (`nail_core::testing`) for its integration tests.
 nail-core = { workspace = true, features = ["testing"] }

@@ -345,10 +345,10 @@ export const LEGACY_ICON_NAMES = {"account-add":"user-plus","attachment":"paperc
 export const OS_MESSAGE_ARG = "os" as const;
 
 /** Every `PlatformFeature`, in the contract's order. */
-export const PLATFORM_FEATURE_VALUES = ["windows-sign-in","windows-certificate-store","start-with-system","default-apps","simple-mapi"] as const satisfies readonly PlatformFeature[];
+export const PLATFORM_FEATURE_VALUES = ["windows-sign-in","windows-certificate-store","start-with-system","default-apps","simple-mapi","print-to-pdf"] as const satisfies readonly PlatformFeature[];
 
 /** The platform features only the desktop app reports (ADR 0202). */
-export const DESKTOP_APP_FEATURES = ["start-with-system","default-apps","simple-mapi"] as const;
+export const DESKTOP_APP_FEATURES = ["start-with-system","default-apps","simple-mapi","print-to-pdf"] as const;
 
 /** The views of the default layout, in rail order. */
 export const BUILTIN_VIEWS = ["mail","calendar","contacts","tasks","settings"] as const;

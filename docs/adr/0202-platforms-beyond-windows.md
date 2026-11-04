@@ -37,7 +37,8 @@ Linux build (Ubuntu 24.04 under WSL2) showed:
 - **Platform report.** `nail_api::platform` defines `Os` (`windows`, `macos`,
   `linux`, `other`) and `PlatformFeature` (`windows-sign-in`,
   `windows-certificate-store` in the core; `start-with-system`,
-  `default-apps`, `simple-mapi` in the desktop app). Each feature is decided
+  `default-apps`, `simple-mapi`, and since ADR 0211 `print-to-pdf`, in the
+  desktop app). Each feature is decided
   at compile time from the same `cfg` that builds it
   (`PlatformFeature::IN_CORE` / `IN_DESKTOP_APP`). `GetConfig` answers with
   `platform: PlatformInfo`: the core's features, plus the desktop app's when

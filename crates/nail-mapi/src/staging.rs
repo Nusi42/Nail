@@ -207,51 +207,15 @@ pub fn sweep_stale(root: &Path, age: Duration) {
     }
 }
 
+/// Longest name of a staged copy (characters).
+const MAX_NAME_CHARS: usize = 200;
+
 /// A name Windows accepts for a file: reserved characters and control
 /// characters become `_`, trailing dots and spaces go, device names
 /// (`CON`, `COM1`, …) get a `_` prefix, at most 200 characters (keeping a
 /// short extension), never empty.
 pub fn safe_file_name(name: &str) -> String {
-    const MAX_CHARS: usize = 200;
-    let replaced: String = name
-        .chars()
-        .map(|c| {
-            if c < ' ' || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let mut out = replaced
-        .trim_start()
-        .trim_end_matches(['.', ' '])
-        .to_owned();
-    if out.is_empty() {
-        return "attachment".to_owned();
-    }
-    let stem = out.split('.').next().unwrap_or_default().trim_end();
-    let upper = stem.to_ascii_uppercase();
-    let reserved = matches!(
-        upper.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-    ) || ((upper.starts_with("COM") || upper.starts_with("LPT"))
-        && upper.len() == 4
-        && upper.as_bytes()[3].is_ascii_digit());
-    if reserved {
-        out.insert(0, '_');
-    }
-    if out.chars().count() > MAX_CHARS {
-        let ext = out
-            .rfind('.')
-            .map(|i| out[i..].to_owned())
-            .filter(|e| e.chars().count() <= 16)
-            .unwrap_or_default();
-        let keep = MAX_CHARS - ext.chars().count();
-        let head: String = out.chars().take(keep).collect();
-        out = format!("{}{ext}", head.trim_end_matches(['.', ' ']));
-    }
-    out
+    nail_util::file_name::safe_attachment_name(name, MAX_NAME_CHARS)
 }
 
 #[cfg(test)]
@@ -429,19 +393,8 @@ mod tests {
 
     #[test]
     fn file_names_are_made_safe() {
-        assert_eq!(safe_file_name("Q3 report.docx"), "Q3 report.docx");
-        assert_eq!(
-            safe_file_name(r#"a<b>c:d"e/f\g|h?i*j"#),
-            "a_b_c_d_e_f_g_h_i_j"
-        );
-        assert_eq!(safe_file_name("tab\there"), "tab_here");
-        assert_eq!(safe_file_name("name. . "), "name");
-        assert_eq!(safe_file_name("  "), "attachment");
-        assert_eq!(safe_file_name("..."), "attachment");
+        // The rules are nail_util::file_name's; here: the length limit.
         assert_eq!(safe_file_name("con.txt"), "_con.txt");
-        assert_eq!(safe_file_name("COM1"), "_COM1");
-        assert_eq!(safe_file_name("COM10.txt"), "COM10.txt");
-        assert_eq!(safe_file_name("Consent.pdf"), "Consent.pdf");
         let long = format!("{}.pdf", "x".repeat(300));
         let safe = safe_file_name(&long);
         assert_eq!(safe.chars().count(), 200);

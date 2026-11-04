@@ -894,7 +894,8 @@ pub trait DesktopHost: Send + Sync + fmt::Debug {
 
     /// Hands a link the user clicked in a message to the system (the
     /// default browser, the phone app). `url` is normalized and has one of
-    /// [`crate::links::EXTERNAL_LINK_SCHEMES`] (the core checked it).
+    /// [`crate::links::EXTERNAL_LINK_SCHEMES`] (the core checked it). May
+    /// wait for the system: the core calls it on a blocking thread.
     fn open_link(&self, url: &str) -> Result<(), ApiError> {
         let _ = url;
         Err(desktop_unsupported())
@@ -905,7 +906,8 @@ pub trait DesktopHost: Send + Sync + fmt::Debug {
     /// Opens `path`, an absolute file the core just wrote into its private
     /// folder for opened attachments, with the system's handler for its
     /// type (`ShellExecuteW` on Windows, `open` on macOS, `xdg-open`
-    /// elsewhere).
+    /// elsewhere). May wait for the system: the core calls it on a
+    /// blocking thread.
     fn open_file(&self, path: &std::path::Path) -> Result<(), ApiError> {
         let _ = path;
         Err(desktop_unsupported())
