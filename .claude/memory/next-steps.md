@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: Where the project stands and what to do next — read first when continuing in a new session (0.8.2 released 2026-11-01; next: link status bar in warning colours, no gap)
+description: Where the project stands and what to do next — read first when continuing in a new session (0.8.4 prepared 2026-11-04, waits for the maintainer's try and go-ahead to publish)
 metadata:
   type: project
 ---
@@ -30,6 +30,18 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 **Waiting for the maintainer to try** (newest installer in `<installer folder>\`, payload smoke passed): HTML mail
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
+
+**Prepared 0.8.4 (2026-11-04), NOT published:** release commit on the lead branch, files in the lead's
+`.nail-build/release/0.8.4/`, installer and zip copied to the installer folder. Waits for the maintainer to try it
+(macOS especially) and to publish with `! cd ~/SelfMade.InWork/nail.win1 && npm run release:publish -- --yes`;
+`main` is not fast-forwarded until then. Content: links and the text menu over HTML mail now work in WebKit
+(macOS / Linux): every mail frame runs one hash-pinned script in an opaque origin (ADR 0212); review fixes to
+0.8.3 (remote desktop-only requests answer `unsupported`, attachment names keep their extension, downloaded files
+are marked (Zone.Identifier / `com.apple.quarantine`), PDF path hidden without print-to-PDF, apostrophes in text
+links). A Playwright `webkit` project runs the engine-dependent specs on Windows. Verified on the real WebKitGTK
+app in WSL under Xvfb (xdotool + screenshots; the app needs a long-lived background `wsl.exe` call). Not compiled:
+the macOS `setxattr` code. Known flaky tests, not fixed: the `nail-smime` CBC padding test (about 1 in 256), the
+m2c quiet-hours e2e under load.
 
 **Released 0.8.2 (2026-11-01):** security update (zip 9.2 with Nail's own archive checks, rustls,
 ammonia and others; ADR 0209) and one update address instead of channels (GitHub's latest release,
