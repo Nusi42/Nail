@@ -3,6 +3,33 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.4 (`0.8.4`)
+
+Links in mail work on macOS and Linux, and opened attachments are safer.
+
+### Corrected in 0.8.4
+
+- **Links in HTML mail on macOS and Linux** — pointing at a link shows where
+  it goes, a click opens it in your browser, and a link that looks
+  suspicious asks first, as on Windows.
+- **The right-click menu over a message** (Copy, Select all) appears on
+  macOS and Linux, and in the browser version too.
+- **Labels and buttons** on macOS and Linux can no longer be selected like
+  text by accident.
+- **Attachments in the browser version** — Open and Save download the file
+  instead of showing an error.
+- **Long attachment names** keep their file type when opened, so the right
+  program starts.
+- **Save as PDF on macOS and Linux** points straight to the print dialog's
+  PDF printer instead of asking for a file it cannot write.
+- **Web addresses with an apostrophe** in plain-text mail are one link.
+
+### Security in 0.8.4
+
+- **Opened attachments are marked as downloaded from the internet**, so
+  Windows SmartScreen, Office's Protected View and macOS Gatekeeper check
+  them like any downloaded file.
+
 ## Nail 0.8.3 (`0.8.3`)
 
 Open attachments directly, and file dialogs on macOS and Linux.

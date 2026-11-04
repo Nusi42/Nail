@@ -8,21 +8,13 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
-### Fixed (ADR 0212)
+### Fixed (ADRs 0211, 0212)
 
 - Links in HTML mail work on macOS and Linux: hovering shows the target, a
   click opens it (or asks first for a warned link). The text menu over mail
   (Copy, Select all) opens there too.
 - On macOS and Linux, Nail's labels, buttons and lists can no longer be
   selected like text (the WebKit engine needs its own name for the rule).
-
-### Changed (ADR 0212)
-
-- Every mail frame runs one fixed script, by its hash, in an isolated origin;
-  the remote UI gets Nail's text menu over mail as well.
-
-### Fixed (ADR 0211, follow-up)
-
 - Open and Save on an attachment in the remote UI download the file instead
   of failing; every desktop-only request answers a remote session with
   `unsupported`, so the browser's own way is taken.
@@ -36,7 +28,12 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 - Opening a link or an attachment no longer blocks one of the core's worker
   threads while macOS starts the program.
 
-### Security (ADR 0211, follow-up)
+### Changed (ADR 0212)
+
+- Every mail frame runs one fixed script, by its hash, in an isolated origin;
+  the remote UI gets Nail's text menu over mail as well.
+
+### Security (ADR 0211)
 
 - An opened attachment is marked as downloaded from the internet (the
   `Zone.Identifier` stream on Windows, the `com.apple.quarantine` attribute
