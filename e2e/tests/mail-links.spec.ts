@@ -299,6 +299,9 @@ test.describe("the warnings banner", () => {
 
 test.describe("the remote UI's sandbox origin", () => {
   useServer();
+  // WebKit's first page over the remote UI's TLS takes long while the whole
+  // suite runs in parallel.
+  test.slow(({ browserName }) => browserName === "webkit", "WebKit's first TLS page load");
 
   test("the hash-pinned script reports hovers and clicks; links open in the session's browser", async ({
     page,
