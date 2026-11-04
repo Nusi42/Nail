@@ -1,6 +1,6 @@
 import { defaultTheme } from "../api/mockData";
 import { uiSources } from "../test/sources";
-import { BASE_CSS, compileTheme } from "./compile";
+import { BASE_CSS, compileTheme, withEnginePrefixes } from "./compile";
 import { isSelectable, SELECTABLE_PARTS, SELECTION_CSS } from "./selection";
 import { SKIN_CSS } from "./skin";
 
@@ -57,5 +57,21 @@ describe("text selection (ADR 0182)", () => {
     for (const chrome of [header, label, row, button, notEditable, null]) {
       expect(isSelectable(chrome), chrome?.outerHTML ?? "null").toBe(false);
     }
+  });
+});
+
+describe("engine prefixes", () => {
+  it("adds WebKit's user-select next to every standard one, once", () => {
+    expect(withEnginePrefixes("body { user-select: none; } a{user-select:text !important}")).toBe(
+      "body { -webkit-user-select: none; user-select: none; } a{-webkit-user-select: text !important; user-select: text !important}",
+    );
+    expect(withEnginePrefixes("p { -webkit-user-select: none; }")).toBe(
+      "p { -webkit-user-select: none; }",
+    );
+    const css = withEnginePrefixes(compileTheme(defaultTheme()).css);
+    expect(css).toContain("body { -webkit-user-select: none; user-select: none; }");
+    const standard = css.match(/(?<![-\w])user-select:/g) ?? [];
+    expect(standard.length).toBeGreaterThan(0);
+    expect(css.match(/-webkit-user-select:/g)?.length).toBe(standard.length);
   });
 });

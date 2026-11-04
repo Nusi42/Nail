@@ -10,7 +10,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ResolvedLayout, ResolvedMenu } from "../../api/generated";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 import { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
-import { findContextTarget, textTarget, type ContextTarget } from "./targets";
+import { findContextTarget, textTarget, type ContextTarget, type SavedSelection } from "./targets";
 
 export interface OpenMenu {
   menu: ResolvedMenu;
@@ -110,16 +110,17 @@ export function openContextMenu(
 }
 
 /**
- * Opens the text menu on `root` (ADR 0184): a mail document's body, whose
- * events the page's handler does not see.
+ * Opens the text menu on `root` (ADR 0184): a mail frame, whose events the
+ * page's handler does not see; `selection` is the frame's (ADR 0212).
  */
 export function openTextMenu(
   ui: UiStore,
   layout: ResolvedLayout,
   root: HTMLElement,
   options: OpenOptions,
+  selection?: SavedSelection,
 ): boolean {
-  return showMenu(ui, layout, textTarget(root), root, options);
+  return showMenu(ui, layout, textTarget(root, selection), root, options);
 }
 
 function showMenu(

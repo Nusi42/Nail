@@ -4329,12 +4329,14 @@ checksum = "a8afc6df942f4c022d70c5725e18df1a705773870e5b7f96fde94ca0334ce77a"
 name = "nail-api"
 version = "0.8.3"
 dependencies = [
+ "base64 0.23.1",
  "indexmap 2.14.2",
  "nail-util",
  "pretty_assertions",
  "schemars 1.2.2",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.21",
  "ts-rs",

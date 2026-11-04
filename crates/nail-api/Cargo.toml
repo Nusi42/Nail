@@ -15,6 +15,9 @@ serde_json.workspace = true
 indexmap.workspace = true
 thiserror.workspace = true
 ts-rs.workspace = true
+# ADR 0212: the hash of the mail frame script (its CSP source).
+base64.workspace = true
+sha2.workspace = true
 # M4a: JSON Schemas of the MCP tool / prompt arguments (`json-schema`).
 schemars = { workspace = true, optional = true }
 

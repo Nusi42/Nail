@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { defined } from "../support/defined";
+import { expectOnlyFrameScript } from "../support/mailFrame";
 import { READER_SUBJECT, messageRows, messageList } from "../support/views";
 
 /** The seeded demo data (nail-testkit corpus) in the shared server. */
@@ -76,8 +77,8 @@ test("the reader shows the body in a sandboxed iframe with remote images blocked
   await expect(page.getByRole("region", { name: "Remote content" })).toBeVisible();
 
   const iframe = view.locator('iframe[data-part="message-view.body"]');
-  // P3 (ADR 0164): the app's origin for measuring, never scripts.
-  await expect(iframe).toHaveAttribute("sandbox", "allow-same-origin");
+  // ADR 0212: an opaque origin; only the frame script runs.
+  await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
   const body = page.frameLocator('iframe[data-part="message-view.body"]');
   await expect(body.locator("h1")).toHaveText("Autumn is here");
   // No remote image survives: sources are gone or local.
@@ -85,7 +86,7 @@ test("the reader shows the body in a sandboxed iframe with remote images blocked
     .locator("img")
     .evaluateAll((imgs) => imgs.map((img) => img.getAttribute("src") ?? ""));
   expect(sources.filter((src) => /^(https?:)?\/\//i.test(src))).toEqual([]);
-  await expect(body.locator("script")).toHaveCount(0);
+  await expectOnlyFrameScript(body);
 });
 
 test("hostile HTML is neutralised", async ({ page }) => {
@@ -93,7 +94,8 @@ test("hostile HTML is neutralised", async ({ page }) => {
   await rows.filter({ hasText: "Action required: verify your mailbox" }).click();
   const frame = page.frameLocator('iframe[data-part="message-view.body"]');
   await expect(frame.locator("body")).not.toBeEmpty();
-  await expect(frame.locator("script, iframe, form, object, embed, svg")).toHaveCount(0);
+  await expect(frame.locator("iframe, form, object, embed, svg")).toHaveCount(0);
+  await expectOnlyFrameScript(frame);
   const handlers = await frame
     .locator("*")
     .evaluateAll(

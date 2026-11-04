@@ -6,9 +6,10 @@
  *
  * ADR 0184: the one `contextmenu` handler of the app. It cancels every
  * right-click — the browser's (WebView2's) menu never shows — and opens
- * Nail's menu for the place, or nothing. Mail documents in their frames
- * (`srcdoc`, same origin) get the text menu from a handler on their own
- * document, attached when the frame loads.
+ * Nail's menu for the place, or nothing. A mail frame's document (opaque
+ * origin, ADR 0212) cancels its own right-click in its script and asks for
+ * the menu; its `<iframe>` then dispatches `FRAME_MENU_EVENT` with the
+ * point and the selected text, and this host opens the text menu.
  *
  * Shift+F10 and the menu key are ordinary key bindings of the action
  * `menu.context` (default layout), so they can be rebound.
@@ -24,12 +25,10 @@ import { withEditShortcuts } from "./editing";
 import { withoutConversationShortcuts, withoutDisabled } from "./resolve";
 import { menuStoreFor, openContextMenu, openTextMenu, useMenu } from "./store";
 import { TEXT_PART } from "./targets";
-
-/** The frames whose documents are mail (text menu inside them). */
-const MAIL_FRAME = 'iframe[data-part="message-view.body"]';
+import { FRAME_MENU_EVENT, type FrameMenu } from "../../theme/frameHeight";
 
 /** Whether a `contextmenu` event came from the keyboard (no pointer position). */
-const fromKeyboard = (event: MouseEvent) =>
+const fromKeyboard = (event: Pick<MouseEvent, "clientX" | "clientY" | "button">) =>
   event.clientX === 0 && event.clientY === 0 && event.button !== 2;
 
 export function ContextMenuHost() {
@@ -48,44 +47,27 @@ export function ContextMenuHost() {
       const point = fromKeyboard(event) ? null : { x: event.clientX, y: event.clientY };
       openContextMenu(ui, layout, element, { point });
     };
-    // Mail documents: the text menu, placed in the page's coordinates.
-    // A document's listener stays with it (an `AbortSignal` of this page
-    // does not reach another document's realm) but does nothing once this
-    // effect is gone; the next run attaches its own.
-    let live = true;
-    const attached = new WeakSet<Document>();
-    const attach = (frame: HTMLIFrameElement) => {
-      const doc = frame.contentDocument;
-      if (doc === null || attached.has(doc)) return;
-      attached.add(doc);
-      doc.addEventListener("contextmenu", (event) => {
-        if (!live) return;
-        event.preventDefault();
-        const body = doc.body as HTMLElement | null;
-        if (body === null) return;
-        const rect = frame.getBoundingClientRect();
-        const inside = fromKeyboard(event)
-          ? { x: 0, y: 0 }
-          : { x: event.clientX, y: event.clientY };
-        openTextMenu(ui, layout, body, {
-          point: { x: rect.left + inside.x, y: rect.top + inside.y },
-          keyboard: fromKeyboard(event),
-        });
-      });
+    // Mail frames: the text menu, placed in the page's coordinates.
+    const onFrameMenu = (event: Event) => {
+      const frame = event.target;
+      if (!(frame instanceof HTMLIFrameElement) || !(event instanceof CustomEvent)) return;
+      const menu = event.detail as FrameMenu;
+      const keyboard = fromKeyboard({ clientX: menu.x, clientY: menu.y, button: menu.button });
+      const rect = frame.getBoundingClientRect();
+      const inside = keyboard ? { x: 0, y: 0 } : { x: menu.x, y: menu.y };
+      openTextMenu(
+        ui,
+        layout,
+        frame,
+        { point: { x: rect.left + inside.x, y: rect.top + inside.y }, keyboard },
+        { range: null, field: null, frame: { text: menu.text, window: frame.contentWindow } },
+      );
     };
     const listening = new AbortController();
     const { signal } = listening;
-    const onLoad = (event: Event) => {
-      if (event.target instanceof HTMLIFrameElement && event.target.matches(MAIL_FRAME)) {
-        attach(event.target);
-      }
-    };
-    document.querySelectorAll<HTMLIFrameElement>(MAIL_FRAME).forEach(attach);
     document.addEventListener("contextmenu", onContextMenu, { signal });
-    // `load` does not bubble; a capturing listener sees every frame's.
-    document.addEventListener("load", onLoad, { capture: true, signal });
+    document.addEventListener(FRAME_MENU_EVENT, onFrameMenu, { signal });
     return () => {
-      live = false;
       listening.abort();
     };
   }, [ui, layout]);

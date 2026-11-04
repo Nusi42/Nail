@@ -4,6 +4,8 @@ import { NodeView } from "../../layout/LayoutRenderer";
 import { must } from "../../test/must";
 import { ContextMenuHost } from "./ContextMenuHost";
 import { EDIT_SHORTCUTS } from "./editing";
+import { FRAME_SELECT_ALL_MESSAGE } from "../../api/generated";
+import { FRAME_MENU_EVENT, type FrameMenu } from "../../theme/frameHeight";
 
 const NOTES = "notes";
 let restoreSizes: () => void;
@@ -22,6 +24,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   restoreSizes();
+  document.getSelection()?.removeAllRanges();
   Reflect.deleteProperty(document, "execCommand");
 });
 
@@ -40,6 +43,7 @@ function render() {
         <pre data-part="message-view.text">Hello from a card</pre>
       </article>
       <textarea aria-label={NOTES} defaultValue="hello world" />
+      <iframe data-part="message-view.body" data-message="m2" title={NOTES} />
       <ContextMenuHost />
     </>,
     env,
@@ -66,7 +70,43 @@ const items = (menu: HTMLElement) =>
     .getAllByRole("menuitem")
     .map((item) => item.getAttribute("data-action"));
 
+/** What a mail frame's `<iframe>` dispatches when its document asks for a menu (ADR 0212). */
+function frameMenu(frame: HTMLIFrameElement, detail: FrameMenu): void {
+  act(() => {
+    frame.dispatchEvent(new CustomEvent(FRAME_MENU_EVENT, { bubbles: true, detail }));
+  });
+}
+
 describe("the text menu (ADR 0184)", () => {
+  it("opens for a mail frame with its text: Copy writes it, Select all asks the frame", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    try {
+      const { container } = render();
+      const frame = must(container.querySelector("iframe"));
+      const view = must(frame.contentWindow);
+      const postMessage = vi.spyOn(view, "postMessage").mockImplementation(() => undefined);
+      frameMenu(frame, { x: 4, y: 6, button: 2, text: "from the mail" });
+      let menu = await screen.findByRole("menu", { name: "Edit" });
+      expect(items(menu)).toEqual(["edit.copy", "edit.select-all"]);
+      fireEvent.click(within(menu).getByRole("menuitem", { name: /Copy/ }));
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith("from the mail");
+      });
+      // Never the page's own editing commands for a frame.
+      expect(commands).toEqual([]);
+
+      // Nothing selected: no Copy; Select all goes to the frame's script.
+      frameMenu(frame, { x: 0, y: 0, button: 0, text: "" });
+      menu = await screen.findByRole("menu", { name: "Edit" });
+      expect(items(menu)).toEqual(["edit.select-all"]);
+      fireEvent.click(within(menu).getByRole("menuitem", { name: /Select all/ }));
+      expect(postMessage).toHaveBeenCalledWith({ type: FRAME_SELECT_ALL_MESSAGE }, "*");
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
   it("offers Copy and Select all on selected text and copies it", async () => {
     const { container } = render();
     const value = must(

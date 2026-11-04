@@ -1,6 +1,7 @@
 # ADR 0164: P3 contract — Gmail-like conversation actions, conversation speed, card height
 
-Status: accepted · 2026-10-05 · P3 contract (wave P3; plan section 10, "Wave P3")
+Status: accepted · 2026-10-05 · P3 contract (wave P3; plan section 10, "Wave P3"). The local frame's
+sandbox (same origin, no scripts) is replaced by ADR 0212: every mail frame runs one script in an opaque origin.
 
 ## Context
 

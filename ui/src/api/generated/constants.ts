@@ -497,6 +497,21 @@ export const FRAME_HEIGHT_MESSAGE = "nail-frame-height" as const;
 /** `type` of the message a sandbox-origin mail document posts about a hovered or clicked link. */
 export const FRAME_LINK_MESSAGE = "nail-frame-link" as const;
 
+/** Root-element attribute of a mail document naming the app origin its frame script posts to. */
+export const FRAME_PARENT_ATTRIBUTE = "data-nail-parent" as const;
+
+/** `type` of the message a mail frame posts for a context menu. */
+export const FRAME_MENU_MESSAGE = "nail-frame-menu" as const;
+
+/** `type` of the message the reader posts to a mail frame to select its text. */
+export const FRAME_SELECT_ALL_MESSAGE = "nail-frame-select-all" as const;
+
+/** The only script a mail document runs (ADR 0212). */
+export const FRAME_SCRIPT = "(function(){\"use strict\";var d=document.documentElement,t=d.getAttribute(\"data-nail-parent\");if(!t)return;var l=-1;function m(){var v=d.clientHeight,s=d.scrollHeight;var h=Math.min(Math.ceil((s>v?s:d.offsetHeight)+Math.max(0,innerHeight-v)),200000);if(h!==l){l=h;parent.postMessage({type:\"nail-frame-height\",height:h},t)}}addEventListener(\"load\",m);addEventListener(\"resize\",m);[\"load\",\"error\",\"toggle\"].forEach(function(e){document.addEventListener(e,m,true)});var r=typeof ResizeObserver===\"function\"?new ResizeObserver(m):null;if(r)r.observe(d);document.addEventListener(\"DOMContentLoaded\",function(){if(r&&document.body)r.observe(document.body);m()});if(document.fonts)document.fonts.ready.then(m);var c=null;function a(e){var n=e.target;return n&&n.closest?n.closest(\"a[href]\"):null}function p(n,o){parent.postMessage({type:\"nail-frame-link\",open:o,href:n?n.getAttribute(\"href\"):null,index:n?Array.prototype.indexOf.call(document.querySelectorAll(\"a[href]\"),n):-1},t)}function k(n){if(n!==c){c=n;p(n,false)}}document.addEventListener(\"click\",function(e){var n=a(e);if(n){e.preventDefault();p(n,true)}},true);document.addEventListener(\"auxclick\",function(e){var n=a(e);if(n){e.preventDefault();if(e.button===1)p(n,true)}},true);[\"mouseover\",\"focusin\"].forEach(function(y){document.addEventListener(y,function(e){k(a(e))},true)});[\"mouseout\",\"focusout\"].forEach(function(y){document.addEventListener(y,function(e){if(!e.relatedTarget)k(null)},true)});document.addEventListener(\"contextmenu\",function(e){e.preventDefault();parent.postMessage({type:\"nail-frame-menu\",x:e.clientX,y:e.clientY,button:e.button,text:String(getSelection())},t)},true);addEventListener(\"message\",function(e){var g=e.data;if(e.source===parent&&e.origin===t&&g&&g.type===\"nail-frame-select-all\"&&document.body)getSelection().selectAllChildren(document.body)})})();" as const;
+
+/** The CSP source that allows `FRAME_SCRIPT` and nothing else. */
+export const FRAME_SCRIPT_SOURCE = "'sha256-nWmvhTuVju88PPyy4QgdisscCqQY0wLhpriiEOQ9ZI0='" as const;
+
 /** Tallest mail frame the reader sizes to its content (CSS px). */
 export const MAX_FRAME_HEIGHT = 200000 as const;
 

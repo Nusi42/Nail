@@ -58,6 +58,19 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1000 } },
     },
+    {
+      // ADR 0212: WebKit, the engine of the desktop app on macOS (WKWebView)
+      // and Linux (WebKitGTK), for what depends on the engine: the mail
+      // frames (links, height, text menu, remote content).
+      name: "webkit",
+      testMatch: [
+        "mail-links.spec.ts",
+        "p3-card-height.spec.ts",
+        "remote-content.spec.ts",
+        "app-chrome.spec.ts",
+      ],
+      use: { ...devices["Desktop Safari"], viewport: { width: 1280, height: 1000 } },
+    },
   ],
   webServer: {
     command: [

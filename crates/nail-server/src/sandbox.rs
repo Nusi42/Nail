@@ -29,20 +29,18 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
+use nail_api::mail_frame::FRAME_PARENT_ATTRIBUTE;
 use nail_api::remote_content::{PROXY_PATH, PROXY_URL_SCHEME};
 use nail_api::{MessageId, Request, Response as ApiResponse};
 use nail_core::Service;
 use nail_proxy::{Proxy, Purpose};
-use sha2::{Digest, Sha256};
 
 /// Route prefix of mail documents on the sandbox origin.
 pub const RENDER_PATH: &str = nail_api::remote_content::RENDER_PATH;
@@ -97,67 +95,7 @@ pub(crate) struct SandboxState {
     pub(crate) scheme: &'static str,
 }
 
-/// The only script a sandbox document runs (P3, ADR 0164; links ADR 0206),
-/// allowed by its hash ([`frame_script_source`]). It reads the app origin
-/// from the document's `parent` query parameter
-/// ([`nail_api::remote_content::RENDER_PARENT_PARAM`]) and posts only there:
-///
-/// * `{type: "nail-frame-height", height}`
-///   ([`nail_api::remote_content::FRAME_HEIGHT_MESSAGE`]) — after `load`,
-///   after each image's `load` / `error`, on `<details>` toggles, when fonts
-///   arrive, on resize and whenever the root or body resizes; only when the
-///   height changed. The arithmetic is the reader's
-///   (`ui/src/theme/frameHeight.ts`, `contentHeight`): the overflow when the
-///   document overflows the frame, else the root's own height, plus a
-///   horizontal scrollbar.
-/// * `{type: "nail-frame-link", open, href, index}`
-///   ([`nail_api::remote_content::FRAME_LINK_MESSAGE`]) — the link
-///   (`closest("a[href]")`) under the pointer or keyboard focus when it
-///   changes (`href: null`, `index: -1` when none), and `open: true` for a
-///   click, Enter or a middle click on one. Those never navigate the frame
-///   (`preventDefault`); the reader follows the link. The numbering is the
-///   core's (`nail_mime::links`): the position among the document's
-///   `a[href]`. The logic is the local frame's (`ui/src/widgets/mailLinks.ts`,
-///   `watchLinks`).
-///
-/// It touches nothing else (an opaque origin has no cookies or storage
-/// anyway). Changing one byte changes its hash; the CSP follows
-/// automatically.
-pub const FRAME_SCRIPT: &str = concat!(
-    "(function(){\"use strict\";",
-    "var t=new URLSearchParams(location.search).get(\"parent\");if(!t)return;",
-    "var d=document.documentElement,l=-1;",
-    "function m(){var v=d.clientHeight,s=d.scrollHeight;",
-    "var h=Math.min(Math.ceil((s>v?s:d.offsetHeight)+Math.max(0,innerHeight-v)),200000);",
-    "if(h!==l){l=h;parent.postMessage({type:\"nail-frame-height\",height:h},t)}}",
-    "addEventListener(\"load\",m);addEventListener(\"resize\",m);",
-    "[\"load\",\"error\",\"toggle\"].forEach(function(e){document.addEventListener(e,m,true)});",
-    "var r=typeof ResizeObserver===\"function\"?new ResizeObserver(m):null;if(r)r.observe(d);",
-    "document.addEventListener(\"DOMContentLoaded\",function(){if(r&&document.body)r.observe(document.body);m()});",
-    "if(document.fonts)document.fonts.ready.then(m);",
-    "var c=null;",
-    "function a(e){var n=e.target;return n&&n.closest?n.closest(\"a[href]\"):null}",
-    "function p(n,o){parent.postMessage({type:\"nail-frame-link\",open:o,",
-    "href:n?n.getAttribute(\"href\"):null,",
-    "index:n?Array.prototype.indexOf.call(document.querySelectorAll(\"a[href]\"),n):-1},t)}",
-    "function k(n){if(n!==c){c=n;p(n,false)}}",
-    "document.addEventListener(\"click\",function(e){var n=a(e);if(n){e.preventDefault();p(n,true)}},true);",
-    "document.addEventListener(\"auxclick\",function(e){var n=a(e);if(n){e.preventDefault();if(e.button===1)p(n,true)}},true);",
-    "[\"mouseover\",\"focusin\"].forEach(function(y){document.addEventListener(y,function(e){k(a(e))},true)});",
-    "[\"mouseout\",\"focusout\"].forEach(function(y){document.addEventListener(y,function(e){if(!e.relatedTarget)k(null)},true)})",
-    "})();"
-);
-
-static FRAME_SCRIPT_SOURCE: LazyLock<String> = LazyLock::new(|| {
-    let digest = Sha256::digest(FRAME_SCRIPT.as_bytes());
-    format!("'sha256-{}'", STANDARD.encode(digest))
-});
-
-/// The CSP source that allows [`FRAME_SCRIPT`] (and nothing else):
-/// `'sha256-<base64>'`.
-pub fn frame_script_source() -> &'static str {
-    &FRAME_SCRIPT_SOURCE
-}
+pub use nail_api::mail_frame::{FRAME_SCRIPT, frame_script_source};
 
 /// Whether `parent` is one of the space-separated `frame_ancestors`
 /// sources (exactly; the app origins the route may be framed by).
@@ -168,16 +106,29 @@ pub fn is_frame_ancestor(parent: &str, frame_ancestors: &str) -> bool {
 /// The sandbox document for `html`: `nail-proxy:` URLs resolved to this
 /// origin's proxy route, no referrer, and the reader stylesheet `css`
 /// (the app's theme; it cannot close its `<style>` element), with the
-/// frame script ([`FRAME_SCRIPT`]) in its head.
-pub fn document(html: &str, css: &str) -> String {
+/// frame script ([`FRAME_SCRIPT`]) in its head. The script posts to
+/// `parent` (an origin the caller checked with [`is_frame_ancestor`],
+/// written into [`FRAME_PARENT_ATTRIBUTE`]); without one it posts nothing.
+pub fn document(html: &str, css: &str, parent: Option<&str>) -> String {
     let body = html.replace(PROXY_URL_SCHEME, PROXY_PATH);
     let css = css.replace("</", "<\\/");
+    let root = parent.map_or_else(String::new, |origin| {
+        format!(" {FRAME_PARENT_ATTRIBUTE}=\"{}\"", attribute_value(origin))
+    });
     format!(
-        "<!doctype html><html><head><meta charset=\"utf-8\">\
+        "<!doctype html><html{root}><head><meta charset=\"utf-8\">\
          <meta name=\"referrer\" content=\"no-referrer\"><style>{css}</style>\
          <script>{FRAME_SCRIPT}</script></head>\
          <body>{body}</body></html>"
     )
+}
+
+/// `value` escaped for a double-quoted HTML attribute.
+fn attribute_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
 }
 
 /// The CSP of a sandbox document served as `self_origin`: scripts only by
@@ -266,7 +217,7 @@ async fn render(
                 HeaderValue::from_static("cross-origin"),
             ),
         ],
-        document(&html, &css),
+        document(&html, &css, query.parent.as_deref()),
     )
         .into_response()
 }
@@ -280,6 +231,7 @@ mod tests {
         let doc = document(
             r#"<p><img src="nail-proxy:abc.def" alt=""></p>"#,
             "body { color: red } </style><script>x</script>",
+            None,
         );
         assert!(doc.contains("<style>body { color: red } <\\/style><script>x<\\/script></style>"));
         assert!(doc.contains(r#"<img src="/api/proxy/abc.def""#));
@@ -313,65 +265,19 @@ mod tests {
     }
 
     #[test]
-    fn the_frame_script_is_the_contracts_and_pinned_by_its_hash() {
-        use nail_api::remote_content::{
-            FRAME_HEIGHT_MESSAGE, FRAME_LINK_MESSAGE, MAX_FRAME_HEIGHT, RENDER_PARENT_PARAM,
-        };
-        assert!(FRAME_SCRIPT.contains(&format!("type:\"{FRAME_HEIGHT_MESSAGE}\"")));
-        assert!(FRAME_SCRIPT.contains(&format!(".get(\"{RENDER_PARENT_PARAM}\")")));
-        assert!(FRAME_SCRIPT.contains(&format!(",{MAX_FRAME_HEIGHT})")));
-        // ADR 0206: links are reported, numbered like the core does, and
-        // never followed by the frame itself.
-        assert!(FRAME_SCRIPT.contains(&format!("type:\"{FRAME_LINK_MESSAGE}\"")));
-        assert!(FRAME_SCRIPT.contains("closest(\"a[href]\")"));
-        assert!(FRAME_SCRIPT.contains("querySelectorAll(\"a[href]\")"));
-        for event in ["click", "auxclick"] {
-            assert!(
-                FRAME_SCRIPT.contains(&format!(
-                    "addEventListener(\"{event}\",function(e){{var n=a(e);if(n){{e.preventDefault();"
-                )),
-                "{event}"
-            );
-        }
-        for event in ["mouseover", "focusin", "mouseout", "focusout"] {
-            assert!(FRAME_SCRIPT.contains(&format!("\"{event}\"")), "{event}");
-        }
-        // Every message goes to the named parent: as many target arguments
-        // as posts.
-        assert_eq!(
-            FRAME_SCRIPT.matches("parent.postMessage(").count(),
-            FRAME_SCRIPT.matches("},t)").count()
-        );
-        // It never navigates or opens anything itself.
-        for forbidden in [
-            "location.href",
-            "location.assign",
-            "window.open",
-            ".click()",
-        ] {
-            assert!(!FRAME_SCRIPT.contains(forbidden), "{forbidden}");
-        }
-        // It posts to the named parent only, never to `*`.
-        assert!(FRAME_SCRIPT.contains("parent.postMessage("));
-        assert!(!FRAME_SCRIPT.contains("\"*\""));
-        // Nothing that reads or writes state.
-        for forbidden in [
-            "cookie",
-            "Storage",
-            "fetch",
-            "XMLHttpRequest",
-            "innerHTML",
-            "eval",
-        ] {
-            assert!(!FRAME_SCRIPT.contains(forbidden), "{forbidden}");
-        }
-        // It cannot end its own element.
-        assert!(!FRAME_SCRIPT.contains("</"));
-        let expected = STANDARD.encode(Sha256::digest(FRAME_SCRIPT.as_bytes()));
-        assert_eq!(frame_script_source(), format!("'sha256-{expected}'"));
-        let doc = document("<p>Hi</p>", "");
+    fn documents_run_the_frame_script_for_their_parent_only() {
+        let doc = document("<p>Hi</p>", "", Some("https://nail.example:4780"));
         assert!(doc.contains(&format!("<script>{FRAME_SCRIPT}</script></head>")));
         assert_eq!(doc.matches("<script").count(), 1);
+        assert!(doc.starts_with(&format!(
+            "<!doctype html><html {FRAME_PARENT_ATTRIBUTE}=\"https://nail.example:4780\"><head>"
+        )));
+        // Without a parent the script posts nothing.
+        let doc = document("<p>Hi</p>", "", None);
+        assert!(doc.starts_with("<!doctype html><html><head>"));
+        // The attribute cannot be closed by its value.
+        let doc = document("", "", Some("a\"><script>"));
+        assert!(doc.contains(&format!("{FRAME_PARENT_ATTRIBUTE}=\"a&quot;>&lt;script>\"")));
     }
 
     #[test]

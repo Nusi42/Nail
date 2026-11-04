@@ -204,7 +204,12 @@ export async function pairedRemoteMail(
   const phone = await context.newPage();
   await phone.setViewportSize({ width: 1280, height: 1000 });
   await pairBrowser(phone, remote, await pairingCode(server, user));
-  await phone.getByRole("button", { name: "Not now" }).click();
+  // The passkey offer shows only where the browser has an authenticator
+  // (Playwright's WebKit has none): decline it when it comes.
+  const notNow = phone.getByRole("button", { name: "Not now" });
+  const sections = phone.getByRole("navigation", { name: "Sections" });
+  await expect(notNow.or(sections)).toBeVisible();
+  if (await notNow.isVisible()) await notNow.click();
   await showView(phone, "Mail");
   return { remote, context, phone };
 }

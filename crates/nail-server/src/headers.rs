@@ -70,8 +70,11 @@ pub fn app_csp(sandbox_origins: &[String], strict: bool, tls: bool) -> String {
         frame_src.push(' ');
         frame_src.push_str(origin);
     }
+    // ADR 0212: a `srcdoc` mail frame inherits this policy; its one script
+    // must pass it too.
+    let frame_script = nail_api::mail_frame::frame_script_source();
     let mut csp = format!(
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+        "default-src 'self'; script-src 'self' {frame_script}; style-src 'self' 'unsafe-inline'; \
          img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; \
          frame-src {frame_src}; worker-src 'self'; manifest-src 'self'; media-src 'self' blob:; \
          object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
@@ -227,7 +230,11 @@ mod tests {
     fn the_csp_has_no_inline_script_and_is_never_framed() {
         for strict in [false, true] {
             let csp = app_csp(&["https://nail.example:4781".to_owned()], strict, true);
-            assert!(csp.contains("script-src 'self';"));
+            // ADR 0212: the mail frame's script, by its hash, and nothing inline.
+            assert!(csp.contains(&format!(
+                "script-src 'self' {};",
+                nail_api::mail_frame::frame_script_source()
+            )));
             assert!(!csp.contains("unsafe-eval"));
             let script = csp
                 .split(';')

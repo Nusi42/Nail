@@ -36,6 +36,23 @@ import { UI_LOG_TARGET as PAGE_LOG_TARGET } from "../../ui/src/api/generated/con
 
 let server: NailServer;
 
+/**
+ * What the clipboard holds after a Copy, or `null` where the test cannot
+ * read it: Playwright's WebKit has no clipboard permissions, so there the
+ * copy itself is only clicked.
+ */
+async function clipboardText(page: Page, browserName: string): Promise<string | null> {
+  if (browserName !== "chromium") return null;
+  return page.evaluate(() => navigator.clipboard.readText());
+}
+
+/** Lets the page use the clipboard where the browser has the permissions (Chromium). */
+async function allowClipboard(page: Page, browserName: string): Promise<void> {
+  if (browserName === "chromium") {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  }
+}
+
 test.afterEach(async () => {
   await server.stop();
 });
@@ -190,6 +207,7 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
 
   test("labels cannot be selected; the conversation and mail text can, and copy", async ({
     page,
+    browserName,
   }) => {
     await openApp(page, server.url);
     await rows(page).filter({ hasText: "Welcome to Nail" }).click();
@@ -199,7 +217,8 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
     const people = page.locator('[data-part="thread-view.participants"]');
     const body = page.locator('[data-part="message-view.text"]');
     const userSelect = (locator: Locator) =>
-      locator.evaluate((el) => getComputedStyle(el).userSelect);
+      // WebKit honours (and reports) only the prefixed property; Chromium reports both.
+      locator.evaluate((el) => getComputedStyle(el).getPropertyValue("-webkit-user-select"));
     // Nail's labels and controls: not selectable.
     expect(await userSelect(count)).toBe("none");
     expect(await userSelect(rows(page).first())).toBe("none");
@@ -208,7 +227,7 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
     // The user's data: selectable.
     for (const data of [subject, people, body]) expect(await userSelect(data)).toBe("text");
     await expect(page.getByRole("searchbox", { name: "Search mail" })).toHaveCSS(
-      "user-select",
+      "-webkit-user-select",
       "text",
     );
 
@@ -218,7 +237,7 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
     expect(await people.textContent()).toContain(person.trim());
 
     // A right-click on the selection: Nail's text menu; Copy copies it.
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await allowClipboard(page, browserName);
     const box = defined(await people.boundingBox(), "the participants");
     await page.mouse.click(box.x + 4, box.y + box.height / 2, { button: "right" });
     const menu = page.getByRole("menu", { name: "Edit" });
@@ -227,7 +246,7 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
     await expect(menu.getByRole("menuitem", { name: /Copy/ })).toContainText("Ctrl+C");
     await menu.getByRole("menuitem", { name: /Copy/ }).click();
     await expect(menu).toBeHidden();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(person);
+    expect(await clipboardText(page, browserName)).toBe(browserName === "chromium" ? person : null);
 
     const text = await dragSelect(page, body);
     expect(text).toContain("Hi Sam");
@@ -238,6 +257,7 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
 
   test("a right-click opens Nail's menu for the place or nothing, never the browser's", async ({
     page,
+    browserName,
   }) => {
     await openApp(page, server.url);
     await expect(rows(page).first()).toBeVisible();
@@ -272,11 +292,23 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
     await rows(page).filter({ hasText: "Your weekly garden digest" }).click();
     await expect(page.locator(READER_SUBJECT)).toContainText("Your weekly garden digest");
     const frame = page.frameLocator('iframe[data-part="message-view.body"]');
+    const edit = page.getByRole("menu", { name: "Edit" });
     await frame.locator("h1").click({ button: "right" });
-    await expect(page.getByRole("menu", { name: "Edit" }).getByRole("menuitem")).toHaveText([
-      /^Select all/,
-    ]);
-    await page.keyboard.press("Escape");
+    await expect(edit.getByRole("menuitem")).toHaveText([/^Select all/]);
+    // ADR 0212: the frame's document has an opaque origin; its script
+    // asks for the menu and selects all when the menu says so.
+    await edit.getByRole("menuitem", { name: /Select all/ }).click();
+    const selected = () =>
+      frame.locator("html").evaluate(() => document.getSelection()?.toString() ?? "");
+    await expect.poll(selected).toContain("Autumn is here");
+    // Selected text: Copy copies it.
+    await frame.locator("h1").click({ button: "right" });
+    await expect(edit.getByRole("menuitem")).toHaveText([/^Copy/, /^Select all/]);
+    await allowClipboard(page, browserName);
+    await edit.getByRole("menuitem", { name: /Copy/ }).click();
+    await expect(edit).toBeHidden();
+    const copied = await clipboardText(page, browserName);
+    if (copied !== null) expect(copied).toContain("Time to plant garlic");
 
     // The other views: whatever is right-clicked, the browser's menu never shows.
     for (const view of [

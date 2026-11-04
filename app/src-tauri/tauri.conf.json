@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: nail-proxy: http://nail-proxy.localhost; font-src 'self' data: nail-proxy: http://nail-proxy.localhost; style-src 'self' 'unsafe-inline'; frame-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self' 'sha256-nWmvhTuVju88PPyy4QgdisscCqQY0wLhpriiEOQ9ZI0='; img-src 'self' data: blob: nail-proxy: http://nail-proxy.localhost; font-src 'self' data: nail-proxy: http://nail-proxy.localhost; style-src 'self' 'unsafe-inline'; frame-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "plugins": {

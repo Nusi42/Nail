@@ -158,8 +158,8 @@ test.describe("HTML mail in nail serve (demo-multi)", () => {
     await openMessage(page, "Big October Sale");
 
     const body = page.locator('iframe[data-part="message-view.body"]');
-    // P3 (ADR 0164): the app's origin for measuring, never scripts.
-    await expect(body).toHaveAttribute("sandbox", "allow-same-origin");
+    // ADR 0212: an opaque origin; only the frame script runs.
+    await expect(body).toHaveAttribute("sandbox", "allow-scripts");
     await expect(body).toHaveAttribute("data-state", /(^|\s)designed(\s|$)/);
     const frame = readerFrame(page);
     await expect(frame.getByRole("heading", { name: "Big October Sale" })).toBeVisible();

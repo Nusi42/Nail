@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { normalizeLayout } from "../api/normalize";
+import { FRAME_SCRIPT, FRAME_SCRIPT_SOURCE } from "../api/generated";
 import {
   createEnv,
   renderNode,
@@ -265,11 +266,13 @@ describe("message-view", () => {
     );
     const iframe = must(container.querySelector("iframe"));
     expect(iframe).toHaveAttribute("data-part", "message-view.body");
-    // P3 (ADR 0164): measured, never with scripts.
-    expect(iframe.getAttribute("sandbox")).toBe("allow-same-origin");
+    // ADR 0212: an opaque origin that runs only the frame script.
+    expect(iframe.getAttribute("sandbox")).toBe("allow-scripts");
     const doc = iframe.getAttribute("srcdoc") ?? "";
     expect(doc).toContain('http-equiv="Content-Security-Policy"');
     expect(doc).toContain("default-src 'none'");
+    expect(doc).toContain(`script-src ${FRAME_SCRIPT_SOURCE};`);
+    expect(doc).toContain(`<script>${FRAME_SCRIPT}</script>`);
     expect(doc).toContain("<b>Ada</b>");
     expect(iframe).toHaveAttribute("title", "Message content: Compiler notes for Monday");
     expect(screen.getByRole("list", { name: "Attachments" })).toHaveTextContent("report.pdf");

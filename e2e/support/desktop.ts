@@ -171,6 +171,10 @@ export async function connectDesktop(app: DesktopApp): Promise<{ browser: Browse
 export function desktopTests(timeout = 240_000): void {
   test.skip(process.platform !== "win32", "the desktop app uses WebView2 (Windows)");
   test.skip(
+    ({ browserName }) => browserName !== "chromium",
+    "the desktop app is driven over WebView2's DevTools protocol, once",
+  );
+  test.skip(
     !!process.env.CI && !process.env.NAIL_E2E_DESKTOP,
     "set NAIL_E2E_DESKTOP=1 to run the desktop tests in CI",
   );

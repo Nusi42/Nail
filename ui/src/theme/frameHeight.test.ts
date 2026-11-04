@@ -1,14 +1,14 @@
-/** The frame-height contract (P3, ADR 0164). */
+/** What mail frames report (P3, ADR 0164; ADR 0212). */
+import { FRAME_MENU_MESSAGE } from "../api/generated";
 import {
   clampFrameHeight,
-  contentHeight,
   FrameHeightGuard,
+  frameMenuOf,
   OPAQUE_ORIGIN,
   FRAME_HEIGHT_MESSAGE,
   frameHeightOf,
+  MAIL_FRAME_SANDBOX,
   MAX_FRAME_HEIGHT,
-  REMOTE_SANDBOX,
-  SRCDOC_SANDBOX,
 } from "./frameHeight";
 
 const SANDBOX = "https://nail.local:4781";
@@ -67,34 +67,30 @@ describe("frame heights", () => {
   });
 
   it("never combines scripts with the app's origin", () => {
-    expect(SRCDOC_SANDBOX.split(" ")).not.toContain("allow-scripts");
-    expect(REMOTE_SANDBOX.split(" ")).not.toContain("allow-same-origin");
+    expect(MAIL_FRAME_SANDBOX.split(" ")).toEqual(["allow-scripts"]);
   });
 });
 
-describe("content heights", () => {
-  it("takes the root's height when the document fits, so a frame can shrink", () => {
-    expect(
-      contentHeight({ clientHeight: 400, scrollHeight: 400, offsetHeight: 120, innerHeight: 400 }),
-    ).toBe(120);
-  });
+describe("frame menus", () => {
+  const frame = {} as Window;
+  const event = (data: unknown, source: unknown = frame) =>
+    ({ data, source, origin: OPAQUE_ORIGIN }) as Pick<MessageEvent, "data" | "origin" | "source">;
+  const menu = { type: FRAME_MENU_MESSAGE, x: 12, y: 30, button: 2, text: "Hello" };
 
-  it("takes the overflow when the document is taller than the frame", () => {
-    expect(
-      contentHeight({ clientHeight: 120, scrollHeight: 980, offsetHeight: 960, innerHeight: 120 }),
-    ).toBe(980);
-  });
-
-  it("adds a horizontal scrollbar's thickness", () => {
-    expect(
-      contentHeight({ clientHeight: 385, scrollHeight: 400, offsetHeight: 400, innerHeight: 400 }),
-    ).toBe(415);
-  });
-
-  it("clamps the very long ones (they scroll inside)", () => {
-    expect(
-      contentHeight({ clientHeight: 100, scrollHeight: 9e6, offsetHeight: 9e6, innerHeight: 100 }),
-    ).toBe(MAX_FRAME_HEIGHT);
+  it("accepts its own frame's menu with the contract's shape", () => {
+    expect(frameMenuOf(event(menu), frame, OPAQUE_ORIGIN)).toEqual({
+      x: 12,
+      y: 30,
+      button: 2,
+      text: "Hello",
+    });
+    expect(frameMenuOf(event(menu, {}), frame, OPAQUE_ORIGIN)).toBe(null);
+    expect(frameMenuOf(event({ ...menu, x: "12" }), frame, OPAQUE_ORIGIN)).toBe(null);
+    expect(frameMenuOf(event({ ...menu, button: null }), frame, OPAQUE_ORIGIN)).toBe(null);
+    expect(frameMenuOf(event({ ...menu, text: 3 }), frame, OPAQUE_ORIGIN)).toBe(null);
+    expect(frameMenuOf(event({ ...menu, type: FRAME_HEIGHT_MESSAGE }), frame, OPAQUE_ORIGIN)).toBe(
+      null,
+    );
   });
 });
 

@@ -1,11 +1,11 @@
 /**
  * The text menu's actions (ADR 0184): Cut, Copy, Paste and Select all on
  * the text the menu opened on — a field, an editor, selectable text
- * (`../../theme/selection.ts`) or a mail document — in place of the
- * browser's menu. They act on the selection saved when the menu opened
+ * (`../../theme/selection.ts`) or a mail frame (its text comes from the
+ * frame's script, ADR 0212) — in place of the browser's menu. They act on the selection saved when the menu opened
  * (the menu took the focus) and apply only while a text menu is open.
  */
-import type { ResolvedMenuEntry } from "../../api/generated";
+import { FRAME_SELECT_ALL_MESSAGE, type ResolvedMenuEntry } from "../../api/generated";
 import type { ActionContext, ActionHandler } from "../../actions/registry";
 import { contextTarget } from "./store";
 import { isTextInput, selectsText, TEXT_PART, type ContextTarget } from "./targets";
@@ -96,9 +96,15 @@ export const editActions: Readonly<Record<string, ActionHandler>> = {
     },
   },
   "edit.copy": {
-    run: (ctx) => {
+    run: async (ctx) => {
       const target = textTargetOf(ctx);
       if (target === null) return;
+      const frame = target.selection?.frame;
+      if (frame !== undefined) {
+        // A mail frame's text arrived with the menu (ADR 0212).
+        await navigator.clipboard.writeText(frame.text);
+        return;
+      }
       restore(target);
       edit(target, "copy");
     },
@@ -124,6 +130,12 @@ export const editActions: Readonly<Record<string, ActionHandler>> = {
     run: (ctx) => {
       const target = textTargetOf(ctx);
       if (target === null) return;
+      const frame = target.selection?.frame;
+      if (frame !== undefined) {
+        // The frame's document has an opaque origin: its script selects.
+        frame.window?.postMessage({ type: FRAME_SELECT_ALL_MESSAGE }, "*");
+        return;
+      }
       const { element } = target;
       if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
         element.focus({ preventScroll: true });

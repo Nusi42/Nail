@@ -286,7 +286,13 @@ async fn every_response_carries_the_security_headers() {
             assert_eq!(r.header(name), Some(value), "{path}: {name}");
         }
         let csp = r.header("content-security-policy").unwrap();
-        assert!(csp.contains("script-src 'self';"), "{path}");
+        assert!(
+            csp.contains(&format!(
+                "script-src 'self' {};",
+                nail_server::sandbox::frame_script_source()
+            )),
+            "{path}"
+        );
         assert!(csp.contains("frame-ancestors 'none'"), "{path}");
         assert!(!csp.contains("require-trusted-types-for"), "{path}");
         assert!(

@@ -1,6 +1,7 @@
 # 0206 — Links in mail open outside the reader's frame
 
-Status: accepted (2026-10-31)
+Status: accepted (2026-10-31). The reader no longer watches local frames itself: since ADR 0212
+every frame reports its links through the hash-pinned frame script (WebKit ran no such listeners).
 
 ## Context
 

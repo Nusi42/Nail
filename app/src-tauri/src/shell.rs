@@ -485,6 +485,27 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    /// ADR 0212: a `srcdoc` mail frame inherits the app's CSP, so the frame
+    /// script's hash must be in it (and no inline script besides).
+    #[test]
+    fn the_app_csp_allows_the_mail_frame_script() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let csp = config["app"]["security"]["csp"].as_str().unwrap();
+        let script_src = csp
+            .split(';')
+            .map(str::trim)
+            .find(|d| d.starts_with("script-src"))
+            .unwrap();
+        assert_eq!(
+            script_src,
+            format!(
+                "script-src 'self' {}",
+                nail_api::mail_frame::frame_script_source()
+            )
+        );
+    }
+
     #[test]
     fn closing_goes_to_the_tray_only_with_a_tray_and_not_when_quitting() {
         assert!(closes_to_tray(true, true, false));

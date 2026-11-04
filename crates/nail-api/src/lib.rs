@@ -152,6 +152,7 @@ pub mod launch;
 pub mod links;
 pub mod localized;
 pub mod mail_actions;
+pub mod mail_frame;
 pub mod mapi;
 pub mod mcp;
 pub mod menus;

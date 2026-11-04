@@ -8,6 +8,19 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Fixed (ADR 0212)
+
+- Links in HTML mail work on macOS and Linux: hovering shows the target, a
+  click opens it (or asks first for a warned link). The text menu over mail
+  (Copy, Select all) opens there too.
+- On macOS and Linux, Nail's labels, buttons and lists can no longer be
+  selected like text (the WebKit engine needs its own name for the rule).
+
+### Changed (ADR 0212)
+
+- Every mail frame runs one fixed script, by its hash, in an isolated origin;
+  the remote UI gets Nail's text menu over mail as well.
+
 ## [0.8.3] — 2026-11-02
 
 ### Added (ADR 0211)

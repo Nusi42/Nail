@@ -1,10 +1,15 @@
-/** Mail frames sized to their content (P3 WP-card-height, ADR 0164). */
+/** Mail frames sized to their content (P3 WP-card-height, ADR 0164; ADR 0212). */
 import { act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createEnv, Providers, renderWithProviders } from "../test/harness";
 import { must } from "../test/must";
-import { FRAME_LINK_MESSAGE } from "../api/generated";
-import { FRAME_HEIGHT_MESSAGE, MAX_FRAME_HEIGHT } from "../theme/frameHeight";
+import { FRAME_LINK_MESSAGE, FRAME_MENU_MESSAGE } from "../api/generated";
+import {
+  FRAME_HEIGHT_MESSAGE,
+  FRAME_MENU_EVENT,
+  MAX_FRAME_HEIGHT,
+  OPAQUE_ORIGIN,
+} from "../theme/frameHeight";
 import { LocalMailFrame, RemoteMailFrame, renderSrc } from "./MailFrame";
 import type { MailLinkReport } from "./mailLinks";
 
@@ -29,26 +34,11 @@ function geometryHeight(frame: HTMLIFrameElement): string | null {
   return null;
 }
 
-/** Gives `doc` the sizes a laid-out document would report. */
-function layOut(
-  doc: Document,
-  sizes: { client: number; scroll: number; offset: number; inner: number },
-): void {
-  const root = doc.documentElement;
-  Object.defineProperty(root, "clientHeight", { configurable: true, value: sizes.client });
-  Object.defineProperty(root, "scrollHeight", { configurable: true, value: sizes.scroll });
-  Object.defineProperty(root, "offsetHeight", { configurable: true, value: sizes.offset });
-  Object.defineProperty(must(doc.defaultView), "innerHeight", {
-    configurable: true,
-    value: sizes.inner,
+/** Posts `data` to the reader's window as `source` from `origin`. */
+function postFrom(data: unknown, source: unknown, origin: string) {
+  act(() => {
+    window.dispatchEvent(new MessageEvent("message", { data, source: source as Window, origin }));
   });
-}
-
-/** Turns the frame's document into its `srcdoc` document (jsdom does not load srcdoc). */
-function loadSrcdoc(frame: HTMLIFrameElement): Document {
-  const doc = must(frame.contentDocument);
-  Object.defineProperty(doc, "URL", { configurable: true, value: "about:srcdoc" });
-  return doc;
 }
 
 /** A remote frame and a way to post messages as `source` from `origin`. */
@@ -64,55 +54,39 @@ function remoteFrame(onLink: (report: MailLinkReport) => void) {
     createEnv(),
   );
   const frame = must(container.querySelector("iframe"));
-  const post = (data: unknown, source: unknown, origin: string) => {
-    act(() => {
-      window.dispatchEvent(new MessageEvent("message", { data, source: source as Window, origin }));
-    });
-  };
-  return { frame, post };
+  return { frame, post: postFrom };
+}
+
+/** A local frame showing a short mail, whose links nobody follows. */
+function localFrame(): HTMLIFrameElement {
+  const { container } = renderWithProviders(
+    <LocalMailFrame srcDoc="<p>Hi</p>" title={TITLE} designed={false} onLink={ignore} />,
+    createEnv(),
+  );
+  return must(container.querySelector("iframe"));
 }
 
 describe("the local mail frame", () => {
-  it("is sandboxed without scripts, keeps its srcdoc and sizes itself to the document", () => {
-    const env = createEnv();
-    const { container } = renderWithProviders(
-      <LocalMailFrame srcDoc="<p>Hi</p>" title={TITLE} designed={false} onLink={ignore} />,
-      env,
-    );
-    const frame = must(container.querySelector("iframe"));
-    expect(frame).toHaveAttribute("sandbox", "allow-same-origin");
-    expect(frame.getAttribute("sandbox")).not.toContain("allow-scripts");
+  it("is sandboxed in an opaque origin, keeps its srcdoc and takes heights from its document", () => {
+    const frame = localFrame();
+    // ADR 0212: scripts (only the frame script), never the app's origin.
+    expect(frame).toHaveAttribute("sandbox", "allow-scripts");
     expect(frame).toHaveAttribute("srcdoc", "<p>Hi</p>");
     expect(frame).toHaveAttribute("data-part", "message-view.body");
-    // The initial about:blank is not measured: a placeholder until then.
+    // A placeholder until the document reports.
     expect(frame.getAttribute("data-state")).toBeNull();
     expect(geometryHeight(frame)).toBeNull();
 
-    const doc = loadSrcdoc(frame);
-    layOut(doc, { client: 192, scroll: 192, offset: 74, inner: 192 });
-    act(() => {
-      frame.dispatchEvent(new Event("load"));
-    });
-    // A short mail: the root's own height, smaller than the placeholder.
+    // Another window, or the sandbox origin of a remote frame: ignored.
+    postFrom({ type: FRAME_HEIGHT_MESSAGE, height: 900 }, window, OPAQUE_ORIGIN);
+    postFrom({ type: FRAME_HEIGHT_MESSAGE, height: 900 }, frame.contentWindow, SANDBOX);
+    expect(geometryHeight(frame)).toBeNull();
+    postFrom({ type: FRAME_HEIGHT_MESSAGE, height: 74 }, frame.contentWindow, OPAQUE_ORIGIN);
     expect(geometryHeight(frame)).toBe("74px");
     expect(frame).toHaveAttribute("data-state", "measured");
-
-    // An image loads and the content overflows: the frame grows to it.
-    layOut(doc, { client: 74, scroll: 540, offset: 540, inner: 74 });
-    act(() => {
-      doc.body.dispatchEvent(new Event("load"));
-    });
-    expect(geometryHeight(frame)).toBe("540px");
-
-    // A horizontal scrollbar (wide mail) adds its thickness.
-    layOut(doc, { client: 525, scroll: 540, offset: 540, inner: 540 });
-    act(() => {
-      doc.body.dispatchEvent(new Event("error"));
-    });
-    expect(geometryHeight(frame)).toBe("555px");
   });
 
-  it("marks designed mail and measures again after a new document", () => {
+  it("marks designed mail and starts over with a new document", () => {
     const env = createEnv();
     const { container, rerender } = renderWithProviders(
       <LocalMailFrame srcDoc="<table></table>" title={TITLE} designed onLink={ignore} />,
@@ -120,14 +94,11 @@ describe("the local mail frame", () => {
     );
     const frame = must(container.querySelector("iframe"));
     expect(frame).toHaveAttribute("data-state", "designed");
-    layOut(loadSrcdoc(frame), { client: 192, scroll: 192, offset: 300, inner: 192 });
-    act(() => {
-      frame.dispatchEvent(new Event("load"));
-    });
+    postFrom({ type: FRAME_HEIGHT_MESSAGE, height: 300 }, frame.contentWindow, OPAQUE_ORIGIN);
     expect(frame).toHaveAttribute("data-state", "designed measured");
     expect(geometryHeight(frame)).toBe("300px");
 
-    // A theme switch: a new srcdoc, a new document; the old height stays until it is measured.
+    // A theme switch: a new srcdoc, a new document; the old height stays until it reports.
     rerender(
       <Providers env={env}>
         <LocalMailFrame srcDoc="<table> </table>" title={TITLE} designed onLink={ignore} />
@@ -135,11 +106,23 @@ describe("the local mail frame", () => {
     );
     expect(frame).toHaveAttribute("srcdoc", "<table> </table>");
     expect(geometryHeight(frame)).toBe("300px");
-    layOut(loadSrcdoc(frame), { client: 300, scroll: 300, offset: 120, inner: 300 });
-    act(() => {
-      frame.dispatchEvent(new Event("load"));
-    });
+    postFrom({ type: FRAME_HEIGHT_MESSAGE, height: 120 }, frame.contentWindow, OPAQUE_ORIGIN);
     expect(geometryHeight(frame)).toBe("120px");
+  });
+
+  it("turns its document's menu request into an event on the iframe", () => {
+    const frame = localFrame();
+    const seen = vi.fn();
+    document.addEventListener(FRAME_MENU_EVENT, seen);
+    const menu = { type: FRAME_MENU_MESSAGE, x: 5, y: 7, button: 2, text: "Hi" };
+    postFrom(menu, window, OPAQUE_ORIGIN);
+    expect(seen).not.toHaveBeenCalled();
+    postFrom(menu, frame.contentWindow, OPAQUE_ORIGIN);
+    document.removeEventListener(FRAME_MENU_EVENT, seen);
+    expect(seen).toHaveBeenCalledTimes(1);
+    const event = seen.mock.calls[0]?.[0] as CustomEvent;
+    expect(event.target).toBe(frame);
+    expect(event.detail).toEqual({ x: 5, y: 7, button: 2, text: "Hi" });
   });
 });
 
@@ -184,77 +167,6 @@ describe("the remote mail frame", () => {
 });
 
 describe("links in mail frames (ADR 0206)", () => {
-  const LINKS =
-    '<p><a href="https://track.example.net/e/1/click"><span>I am fully satisfied.</span></a>' +
-    '<a name="x">no target</a><a href="https://example.org/pic"><img alt="Picture"></a></p>';
-
-  it("never navigates a local frame and reports hovers, focus and clicks", () => {
-    const env = createEnv();
-    const onLink = vi.fn();
-    const { container } = renderWithProviders(
-      <LocalMailFrame srcDoc={LINKS} title={TITLE} designed={false} onLink={onLink} />,
-      env,
-    );
-    const frame = must(container.querySelector("iframe"));
-    const doc = loadSrcdoc(frame);
-    doc.body.innerHTML = LINKS;
-    act(() => {
-      frame.dispatchEvent(new Event("load"));
-    });
-    const span = must(doc.querySelector("span"));
-    const img = must(doc.querySelector("img"));
-    const view = must(doc.defaultView);
-
-    span.dispatchEvent(new view.MouseEvent("mouseover", { bubbles: true }));
-    expect(onLink).toHaveBeenLastCalledWith({
-      link: { href: "https://track.example.net/e/1/click", index: 0 },
-      open: false,
-    });
-    // Moving inside the same link reports nothing new.
-    const calls = onLink.mock.calls.length;
-    must(doc.querySelector("a")).dispatchEvent(new view.MouseEvent("mouseover", { bubbles: true }));
-    expect(onLink).toHaveBeenCalledTimes(calls);
-
-    const click = new view.MouseEvent("click", { bubbles: true, cancelable: true });
-    span.dispatchEvent(click);
-    expect(click.defaultPrevented).toBe(true);
-    expect(onLink).toHaveBeenLastCalledWith({
-      link: { href: "https://track.example.net/e/1/click", index: 0 },
-      open: true,
-    });
-
-    // The image link is the second link: `<a>` without `href` is not counted.
-    const middle = new view.MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 });
-    img.dispatchEvent(middle);
-    expect(middle.defaultPrevented).toBe(true);
-    expect(onLink).toHaveBeenLastCalledWith({
-      link: { href: "https://example.org/pic", index: 1 },
-      open: true,
-    });
-    // A right click opens nothing (and navigates nothing).
-    onLink.mockClear();
-    const right = new view.MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 2 });
-    img.dispatchEvent(right);
-    expect(right.defaultPrevented).toBe(true);
-    expect(onLink).not.toHaveBeenCalled();
-
-    // Keyboard focus shows the link too; leaving the document clears it.
-    must(doc.querySelectorAll("a")[2]).dispatchEvent(
-      new view.FocusEvent("focusin", { bubbles: true }),
-    );
-    expect(onLink).toHaveBeenLastCalledWith({
-      link: { href: "https://example.org/pic", index: 1 },
-      open: false,
-    });
-    img.dispatchEvent(new view.FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
-    expect(onLink).toHaveBeenLastCalledWith({ link: null, open: false });
-
-    // Clicks outside links are left alone.
-    const plain = new view.MouseEvent("click", { bubbles: true, cancelable: true });
-    doc.body.dispatchEvent(plain);
-    expect(plain.defaultPrevented).toBe(false);
-  });
-
   it("takes link reports only from the remote frame's own window", () => {
     const onLink = vi.fn();
     const { frame, post } = remoteFrame(onLink);

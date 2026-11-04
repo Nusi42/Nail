@@ -8,8 +8,7 @@
  * CSSOM rules keyed on `[data-geom="<id>"]`, updated in place without
  * re-parsing the theme, and re-inserted after each theme swap.
  */
-import { cssString, isSafeValue } from "./compile";
-import { PROPERTY_RE } from "./compile";
+import { cssString, isSafeValue, PROPERTY_RE, withEnginePrefixes } from "./compile";
 
 export type Declarations = Record<string, string>;
 
@@ -58,7 +57,7 @@ export class StyleManager {
   setTheme(css: string): void {
     if (css === this.themeCss && this.el?.isConnected) return;
     this.themeCss = css;
-    this.element.textContent = css;
+    this.element.textContent = withEnginePrefixes(css);
     for (const [id, entry] of this.geometry) {
       entry.rule = this.insert(id, entry.declarations);
     }

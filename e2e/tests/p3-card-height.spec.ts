@@ -9,10 +9,9 @@ import { showView, messageRow } from "../support/views";
  * a short HTML card is short, a long newsletter shows in full and the feed
  * (or the single-message reader) scrolls as a whole; the frames measure
  * again after remote content loads, when their width changes and after a
- * theme switch. Local frames (`srcdoc`, `sandbox="allow-same-origin"`) are
- * measured by the reader; remote UI frames on the sandbox origin
- * (`sandbox="allow-scripts"`, opaque origin) report through the route's
- * hash-pinned script. No mail script, handler, `javascript:` link, meta
+ * theme switch. Local frames (`srcdoc`) and remote UI frames on the sandbox
+ * origin alike (`sandbox="allow-scripts"`, opaque origin; ADR 0212) report
+ * through the hash-pinned frame script. No mail script, handler, `javascript:` link, meta
  * refresh or CSS expression runs on either path; Trusted Types stay
  * enforced in the remote UI. The desktop app (WebView2) measures its local
  * frames like the browser.
@@ -170,8 +169,11 @@ async function expectFitted(frame: Locator): Promise<Fit> {
 const screenshotPath = (name: string): string => screenshotFile("p3", `card-height-${name}`);
 
 /** A document that would act if anything in it ran: a script, a handler, a `javascript:` link, a meta refresh, a CSS expression. */
+/** A refresh to another page (the sanitizer drops it; past it, `frame-src` blocks it). */
+const REFRESH = '<meta http-equiv="refresh" content="0;url=https://evil.example/">';
+
 const HOSTILE =
-  '<meta http-equiv="refresh" content="0;url=https://evil.example/">' +
+  REFRESH +
   "<p>Hostile words</p>" +
   '<script>parent.postMessage({type:"nail-frame-height",height:4321},"*");document.documentElement.dataset.pwned="script";try{parent.document.documentElement.dataset.pwned="script"}catch(e){}</script>' +
   '<img alt="x" src="data:," onerror="document.documentElement.dataset.pwned=\'handler\';try{parent.document.documentElement.dataset.pwned=\'handler\'}catch(e){}">' +
@@ -205,8 +207,8 @@ test.describe("local frames (nail serve)", () => {
     await showView(page, "Mail");
     const { long, short } = await openConversation(page);
 
-    // Local frames: the app's origin for measuring, never scripts.
-    await expect(frameIn(short)).toHaveAttribute("sandbox", "allow-same-origin");
+    // Local frames (ADR 0212): an opaque origin; only the frame script runs.
+    await expect(frameIn(short)).toHaveAttribute("sandbox", "allow-scripts");
 
     const shortFit = await expectFitted(frameIn(short));
     expect(shortFit.frame).toBeLessThan(120);
@@ -237,9 +239,17 @@ test.describe("local frames (nail serve)", () => {
         { timeout: 15_000 },
       )
       .toBe(1);
+    // The loaded banner is 560 px square; the frame grows by what it adds
+    // to its placeholder (the engine's own size for an image not loaded).
+    expect(
+      await frameIn(long)
+        .contentFrame()
+        .getByAltText("Banner")
+        .evaluate((img: HTMLImageElement) => img.getBoundingClientRect().height),
+    ).toBe(560);
     await expect
       .poll(async () => (await fitOf(frameIn(long))).frame, { timeout: 15_000 })
-      .toBeGreaterThan(before + 500);
+      .toBeGreaterThan(before);
     await expectFitted(frameIn(long));
 
     // A narrower window: the frames get narrower, the text wraps again, and
@@ -288,21 +298,36 @@ test.describe("local frames (nail serve)", () => {
     await showView(page, "Mail");
     await rowOf(page, "Hostile mail").click();
     const frame = page.locator('iframe[data-part="message-view.body"]');
-    await expect(frame).toHaveAttribute("sandbox", "allow-same-origin");
+    await expect(frame).toHaveAttribute("sandbox", "allow-scripts");
     await expectInert(page, frame);
 
     // Past the sanitizer: the raw document straight into the reader's frame
-    // (loopback `nail serve` reports Trusted Types only). The sandbox alone
-    // keeps every script, handler, link and refresh inert, although the
-    // document has the app's origin.
-    await frame.evaluate((el: HTMLIFrameElement, html: string) => {
-      el.setAttribute("srcdoc", html);
-    }, HOSTILE);
+    // (loopback `nail serve` reports Trusted Types only), without the
+    // reader's own CSP. The policy it inherits from the app runs only the
+    // frame script (by its hash): every script, handler and link stays
+    // inert, the refresh may not load another page into the frame
+    // (`frame-src`), and the opaque origin keeps the app out of reach.
+    const evil: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("evil.example")) evil.push(request.url());
+    });
+    await frame.evaluate(
+      (el: HTMLIFrameElement, html: string) => {
+        el.setAttribute("srcdoc", html);
+      },
+      HOSTILE.replace(REFRESH, ""),
+    );
     await expect(frame.contentFrame().locator("script")).toHaveCount(1);
     await expectInert(page, frame);
-    expect(await frame.evaluate((el: HTMLIFrameElement) => el.contentDocument?.URL)).toBe(
-      "about:srcdoc",
-    );
+    expect(await frame.evaluate((el: HTMLIFrameElement) => el.contentDocument)).toBeNull();
+    // The refresh alone: the frame may run its own script, so the engine
+    // would follow it, but the app's `frame-src` lets nothing load.
+    await frame.evaluate((el: HTMLIFrameElement, html: string) => {
+      el.setAttribute("srcdoc", html);
+    }, `${REFRESH}<p>Hostile words</p>`);
+    await page.waitForTimeout(1500);
+    expect(evil).toEqual([]);
+    expect(await page.locator("html").getAttribute("data-pwned")).toBeNull();
   });
 });
 
@@ -403,7 +428,7 @@ test.describe("the desktop app", () => {
     for (const subject of ["Your weekly garden digest 🌱", "Photo of the new lab bench"]) {
       await rowOf(desktop, subject).click();
       const frame = desktop.locator('iframe[data-part="message-view.body"]').first();
-      await expect(frame).toHaveAttribute("sandbox", "allow-same-origin");
+      await expect(frame).toHaveAttribute("sandbox", "allow-scripts");
       const fit = await expectFitted(frame);
       // Short corpus mail: no 40vh of empty paper below it.
       expect(fit.frame).toBeLessThan(600);

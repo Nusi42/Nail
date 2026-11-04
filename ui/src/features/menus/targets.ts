@@ -37,6 +37,12 @@ export interface SavedSelection {
   range: Range | null;
   /** The selected characters of a text field (`[start, end]`). */
   field: readonly [number, number] | null;
+  /**
+   * A mail frame's selection (ADR 0212): its document has an opaque
+   * origin, so the reader gets the selected text from the frame's script
+   * and asks the frame (`window`) to select all.
+   */
+  frame?: { text: string; window: Window | null };
 }
 
 /** The thing a context menu acts on. */
@@ -124,13 +130,17 @@ export function saveSelection(root: Element): SavedSelection {
 }
 
 /** Whether a saved selection holds any text. */
-export function selectsText({ range, field }: SavedSelection): boolean {
+export function selectsText({ range, field, frame }: SavedSelection): boolean {
+  if (frame !== undefined) return frame.text !== "";
   return field !== null ? field[0] !== field[1] : range !== null && !range.collapsed;
 }
 
-/** A text target on `root` with the selection of now. */
-export function textTarget(root: HTMLElement): ContextTarget {
-  return { ...targetOf(root, TEXT_PART), selection: saveSelection(root) };
+/** A text target on `root` with `selection` (by default the selection of now). */
+export function textTarget(
+  root: HTMLElement,
+  selection: SavedSelection = saveSelection(root),
+): ContextTarget {
+  return { ...targetOf(root, TEXT_PART), selection };
 }
 
 /**

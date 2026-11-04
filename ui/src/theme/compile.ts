@@ -405,6 +405,24 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   return { css: `${sections.join("\n")}\n`, warnings };
 }
 
+/** A `user-select` declaration not already prefixed: its value (and `!important`). */
+const USER_SELECT = /(?<![-\w])user-select:\s*([a-z-]+)(\s*!important)?/g;
+
+/**
+ * `css` with the prefixed declarations WebKit still needs next to the
+ * standard ones: WKWebView (macOS) and WebKitGTK (Linux) ignore an
+ * unprefixed `user-select`, so the chrome would be selectable there
+ * (ADR 0182). Applied where the stylesheet is set (`styleManager.ts`):
+ * one place for every skin and theme rule.
+ */
+export function withEnginePrefixes(css: string): string {
+  return css.replace(
+    USER_SELECT,
+    (_, value: string, important: string | undefined) =>
+      `-webkit-user-select: ${value}${important ?? ""}; user-select: ${value}${important ?? ""}`,
+  );
+}
+
 /** The concrete mode to show for a theme / override and the OS preferences. */
 export function effectiveMode(
   mode: ThemeMode,

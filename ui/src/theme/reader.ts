@@ -1,12 +1,13 @@
 /**
  * The document rendered inside the sandboxed reader iframe.
  *
- * The iframe has `sandbox="allow-same-origin"` — never with scripts (P3,
- * ADR 0164: the reader measures the document's height; `frameHeight.ts`) —
- * and the document carries its own Content-Security-Policy without
- * `script-src`: nothing may be loaded except inline
+ * The iframe has `sandbox="allow-scripts"` and an opaque origin — never
+ * `allow-same-origin` (ADR 0212, `frameHeight.ts`) — and the document
+ * carries its own Content-Security-Policy: the one frame script
+ * (`FRAME_SCRIPT`, by its hash; it reports height, links and the context
+ * menu to the app origin in the root's `FRAME_PARENT_ATTRIBUTE`), inline
  * styles, `data:` images/fonts and — for remote content the user allowed —
- * the core's proxy. Inline (`cid:`) images arrive as `data:` URLs: the core
+ * the core's proxy; nothing else. Inline (`cid:`) images arrive as `data:` URLs: the core
  * resolves them when it builds the body (P1 WP190), because a `srcdoc`
  * document also inherits the page's policy, which allows no `cid:`.
  *
@@ -20,21 +21,27 @@
  * in the browser, the `nail-proxy` protocol in the desktop app.
  */
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { PROXY_PATH, PROXY_URL_SCHEME, type ResolvedTheme } from "../api/generated";
+import {
+  FRAME_PARENT_ATTRIBUTE,
+  FRAME_SCRIPT,
+  FRAME_SCRIPT_SOURCE,
+  PROXY_PATH,
+  PROXY_URL_SCHEME,
+  type ResolvedTheme,
+} from "../api/generated";
 import { isSafeValue, resolveTokenRefs } from "./compile";
 import { ACCENT_BAR } from "./declarations";
 
 export { PROXY_PATH, PROXY_URL_SCHEME } from "../api/generated";
 
-/** CSP of the reader document (nothing remote). */
-export const READER_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
-
-/** CSP of the reader document that may load through the proxy at `origin`. */
+/** CSP of the reader document that may load through the proxy at `origin` (`null`: nothing remote). */
 export function readerCsp(proxyOrigin: string | null): string {
-  if (proxyOrigin === null) return READER_CSP;
-  return `default-src 'none'; style-src 'unsafe-inline'; img-src data: ${proxyOrigin}; font-src data: ${proxyOrigin}; form-action 'none'; base-uri 'none'`;
+  const remote = proxyOrigin === null ? "" : ` ${proxyOrigin}`;
+  return `default-src 'none'; script-src ${FRAME_SCRIPT_SOURCE}; style-src 'unsafe-inline'; img-src data:${remote}; font-src data:${remote}; form-action 'none'; base-uri 'none'`;
 }
+
+/** CSP of the reader document (nothing remote). */
+export const READER_CSP = readerCsp(null);
 
 /**
  * Where `nail-proxy:<token>` points in this window: the desktop app's
@@ -180,17 +187,24 @@ export function readerCss(theme: ResolvedTheme, mode: string, designed = false):
   return rules.join("\n");
 }
 
+/** `value` escaped for a double-quoted HTML attribute. */
+function attributeValue(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+}
+
 /**
  * Full `srcdoc` for a sanitized HTML body. With a `proxy` base, signed
  * `nail-proxy:` URLs load through it; without one they stay unloadable.
+ * The frame script reports to `parent` (this window's origin).
  */
 export function readerDocument(
   sanitizedHtml: string,
   css: string,
   proxy: string | null = null,
+  parent: string = window.location.origin,
 ): string {
   const usesProxy = proxy !== null && sanitizedHtml.includes(PROXY_URL_SCHEME);
   const body = usesProxy ? sanitizedHtml.replaceAll(PROXY_URL_SCHEME, proxy) : sanitizedHtml;
   const csp = readerCsp(usesProxy ? originOf(proxy) : null);
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><style>${css.replaceAll("</", "<\\/")}</style></head><body>${body}</body></html>`;
+  return `<!doctype html><html ${FRAME_PARENT_ATTRIBUTE}="${attributeValue(parent)}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><style>${css.replaceAll("</", "<\\/")}</style><script>${FRAME_SCRIPT}</script></head><body>${body}</body></html>`;
 }

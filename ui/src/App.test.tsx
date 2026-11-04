@@ -54,8 +54,8 @@ describe("App", () => {
     const frame = await waitFor(() =>
       must(feed.querySelector<HTMLElement>('[data-part="message-view"] iframe')),
     );
-    // P3 (ADR 0164): measured, never with scripts.
-    expect(frame.getAttribute("sandbox")).toBe("allow-same-origin");
+    // ADR 0212: an opaque origin; only the frame script runs.
+    expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
   });
 
   it("navigates with the layout's key bindings (j/k, ctrl+b, g r)", async () => {

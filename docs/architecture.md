@@ -711,15 +711,15 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        one-time "Read conversations as cards" offer, UI-state key `conversation-reader.layout-offer`)
                        (ADR 0151); UiState.messageThreads (j / k continue from a conversation's row; ADR 0153);
                        P3 (ADR 0164): features/mail-actions (conversation actions, undo toast), api/mockMailActions.ts (the
-                       contract with undo), theme/frameHeight.ts (mail frames report their height: srcdoc allow-same-origin
-                       without scripts, sandbox origin hashed script + postMessage); P3 packages: actions/mailTargets.ts
+                       contract with undo), theme/frameHeight.ts (mail frames report their height through the hash-pinned
+                       frame script + postMessage; ADR 0212); P3 packages: actions/mailTargets.ts
                        (currentTargets: context menu → picked rows → selection; conversation + listed folder),
                        features/mail-actions run.ts / store.ts / Toast.tsx / move.ts / skin.ts (MAIL_ACTIONS_SKIN_CSS in
                        theme/compile.ts; one ApplyMailAction per action, undo toast + `mail.undo` = z, card More menus;
                        ADR 0167), widgets/DeletePermanently.tsx asks with the count; widgets/MailFrame.tsx
                        (LocalMailFrame / RemoteMailFrame sized by a geometry rule; FrameHeightGuard in theme/frameHeight.ts,
                        frameHeightOf accepts origin "null" from the opaque sandbox origin; ADR 0168); ADR 0206:
-                       widgets/mailLinks.ts (watchLinks / frameLinkOf: links never navigate a mail frame),
+                       widgets/mailLinks.ts (frameLinkOf: links never navigate a mail frame),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
@@ -1277,7 +1277,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   messages). Until WP-actions-core the core's stub forwards per message without undo; the UI mock implements all of
   it. Schema v17: `thread_activity` (WP-perf: v18 maintenance, `ListThreads` on it, `thread-page-p95-ms` ≤ 10).
   Mail frames: local `sandbox="allow-same-origin"` (never scripts), remote a hash-pinned height script on the sandbox
-  origin (never same-origin).
+  origin (never same-origin). Since ADR 0212 both run the one frame script in an opaque origin (see "After Q2").
 - P3 integration (ADR 0169; packages ADRs 0165 actions core, 0166 thread-activity speed, 0167 actions UI, 0168 card
   height): every row / toolbar / key / menu action acts on the conversation through one `ApplyMailAction` batch with
   undo (toast, `z`); a card's own actions (its More menu) act on that message; Delete permanently only in Trash /
@@ -1369,9 +1369,8 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`ui/src/layout/settingsIndex.ts`); every Fluent message gets `$os` (`nail-config` `fluent_args`, the UI's
   `createLocalizer`); `DesktopHost::print_to_pdf` exists in the shell on Windows only (`pick_path` everywhere, `rfd` off
   Windows, ADR 0211); Linux / macOS bundles in `app/src-tauri/tauri.{linux,macos}.conf.json`; Linux checks in WSL2 (`docs/dev-setup.md`).
-- Links in mail (ADR 0206): no click navigates a mail frame. Local frames are watched by the reader
-  (`ui/src/widgets/mailLinks.ts` `watchLinks`), remote frames post `FRAME_LINK_MESSAGE` from the sandbox route's
-  hash-pinned `FRAME_SCRIPT`. `OpenLink` (`nail_api::links`, `nail_core::links`) answers `Opened` (the desktop host's
+- Links in mail (ADR 0206): no click navigates a mail frame. Every frame posts `FRAME_LINK_MESSAGE` from the
+  hash-pinned `FRAME_SCRIPT` (ADR 0212). `OpenLink` (`nail_api::links`, `nail_core::links`) answers `Opened` (the desktop host's
   `open_link`, `ShellExecuteW`; test runs record links for the `opened-links` test control), `OpenInBrowser` (web mode,
   every remote session: a new tab with `noopener,noreferrer`) or `Compose` (`mailto:`, the composer). The reader's
   status overlay (`message-view.link-dock` / `.link-status`, `ui/src/widgets/ReaderLinks.tsx`) shows the hovered
@@ -1408,3 +1407,13 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `ui/src/state/pageDiagnostics.ts`, `crates/nail-core/src/ui_log.rs`, target `nail_ui`, capped per minute on both
   sides); `ui/src/PageErrorBoundary.tsx` around the shell; action `system.reload` (Ctrl+Shift+R); bounded page lists
   through `ui/src/state/bounded.ts` `pushBounded` (plug-in and PIM toasts).
+- Mail frames run one script (ADR 0212): every mail frame is `sandbox="allow-scripts"` with an opaque origin and runs
+  only `FRAME_SCRIPT` (`crates/nail-api/src/mail_frame.rs`, exported to TypeScript with `FRAME_SCRIPT_SOURCE`, its
+  CSP hash), which posts the height, links and context-menu requests to the origin in the root's `data-nail-parent`
+  and selects all on request. `ui/src/theme/reader.ts` `readerDocument` writes the attribute, the script and its hash
+  into the local document; `nail_server::sandbox::document` does the same for the remote UI; the app's CSP names the
+  hash (`app_csp`; `tauri.conf.json`, pinned by `shell.rs`'s tests). `ui/src/widgets/MailFrame.tsx`
+  `useFrameMessages` serves both frames; a menu request becomes `FRAME_MENU_EVENT` on the `<iframe>`, which
+  `ContextMenuHost` turns into the text menu (Copy via the clipboard API, Select all posted to the frame). The
+  script's behaviour is tested in jsdom (`ui/src/theme/frameScript.test.ts`); e2e has a `webkit` project for the
+  engine-dependent specs.

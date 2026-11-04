@@ -652,6 +652,31 @@ fn remote(c: Constants) -> Result<Constants, serde_json::Error> {
         &rc::FRAME_LINK_MESSAGE,
     )?
     .add(
+        "FRAME_PARENT_ATTRIBUTE",
+        "Root-element attribute of a mail document naming the app origin its frame script posts to.",
+        &crate::mail_frame::FRAME_PARENT_ATTRIBUTE,
+    )?
+    .add(
+        "FRAME_MENU_MESSAGE",
+        "`type` of the message a mail frame posts for a context menu.",
+        &crate::mail_frame::FRAME_MENU_MESSAGE,
+    )?
+    .add(
+        "FRAME_SELECT_ALL_MESSAGE",
+        "`type` of the message the reader posts to a mail frame to select its text.",
+        &crate::mail_frame::FRAME_SELECT_ALL_MESSAGE,
+    )?
+    .add(
+        "FRAME_SCRIPT",
+        "The only script a mail document runs (ADR 0212).",
+        &crate::mail_frame::FRAME_SCRIPT,
+    )?
+    .add(
+        "FRAME_SCRIPT_SOURCE",
+        "The CSP source that allows `FRAME_SCRIPT` and nothing else.",
+        &crate::mail_frame::frame_script_source(),
+    )?
+    .add(
         "MAX_FRAME_HEIGHT",
         "Tallest mail frame the reader sizes to its content (CSS px).",
         &rc::MAX_FRAME_HEIGHT,

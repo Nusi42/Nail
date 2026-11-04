@@ -12,7 +12,7 @@ is the primary platform. User-facing documentation lives in
 | Visual Studio Build Tools | 2022, "Desktop development with C++" | MSVC linker; SQLite and zstd are compiled from source |
 | Node.js / npm | 26 / 11 | npm workspaces (`ui`, `e2e`, `packages/*`); **not** pnpm (ADR 0001) |
 | WebView2 runtime | evergreen | Preinstalled on Windows 11; needed by the desktop app only |
-| Playwright Chromium | matches `@playwright/test` | `npx -w e2e playwright install chromium`, once per machine |
+| Playwright Chromium, WebKit | matches `@playwright/test` | `npx -w e2e playwright install chromium webkit`, once per machine (WebKit: the engine of macOS and Linux, ADR 0212) |
 | Lint tools (Q1, ADR 0123) | taplo-cli 0.10, cargo-machete 0.9, cargo-deny; typos 1.50 | `cargo install taplo-cli cargo-machete cargo-deny --locked`; `pip install -r requirements-dev.txt` (Python 3; the scripts directory need not be on PATH, `npm run check` finds it). Everything else comes with `npm ci` |
 
 Docker is not needed. Integration tests use the in-process mock servers from
@@ -641,7 +641,7 @@ first:
 npm run build -w ui                      # ui/dist, served by nail serve
 cargo build -p nail-cli                  # the nail binary (debug profile)
 npm run build:desktop                    # nail-app for the desktop smoke test
-npx -w e2e playwright install chromium   # once per machine
+npx -w e2e playwright install chromium webkit   # once per machine
 ```
 
 How it works:
@@ -936,6 +936,15 @@ cargo test --workspace -j 4
 npm test
 npx playwright install --with-deps chromium && npm run e2e:only -- tests/platform.spec.ts
 ```
+
+The desktop app itself runs in the distribution too (WebKitGTK, the engine family of macOS): build
+it with `node e2e/scripts/build-desktop.mjs`, then start
+`.nail-build/desktop-target/debug/nail-app --seed demo` with `NAIL_TEST_BACKGROUND_WINDOWS=1`
+(clicked links and opened files are only logged, `NAIL_LOG=info`), `GDK_BACKEND=x11` and
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` on an `Xvfb :99` display, and drive it with `xdotool`
+(clicks, keys) and ImageMagick's `import -window root` (screenshots). Keep the `wsl` call that
+starts the app running: the app ends with it. In Playwright, the `webkit` project covers the
+engine-dependent specs on Windows (ADR 0212).
 
 Conventions for code that differs per system:
 

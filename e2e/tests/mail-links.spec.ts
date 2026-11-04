@@ -344,7 +344,7 @@ test.describe("the desktop app", () => {
     const row = messageRows(desktop).filter({ hasText: "Your weekly garden digest" }).first();
     await row.click();
     const frame = desktop.locator('iframe[data-part="message-view.body"]').first();
-    await expect(frame).toHaveAttribute("sandbox", "allow-same-origin");
+    await expect(frame).toHaveAttribute("sandbox", "allow-scripts");
     const link = frame.contentFrame().getByText("bulb guide");
     const target = "https://garden-weekly.example/r/abc123?to=bulbs";
 

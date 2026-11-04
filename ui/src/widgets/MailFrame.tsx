@@ -1,23 +1,19 @@
 /**
  * The frame an HTML mail body renders in, sized to its content (P3
- * WP-card-height, ADR 0164; `frameHeight.ts` has the design):
+ * WP-card-height, ADR 0164; ADR 0212; `frameHeight.ts` has the design).
+ * Both frames are sandboxed with scripts and an opaque origin
+ * (`MAIL_FRAME_SANDBOX`) and run only the frame script, which posts the
+ * height, the hovered or clicked link and the context menu; the reader
+ * accepts them only from the frame's own window ({@link useFrameMessages}):
  *
- * - {@link LocalMailFrame}: `srcdoc` (set through the Trusted Types policy)
- *   with `sandbox="allow-same-origin"` and no scripts; the reader reads the
- *   document's size itself — after `load`, after each image's `load` /
- *   `error`, on `<details>` toggles, when fonts arrive, when the frame
- *   resizes and whenever the document's root or body resizes (a width
- *   change reflows it). It only
- *   reads sizes and listens; it never writes into the document.
+ * - {@link LocalMailFrame}: `srcdoc` (set through the Trusted Types policy;
+ *   `readerDocument` adds the script and names this window as its parent).
  * - {@link RemoteMailFrame}: the remote UI's sandbox origin
- *   (`render_url?parent=<app origin>`), `sandbox="allow-scripts"` and an
- *   opaque origin; the route's hash-pinned script posts the height, which
- *   the reader accepts only from this frame's window (`frameHeightOf`).
+ *   (`render_url?parent=<app origin>`).
  *
- * Links (ADR 0206, `mailLinks.ts`): neither frame ever navigates. The
- * local frame's links are watched by the reader ({@link watchLinks}); the
- * remote frame's script posts the hovered and clicked link, accepted only
- * from that frame's window ({@link frameLinkOf}). Both report to `onLink`.
+ * Links (ADR 0206, `mailLinks.ts`) never navigate a frame; they reach
+ * `onLink`. A context menu becomes a bubbling `FRAME_MENU_EVENT` on the
+ * `<iframe>` element, which the menu host turns into the text menu.
  *
  * The measured height reaches the frame as a geometry rule (`useGeometry`),
  * never an inline style; `data-state~="measured"` lets the skin drop the
@@ -27,17 +23,17 @@
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  contentHeight,
-  documentMetrics,
+  FRAME_MENU_EVENT,
   FrameHeightGuard,
   frameHeightOf,
-  REMOTE_SANDBOX,
+  frameMenuOf,
+  MAIL_FRAME_SANDBOX,
+  OPAQUE_ORIGIN,
   RENDER_PARENT_PARAM,
-  SRCDOC_SANDBOX,
 } from "../theme/frameHeight";
 import { useGeometry } from "../theme/ThemeProvider";
 import { setSrcdoc } from "../theme/trustedHtml";
-import { frameLinkOf, watchLinks, type MailLinkReport } from "./mailLinks";
+import { frameLinkOf, type MailLinkReport } from "./mailLinks";
 
 /** What both frames share. */
 interface FrameProps {
@@ -62,12 +58,6 @@ function useLinkReporter(onLink: (report: MailLinkReport) => void) {
     [],
   );
 }
-
-/** Events inside a local mail document after which its height may differ. */
-const REMEASURE_EVENTS = ["load", "error", "toggle"] as const;
-
-/** The about: URL of a `srcdoc` document (the initial `about:blank` is not measured). */
-const SRCDOC_URL = "about:srcdoc";
 
 /**
  * A frame's measured height: state plus the guard, reset when the frame's
@@ -102,7 +92,39 @@ function useFrameGeometry(height: number | null, designed: boolean) {
   return { geom, state: states.length > 0 ? states.join(" ") : undefined };
 }
 
-/** A local (`srcdoc`) mail frame that measures its document. */
+/**
+ * Listens to what `frame`'s document posts from `origin` (the sandbox
+ * origin, or the opaque origin of a `srcdoc` frame): heights go to
+ * `apply`, links to `report`, a context menu becomes a
+ * {@link FRAME_MENU_EVENT} on the `<iframe>`.
+ */
+function useFrameMessages(
+  frame: React.RefObject<HTMLIFrameElement | null>,
+  origin: string,
+  apply: (height: number) => void,
+  report: (link: MailLinkReport) => void,
+) {
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const el = frame.current;
+      const source = el?.contentWindow ?? null;
+      const posted = frameHeightOf(event, source, origin);
+      if (posted !== null) apply(posted);
+      const link = frameLinkOf(event, source, origin);
+      if (link !== null) report(link);
+      const menu = frameMenuOf(event, source, origin);
+      if (menu !== null && el) {
+        el.dispatchEvent(new CustomEvent(FRAME_MENU_EVENT, { bubbles: true, detail: menu }));
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+    };
+  }, [frame, origin, apply, report]);
+}
+
+/** A local (`srcdoc`) mail frame; its document's script posts the height and links. */
 export function LocalMailFrame({
   srcDoc,
   title,
@@ -113,53 +135,11 @@ export function LocalMailFrame({
   const { height, guard, apply } = useMeasuredHeight(frame);
   const report = useLinkReporter(onLink);
   useLayoutEffect(() => {
+    // A new document (the first, a theme switch, remote content allowed) starts over.
+    guard.reset();
     if (frame.current) setSrcdoc(frame.current, srcDoc);
-  }, [srcDoc]);
-  useEffect(() => {
-    const el = frame.current;
-    if (el === null) return;
-    let detach: () => void = () => undefined;
-    const attach = () => {
-      detach();
-      const doc = el.contentDocument;
-      if (doc?.URL !== SRCDOC_URL) return;
-      // A new document (the first, a theme switch, remote content allowed).
-      guard.reset();
-      let live = true;
-      const measure = () => {
-        if (!live) return;
-        const metrics = documentMetrics(doc);
-        if (metrics !== null) apply(contentHeight(metrics));
-      };
-      for (const type of REMEASURE_EVENTS) doc.addEventListener(type, measure, true);
-      // The frame's own size changed (content overflowing the root shows only then).
-      const view = doc.defaultView;
-      view?.addEventListener("resize", measure);
-      const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-      observer?.observe(doc.documentElement);
-      // `body` is null in a document without one (typed as present).
-      const body = doc.body as HTMLElement | null;
-      if (body !== null) observer?.observe(body);
-      // Web fonts change line heights after the first layout.
-      if ("fonts" in doc) void doc.fonts.ready.then(measure);
-      measure();
-      // Links never navigate the frame; the reader follows them.
-      const unwatch = watchLinks(doc, report);
-      detach = () => {
-        live = false;
-        unwatch();
-        for (const type of REMEASURE_EVENTS) doc.removeEventListener(type, measure, true);
-        view?.removeEventListener("resize", measure);
-        observer?.disconnect();
-      };
-    };
-    el.addEventListener("load", attach);
-    attach();
-    return () => {
-      el.removeEventListener("load", attach);
-      detach();
-    };
-  }, [guard, apply, report]);
+  }, [srcDoc, guard]);
+  useFrameMessages(frame, OPAQUE_ORIGIN, apply, report);
   const { geom, state } = useFrameGeometry(height, designed);
   return (
     <iframe
@@ -167,7 +147,7 @@ export function LocalMailFrame({
       data-part="message-view.body"
       data-state={state}
       data-geom={geom}
-      sandbox={SRCDOC_SANDBOX}
+      sandbox={MAIL_FRAME_SANDBOX}
       referrerPolicy="no-referrer"
       title={title}
     />
@@ -182,7 +162,7 @@ export function renderSrc(renderUrl: string, css: string, parent: string): strin
   return url.toString();
 }
 
-/** A remote UI mail frame on the sandbox origin; its route's script posts the height and links. */
+/** A remote UI mail frame on the sandbox origin; its document's script posts the height and links. */
 export function RemoteMailFrame({
   renderUrl,
   css,
@@ -195,19 +175,7 @@ export function RemoteMailFrame({
   const report = useLinkReporter(onLink);
   const src = renderSrc(renderUrl, css, window.location.origin);
   const sandboxOrigin = new URL(renderUrl).origin;
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      const source = frame.current?.contentWindow ?? null;
-      const posted = frameHeightOf(event, source, sandboxOrigin);
-      if (posted !== null) apply(posted);
-      const link = frameLinkOf(event, source, sandboxOrigin);
-      if (link !== null) report(link);
-    };
-    window.addEventListener("message", onMessage);
-    return () => {
-      window.removeEventListener("message", onMessage);
-    };
-  }, [sandboxOrigin, apply, report]);
+  useFrameMessages(frame, sandboxOrigin, apply, report);
   // A new document starts over.
   useEffect(() => {
     guard.reset();
@@ -219,7 +187,7 @@ export function RemoteMailFrame({
       data-part="message-view.body"
       data-state={state}
       data-geom={geom}
-      sandbox={REMOTE_SANDBOX}
+      sandbox={MAIL_FRAME_SANDBOX}
       src={src}
       referrerPolicy="no-referrer"
       title={title}
