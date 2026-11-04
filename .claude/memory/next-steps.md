@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: Where the project stands and what to do next — read first when continuing in a new session (0.8.4 prepared 2026-11-04, waits for the maintainer's try and go-ahead to publish)
+description: Where the project stands and what to do next — read first when continuing in a new session (0.8.4 released 2026-11-05: WebKit links fix; macOS check by the maintainer pending)
 metadata:
   type: project
 ---
@@ -31,10 +31,8 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
-**Prepared 0.8.4 (2026-11-04), NOT published:** release commit on the lead branch, files in the lead's
-`.nail-build/release/0.8.4/`, installer and zip copied to the installer folder. Waits for the maintainer to try it
-(macOS especially) and to publish with `! cd ~/SelfMade.InWork/nail.win1 && npm run release:publish -- --yes`;
-`main` is not fast-forwarded until then. Content: links and the text menu over HTML mail now work in WebKit
+**Released 0.8.4 (2026-11-05):** GitHub release `v0.8.4` (Latest), `main` published. Waits for the
+maintainer's check on macOS (links, status bar, text menu over HTML mail). Content: links and the text menu over HTML mail now work in WebKit
 (macOS / Linux): every mail frame runs one hash-pinned script in an opaque origin (ADR 0212); review fixes to
 0.8.3 (remote desktop-only requests answer `unsupported`, attachment names keep their extension, downloaded files
 are marked (Zone.Identifier / `com.apple.quarantine`), PDF path hidden without print-to-PDF, apostrophes in text
