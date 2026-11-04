@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.4] — 2026-11-04
+
 ### Fixed (ADRs 0211, 0212)
 
 - Links in HTML mail work on macOS and Linux: hovering shows the target, a
@@ -279,6 +281,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.4]: https://github.com/Nusi42/Nail/releases/tag/v0.8.4
 [0.8.3]: https://github.com/Nusi42/Nail/releases/tag/v0.8.3
 [0.8.2]: https://github.com/Nusi42/Nail/releases/tag/v0.8.2
 [0.8.1]: https://github.com/Nusi42/Nail/releases/tag/v0.8.1
