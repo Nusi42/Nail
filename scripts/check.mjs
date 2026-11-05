@@ -6,7 +6,8 @@
 //
 //   node scripts/check.mjs [--only a,b] [--skip a,b] [--advisories] [--fail-fast] [--list]
 //
-// Cargo runs with `-j $CARGO_BUILD_JOBS` (default 4; the machine is shared).
+// Cargo runs with `-j $CARGO_BUILD_JOBS`, chosen from the free memory unless set
+// (`ensureCargoJobs`, ADR 0214).
 // `cargo deny` checks advisories only with --advisories or with CI=1 (it fetches
 // the RustSec database).
 import { spawnSync } from "node:child_process";
@@ -21,6 +22,7 @@ import {
   selectSteps,
   summarize,
 } from "./lib/check-steps.mjs";
+import { ensureCargoJobs } from "./lib/cargo.mjs";
 import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -37,7 +39,7 @@ try {
 
 const ci = Boolean(process.env.CI);
 const steps = selectSteps(
-  checkSteps({ ci, advisories: options.advisories, jobs: process.env.CARGO_BUILD_JOBS ?? "4" }),
+  checkSteps({ ci, advisories: options.advisories, jobs: ensureCargoJobs() }),
   options,
 );
 

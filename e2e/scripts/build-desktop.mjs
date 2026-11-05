@@ -21,10 +21,12 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 import { buildBase } from "../../scripts/lib/build.mjs";
+import { ensureCargoJobs } from "../../scripts/lib/cargo.mjs";
 import { repoRoot } from "../../scripts/lib/program.mjs";
 import { assertWorkFolder } from "../../scripts/lib/work-folder.mjs";
 
 assertWorkFolder("npm run build:desktop", repoRoot);
+ensureCargoJobs();
 const base = buildBase(process.env, repoRoot);
 const targetDir = path.join(base, "desktop-target");
 

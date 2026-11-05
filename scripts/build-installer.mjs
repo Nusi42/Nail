@@ -72,6 +72,7 @@ import { run } from "./lib/run.mjs";
 import { findSigntool, signingFromEnv, signtoolArgs, tauriSigning } from "./lib/sign.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 import { writeSboms } from "./sbom.mjs";
+import { ensureCargoJobs } from "./lib/cargo.mjs";
 import { assertWorkFolder } from "./lib/work-folder.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -111,6 +112,7 @@ function main() {
   if (process.platform !== "win32") {
     throw new Error("the Windows installers are built on Windows");
   }
+  ensureCargoJobs();
   const options = parseArgs(process.argv.slice(2), { arch: tauriArch(process.arch) });
   const base = buildBase(process.env, repoRoot);
   const targetDir = path.resolve(options.targetDir ?? path.join(base, "installer-target"));

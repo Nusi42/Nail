@@ -25,6 +25,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 
+import { probe } from "./probe.mjs";
+
 /** The checkout's local settings file (gitignored, never committed). */
 export const LOCAL_ENV = ".env.local";
 
@@ -173,16 +175,7 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
  * @returns {string | undefined}
  */
 export function originOf(root = REPO_ROOT) {
-  try {
-    const url = execFileSync("git", ["remote", "get-url", "origin"], {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return url.trim() || undefined;
-  } catch {
-    return undefined;
-  }
+  return probe("git", ["remote", "get-url", "origin"], root);
 }
 
 /**

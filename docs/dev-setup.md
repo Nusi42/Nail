@@ -282,7 +282,9 @@ Where shared things live (Q2, ADRs 0172–0177):
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`
 select some, `--fail-fast` stops at the first failure. Cargo runs with
-`-j $CARGO_BUILD_JOBS` (default 4). `cargo deny` checks advisories only with
+`-j $CARGO_BUILD_JOBS`; unless it is set, the scripts choose it from the free
+memory (`ensureCargoJobs` in `scripts/lib/cargo.mjs`, ADR 0214): one job per
+3 GiB after a 4 GiB reserve, 2 to one per hardware thread. `cargo deny` checks advisories only with
 `--advisories` (the RustSec database comes from the network); the full
 verification run uses plain `cargo deny check`, which includes them.
 `release:prepare` runs `npm run check -- --advisories` and `npm audit
@@ -466,8 +468,9 @@ with a `customize-keys-context-*` label.
   run it by path (Python raw strings for escapes), or edit the file directly.
   `open(p, "w").write(open(p).read() …)` truncates the file before it is read.
 - `cargo test --workspace` stops at the first failing test binary; add
-  `--no-fail-fast` for the full picture. Run it with `-j 4` (more jobs ran out
-  of paging file, os error 1455). Transient rustc errors ("crate required to
+  `--no-fail-fast` for the full picture. Run it with `-j 4` by hand (more jobs
+  ran out of paging file, os error 1455, while other programs held the
+  memory); the scripts pick the job count from the free memory (ADR 0214). Transient rustc errors ("crate required to
   be available in rlib format", `STATUS_STACK_BUFFER_OVERRUN`) and Vitest
   widget / axe time-outs appeared while cargo, `npm test` or `npm run lint`
   ran at the same time: rerun alone before believing a failure. Measured

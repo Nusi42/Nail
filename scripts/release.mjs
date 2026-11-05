@@ -36,6 +36,7 @@ import path from "node:path";
 
 import { forEachArg } from "./lib/args.mjs";
 import { buildBase, withoutUpdaterSecrets } from "./lib/build.mjs";
+import { ensureCargoJobs } from "./lib/cargo.mjs";
 import { readJson } from "./lib/json.mjs";
 import { confirm, repoRoot, runMain } from "./lib/program.mjs";
 import {
@@ -84,8 +85,12 @@ const CHECKS = [
   { command: "npm", args: ["test"] },
   { command: "node", args: ["--test", "scripts/test/*.test.mjs"] },
   { command: "npm", args: ["run", "build"] },
-  { command: "cargo", args: ["test", "--workspace", "-j", "4"] },
-  { command: "npm", args: ["run", "e2e"] },
+  { command: "cargo", args: ["test", "--workspace"] },
+  // `npm run e2e` without its CLI build: the tests above built
+  // target/debug/nail, which `cargo build -p nail-cli` would compile again
+  // with other dependency features (ADR 0214).
+  { command: "npm", args: ["run", "build:desktop"] },
+  { command: "npm", args: ["run", "e2e:only"] },
   { command: "npm", args: ["run", "visual"] },
   { command: "npm", args: ["run", "e2e:only", "--", "desktop"], env: { NAIL_E2E_DESKTOP: "1" } },
   { command: "cargo", args: ["test", "-p", "nail-mapi", "--target", "i686-pc-windows-msvc"] },
@@ -173,6 +178,8 @@ function updateKey(dev) {
 function prepare(argv) {
   assertWorkFolder("npm run release:prepare");
   const o = prepareArgs(argv);
+  // Every cargo below (checks, tests, installer) inherits it (ADR 0214).
+  ensureCargoJobs();
   const { version } = o;
   const tag = releaseTag(version);
   const repo = repository();

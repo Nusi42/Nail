@@ -1426,3 +1426,6 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - One integration-test binary per crate (ADR 0213): a crate with two or more test files builds them as modules of
   `tests/integration/main.rs` (shared helpers in `tests/integration/common/`); one file's tests run with
   `cargo test -p <crate> --test integration <file>::`.
+- Faster builds (ADR 0214): `ensureCargoJobs` (`scripts/lib/cargo.mjs`) sets `CARGO_BUILD_JOBS` from the free memory
+  for `npm run check`, `release:prepare`, `build-installer.mjs` and `build:desktop` (an explicit value wins); the
+  release checks run e2e on the `nail` that `cargo test --workspace` built.
