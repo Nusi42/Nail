@@ -188,6 +188,9 @@ Habits of the Rust lints (ADRs 0124–0126, 0129):
   `cargo test -p <crate> --test integration <file>::`. The tests share one
   process: anything process-wide (environment variables, the current
   directory, global state of the crate) needs a shared lock in `common`.
+  Exception: `nail-core` keeps one binary per file. Merged, its 280 service
+  tests ran at once in one process and three timing-dependent tests failed
+  in 3 of 7 Linux runs; the files stay apart until those races are fixed.
 - Every integration-test crate root (`tests/*.rs`, `tests/*/main.rs`)
   starts with `#![cfg(test)]`, so `clippy.toml`'s `allow-unwrap-in-tests` /
   `allow-expect-in-tests` also cover its helper functions. A module file

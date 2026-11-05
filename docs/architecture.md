@@ -511,7 +511,7 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        `plugin:<id>`), plan_snooze / plan_mark_junk (undo cancels wake timers / training), replay.rs
                        grouped IMAP UID STORE / MOVE per folder, gmail.rs + exchange/sync.rs grouped writes,
                        exchange/batch.rs (RunningEngine.batch = the concrete Graph / EWS engine for write_many);
-                       tests/integration/mail_actions.rs
+                       tests/mail_actions.rs
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -970,7 +970,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   with a conflict copy) with backoff; reminders run on the triage clock (`ServiceOptions::clock`), notify
   through `NotificationRequested` (quiet hours mute the sound); the PIM search index is in memory; MCP PIM
   resources / tools need `read` and the grant's account per source (`all_accounts` for local / subscriptions);
-  remote PIM still needs a grant for every account. Core tests: `tests/integration/pim.rs`, `tests/integration/pim_sync.rs` (mock DAV /
+  remote PIM still needs a grant for every account. Core tests: `tests/pim.rs`, `tests/pim_sync.rs` (mock DAV /
   HTTP servers, `AdjustableClock`). demo-multi adds `work-calendars` / `work-contacts` (mock DAV, password
   `dav-secret`) and the `holidays` feed, controls `dav-objects` / `dav-put` / `dav-delete` / `feeds`.
 - M3a review fixes (ADR 0064): untrusted calendar data is bounded — `nail-ical` nests at most 32 levels, recurrence
@@ -1053,7 +1053,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   user's rules (actions not awaited), before-send hooks in `SendDraft` (veto map in memory 10 min, `OverrideSendVeto`,
   content into the draft, `X-` headers on the built message), open hooks for `GetMessagePluginAnnotations`; the
   `clock-set` / `clock-advance` controls run due plug-in jobs (`Service::clock_moved`); plug-in tools appear in MCP
-  `tools/list` for clients with their scopes. Core tests: `tests/integration/m4a_wired.rs` (demo-multi, `multi_thread`).
+  `tools/list` for clients with their scopes. Core tests: `tests/m4a_wired.rs` (demo-multi, `multi_thread`).
 - Post-M4a (ADR 0086): `PluginCatalogs::localize_manifest` resolves every `%id%` text of every contribution kind
   (a new contribution text must be added there, with a test); confirmed sends pin the draft's content-hash
   revision (`nail_store::draft_revision`, `SendDraft.expected_revision`), checked in the store transaction of each
@@ -1423,7 +1423,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `ContextMenuHost` turns into the text menu (Copy via the clipboard API, Select all posted to the frame). The
   script's behaviour is tested in jsdom (`ui/src/theme/frameScript.test.ts`); e2e has a `webkit` project for the
   engine-dependent specs.
-- One integration-test binary per crate (ADR 0213): a crate with two or more test files builds them as modules of
+- One integration-test binary per crate except `nail-core` (ADR 0213): a crate with two or more test files builds them as modules of
   `tests/integration/main.rs` (shared helpers in `tests/integration/common/`); one file's tests run with
   `cargo test -p <crate> --test integration <file>::`.
 - Faster builds (ADR 0214): `ensureCargoJobs` (`scripts/lib/cargo.mjs`) sets `CARGO_BUILD_JOBS` from the free memory

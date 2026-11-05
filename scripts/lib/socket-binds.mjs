@@ -140,7 +140,7 @@ export const ALLOWLIST = [
     reason: "test: settings validation",
   },
   {
-    file: "crates/nail-core/tests/integration/service.rs",
+    file: "crates/nail-core/tests/service.rs",
     text: 'bind_address: "0.0.0.0".into()',
     reason: "test: stored settings (no host runs)",
   },

@@ -31,13 +31,23 @@ that the shared helpers are checked for dead code.
   did.
 - Helpers in `common` that no module uses any more are deleted; the former
   per-file `#[expect(dead_code)] mod common;` is gone.
+- **Except `nail-core`**, which keeps one binary per file for now. Merged,
+  its 280 tests ran up to 32 at once in one process, each starting a whole
+  service. Under that load three timing-dependent tests failed in 3 of 7
+  Linux runs (WSL), each time a different one:
+  `security::autocrypt_enables_encryption_after_one_message`,
+  `pim_sync::conflicts_keep_the_server_version_and_resolve_both_ways` and
+  `m2c_wired::rules_and_vacation_run_on_the_sieve_server`. The last one
+  points to a real race: a forced `SyncSieve` can answer `pending` when an
+  earlier upload ends first. Per-file binaries passed in 8 of 8 runs. The
+  merge waits until those races are fixed.
 - Single-file crates keep `tests/<name>.rs`. `scripts/interop` is not a
   member of the workspace and runs only in the interop job; it keeps its two
   files.
 
 ## Consequences
 
-The workspace links 80 test binaries instead of 206, with the same 4091
-tests. A test that needs its own process (`harness = false`, a required
+The workspace links 112 test binaries instead of 206 (80 once `nail-core`
+is merged too), with the same 4091 tests. A test that needs its own process (`harness = false`, a required
 feature, process-wide state that a lock cannot guard) gets its own
 `tests/<name>.rs` and a note why.
