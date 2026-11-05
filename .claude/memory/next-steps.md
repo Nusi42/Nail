@@ -31,6 +31,14 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
+**Build speed (2026-11-05, on `main`, not published):** the scripts pick the cargo job count from the free memory
+(ADR 0214); one integration-test binary per crate except `nail-core` (ADR 0213; 206 → 112 binaries, test compile
+6:51 → 1:48, workspace `cargo test` about 6.5 min). The release checks run e2e on the test build's `nail`. Measured and
+rejected: one release target directory (nothing shared: cargo resolves features per call). Open follow-ups: fix the
+three `nail-core` races that merging exposed (ADR 0213; the forced Sieve upload one looks like a real core bug), then
+merge its tests; `nail-api` compiles four times per release at about 7.5 min each (crate-local ThinLTO): a small crate
+for what `nail-mapi` needs would skip two of them; `cargo doc` takes about 5 min in `npm run check`.
+
 **Released 0.8.4 (2026-11-05):** GitHub release `v0.8.4` (Latest), `main` published. Waits for the
 maintainer's check on macOS (links, status bar, text menu over HTML mail). Content: links and the text menu over HTML mail now work in WebKit
 (macOS / Linux): every mail frame runs one hash-pinned script in an opaque origin (ADR 0212); review fixes to
@@ -45,8 +53,8 @@ m2c quiet-hours e2e under load.
 ammonia and others; ADR 0209) and one update address instead of channels (GitHub's latest release,
 `releases/latest/download/latest.json`; ADR 0210). The rolling `stable` / `beta` releases are deleted;
 installed 0.8.0 / 0.8.1 copies need one manual install (accepted). `release:prepare` now stops while Dependabot
-alerts are open; glib (#1) and minimatch (#34) are dismissed as accepted risks (ADR 0209). On this machine run
-`release:prepare` with `CARGO_BUILD_JOBS=2`: with 4 jobs Claude Code stopped it twice for low memory.
+alerts are open; glib (#1) and minimatch (#34) are dismissed as accepted risks (ADR 0209). The scripts now choose
+`CARGO_BUILD_JOBS` from the free memory (ADR 0214); don't set it by hand.
 
 **Released 0.8.1 (2026-10-31):** GitHub release `v0.8.1` (Latest) with the installer, zip, signature,
 checksums and SBOMs; the `stable` and `beta` channels announce 0.8.1; the maintainer runs it (installed over
