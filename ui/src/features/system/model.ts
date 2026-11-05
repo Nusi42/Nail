@@ -3,7 +3,7 @@
  * `nail_api::mapi`; ADR 0087): the enum values and the Fluent ids the
  * contract names come generated (texts in `locales/en/core-desktop.ftl`);
  * the update-state rules are ports pinned by
- * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `model.test.ts`).
+ * `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in `model.test.ts`).
  */
 import {
   DEFAULT_APP_STATE_MESSAGE_IDS,

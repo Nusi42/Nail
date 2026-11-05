@@ -27,10 +27,10 @@ thunderbird/
 ```
 
 The text files are written by hand. The two SQLite files are generated
-from the card lists in `tests/thunderbird_profile.rs`:
+from the card lists in `tests/integration/thunderbird_profile.rs`:
 
 ```sh
-NAIL_REGENERATE_FIXTURES=1 cargo test -p nail-portability --test thunderbird_profile
+NAIL_REGENERATE_FIXTURES=1 cargo test -p nail-portability --test integration thunderbird_profile::
 ```
 
 Every normal test run checks that the committed files hold exactly those

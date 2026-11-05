@@ -1,6 +1,6 @@
 /**
  * Runs the UI's ports of contract rules over the test vectors nail-api
- * generates from the Rust functions (`crates/nail-api/tests/ts_vectors.rs`
+ * generates from the Rust functions (`crates/nail-api/tests/integration/ts_vectors.rs`
  * writes `crates/nail-api/fixtures/ts-vectors/<area>.json`): each case is a
  * function name, its arguments and the Rust answer. The Rust code is the
  * single source; a port that answers differently fails here, and a Rust

@@ -7,7 +7,7 @@
  * shrinks, and remembered geometry.
  *
  * The contract: window ids, specs and checks in `../../state/windows.ts`
- * (ports of `nail_api::windows`, pinned by `crates/nail-api/tests/ts_vectors.rs`;
+ * (ports of `nail_api::windows`, pinned by `crates/nail-api/tests/integration/ts_vectors.rs`;
  * `resolveWindowSpec` = defaults →
  * `Feature.windows` → the layout's `window` properties), remembered state in
  * `../../state/windowState.ts` (`useWindowState`, `useSetWindowState`, per

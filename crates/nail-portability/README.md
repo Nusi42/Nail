@@ -20,7 +20,7 @@ writes into the store / operation queues and reports progress.
 | `job`, `sink`, `error` | progress / cancellation / reports, the core's traits, errors |
 
 Tests: `cargo test -p nail-portability` (unit tests per module,
-`tests/thunderbird_profile.rs` over the committed synthetic profile in
-`tests/fixtures/thunderbird`, `tests/catalog.rs` for the Fluent ids).
+`tests/integration/thunderbird_profile.rs` over the committed synthetic profile in
+`tests/fixtures/thunderbird`, `tests/integration/catalog.rs` for the Fluent ids).
 The feature `testing` exposes cheap Argon2id parameters for other crates'
 tests.

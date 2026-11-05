@@ -3,7 +3,7 @@
  * print view's route, the named CSS page of the options (`@page a4-portrait`
  * in `PRINT_BASE_CSS`), the agenda's default range, the occurrence string of
  * an event instance, and quoted-text folding for "without quoted text".
- * The contract's rules are ports pinned by `crates/nail-api/tests/ts_vectors.rs`
+ * The contract's rules are ports pinned by `crates/nail-api/tests/integration/ts_vectors.rs`
  * (vectors run in `model.test.ts`); its defaults are generated.
  */
 import {

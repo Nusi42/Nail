@@ -3,7 +3,7 @@
  * `ApplyMailAction`, `ResolveMailTargets` and `UndoMailAction` with the
  * contract's semantics — targets resolve per action
  * (`nail_api::mail_actions::MailAction::reach`, ported as `reachOf` and
- * pinned by `crates/nail-api/tests/ts_vectors.rs`), the
+ * pinned by `crates/nail-api/tests/integration/ts_vectors.rs`), the
  * change is applied at once and replayed per account like every mock write,
  * and each action is one batch with one undo (the messages' folders, flags
  * and tags as they were). Snooze and junk reuse the triage mock.

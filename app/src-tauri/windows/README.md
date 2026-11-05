@@ -18,6 +18,6 @@ Both installers write the installation facts the app reads
 the Simple MAPI client registration (`nail_api::mapi::registry`, DLLs at
 `mapi\<arch>\NailMapi.dll`).
 
-`../tests/installer.rs` checks these sources against the app and
+`../tests/integration/installer.rs` checks these sources against the app and
 `nail_api`; `scripts/installer-smoke.ps1` and `scripts/msi-smoke.ps1` run
 the built installers.

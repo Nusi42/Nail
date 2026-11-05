@@ -1,7 +1,7 @@
 # nail-itip interop fixtures
 
 iMIP mail (RFC 6047) in the shapes the common calendar producers send,
-used by `tests/interop.rs` (WP81).
+used by `tests/integration/interop.rs` (WP81).
 
 **Everything here is synthesized.** The messages were written by hand
 (through `generate.py`) to mimic the MIME structure, header set,

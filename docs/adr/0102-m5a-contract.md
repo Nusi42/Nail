@@ -221,7 +221,7 @@ kinds, sources, densities, colour schemes, override issues, theme problems,
 
 | Package | Owns |
 | --- | --- |
-| WP151 | `defaults/themes/` (the five theme files; the contract placeholders carry the proposal palettes), `defaults/theme.kdl` (token scales, density variants, aliases of the old names), `crates/nail-config/tests/theme_contrast.rs` (WCAG AA for text and UI parts, AAA for High contrast), and the regenerated `crates/nail-api/fixtures/default-theme.json` |
+| WP151 | `defaults/themes/` (the five theme files; the contract placeholders carry the proposal palettes), `defaults/theme.kdl` (token scales, density variants, aliases of the old names), `crates/nail-config/tests/integration/theme_contrast.rs` (WCAG AA for text and UI parts, AAA for High contrast), and the regenerated `crates/nail-api/fixtures/default-theme.json` |
 | WP152 | `crates/nail-config` (everything else: the `appearance` node, `extends` of theme ids, the themes directory, user themes, write-back of selection / overrides, watcher for `themes/`), `crates/nail-core/src/appearance.rs` (requests, the Windows source, `ThemeChanged`); small wiring edits elsewhere in `nail-core` (watcher, `Service` fields) are allowed — no other M5a package edits `nail-core` |
 | WP153 | `ui/` (primitives on the new tokens, Lucide everywhere, the appearance feature `ui/src/features/appearance/`, density on the root, the listed fixes) and `locales/` |
 | WP154 | `e2e/visual/` and `scripts/visual-review/` (new; READMEs only so far) |

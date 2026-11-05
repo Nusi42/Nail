@@ -34,7 +34,7 @@ were written from memory; they were checked against Tauri CLI 2.12.0
   3. the uninstall checkbox reads "Also delete my mail data, settings and
      stored passwords";
   4. Nail's strings are included after the languages are loaded.
-  `app/src-tauri/tests/installer.rs` fails when `package-lock.json` pins
+  `app/src-tauri/tests/integration/installer.rs` fails when `package-lock.json` pins
   another Tauri CLI than the one the copy is based on, so an upgrade forces
   a re-copy (procedure in `installer/README.md`).
 - **Registration in `installer/hooks.nsh`, not Tauri's `fileAssociations` /

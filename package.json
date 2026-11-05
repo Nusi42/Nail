@@ -31,7 +31,7 @@
     "format:check": "prettier --check .",
     "e2e": "npm run build -w ui && cargo build -p nail-cli && npm run build:desktop && npm run test -w e2e",
     "build:desktop": "node e2e/scripts/build-desktop.mjs",
-    "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings",
+    "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test integration bindings::",
     "tauri": "node scripts/tauri.mjs",
     "e2e:only": "npm run test -w e2e",
     "release:prepare": "node scripts/release.mjs prepare",

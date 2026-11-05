@@ -1,7 +1,7 @@
 # nail-ical test corpus
 
 Calendar and contact files in the shapes the common producers export,
-used by `tests/corpus.rs` (WP71, ADR 0059).
+used by `tests/integration/corpus.rs` (WP71, ADR 0059).
 
 **Everything here is synthesized.** The files were written by hand to
 mimic the structure, property order, vendor extensions, folding and

@@ -86,7 +86,7 @@ test("ignores: generated code, vendored bindings and data, nothing else", () => 
   assert.ok(isIgnored("crates/nail-testkit/corpus/INBOX/1.eml"));
   assert.ok(isIgnored("e2e/visual/baselines/win32/main.png"));
   assert.ok(!isIgnored("ui/src/App.tsx"));
-  assert.ok(!isIgnored("crates/nail-core/tests/m1b.rs"));
+  assert.ok(!isIgnored("crates/nail-core/tests/integration/m1b.rs"));
   assert.ok(globMatches("**/x/**", "x/a.ts") && globMatches("a/*.ts", "a/b.ts"));
   assert.ok(!globMatches("a/*.ts", "a/b/c.ts"));
   // Every ignore has its reason (ADR 0171 lists them).
@@ -95,7 +95,7 @@ test("ignores: generated code, vendored bindings and data, nothing else", () => 
 
 test("test code: tests, helpers, mock servers and the mock core", () => {
   for (const f of [
-    "crates/nail-core/tests/m1b.rs",
+    "crates/nail-core/tests/integration/m1b.rs",
     "crates/nail-portability/src/backup/tests.rs",
     "crates/nail-store/src/thread/activity_tests.rs",
     "crates/nail-proto-ews/src/testing/ops.rs",

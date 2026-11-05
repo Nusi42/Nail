@@ -14,7 +14,7 @@ pub const UPDATE_SNAPSHOTS: &str = "NAIL_UPDATE_SNAPSHOTS";
 pub const UPDATE_GOLDEN: &str = "NAIL_UPDATE_GOLDEN";
 
 /// Set to rewrite the generated TypeScript bindings
-/// (`NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings`).
+/// (`NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test integration bindings::`).
 pub const UPDATE_BINDINGS: &str = "NAIL_UPDATE_BINDINGS";
 
 /// Whether the update variable `env` is set.

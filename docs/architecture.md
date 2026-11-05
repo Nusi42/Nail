@@ -163,8 +163,8 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        extends chains, ThemeProblem), appearance_edit.rs (comment-preserving writes of the
                        `appearance` node / override tokens), ConfigManager appearance / set_theme /
                        set_theme_preferences / set_system_appearance / reload_themes, ConfigUpdate::ThemeChanged
-                       (before Changed), css::MODES + `compact`; tests/theme_contrast.rs (WCAG per theme, the
-                       pair table every default part rule must stay within), tests/appearance.rs (ADRs 0102–0104);
+                       (before Changed), css::MODES + `compact`; tests/integration/theme_contrast.rs (WCAG per theme, the
+                       pair table every default part rule must stay within), tests/integration/appearance.rs (ADRs 0102–0104);
                        M5b (ADR 0109): layout.rs `views` / `rail` / `settings-page` sections (replace the base as a
                        whole; checks: view window exists without a view-host, default / rail views exist, shell widgets
                        need their section), toolbar `hide-disabled=` / `overflow=`, item `rank=` / `display=`, `more {}`,
@@ -176,14 +176,14 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        M5c (ADR 0116): `window` node properties size= / min-size= / modal= / resizable= / pop-out= /
                        instances= (LayoutFile.window_frames, merged field by field; render / merge / write-back keep them);
                        window_state.rs (ConfigManager::window_states / set_window_state / update_window_state /
-                       reset_window_states, atomic `window-state.json`); tests/m5c_windows.rs
+                       reset_window_states, atomic `window-state.json`); tests/integration/m5c_windows.rs
                        M5d (ADR 0131): `hidden=` on every layout node, `presets` section (preset / split / stack / tabs /
                        pane; replaces the base as a whole; panes a breakpoint lacks are no error), widgets/editors.rs
                        (layout-editor-settings, toolbar-editor-settings, theme-editor); edit_history.rs (undo history
                        per HistoryScope recorded by every theme / layout write, undo / redo with conflict check + force,
                        update_layout_checked base revision); slots of WP184: layout_edit.rs (the M5d patches, routed
                        from write_back.rs) and theme_edit.rs (theme_details / edit_theme / duplicate / rename /
-                       delete_theme); tests/m5d_contract.rs
+                       delete_theme); tests/integration/m5d_contract.rs
                        M5d (ADR 0136 WP184): layout_edit.rs (move / swap / dock / add / remove / hide, presets, reset-window,
                        toolbar bar<->More; marker properties `__nail_edit_*` never reach the file), theme_edit.rs (EditTheme
                        tokens / modes / parts, Duplicate / Rename (selection and extending themes follow) / Delete (fallback
@@ -259,7 +259,7 @@ crates/nail-store      SQLite metadata (v19), blob store, per-account operation 
                        random-write consistency; P3 WP-actions-core (ADR 0165): thread/targets.rs conversation_targets
                        (every stored copy per reach), mail_batches.rs apply_mail_batch / undo_mail_batch (one
                        transaction, purged after 1 h / beyond 50, actor-owned), queue.rs group keys (replay hands
-                       consecutive same-key operations to an engine at once; tests/queue_groups.rs)
+                       consecutive same-key operations to an engine at once; tests/integration/queue_groups.rs)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -374,7 +374,7 @@ crates/nail-proto-ews  EWS engine (WP92, ADR 0074): soap.rs (Exchange2016, falls
 crates/nail-exchange   Exchange common layer (WP93, ADR 0075): autodiscover/ (v2 + POX + HTTP method + SRV, ConfirmRedirect /
                        NeedsLogin, engine choice), http.rs (ExchangeHttp, ReqwestHttp::route_all_to), negotiate.rs (401
                        handshake, Basic over TLS), sspi.rs (SspiNegotiate: NegotiateAuth over SSPI; real in-process
-                       handshake tests; ignored live test tests/sspi_live.rs with NAIL_EWS_LIVE_URL), mapping/ (categories,
+                       handshake tests; ignored live test tests/integration/sspi_live.rs with NAIL_EWS_LIVE_URL), mapping/ (categories,
                        focus, rules, oof, events, tasks, contacts, rooms, text, time, windows_zones = IANA → Windows ids
                        for EWS writes; ADR 0078), texts.rs (exchange-autodiscover-*,
                        -signin-*, -rule-reason-*, -oof-note-*, -pim-reason-*); feature `testing` = MockAutodiscoverServer
@@ -511,7 +511,7 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        `plugin:<id>`), plan_snooze / plan_mark_junk (undo cancels wake timers / training), replay.rs
                        grouped IMAP UID STORE / MOVE per folder, gmail.rs + exchange/sync.rs grouped writes,
                        exchange/batch.rs (RunningEngine.batch = the concrete Graph / EWS engine for write_many);
-                       tests/mail_actions.rs
+                       tests/integration/mail_actions.rs
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -577,7 +577,7 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        single instance); launch.rs,
                        portable.rs, setup_helper.rs; windows/ (installer sources: nsis/ template copy +
                        hooks + strings (ADR 0040), wix/nail.wxs MSI fragment + bundle.json (upgrade code)
-                       (M4b WP112, ADR 0089); tests/installer.rs checks them);
+                       (M4b WP112, ADR 0089); tests/integration/installer.rs checks them);
                        M4b shell (WP113, ADR 0090): registry.rs (Registry trait; WindowsRegistry with
                        NAIL_REGISTRY_ROOT; MemoryRegistry for seeded runs), install.rs (InstallationInfo, HKLM
                        facts before HKCU, UpdateSource from plugins.updater: the manifest URL as configured,
@@ -590,7 +590,7 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        Origin), mapi_server.rs (named pipe, first instance, current-user DACL; waits for the
                        client to close before disconnecting), win.rs, host.rs (ShellHost: DesktopHost), tray.rs,
                        shell.rs (tray menu, second start, seeded-only test control `nail_test_shell`);
-                       tests/mapi_wired.rs (DLL client → pipe server → core; ADR 0092);
+                       tests/integration/mapi_wired.rs (DLL client → pipe server → core; ADR 0092);
                        M4c (ADR 0099): printing.rs (PDF: hidden window `print-<job>` on `#/print/<job>`, waits for
                        PrintViewReady, WebView2 PrintToPdf via webview2-com), dialog.rs (PickPath: Windows common item
                        dialog on an STA thread, elsewhere `rfd` — NSOpenPanel / GTK 3, ADR 0211); capabilities
@@ -907,7 +907,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `nail-sieve` / `nail-triage`; slots incl. `nail-config/src/l10n.rs`,
   `nail-testkit-net/src/managesieve.rs`, `locales/*/core{,-sieve,-triage}.ftl`). The core serves
   the store-backed requests; `SyncSieve`, `PreviewSieveScript`, `MarkJunk`, `(Un)SnoozeMessages`
-  answer `unsupported` until WP55. `nail-api/tests/catalog.rs` checks contract Fluent ids.
+  answer `unsupported` until WP55. `nail-api/tests/integration/catalog.rs` checks contract Fluent ids.
 - M2c integration (ADR 0048; packages ADRs 0044 Sieve, 0045 triage, 0046 engine polish, 0047 UI):
   Sieve uploads run from a core task (digest of the inputs; server rules are skipped on arrival);
   arrivals go security → junk → rules → notifications; snooze = `$Snoozed` + move to the hidden
@@ -970,7 +970,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   with a conflict copy) with backoff; reminders run on the triage clock (`ServiceOptions::clock`), notify
   through `NotificationRequested` (quiet hours mute the sound); the PIM search index is in memory; MCP PIM
   resources / tools need `read` and the grant's account per source (`all_accounts` for local / subscriptions);
-  remote PIM still needs a grant for every account. Core tests: `tests/pim.rs`, `tests/pim_sync.rs` (mock DAV /
+  remote PIM still needs a grant for every account. Core tests: `tests/integration/pim.rs`, `tests/integration/pim_sync.rs` (mock DAV /
   HTTP servers, `AdjustableClock`). demo-multi adds `work-calendars` / `work-contacts` (mock DAV, password
   `dav-secret`) and the `holidays` feed, controls `dav-objects` / `dav-put` / `dav-delete` / `feeds`.
 - M3a review fixes (ADR 0064): untrusted calendar data is bounded — `nail-ical` nests at most 32 levels, recurrence
@@ -1053,7 +1053,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   user's rules (actions not awaited), before-send hooks in `SendDraft` (veto map in memory 10 min, `OverrideSendVeto`,
   content into the draft, `X-` headers on the built message), open hooks for `GetMessagePluginAnnotations`; the
   `clock-set` / `clock-advance` controls run due plug-in jobs (`Service::clock_moved`); plug-in tools appear in MCP
-  `tools/list` for clients with their scopes. Core tests: `tests/m4a_wired.rs` (demo-multi, `multi_thread`).
+  `tools/list` for clients with their scopes. Core tests: `tests/integration/m4a_wired.rs` (demo-multi, `multi_thread`).
 - Post-M4a (ADR 0086): `PluginCatalogs::localize_manifest` resolves every `%id%` text of every contribution kind
   (a new contribution text must be added there, with a test); confirmed sends pin the draft's content-hash
   revision (`nail_store::draft_revision`, `SendDraft.expected_revision`), checked in the store transaction of each
@@ -1069,7 +1069,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `ServiceOptions::desktop`; 12 desktop-only requests, 3 events; `nail_api::mapi`: Simple MAPI messages,
   MAPI.h result codes, named pipe `\\.\pipe\nail-mapi-<SID>` with length-prefixed JSON frames,
   `Service::submit_mapi` → draft + `LaunchRequest::ComposeDraft`, never sent for a program; slots:
-  `crates/nail-mapi` (WP111), `app/src-tauri/windows/` + `tests/installer.rs` + `packaging/` + `scripts/` +
+  `crates/nail-mapi` (WP111), `app/src-tauri/windows/` + `tests/integration/installer.rs` + `packaging/` + `scripts/` +
   `.github/workflows/` (WP112), rest of `app/src-tauri` (WP113), `ui/src/features/system/` + `system.ftl`
   (WP114); new deps tauri-plugin-updater (rustls only), tauri tray-icon / image-png, windows-sys,
   windows-registry).
@@ -1118,18 +1118,18 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `appearance follow-system= light= dark= density=`, overrides = tokens `font-size "body"`, `radius "md"`,
   `color "accent"`; `active_theme` rule (Follow Windows → high contrast / dark / light of the pair); density =
   token variant `compact=` → `modes["compact"]` under `:root[data-nail-density="compact"]` + `app[density=…]`
-  part condition; token schema `token_schema()` checked by nail-config `tests/defaults.rs`; icons = Lucide names
+  part condition; token schema `token_schema()` checked by nail-config `tests/integration/defaults.rs`; icons = Lucide names
   (`nail_api::icons`, legacy names mapped); `ListThemes` / `SetTheme` / `SetThemePreferences` → `Themes`,
   `ThemeChanged`; `SystemAppearanceSource` in `ServiceOptions::system_appearance`). The core answered
   `unsupported` until the integration (served since WP155, below). Slots: WP151 `defaults/themes/` + `defaults/theme.kdl` +
-  `nail-config/tests/theme_contrast.rs`; WP152 rest of `nail-config` + `nail-core/src/appearance.rs`; WP153 `ui/` +
+  `nail-config/tests/integration/theme_contrast.rs`; WP152 rest of `nail-config` + `nail-core/src/appearance.rs`; WP153 `ui/` +
   `locales/`; WP154 `e2e/visual/` + `scripts/visual-review/`.
 - M5a integration (ADR 0107; packages ADRs 0103 themes + contrast test, 0104 selection / user themes / Follow
   Windows, 0105 UI skin / Lucide / mail panes / appearance page, 0106 visual regression): no theme.kdl = Follow
   Windows with Frost / Graphite (`nail_config::default_selected_theme()`); an accent override sends `ThemeChanged`
   before `ConfigChanged`. Seeded runs see a light OS (`demo_options`); never rely on the machine's mode in tests.
   `defaults/theme.kdl` has no rules for the parts `ui/src/theme/skin.ts` styles and no `icons` (Lucide) — a new
-  default part rule's colours must be in the pair table of `tests/theme_contrast.rs`; input-like parts use
+  default part rule's colours must be in the pair table of `tests/integration/theme_contrast.rs`; input-like parts use
   `border "$border.control"`. `ReportSystemAppearance` is ignored while the core watches the OS.
   `GetMessageAttachment` (base64, ≤ 64 MiB) / `SaveAttachment` (desktop only, absolute path) /
   `OpenAttachment` (ADR 0211, desktop only: `attachments.rs` `OpenedFiles` writes `<data dir>/opened-attachments/
@@ -1423,3 +1423,6 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `ContextMenuHost` turns into the text menu (Copy via the clipboard API, Select all posted to the frame). The
   script's behaviour is tested in jsdom (`ui/src/theme/frameScript.test.ts`); e2e has a `webkit` project for the
   engine-dependent specs.
+- One integration-test binary per crate (ADR 0213): a crate with two or more test files builds them as modules of
+  `tests/integration/main.rs` (shared helpers in `tests/integration/common/`); one file's tests run with
+  `cargo test -p <crate> --test integration <file>::`.

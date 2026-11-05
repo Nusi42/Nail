@@ -1,7 +1,7 @@
 import { KEBAB } from "../../text/kebab";
 /**
  * Plug-in ids in the layout (ADR 0050), ports of `nail_api::plugins` pinned
- * by `crates/nail-api/tests/ts_vectors.rs` (vectors run in
+ * by `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in
  * `extensions.test.ts`): plug-in ids and names of commands / panels are
  * kebab-case, 1–64 characters, starting with a letter; commands are the
  * actions `plugin.<plugin>.<command>`, panels `plugin-panel

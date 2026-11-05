@@ -1,7 +1,7 @@
 /**
  * Context menus resolved from `layout.kdl` — the UI side of
  * `nail_api::menus::resolve_menu` (ADR 0043): a port pinned by
- * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `resolve.test.ts`):
+ * `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in `resolve.test.ts`):
  *
  * - label and icon: the item's override, else the layout's action metadata,
  *   else `null` (the action's built-in label);

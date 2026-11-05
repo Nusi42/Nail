@@ -2,7 +2,7 @@
  * Pure helpers of the sieve feature (`nail_api::sieve`, ADR 0043): the
  * vacation defaults and the value lists come generated; the validation
  * (`VacationSettings::issues`, `ManageSieveConfig::issues`) is a port pinned
- * by `crates/nail-api/tests/ts_vectors.rs` (vectors run in `model.test.ts`).
+ * by `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in `model.test.ts`).
  */
 import {
   DEFAULT_VACATION,

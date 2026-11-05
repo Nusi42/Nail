@@ -7,7 +7,7 @@
 // itself while a Windows contrast theme is active.
 //
 // Every text passes WCAG AAA (7:1) on every surface; the contrast test
-// (crates/nail-config/tests/theme_contrast.rs) checks each pair. The
+// (crates/nail-config/tests/integration/theme_contrast.rs) checks each pair. The
 // selection is a solid highlight: everything inside a selected item uses
 // `selection-fg`. See userDocs/en/accessibility.md.
 

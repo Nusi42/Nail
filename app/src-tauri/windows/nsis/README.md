@@ -42,7 +42,7 @@ What the installer does:
 
 `installer.nsi` is based on the template inside `@tauri-apps/cli` (its
 version is in the file header). When `package-lock.json` moves to another
-CLI version, `cargo test -p nail-app --test installer` fails until the copy
+CLI version, `cargo test -p nail-app --test integration installer::` fails until the copy
 is renewed:
 
 1. Take the template of the new version: it is

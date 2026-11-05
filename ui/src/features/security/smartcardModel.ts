@@ -1,7 +1,7 @@
 /**
  * Smartcard checks the UI makes before asking the core (ports of
  * `nail_api::smartcard`, ADR 0094, pinned by
- * `crates/nail-api/tests/ts_vectors.rs`; the constants are generated): the
+ * `crates/nail-api/tests/integration/ts_vectors.rs`; the constants are generated): the
  * settings' issues, the PIN cache limit, a typed PIN's plausibility.
  */
 import {

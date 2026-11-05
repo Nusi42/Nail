@@ -2,7 +2,7 @@
  * Views behind the navigation rail (M5b, ADR 0109) — the UI side of
  * `nail_api::views` and the layout's `views` / `rail` sections: the
  * constants are generated, the rules are ports pinned by
- * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `views.test.ts`).
+ * `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in `views.test.ts`).
  *
  * - A view shows a layout window (`ViewDef.window`) inside the `view-host`
  *   widget; without a `view-host` in the main window, `view.show` opens the

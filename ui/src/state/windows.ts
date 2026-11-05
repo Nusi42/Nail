@@ -1,7 +1,7 @@
 /**
  * The window model of M5c (ADR 0116): the contract's constants come from
  * the generated `constants.ts`; the rules are ports of `nail_api::windows`
- * pinned by `crates/nail-api/tests/ts_vectors.rs` (its vectors run in
+ * pinned by `crates/nail-api/tests/integration/ts_vectors.rs` (its vectors run in
  * `windows.test.ts`). Shared contract file:
  * the window manager (WP171, `features/windows/` + `layout/`), the
  * composers (WP172) and the pop-outs (WP173) build on it; change it only

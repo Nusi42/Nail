@@ -26,7 +26,7 @@
       so the Tauri updater's `msiexec /i … /passive` changes nothing.
 
   Every user-visible text is a preprocessor variable from
-  languages\en-US.wxi. ../../tests/installer.rs checks this file against
+  languages\en-US.wxi. ../../tests/integration/installer.rs checks this file against
   nail_api and the per-user installer.
 -->
 <?include languages\en-US.wxi ?>

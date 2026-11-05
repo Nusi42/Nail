@@ -4,7 +4,7 @@
  * lists, Fluent ids, limits and defaults come generated; the formats' shapes
  * (file or folder, mail or PIM data), which export formats fit which source,
  * the checks the core makes before a job starts and progress fractions are
- * ports pinned by `crates/nail-api/tests/ts_vectors.rs` (vectors run in
+ * ports pinned by `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in
  * `model.test.ts`); file-dialog filters and byte sizes are the UI's own.
  */
 import {

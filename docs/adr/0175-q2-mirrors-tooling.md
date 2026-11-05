@@ -54,7 +54,7 @@ policies, portability progress, plug-in extension ids). Their single source
 is the Rust function: `nail_api::ts_vectors::Vectors` records `{fn, args,
 out}` cases from the Rust code into
 `crates/nail-api/fixtures/ts-vectors/<area>.json` (tests in
-`crates/nail-api/tests/ts_vectors.rs`, `crates/nail-config/src/ts_vectors.rs`,
+`crates/nail-api/tests/integration/ts_vectors.rs`, `crates/nail-config/src/ts_vectors.rs`,
 `crates/nail-core/src/sync_policy.rs`; regenerate with
 `NAIL_UPDATE_SNAPSHOTS=1`); `ui/src/test/vectors.ts` `describeVectors` runs
 the TypeScript ports over the same file. Either side changing alone fails.

@@ -167,7 +167,7 @@ launch test (`ComposeDraft` opens the composer).
 | Package | Owns |
 | --- | --- |
 | WP111 | `crates/nail-mapi/` (cdylib `nail_mapi.dll` → shipped as `NailMapi.dll`, rlib for tests, bin `nail-mapi-harness`; `#![allow(unsafe_code)]` scoped to the FFI module) |
-| WP112 | `app/src-tauri/windows/` (moved from `installer/`: `nsis/` template + hooks + strings, `wix/`), `app/src-tauri/tests/installer.rs`, `packaging/` (new: winget, update manifests), `scripts/`, `.github/workflows/`; bundle-config changes for `tauri.conf.json` go to WP115 as apiRequests (or into the overlay `scripts/build-installer.mjs` passes) |
+| WP112 | `app/src-tauri/windows/` (moved from `installer/`: `nsis/` template + hooks + strings, `wix/`), `app/src-tauri/tests/integration/installer.rs`, `packaging/` (new: winget, update manifests), `scripts/`, `.github/workflows/`; bundle-config changes for `tauri.conf.json` go to WP115 as apiRequests (or into the overlay `scripts/build-installer.mjs` passes) |
 | WP113 | the rest of `app/src-tauri` (`src/`, `Cargo.toml`, `tauri.conf.json` outside `bundle`, `capabilities/`), `locales/*/core-desktop.ftl` below its "Desktop shell" heading |
 | WP114 | `ui/src/features/system/` (registered; mock routed; `data.features.system`), `locales/*/system.ftl` |
 

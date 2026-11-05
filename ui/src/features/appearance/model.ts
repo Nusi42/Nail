@@ -2,7 +2,7 @@
  * The appearance rules the UI needs outside the mock core: the built-in
  * theme ids, the override ranges and their validation, and which theme is
  * active. The constants are generated; the rules are ports of
- * `nail_api::appearance` pinned by `crates/nail-api/tests/ts_vectors.rs`
+ * `nail_api::appearance` pinned by `crates/nail-api/tests/integration/ts_vectors.rs`
  * (vectors run in `model.test.ts`); the mock core
  * (`./mock.ts`) answers the requests with them. Kept apart from the mock so
  * the app bundle does not carry the mock core.

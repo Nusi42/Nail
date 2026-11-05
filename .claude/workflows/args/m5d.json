@@ -10,7 +10,7 @@
   "build": [
     {
       "key": "wp181-layout",
-      "dirs": "ui/src/features/layout-editor/, ui/src/layout/LayoutRenderer.tsx, ui/src/layout/LayoutChrome.ts, the settings-page placement of layout-editor-settings / toolbar-editor-settings in defaults/layout.kdl (+ regenerating crates/nail-api/fixtures/default-layout.json with NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults), locales/en/layout-editor.ftl, locales/de/layout-editor.ftl",
+      "dirs": "ui/src/features/layout-editor/, ui/src/layout/LayoutRenderer.tsx, ui/src/layout/LayoutChrome.ts, the settings-page placement of layout-editor-settings / toolbar-editor-settings in defaults/layout.kdl (+ regenerating crates/nail-api/fixtures/default-layout.json with NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test integration defaults::), locales/en/layout-editor.ftl, locales/de/layout-editor.ftl",
       "npm": false,
       "prompt": "WP181 — customize-layout mode exactly as in docs/plan.md section 10 and the proposal: pane headers with drag handles, dock and swap targets, a hide/show eye, the widget palette (\"Add to layout\") and presets (Three panes, Reader below, Wide reader, Focus), Undo, Reset to default and Done, a full keyboard alternative for every drag operation. Every change goes through the contract's write-back patches (layout.kdl keeps the user's comments). Themeable via parts, axe-clean in all five themes, Vitest tests, 0 lint warnings."
     },

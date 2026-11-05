@@ -18,7 +18,7 @@ Items left over from M2c (ADR 0049 and its verify run):
 
 WP65 owns `crates/nail-pgp`, `crates/nail-mime`, `ui/src/i18n/`, the date
 formatting code in `ui/src`, `locales/{en,de}/core-crypto.ftl`,
-`e2e/tests/a11y-windows.spec.ts` and `crates/nail-core/tests/snooze_restart.rs`
+`e2e/tests/a11y-windows.spec.ts` and `crates/nail-core/tests/integration/snooze_restart.rs`
 (new files only in nail-core). Core wiring is requested from the
 integrator (below).
 
@@ -123,7 +123,7 @@ scanned tabs the number of children of the settings window's `tabs`
 nodes; a new window or tab fails until it is reachable and clean.
 `a11y.spec.ts` stays as it is.
 
-### 5. Snoozes across restarts (`crates/nail-core/tests/snooze_restart.rs`)
+### 5. Snoozes across restarts (`crates/nail-core/tests/integration/snooze_restart.rs`)
 
 Complements `m2c_wired.rs` (wake time passed while stopped):
 two pending snoozes (Inbox, explicit Archive wake folder) survive a

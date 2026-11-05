@@ -52,7 +52,7 @@ restart, an MSI install with `DISABLEUPDATES=1` hiding the updater, and
   timing). The server now waits until the client closes its end (at most
   10 s) before disconnecting (`mapi_server::wait_for_client_close`).
   Tests: a client that reads 500 ms late still gets its answer; the
-  cross-package test `app/src-tauri/tests/mapi_wired.rs` drives the shell's
+  cross-package test `app/src-tauri/tests/integration/mapi_wired.rs` drives the shell's
   server with the DLL's own client (`nail_mapi::forward` + `PipeTransport`:
   private copies, same-user check) and the real core.
 - **A stale update answer overwrote a newer state.** The UI wrote the

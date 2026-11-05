@@ -83,7 +83,7 @@ rfd.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
-# M4b WP115: tests/mapi_wired.rs drives the shell's pipe server with the
+# M4b WP115: tests/integration/mapi_wired.rs drives the shell's pipe server with the
 # DLL's own client logic (staging, same-user check, frames).
 nail-mapi.workspace = true
 # M4b: dev-endpoint tests connect like `nail plugin dev`.

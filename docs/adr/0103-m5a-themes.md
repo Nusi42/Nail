@@ -84,7 +84,7 @@ the UI face for plain text too, `line-height.relaxed`, at most 68ch
 (proposal); its size stays `$font-size.md` (= body), which an existing
 nail-config test pins.
 
-### The contrast test (`crates/nail-config/tests/theme_contrast.rs`)
+### The contrast test (`crates/nail-config/tests/integration/theme_contrast.rs`)
 
 - Resolves the base and each built-in through `nail-config` and evaluates
   colour tokens like the browser on `:root`: the mode's value (`dark=`

@@ -2,7 +2,7 @@
  * Pure helpers of the remote-UI and privacy UI (ADR 0036): access presets
  * (`RemoteAccessPreset::grant`), the settings checks the core runs
  * (`RemoteUiSettings::issues`, ported so the form can explain a problem
- * before saving; pinned by `crates/nail-api/tests/ts_vectors.rs`), fingerprint and pairing-code formatting, and the value
+ * before saving; pinned by `crates/nail-api/tests/integration/ts_vectors.rs`), fingerprint and pairing-code formatting, and the value
  * lists the Fluent ids are built from.
  */
 import {

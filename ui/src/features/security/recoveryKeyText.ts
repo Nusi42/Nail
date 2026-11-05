@@ -1,6 +1,6 @@
 /**
  * The vault recovery key's text form (a port of `nail_api::recovery`,
- * ADR 0094, pinned by `crates/nail-api/tests/ts_vectors.rs`; the constants
+ * ADR 0094, pinned by `crates/nail-api/tests/integration/ts_vectors.rs`; the constants
  * are generated): 32 bytes as Crockford base32 (52 characters) plus 4 check
  * characters (the top 20 bits of the CRC-32 of the bytes), in 14 groups of
  * 4 joined by `-`. Parsing forgives case, spaces and dashes and reads `O`

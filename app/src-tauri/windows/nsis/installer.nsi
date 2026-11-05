@@ -7,7 +7,7 @@
 ; marked with "; NAIL:". Nail's own installer logic lives in hooks.nsh; this
 ; copy only adds the places to call it. When the Tauri CLI is upgraded, copy
 ; the new template again, re-apply the NAIL blocks and update the version
-; above (a test in app/src-tauri/tests/installer.rs compares it with
+; above (a test in app/src-tauri/tests/integration/installer.rs compares it with
 ; package-lock.json). See app/src-tauri/windows/nsis/README.md.
 
 Unicode true

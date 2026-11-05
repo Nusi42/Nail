@@ -1,7 +1,7 @@
 /**
  * Pure helpers of the Exchange UI: validation ports of the contract's
  * `issues()` (immediate feedback with the same `exchange-*-issue-*` texts;
- * the core stays authoritative; pinned by `crates/nail-api/tests/ts_vectors.rs`), category colours, Focused Inbox queries,
+ * the core stays authoritative; pinned by `crates/nail-api/tests/integration/ts_vectors.rs`), category colours, Focused Inbox queries,
  * mailbox folder paths (`@<address>/…`), Autodiscover review (domain
  * redirects, EWS against Exchange Online), Exchange sign-in methods, rooms
  * as attendees and room availability, task-list grouping (To Do lists).

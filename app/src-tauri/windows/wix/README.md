@@ -55,6 +55,6 @@ Group Policy can still force updates off through
 `HKLM\Software\Policies\Nail` (`DisableUpdates`); the app lets the policy
 win over everything. The former `UpdateChannel` value is ignored (ADR 0210).
 
-`../../tests/installer.rs` checks this fragment against `nail_api` and the
+`../../tests/integration/installer.rs` checks this fragment against `nail_api` and the
 per-user installer; `scripts/msi-smoke.ps1` installs, upgrades and removes
 a built MSI (elevated; CI).

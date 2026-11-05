@@ -158,7 +158,7 @@ edits take effect (valid change → `Event::AccountsChanged`; invalid →
 ## Consequences
 
 - Hand-edited and UI-edited files coexist; tests pin the preserving
-  behaviour (`crates/nail-config/tests/accounts.rs`).
+  behaviour (`crates/nail-config/tests/integration/accounts.rs`).
 - New account settings are added in five places: the `nail-api` model,
   the reader, the renderer, the schema mirror and
   `userDocs/en/accounts-reference.md` (whose examples are parsed by a test).

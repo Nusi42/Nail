@@ -2,7 +2,7 @@
  * The contract's rules for writes by agents and plug-ins (`nail_api::agents`,
  * ADR 0079) for the mock core and the confirmation center: the per-kind
  * rules come generated (`ACTION_KIND_RULES`), the policy table is a port
- * pinned by `crates/nail-api/tests/ts_vectors.rs` (vectors run in
+ * pinned by `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in
  * `model.test.ts`).
  */
 import {

@@ -46,7 +46,7 @@ pub use snooze::{MemorySnoozeStore, SnoozeEntry, SnoozeScheduler, SnoozeStore};
 pub use tokenize::{TokenSource, Tokenizer};
 
 /// Every Fluent message id this crate produces (all in
-/// `locales/en/core-triage.ftl`; checked by `tests/catalog.rs`).
+/// `locales/en/core-triage.ftl`; checked by `tests/integration/catalog.rs`).
 pub const FLUENT_IDS: &[&str] = &[
     "notification-new-mail-title",
     "notification-new-mail-body",

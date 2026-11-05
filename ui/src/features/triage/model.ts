@@ -1,7 +1,7 @@
 /**
  * Pure helpers of the triage feature (`nail_api::triage`, ADR 0043): the
  * defaults and value lists come generated; the validation is a port pinned
- * by `crates/nail-api/tests/ts_vectors.rs` (vectors run in `model.test.ts`);
+ * by `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in `model.test.ts`);
  * and the names the UI shows.
  */
 import {

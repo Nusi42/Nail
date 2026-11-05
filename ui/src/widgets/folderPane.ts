@@ -1,7 +1,7 @@
 /**
  * The folder pane's sections (M5b, ADR 0109) — the port of
  * `nail_api::views::folder_pane_sections`, pinned by
- * `crates/nail-api/tests/ts_vectors.rs` (vectors run in `layout/views.test.ts`):
+ * `crates/nail-api/tests/integration/ts_vectors.rs` (vectors run in `layout/views.test.ts`):
  *
  * - sections in the order of the `folder-tree sections=` option (default
  *   `favorites accounts smart-folders`);

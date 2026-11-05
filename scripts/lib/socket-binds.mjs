@@ -140,12 +140,12 @@ export const ALLOWLIST = [
     reason: "test: settings validation",
   },
   {
-    file: "crates/nail-core/tests/service.rs",
+    file: "crates/nail-core/tests/integration/service.rs",
     text: 'bind_address: "0.0.0.0".into()',
     reason: "test: stored settings (no host runs)",
   },
   {
-    file: "crates/nail-store/tests/remote.rs",
+    file: "crates/nail-store/tests/integration/remote.rs",
     text: 'bind_address: "0.0.0.0".into()',
     reason: "test: stored settings",
   },
@@ -166,12 +166,12 @@ export const ALLOWLIST = [
   },
   // Refusals: binding a non-loopback address without TLS is refused before any socket.
   {
-    file: "crates/nail-server/tests/server.rs",
+    file: "crates/nail-server/tests/integration/server.rs",
     text: "SocketAddr::from(([0, 0, 0, 0], 0))",
     reason: "test: Server::bind refuses it (NotLoopback) before binding",
   },
   {
-    file: "crates/nail-server/tests/transport.rs",
+    file: "crates/nail-server/tests/integration/transport.rs",
     text: "SocketAddr::from(([0, 0, 0, 0], 0))",
     reason: "test: bind / bind_with refuse it before binding",
   },
@@ -184,11 +184,15 @@ export const ALLOWLIST = [
   { file: "crates/nail-proxy/src/policy.rs", text: '"0.0.0.0",', reason: "test: blocked address" },
   { file: "crates/nail-proxy/src/policy.rs", text: '"::",', reason: "test: blocked address" },
   {
-    file: "crates/nail-proxy/tests/fetch.rs",
+    file: "crates/nail-proxy/tests/integration/fetch.rs",
     text: '"http://0.0.0.0/"',
     reason: "test: refused URL",
   },
-  { file: "crates/nail-proxy/tests/fetch.rs", text: '"http://[::]/"', reason: "test: refused URL" },
+  {
+    file: "crates/nail-proxy/tests/integration/fetch.rs",
+    text: '"http://[::]/"',
+    reason: "test: refused URL",
+  },
 ];
 
 /**

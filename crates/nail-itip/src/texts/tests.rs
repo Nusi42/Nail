@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 const EN: &str = include_str!("../../../../locales/en/itip.ftl");
 const DE: &str = include_str!("../../../../locales/de/itip.ftl");
 
-#[path = "../../tests/common/english.rs"]
+#[path = "../../tests/integration/common/english.rs"]
 mod english;
 
 use english::English;

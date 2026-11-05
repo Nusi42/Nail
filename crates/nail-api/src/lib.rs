@@ -120,7 +120,7 @@
 //! `ui/src/api/generated/` by [`export_typescript`]. The generated files are
 //! checked in; the `bindings` integration test fails when they are stale.
 //! Regenerate with `npm run gen:api` (or
-//! `NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings`).
+//! `NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test integration bindings::`).
 
 #![warn(missing_docs)]
 

@@ -1,6 +1,6 @@
 ; Nail's installer strings (English). Used by hooks.nsh and installer.nsi
 ; as $(name). Every string used there must be defined here
-; (app/src-tauri/tests/installer.rs checks it). Tauri's own installer
+; (app/src-tauri/tests/integration/installer.rs checks it). Tauri's own installer
 ; strings come from the Tauri CLI.
 
 LangString nailOptionsTitle ${LANG_ENGLISH} "Options"

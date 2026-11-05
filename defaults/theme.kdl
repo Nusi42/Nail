@@ -11,7 +11,7 @@ theme "default" mode="system" {
         // the print view is shown (white paper, black text, no shadows).
         // The built-in themes (defaults/themes/*.kdl) replace these colours.
         // Every theme passes the contrast check in
-        // crates/nail-config/tests/theme_contrast.rs (WCAG AA; AAA for high
+        // crates/nail-config/tests/integration/theme_contrast.rs (WCAG AA; AAA for high
         // contrast).
         //
         // Surfaces: `bg` for panes (list, reader, dialogs), `bg-subtle` for

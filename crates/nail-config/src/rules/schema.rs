@@ -5,7 +5,7 @@
 //! tree (each condition an object with one key, its node name) and `then`
 //! the list of actions. The types below exist only to generate the schema;
 //! the reader produces `nail_api::rules` types directly.
-//! `tests/rules.rs` checks that the node and property names the reader
+//! `tests/integration/rules.rs` checks that the node and property names the reader
 //! accepts are in the schema.
 
 #![expect(dead_code, reason = "schema-only mirror types are never constructed")]

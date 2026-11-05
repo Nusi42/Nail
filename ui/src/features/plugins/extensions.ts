@@ -1,7 +1,7 @@
 /**
  * Which plug-in extensions apply where (M4a, ADR 0079), ported from
  * `nail_api::plugins::extensions` for the UI (the matching rules pinned by
- * `crates/nail-api/tests/ts_vectors.rs`, the limits and lists generated): preview renderers and
+ * `crates/nail-api/tests/integration/ts_vectors.rs`, the limits and lists generated): preview renderers and
  * actions for an attachment, actions for a link, composer actions and
  * Markdown blocks, the "what it adds" list of a manifest, write
  * permissions, and applying a composer edit to plain text.

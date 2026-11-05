@@ -4,7 +4,7 @@
 //! object: each kind of top-level node is a property, each named node a map
 //! key, each child node a property of its parent. The types below exist only
 //! to generate the schema; the reader produces `nail_api` types directly.
-//! `tests/accounts.rs` checks that every property the reader accepts is in
+//! `tests/integration/accounts.rs` checks that every property the reader accepts is in
 //! the schema.
 
 #![expect(dead_code, reason = "schema-only mirror types are never constructed")]

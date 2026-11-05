@@ -17,7 +17,7 @@
 //!
 //! The UI bundles only [`BUNDLED_ICONS`] (static imports keep the bundle
 //! small); `crates/nail-api/fixtures/icons.json` mirrors both tables for
-//! the UI's registry test (`nail-api/tests/fixtures.rs` keeps it current).
+//! the UI's registry test (`nail-api/tests/integration/fixtures.rs` keeps it current).
 //! Adding an icon = add its Lucide name here (sorted) and to the UI's
 //! registry.
 

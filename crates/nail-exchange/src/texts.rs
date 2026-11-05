@@ -206,7 +206,7 @@ mod tests {
 
     /// Every id has an English text; the German catalog is the same
     /// (empty) file (ADR 0043). The contract's own ids (warnings, issues,
-    /// colours) are checked by `nail-api/tests/catalog.rs`.
+    /// colours) are checked by `nail-api/tests/integration/catalog.rs`.
     #[test]
     fn catalog_has_every_id() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../locales");

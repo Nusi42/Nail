@@ -179,11 +179,21 @@ Habits of the type-aware TypeScript / JavaScript rules (ADR 0127):
 
 Habits of the Rust lints (ADRs 0124–0126, 0129):
 
+- A crate has at most one integration-test binary (ADR 0213): with two or
+  more test files they are modules of `tests/integration/main.rs`
+  (`mod common;` first, then one `mod` per file; shared helpers in
+  `tests/integration/common/`, used as `crate::common::…`). Each
+  `tests/*.rs` is a binary of its own that links the crate and all its
+  dependencies again. Run one file's tests with
+  `cargo test -p <crate> --test integration <file>::`. The tests share one
+  process: anything process-wide (environment variables, the current
+  directory, global state of the crate) needs a shared lock in `common`.
 - Every integration-test crate root (`tests/*.rs`, `tests/*/main.rs`)
   starts with `#![cfg(test)]`, so `clippy.toml`'s `allow-unwrap-in-tests` /
-  `allow-expect-in-tests` also cover its helper functions. A test crate that
-  uses only part of `tests/common` declares
-  `#[expect(dead_code, reason = "…")] mod common;`.
+  `allow-expect-in-tests` also cover its helper functions. A module file
+  needs no attribute: it inherits the root's; a Windows-only file starts
+  with `#![cfg(windows)]`. Since all modules share one `common`, a helper
+  no test uses any more is deleted, not excused with `#[expect(dead_code)]`.
 - No `#[allow(…)]` anywhere (`clippy::allow_attributes` is deny); an
   expectation that no longer fires warns, so remove it with the cause.
 - `let _ = value;` → `drop(value);` (same drop point) or, for a
@@ -300,7 +310,7 @@ working-tree copy of each staged file, so stage the whole file you fixed.
   run the duplicate check only after staging the resolutions. A branch that
   predates the shared homes adds its behaviour there (one copy), then
   regenerates `npm run gen:api` and the ts-vectors
-  (`NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test ts_vectors`; they
+  (`NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test integration ts_vectors::`; they
   go stale when `defaults/layout.kdl` changes).
 
 ### Commit messages
@@ -567,7 +577,7 @@ runs, by hand:
   Drafts) and the EWS retirement date (ADR 0075).
 - **Exchange Server 2019 / SE**: the same with EWS — Windows sign-in as the
   domain user (Kerberos), with explicit credentials and with NTLM
-  (`cargo test -p nail-exchange --test sspi_live -- --ignored` with
+  (`cargo test -p nail-exchange --test integration sspi_live:: -- --ignored` with
   `NAIL_EWS_LIVE_URL`, optionally `NAIL_EWS_LIVE_PACKAGE=ntlm`), streaming
   notifications, the `CategoryList`, `ResolveNames` (ADR 0074).
 - **Google**: a test account with the restricted Gmail scope on the Google
@@ -874,13 +884,13 @@ regenerate it with the matching command:
 | --- | --- |
 | `ui/src/api/generated/` (TypeScript types from `nail-api`) | `npm run gen:api` |
 | `packages/plugin-api/src/generated/` (plug-in-facing TypeScript types from `nail-api`, M2d) | `npm run gen:api` |
-| `crates/nail-api/fixtures/ts-vectors/*.json` (Rust answers the UI's ports must give, Q2) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test ts_vectors`, `… cargo test -p nail-config ts_vectors`, `… cargo test -p nail-core ts_vectors` |
+| `crates/nail-api/fixtures/ts-vectors/*.json` (Rust answers the UI's ports must give, Q2) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test integration ts_vectors::`, `… cargo test -p nail-config ts_vectors`, `… cargo test -p nail-core ts_vectors` |
 | Reference sections of `userDocs/en/plugins/api-reference.md` and `components.md` (from the SDK types and `ui.rs` doc comments) | `npm run docs -w packages/plugin-api` |
-| `crates/nail-config/schema/*.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema` |
-| `crates/nail-mime/tests/snapshots/` (insta) | `INSTA_UPDATE=always cargo test -p nail-mime --test corpus`, or `cargo insta review` |
-| `crates/nail-api/fixtures/default-{theme,layout}.json` (after changing `defaults/*.kdl`) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults`, then `npx prettier --write crates/nail-api/fixtures` |
-| `crates/nail-config/schema/rules.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema` |
-| `crates/nail-config/tests/golden/` (layout write-back, merge) | `NAIL_UPDATE_GOLDEN=1 cargo test -p nail-config --test write_back` (or `--test merge`) |
+| `crates/nail-config/schema/*.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test integration schema::` |
+| `crates/nail-mime/tests/integration/snapshots/` (insta) | `INSTA_UPDATE=always cargo test -p nail-mime --test integration corpus::`, or `cargo insta review` |
+| `crates/nail-api/fixtures/default-{theme,layout}.json` (after changing `defaults/*.kdl`) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test integration defaults::`, then `npx prettier --write crates/nail-api/fixtures` |
+| `crates/nail-config/schema/rules.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test integration rules_schema::` |
+| `crates/nail-config/tests/golden/` (layout write-back, merge) | `NAIL_UPDATE_GOLDEN=1 cargo test -p nail-config --test integration write_back::` (or `--test integration merge::`) |
 | `crates/nail-compose/tests/golden/*.eml` (built MIME, CRLF, kept byte for byte by `.gitattributes`) | `NAIL_UPDATE_GOLDEN=1 cargo test -p nail-compose --test mime` |
 | `crates/nail-testkit/corpus/crypto/pgp/` (OpenPGP interop vectors made by GnuPG 2.4; Git for Windows ships it as `/usr/bin/gpg`) | `bash crates/nail-testkit/corpus/crypto/pgp/generate.sh` (random session keys: every file changes, the tests must still pass) |
 | `crates/nail-testkit/corpus/crypto/smime/` (S/MIME test CA, certificates incl. the demo-multi `ada-work` / `ada-home`, PKCS#12 files password `nail-test`, OpenSSL-made messages) | `bash crates/nail-testkit/corpus/crypto/smime/generate.sh` (needs OpenSSL 3.4+, Git for Windows ships `/mingw64/bin/openssl`; OpenSSL is a fixture tool only) |
@@ -1280,7 +1290,7 @@ For M2c:
   notifications, folder sync policies and on-demand bodies, context menus, layout reset
   patches, MCP port setting, `RuleFromMessage`, store v7, the `nail-sieve` / `nail-triage`
   stubs, slots). Fluent texts built in Rust live in `locales/<lang>/core*.ftl`;
-  `cargo test -p nail-api --test catalog` checks that every id the contract names exists.
+  `cargo test -p nail-api --test integration catalog::` checks that every id the contract names exists.
 - **0044:** `nail-sieve` — the Sieve compiler (placement + localized reasons), the
   parse / decompile round-trip harness, the ManageSieve client, upload / remove of the
   managed script; `nail-testkit-net`'s `MockSieveServer` + `validate_script`
