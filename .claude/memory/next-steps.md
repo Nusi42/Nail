@@ -36,8 +36,8 @@ filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender war
 6:51 → 1:48, workspace `cargo test` about 6.5 min). The release checks run e2e on the test build's `nail`. Measured and
 rejected: one release target directory (nothing shared: cargo resolves features per call). Open follow-ups: fix the
 three `nail-core` races that merging exposed (ADR 0213; the forced Sieve upload one looks like a real core bug), then
-merge its tests; `nail-api` compiles four times per release at about 7.5 min each (crate-local ThinLTO): a small crate
-for what `nail-mapi` needs would skip two of them; `cargo doc` takes about 5 min in `npm run check`.
+merge its tests; `nail-api` compiles twice per release at about 7.5 min each (crate-local ThinLTO; the MAPI DLL no
+longer needs it, ADR 0215, 2026-11-06: cold DLL builds 18 s / 13 s); `cargo doc` takes about 5 min in `npm run check`.
 
 **Released 0.8.4 (2026-11-05):** GitHub release `v0.8.4` (Latest), `main` published. Waits for the
 maintainer's check on macOS (links, status bar, text menu over HTML mail). Content: links and the text menu over HTML mail now work in WebKit
