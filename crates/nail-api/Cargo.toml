@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 # Shared civil-date helpers (ADR 0171).
 nail-util.workspace = true
+# ADR 0215: the Simple MAPI protocol, re-exported as `mapi`.
+nail-mapi-protocol.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true

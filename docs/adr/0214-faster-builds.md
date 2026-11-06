@@ -55,11 +55,9 @@ Tried and rejected:
 
 - Builds use the machine. With about 28 GiB free, cargo runs 8 jobs instead
   of 2; when memory is short, it still falls back to 2.
-- The release build stays bound by `nail-api`, which compiles four times in
-  release. Open options:
-  - move what `nail-mapi` needs (the MAPI protocol, `WindowsArch`, the
-    registry names) into a small crate, so the two DLL builds skip
-    `nail-api`;
-  - find the code that makes ThinLTO slow in `nail-api`.
+- The release build stays bound by `nail-api`, which compiled four times in
+  release. The two DLL builds no longer need it (ADR 0215: the MAPI
+  protocol in its own crate), so it compiles twice. Open option: find the
+  code that makes ThinLTO slow in `nail-api`.
 - Linux and macOS use the same scripts; only the measured free memory
   differs per OS.

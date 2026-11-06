@@ -30,8 +30,9 @@ path = "src/bin/harness.rs"
 test-overrides = []
 
 [dependencies]
-# The pipe protocol and request types (nail_api::mapi).
-nail-api.workspace = true
+# The pipe protocol and request types; not nail-api, so the x64 and x86
+# release builds stay small (ADR 0215).
+nail-mapi-protocol.workspace = true
 nail-util.workspace = true
 serde_json.workspace = true
 

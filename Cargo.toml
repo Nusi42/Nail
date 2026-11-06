@@ -32,6 +32,7 @@ members = [
     "crates/nail-proto-graph",
     "crates/nail-proto-ews",
     "crates/nail-exchange",
+    "crates/nail-mapi-protocol",
     "crates/nail-mapi",
     "crates/nail-portability",
     "crates/nail-pkcs11",
@@ -78,6 +79,7 @@ default-members = [
     "crates/nail-proto-graph",
     "crates/nail-proto-ews",
     "crates/nail-exchange",
+    "crates/nail-mapi-protocol",
     "crates/nail-mapi",
     "crates/nail-portability",
     "crates/nail-pkcs11",
@@ -100,6 +102,7 @@ repository = "https://github.com/Nusi42/Nail"
 [workspace.dependencies]
 # Internal crates
 nail-api = { path = "crates/nail-api" }
+nail-mapi-protocol = { path = "crates/nail-mapi-protocol" }
 nail-connlog = { path = "crates/nail-connlog" }
 nail-config = { path = "crates/nail-config" }
 nail-store = { path = "crates/nail-store" }

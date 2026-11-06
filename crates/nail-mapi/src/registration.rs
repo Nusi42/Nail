@@ -1,5 +1,5 @@
 //! The registry entries that make NailMapi.dll the system's Simple MAPI
-//! client (`nail_api::mapi::registry`). The installers write them (WP112;
+//! client (`nail_mapi_protocol::registry`). The installers write them (WP112;
 //! HKLM needs elevation); nothing in this crate writes to the registry.
 //! [`client_registration`] lists the values, [`to_reg_file`] renders them
 //! as a `.reg` file for the installers' tests and for manual setups.
@@ -17,8 +17,8 @@
 //!   user choose it (Settings → Default apps / the first-run screen), so
 //!   [`default_client_entry`] is for managed deployments.
 
-use nail_api::desktop::WindowsArch;
-use nail_api::mapi::{mapi_dll_relative_path, registry};
+use nail_mapi_protocol::WindowsArch;
+use nail_mapi_protocol::{mapi_dll_relative_path, registry};
 use std::fmt::Write as _;
 
 /// The registry root of an entry.

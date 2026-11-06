@@ -21,12 +21,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, SystemTime};
 
-use nail_api::mapi::{MapiMessage, MapiResult};
+use nail_mapi_protocol::{MapiMessage, MapiResult};
 
 /// Largest file the DLL copies: the composer's attachment limit (25 MiB,
-/// `nail_api::compose::MAX_ATTACHMENT_BYTES`); larger files are refused
+/// `nail_mapi_protocol::MAX_ATTACHMENT_BYTES`); larger files are refused
 /// with `MAPI_E_ATTACHMENT_TOO_LARGE` before anything is copied.
-pub const MAX_STAGED_FILE_BYTES: u64 = nail_api::compose::MAX_ATTACHMENT_BYTES;
+pub const MAX_STAGED_FILE_BYTES: u64 = nail_mapi_protocol::MAX_ATTACHMENT_BYTES;
 
 /// Staging folders older than this are removed by later calls.
 pub const STALE_AFTER: Duration = Duration::from_hours(24);
@@ -221,7 +221,7 @@ pub fn safe_file_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::mapi::{MapiAttachment, MapiUi};
+    use nail_mapi_protocol::{MapiAttachment, MapiUi};
     use pretty_assertions::assert_eq;
 
     fn message(paths: &[(&Path, Option<&str>)]) -> MapiMessage {

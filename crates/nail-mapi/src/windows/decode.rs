@@ -1,4 +1,4 @@
-//! Caller structures → [`nail_api::mapi::MapiMessage`].
+//! Caller structures → [`nail_mapi_protocol::MapiMessage`].
 //!
 //! The `MapiMessage` / `MapiRecipDesc` / `MapiFileDesc` structures (and
 //! their `W` twins) are windows-sys' bindings of `MAPI.h`, so the layout is
@@ -6,7 +6,7 @@
 //! (`super::memory`); counts are checked against the contract's limits
 //! before any element is touched.
 
-use nail_api::mapi::{
+use nail_mapi_protocol::{
     MAX_MAPI_ATTACHMENTS, MAX_MAPI_RECIPIENTS, MAX_MAPI_TEXT_BYTES, MapiAttachment, MapiMessage,
     MapiRecipient, MapiRecipientClass, MapiResult, MapiUi,
 };

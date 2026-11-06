@@ -1,5 +1,5 @@
 //! Nail's Simple MAPI provider (plan M4b WP111; ADR 0087 contract, ADR
-//! 0088 decisions; `nail_api::mapi`).
+//! 0088 decisions; `nail_mapi_protocol`).
 //!
 //! Built as `nail_mapi.dll`, installed as `mapi\<arch>\NailMapi.dll` for
 //! x64, x86 (32-bit Office) and ARM64. Programs reach it through the
@@ -9,15 +9,15 @@
 //! 1. `MAPISendMail` / `MAPISendMailW` / `MAPISendDocuments`
 //!    ([`windows::exports`]) decode the caller's structures without trusting
 //!    a single pointer ([`windows::decode`], `windows::memory`) into a
-//!    [`nail_api::mapi::MapiMessage`].
+//!    [`nail_mapi_protocol::MapiMessage`].
 //! 2. [`forward::forward`] runs the contract's checks, copies the
 //!    attachments to a private temporary folder ([`staging`]) so the program
 //!    may delete its files at once, and sends a
-//!    [`nail_api::mapi::MapiPipeRequest`] to the running app over the
+//!    [`nail_mapi_protocol::MapiPipeRequest`] to the running app over the
 //!    user's named pipe ([`windows::client`]), starting `Nail.exe` when
 //!    nothing listens. The app saves a draft and opens the composer — it
 //!    never sends on the program's behalf.
-//! 3. The app's [`nail_api::mapi::MapiResult`] is what the program gets.
+//! 3. The app's [`nail_mapi_protocol::MapiResult`] is what the program gets.
 //!
 //! The rest of Simple MAPI answers as a mail client without a profile or a
 //! readable store would: logon / logoff succeed, names that are addresses
@@ -37,7 +37,7 @@ pub use export_table::EXPORTS;
 
 /// The pipe protocol version this DLL speaks.
 pub fn protocol_version() -> u32 {
-    nail_api::mapi::MAPI_PROTOCOL_VERSION
+    nail_mapi_protocol::MAPI_PROTOCOL_VERSION
 }
 
 #[cfg(test)]

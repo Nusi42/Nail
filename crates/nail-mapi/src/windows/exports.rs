@@ -19,7 +19,7 @@ use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Mutex;
 
-use nail_api::mapi::{MapiMessage, MapiRecipient, MapiRecipientClass, MapiResult, MapiUi};
+use nail_mapi_protocol::{MapiMessage, MapiRecipient, MapiRecipientClass, MapiResult, MapiUi};
 use windows_sys::Win32::System::Mapi::{
     MAPI_E_FAILURE, MAPI_E_NOT_SUPPORTED, MAPI_E_UNKNOWN_RECIPIENT, MAPI_TO,
     MapiMessage as RawMessage, MapiMessageW as RawMessageW, MapiRecipDesc, SUCCESS_SUCCESS,
@@ -412,7 +412,7 @@ mod signatures {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::mapi::{MapiPipeRequest, MapiPipeResponse};
+    use nail_mapi_protocol::{MapiPipeRequest, MapiPipeResponse};
     use pretty_assertions::assert_eq;
     use std::ptr::{null, null_mut};
 

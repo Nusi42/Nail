@@ -23,8 +23,8 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use nail_api::desktop::registry as install_registry;
-use nail_api::mapi::{
+use nail_mapi_protocol::install_registry;
+use nail_mapi_protocol::{
     APP_EXE_FILE, MAPI_CONNECT_TIMEOUT_MS, MAPI_PIPE_ENV, MAPI_RESPONSE_TIMEOUT_MS,
     MapiPipeRequest, MapiPipeResponse, MapiResult, app_exe_from_dll, decode_frame, encode_frame,
     frame_len, mapi_pipe_name,
@@ -655,7 +655,7 @@ impl Transport for PipeTransport {
 mod tests {
     use super::super::server::{FakeAppPipe, pipe_sddl, unique_pipe_name};
     use super::*;
-    use nail_api::mapi::{MAPI_PROTOCOL_VERSION, MapiMessage, MapiUi};
+    use nail_mapi_protocol::{MAPI_PROTOCOL_VERSION, MapiMessage, MapiUi};
     use pretty_assertions::assert_eq;
 
     fn request(subject: &str) -> MapiPipeRequest {

@@ -263,6 +263,10 @@ Where shared things live (Q2, ADRs 0172–0177):
   `rfc3339_utc`, `rfc3339_now` and the millis forms; `color`: WCAG colour
   math; `snapshot`: snapshot and golden files); transport / HTTP / XML
   plumbing in `nail-net`; provider domains in `nail_api::hosts`.
+- Facts `NailMapi.dll` needs (the Simple MAPI pipe protocol, `WindowsArch`,
+  the install registry names, `MAX_ATTACHMENT_BYTES`) are in
+  `nail-mapi-protocol`, which `nail-api` re-exports; the DLL never depends on
+  `nail-api` (ADR 0215).
 - Contract samples are in `nail_api::testing` (feature `testing`); test
   support in the `testing` features of nail-core / nail-store / nail-rules /
   nail-portability / nail-proxy and in nail-testkit(-net).

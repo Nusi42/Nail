@@ -1,0 +1,23 @@
+[package]
+name = "nail-mapi-protocol"
+description = "Simple MAPI pipe protocol and Windows install facts shared by NailMapi.dll and the app (re-exported by nail-api)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Kept small on purpose (ADR 0215): NailMapi.dll depends on this crate
+# instead of nail-api, so its x64 and x86 release builds skip nail-api.
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+# The types are part of the TypeScript contract (nail-api exports them).
+ts-rs.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

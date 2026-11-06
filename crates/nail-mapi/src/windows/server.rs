@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io;
 use std::os::windows::io::{FromRawHandle, OwnedHandle};
 
-use nail_api::mapi::{MapiPipeRequest, MapiPipeResponse, read_frame, write_frame};
+use nail_mapi_protocol::{MapiPipeRequest, MapiPipeResponse, read_frame, write_frame};
 use windows_sys::Win32::Foundation::{
     ERROR_PIPE_CONNECTED, GetLastError, INVALID_HANDLE_VALUE, LocalFree,
 };

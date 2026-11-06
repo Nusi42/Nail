@@ -199,7 +199,9 @@ impl Service {
             Response::DraftSaved { draft_id } => Ok(draft_id),
             Response::Error { code, message, .. } => {
                 tracing::warn!(?code, %message, "cannot save the Simple MAPI draft");
-                Err(MapiResult::from_api_error(&ApiError::new(code, message)))
+                Err(nail_api::mapi::result_for_error(&ApiError::new(
+                    code, message,
+                )))
             }
             _ => Err(MapiResult::Failure),
         }

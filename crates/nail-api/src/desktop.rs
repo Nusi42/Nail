@@ -120,45 +120,9 @@ impl InstallScope {
     }
 }
 
-/// A Windows processor architecture Nail ships for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
-#[serde(rename_all = "lowercase")]
-pub enum WindowsArch {
-    /// 64-bit x86.
-    X64,
-    /// 32-bit x86 (only the Simple MAPI DLL, for 32-bit Office).
-    X86,
-    /// 64-bit ARM.
-    Arm64,
-}
-
-impl WindowsArch {
-    /// Every architecture.
-    pub const ALL: [WindowsArch; 3] = [Self::X64, Self::X86, Self::Arm64];
-
-    /// The name used in paths and file names (`x64`, `x86`, `arm64`).
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::X64 => "x64",
-            Self::X86 => "x86",
-            Self::Arm64 => "arm64",
-        }
-    }
-
-    /// The architecture this binary was built for (`None` for targets Nail
-    /// does not ship).
-    pub fn current() -> Option<Self> {
-        if cfg!(target_arch = "x86_64") {
-            Some(Self::X64)
-        } else if cfg!(target_arch = "x86") {
-            Some(Self::X86)
-        } else if cfg!(target_arch = "aarch64") {
-            Some(Self::Arm64)
-        } else {
-            None
-        }
-    }
-}
+/// A Windows processor architecture Nail ships for (ADR 0215: defined in
+/// `nail-mapi-protocol`, which `NailMapi.dll` uses).
+pub use nail_mapi_protocol::WindowsArch;
 
 /// Why the in-app updater does not run. The UI shows the reason and hides
 /// "check now".
@@ -737,38 +701,8 @@ pub fn dev_endpoint_forwards(event: &crate::Event) -> bool {
 // Registry facts written by the installers (read by the shell)
 
 /// Registry keys and values the installers write and the shell reads
-/// (WP112 writes, WP113 reads). Paths are relative to `HKCU` (per-user
-/// install) or `HKLM` (per-machine install; the policy key in either
-/// hive).
-pub mod registry {
-    /// Installation facts: `HKCU` / `HKLM` `Software\Nail\Install`.
-    pub const INSTALL_KEY: &str = r"Software\Nail\Install";
-    /// `REG_SZ` [`super::InstallKind::as_str`] (`nsis`, `msi`).
-    pub const INSTALLER_VALUE: &str = "Installer";
-    /// `REG_SZ` [`super::InstallScope::as_str`].
-    pub const SCOPE_VALUE: &str = "Scope";
-    /// `REG_SZ` installation directory.
-    pub const INSTALL_DIR_VALUE: &str = "InstallDir";
-    /// `REG_SZ` installed version.
-    pub const VERSION_VALUE: &str = "Version";
-    /// `REG_DWORD` 1 = the MSI's `DISABLEUPDATES` was set (the default for
-    /// the MSI).
-    pub const DISABLE_UPDATES_VALUE: &str = "DisableUpdates";
-    /// `REG_DWORD` 1 = the Simple MAPI component was installed.
-    pub const MAPI_VALUE: &str = "Mapi";
-    /// Group policy / Intune: `HKLM` or `HKCU` `Software\Policies\Nail`.
-    pub const POLICY_KEY: &str = r"Software\Policies\Nail";
-    /// `REG_DWORD` 1 under [`POLICY_KEY`]: no in-app updates.
-    pub const POLICY_DISABLE_UPDATES_VALUE: &str = "DisableUpdates";
-    /// The per-user Run key ("Start with Windows").
-    pub const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-    /// Nail's value under [`RUN_KEY`]: `"<Nail.exe>" --autostart`.
-    pub const RUN_VALUE: &str = "Nail";
-    /// `RegisteredApplications` (value [`super::REGISTERED_APP_NAME`]).
-    pub const REGISTERED_APPLICATIONS_KEY: &str = r"Software\RegisteredApplications";
-    /// Nail's Capabilities key (what `RegisteredApplications` points to).
-    pub const CAPABILITIES_KEY: &str = r"Software\Nail\Capabilities";
-}
+/// (ADR 0215: defined in `nail-mapi-protocol`, which `NailMapi.dll` uses).
+pub use nail_mapi_protocol::install_registry as registry;
 
 // ---------------------------------------------------------------------------
 // The shell's side (Rust only)

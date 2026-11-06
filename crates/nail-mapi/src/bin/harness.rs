@@ -28,7 +28,9 @@ use std::process::ExitCode;
 
 #[cfg(not(windows))]
 fn main() -> ExitCode {
-    ExitCode::from(u8::try_from(nail_api::mapi::MapiResult::NotSupported.code()).unwrap_or(u8::MAX))
+    ExitCode::from(
+        u8::try_from(nail_mapi_protocol::MapiResult::NotSupported.code()).unwrap_or(u8::MAX),
+    )
 }
 
 #[cfg(windows)]
@@ -72,7 +74,7 @@ fn default_dll() -> std::path::PathBuf {
     [
         dir.join("nail_mapi.dll"),
         dir.join("deps").join("nail_mapi.dll"),
-        dir.join(nail_api::mapi::MAPI_DLL_FILE),
+        dir.join(nail_mapi_protocol::MAPI_DLL_FILE),
     ]
     .into_iter()
     .find(|p| p.is_file())
@@ -181,8 +183,8 @@ fn exports(args: &[String]) -> Result<u8, String> {
 
 #[cfg(windows)]
 fn registry(args: &[String]) -> Result<u8, String> {
-    use nail_api::desktop::WindowsArch;
     use nail_mapi::registration::{client_registration, to_reg_file};
+    use nail_mapi_protocol::WindowsArch;
     let dir = args
         .first()
         .ok_or("usage: registry INSTALL_DIR [--os ARCH]")?;
@@ -200,8 +202,8 @@ fn registry(args: &[String]) -> Result<u8, String> {
 
 #[cfg(windows)]
 fn serve() -> Result<u8, String> {
-    use nail_api::mapi::{MAPI_PIPE_ENV, MapiPipeResponse, MapiResult};
     use nail_mapi::windows::server::FakeAppPipe;
+    use nail_mapi_protocol::{MAPI_PIPE_ENV, MapiPipeResponse, MapiResult};
 
     let pipe = std::env::var(MAPI_PIPE_ENV).map_err(|_| format!("{MAPI_PIPE_ENV} is not set"))?;
     let result = match std::env::var(RESULT_ENV) {

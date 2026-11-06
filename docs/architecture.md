@@ -522,8 +522,12 @@ crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (s
                        enable), windows/server.rs (reference pipe server), windows/staging_root.rs (RootGuard:
                        staging root not a reparse point, owned by user / Administrators / SYSTEM, pinned),
                        forward.rs, staging.rs (attachment copies in %TEMP%\nail-mapi, sweep of own
-                       `<pid>-<hex>-<n>` folders only, limit nail_api::compose::MAX_ATTACHMENT_BYTES),
-                       registration.rs (HKLM Clients\Mail\Nail values, .reg rendering) (ADRs 0087, 0088, 0093)
+                       `<pid>-<hex>-<n>` folders only, limit nail_mapi_protocol::MAX_ATTACHMENT_BYTES),
+                       registration.rs (HKLM Clients\Mail\Nail values, .reg rendering) (ADRs 0087, 0088, 0093);
+                       depends on nail-mapi-protocol, not nail-api (ADR 0215)
+crates/nail-mapi-protocol The Simple MAPI pipe protocol, WindowsArch, the install registry names and
+                       MAX_ATTACHMENT_BYTES (ADR 0215); nail-api re-exports it as nail_api::mapi (plus
+                       result_for_error), desktop::WindowsArch, desktop::registry, compose::MAX_ATTACHMENT_BYTES
 crates/nail-portability M4c WP121 (ADR 0096): importers (mbox streamed: mboxrd / mboxo / mboxcl(2), EML folders,
                        Maildir incl. Dovecot / Courier keywords, Thunderbird profiles: profiles.ini, prefs.js account
                        proposals, Local Folders / POP3 mail, abook.sqlite / history.sqlite / Mork .mab address books,
@@ -1429,3 +1433,5 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - Faster builds (ADR 0214): `ensureCargoJobs` (`scripts/lib/cargo.mjs`) sets `CARGO_BUILD_JOBS` from the free memory
   for `npm run check`, `release:prepare`, `build-installer.mjs` and `build:desktop` (an explicit value wins); the
   release checks run e2e on the `nail` that `cargo test --workspace` built.
+- The Simple MAPI protocol in its own crate (ADR 0215): `nail-mapi` depends on `nail-mapi-protocol`, so the x64 and
+  x86 DLL release builds skip `nail-api` (18 s / 13 s cold instead of about 7.5 min each).

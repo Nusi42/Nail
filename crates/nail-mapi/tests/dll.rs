@@ -13,12 +13,12 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use nail_api::mapi::{
-    MAPI_PIPE_ENV, MapiPipeRequest, MapiPipeResponse, MapiRecipientClass, MapiResult, MapiUi,
-};
 use nail_mapi::windows::caller::{CallerMessage, MapiDll};
 use nail_mapi::windows::client::MAPI_APP_ENV;
 use nail_mapi::windows::server::{FakeAppPipe, unique_pipe_name};
+use nail_mapi_protocol::{
+    MAPI_PIPE_ENV, MapiPipeRequest, MapiPipeResponse, MapiRecipientClass, MapiResult, MapiUi,
+};
 use pretty_assertions::assert_eq;
 use windows_sys::Win32::System::Mapi::{MAPI_CC, MAPI_DIALOG, MAPI_TO, MapiMessageW};
 

@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use nail_api::mapi::{
+use nail_mapi_protocol::{
     MAPI_PROTOCOL_VERSION, MapiMessage, MapiPipeRequest, MapiPipeResponse, MapiResult,
 };
 
@@ -61,7 +61,7 @@ pub fn forward(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::mapi::{MapiAttachment, MapiRecipient, MapiRecipientClass, MapiUi};
+    use nail_mapi_protocol::{MapiAttachment, MapiRecipient, MapiRecipientClass, MapiUi};
     use pretty_assertions::assert_eq;
     use std::cell::RefCell;
     use std::fs;
