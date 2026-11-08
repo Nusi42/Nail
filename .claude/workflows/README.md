@@ -12,7 +12,8 @@ the lead stages (contract, integration, reviews, fix, verify) in
 stage pushes `work-1` and fast-forwards the master's `main`
 (`git -C <master> merge --ff-only work-1`). Each package resets its folder
 to `origin/main` (= the contract), commits and pushes its branch; the
-integrator rebases the branches onto `work-1` (never a merge commit, ADR 0208).
+integrator rebases the branches onto `work-1` (never a merge commit, ADR 0208)
+and then cleans the package folders (`node scripts/work-folders.mjs clean <n>`).
 
 ## Starting a wave
 

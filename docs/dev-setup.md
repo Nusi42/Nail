@@ -45,6 +45,7 @@ Settings come from the environment or from a checkout's gitignored
 ```sh
 node scripts/work-folders.mjs guard-master    # once, from a work folder: mark origin as the master, Cargo refuses there, its hooks on
 node scripts/work-folders.mjs create 6        # clone the master into nail-work-6 (branch work-6), copy its identity, npm ci
+node scripts/work-folders.mjs clean 3         # an idle folder: branch to main, build output and node_modules removed (refused with uncommitted changes or commits neither in main nor pushed)
 git fetch origin && git reset --hard origin/main  # a package folder starts from main (clean tree first)
 git push --force-with-lease origin work-3       # a package is done (pre-push runs npm run check); the lead rebases origin/work-3 onto work-1 (no merge commits, ADR 0208)
 git push origin work-1 && git -C <master> merge --ff-only work-1   # after each green lead stage: main = work-1

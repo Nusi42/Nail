@@ -264,3 +264,74 @@ export function claudeLocalSettings(folder) {
   const memory = path.join(folder, ".claude", "memory").replaceAll("\\", "/");
   return `${JSON.stringify({ autoMemoryDirectory: memory }, null, 2)}\n`;
 }
+
+/**
+ * Runs git in `cwd` and returns its trimmed output.
+ *
+ * @param {string} cwd
+ * @param {string[]} args
+ * @returns {string}
+ */
+export function gitOut(cwd, args) {
+  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+}
+
+/**
+ * The branch checked out in `cwd`.
+ *
+ * @param {string} [cwd]
+ * @returns {string}
+ */
+export function currentBranch(cwd = REPO_ROOT) {
+  return gitOut(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
+}
+
+/** Untracked files that {@link cleanWorkFolder} keeps: the folder's local settings. */
+export const CLEAN_KEEP = [".claude/settings.local.json", LOCAL_ENV];
+
+/**
+ * The local commits that only this folder holds: their change is not in
+ * `origin/main` (`git cherry`, so a commit rebased into `main` counts as
+ * merged) and they were not pushed to `origin/<branch>` either.
+ *
+ * @param {string} folder
+ * @param {string} branch
+ * @returns {string[]} the commit ids
+ */
+function unsavedCommits(folder, branch) {
+  const lines = (/** @type {string[]} */ args) =>
+    gitOut(folder, args).split(/\r?\n/).filter(Boolean);
+  const unmerged = lines(["cherry", "origin/main", "HEAD"])
+    .filter((line) => line.startsWith("+ "))
+    .map((line) => line.slice(2));
+  if (gitOut(folder, ["branch", "-r", "--list", `origin/${branch}`]) === "") return unmerged;
+  const local = new Set(lines(["rev-list", "HEAD", "--not", `origin/${branch}`]));
+  return unmerged.filter((commit) => local.has(commit));
+}
+
+/**
+ * Cleans an idle work folder: its branch moves to `origin/main` and every
+ * untracked or ignored file goes (build output, `node_modules`, `ui/dist`),
+ * except {@link CLEAN_KEEP}. Refuses, changing nothing, when the folder is
+ * on another branch, has uncommitted changes (new untracked files
+ * included), or holds commits that are neither in `main` nor pushed to
+ * `origin/<branch>` (which the clean leaves alone). Whether an agent still
+ * works there is the caller's check.
+ *
+ * @param {string} folder the work folder's root
+ * @param {string} branch the branch it must be on
+ */
+export function cleanWorkFolder(folder, branch) {
+  const current = currentBranch(folder);
+  if (current !== branch) throw new Error(`${folder} is on ${current}, not ${branch}`);
+  if (gitOut(folder, ["status", "--porcelain"]) !== "") {
+    throw new Error(`${folder} has uncommitted changes`);
+  }
+  gitOut(folder, ["fetch", "-q", "origin"]);
+  const unsaved = unsavedCommits(folder, branch);
+  if (unsaved.length > 0) {
+    throw new Error(`${folder}: commits neither in main nor pushed: ${unsaved.join(", ")}`);
+  }
+  gitOut(folder, ["reset", "-q", "--hard", "origin/main"]);
+  gitOut(folder, ["clean", "-fdxq", ...CLEAN_KEEP.flatMap((keep) => ["-e", keep])]);
+}

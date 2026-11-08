@@ -31,6 +31,11 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
+**Idle work folders (2026-11-08, on `main`, not published):** a folder with nothing running and nothing waiting is
+cleaned with `node scripts/work-folders.mjs clean <n>` (branch to `main`, build output and `node_modules` removed;
+refused with uncommitted changes or commits neither in `main` nor pushed). The wave integrator cleans the package
+folders after the fast-forward. Folders 2 and 3 were cleaned on 2026-11-08.
+
 **Build speed (2026-11-05, on `main`, not published):** the scripts pick the cargo job count from the free memory
 (ADR 0214); one integration-test binary per crate except `nail-core` (ADR 0213; 206 → 112 binaries, test compile
 6:51 → 1:48, workspace `cargo test` about 6.5 min). The release checks run e2e on the test build's `nail`. Measured and

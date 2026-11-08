@@ -20,7 +20,8 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   commit anything there (the npm entry points, `prepare`, the pre-commit hook and its Cargo rustc wrapper refuse). Work then
   happens in work folders (`nail-work-<N>` on `work-<N>` by default; `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`):
   the lead in folder 1, a parallel package in its own folder (reset to `origin/main`, push the branch when done; never
-  push to `main`). New folder: `node scripts/work-folders.mjs create <n>`. Details: `docs/dev-setup.md` "Work folders".
+  push to `main`). New folder: `node scripts/work-folders.mjs create <n>`; a
+  folder with nothing running and nothing waiting is cleaned: `node scripts/work-folders.mjs clean <n>`. Details: `docs/dev-setup.md` "Work folders".
   Hooks: pre-commit (per-file checks), pre-push (`scripts/lib/push-plan.mjs`: work folder → master runs `npm run
   check`, master → public remote only checks that build nothing, other pushes are refused), and the Claude Code
   post-edit hook (per-file checks on each edited file; fix what it reports).

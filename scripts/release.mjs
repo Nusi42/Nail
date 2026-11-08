@@ -64,7 +64,7 @@ import { compareVersions, parseVersion } from "./lib/update-manifest.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
 import { CARGO_TOML, setVersion, workspaceRepository } from "./lib/version.mjs";
 import { masterOf, publishPushes } from "./lib/push-plan.mjs";
-import { assertWorkFolder, originOf } from "./lib/work-folder.mjs";
+import { assertWorkFolder, currentBranch, originOf } from "./lib/work-folder.mjs";
 import { writeUpdateManifest } from "./update-manifest.mjs";
 
 /** The architecture and installers of a release (ADR 0203). */
@@ -340,7 +340,7 @@ async function publish(argv) {
   const { version, tag, commit } = record;
   const repo = repository();
   const slug = githubSlug(repo);
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const branch = currentBranch(repoRoot);
   if (!succeeds("git", ["merge-base", "--is-ancestor", commit, "HEAD"])) {
     throw new Error(`the release commit ${commit.slice(0, 8)} is not on ${branch}`);
   }

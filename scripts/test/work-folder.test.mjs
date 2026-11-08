@@ -13,7 +13,9 @@ import {
   REPO_ROOT,
   branchOf,
   claudeLocalSettings,
+  cleanWorkFolder,
   folderOf,
+  gitOut,
   guardMaster,
   identityConfig,
   isMaster,
@@ -134,4 +136,68 @@ test("hooks: install-hooks and new work folders point git at one directory", () 
   assert.equal(HOOKS_DIR, ".githooks");
   assert.deepEqual(HOOKS_PATH_ARGS, ["config", "core.hooksPath", HOOKS_DIR]);
   assert.ok(fs.existsSync(path.join(REPO_ROOT, HOOKS_DIR, "pre-commit")));
+});
+
+test("cleaning an idle work folder resets it to main and keeps only its local settings", () => {
+  withTempDir("nail-clean-", (dir) => {
+    const master = initRepo(path.join(dir, "master"));
+    const work = path.join(dir, "work-2");
+    git(dir, ["clone", "-q", master, work]);
+    for (const args of identityConfig((key) => gitOut(master, ["config", key]))) git(work, args);
+    git(work, ["config", "core.hooksPath", "no-hooks"]);
+    git(work, ["switch", "-q", "-c", "work-2"]);
+    fs.writeFileSync(
+      path.join(work, ".git", "info", "exclude"),
+      ".env.local\n.claude/\ntarget/\n*.log\n",
+    );
+    const kept = [".env.local", path.join(".claude", "settings.local.json")];
+    for (const file of [...kept, path.join("target", "debug.txt"), "scratch.log"]) {
+      fs.mkdirSync(path.dirname(path.join(work, file)), { recursive: true });
+      fs.writeFileSync(path.join(work, file), "x\n");
+    }
+    /**
+     * Asserts that cleaning on `branch` is refused and changes nothing.
+     *
+     * @param {string} branch
+     * @param {RegExp} reason
+     */
+    const refused = (branch, reason) => {
+      const before = [gitOut(work, ["rev-parse", "HEAD"]), fs.readdirSync(work).sort()];
+      assert.throws(() => {
+        cleanWorkFolder(work, branch);
+      }, reason);
+      assert.deepEqual([gitOut(work, ["rev-parse", "HEAD"]), fs.readdirSync(work).sort()], before);
+    };
+
+    refused("work-3", /is on work-2, not work-3/);
+    fs.writeFileSync(path.join(work, "new.txt"), "new work\n");
+    refused("work-2", /uncommitted changes/);
+    fs.rmSync(path.join(work, "new.txt"));
+    fs.writeFileSync(path.join(work, "a.txt"), "changed\n");
+    refused("work-2", /uncommitted changes/);
+    git(work, ["commit", "-q", "-am", "package"]);
+    refused("work-2", /commits neither in main nor pushed/);
+
+    // Pushed: the master keeps the commit, so the folder may go back to main.
+    git(work, ["push", "-q", "origin", "work-2"]);
+    const pushed = gitOut(work, ["rev-parse", "HEAD"]);
+    cleanWorkFolder(work, "work-2");
+    const main = () => gitOut(master, ["rev-parse", "main"]);
+    assert.equal(gitOut(work, ["rev-parse", "HEAD"]), main());
+    assert.equal(gitOut(master, ["rev-parse", "work-2"]), pushed);
+    assert.ok(!fs.existsSync(path.join(work, "target")));
+    assert.ok(!fs.existsSync(path.join(work, "scratch.log")));
+    for (const file of kept) assert.ok(fs.existsSync(path.join(work, file)), file);
+
+    // Not pushed, but its change reached main as a different commit (a rebase).
+    fs.writeFileSync(path.join(work, "b.txt"), "next\n");
+    git(work, ["add", "b.txt"]);
+    git(work, ["commit", "-q", "-m", "next package"]);
+    refused("work-2", /commits neither in main nor pushed/);
+    fs.writeFileSync(path.join(master, "b.txt"), "next\n");
+    git(master, ["add", "b.txt"]);
+    git(master, ["commit", "-q", "-m", "next package, rebased"]);
+    cleanWorkFolder(work, "work-2");
+    assert.equal(gitOut(work, ["rev-parse", "HEAD"]), main());
+  });
 });

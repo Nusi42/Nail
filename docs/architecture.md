@@ -823,7 +823,7 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        Q1 (ADR 0123): check.mjs + lib/check-steps.mjs (`npm run check`), pre-commit.mjs +
                        lib/staged.mjs (.githooks/pre-commit), install-hooks.mjs (`prepare`: core.hooksPath),
                        check-editorconfig.mjs + lib/editorconfig-check.mjs;
-                       work-folders.mjs + lib/work-folder.mjs (ADR 0132: create a work folder, guard the master;
+                       work-folders.mjs + lib/work-folder.mjs (ADR 0132: create a work folder, clean an idle one, guard the master;
                        assertWorkFolder refuses development commands in a checkout marked as the master, ADR 0199;
                        lib/work-folder.mjs guardMaster also sets the master's core.hooksPath); post-edit.mjs (the Claude Code
                        post-edit hook of .claude/settings.json; small and stable, it loads lib/after-edit.mjs of the edited

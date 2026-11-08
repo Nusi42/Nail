@@ -128,7 +128,9 @@ ${buildReport}
 1. Get everything green first (npm run build, cargo fmt/clippy -D warnings/test --workspace, npm run lint, npm test, npm run e2e:only). Resolve all apiRequests, renumber ADRs consistently, regenerate TS types. Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) (trailer below).
 2. ${A.integrate}
 3. Update userDocs/en, docs/dev-setup.md, docs/architecture.md (code map, milestone notes), CLAUDE.md (rules only), and docs/plan.md (status line for this wave, follow-ups/deferrals). Add a memory file .claude/memory/${A.memoryName}.md (frontmatter name/description/metadata.type project; what was integrated, pitfalls) and a line in .claude/memory/MEMORY.md.
-4. Full run incl. npm run e2e. Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) with the trailer below; ${FF}:
+4. Full run incl. npm run e2e. Commit with a Conventional Commits message that says in plain English what changed (CLAUDE.md "Git"; the commit-msg hook checks it) with the trailer below; ${FF}.
+5. The package folders are idle now: clean each one from ${REPO} with ${A.build.map((b, i) => `\`node scripts/work-folders.mjs clean ${slotOf(b, i)}\``).join(', ')} (branch to main, build output and node_modules removed). A refusal names what is left there (uncommitted changes, commits neither in main nor pushed): report it, never force it.
+The trailer:
 ${TRAILER}`, { ...OPTS, label: `${A.wave} integrate`, phase: 'Integrate', schema: RESULT })
 
 const FINDINGS = {
