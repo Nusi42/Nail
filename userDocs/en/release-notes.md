@@ -3,6 +3,21 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.5 (`0.8.5`)
+
+Continue writing your drafts straight from the Drafts folder.
+
+### Corrected in 0.8.5
+
+- **Drafts open in the editor** — double-click a draft in the Drafts folder,
+  or select it and press Enter, to go on writing it. The reader and the
+  right-click menu offer **Continue writing** too.
+- **Drafts from other mail programs** — a draft you started in webmail or on
+  another device opens for editing as well. When Nail saves it, it replaces
+  the old copy on the server, so you do not end up with two.
+- **The Outbox in the sidebar** also appears while you have saved drafts,
+  so they are easy to find.
+
 ## Nail 0.8.4 (`0.8.4`)
 
 Links in mail work on macOS and Linux, and opened attachments are safer.

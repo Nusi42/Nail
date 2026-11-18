@@ -8,6 +8,15 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Fixed — continuing drafts
+
+- A saved draft can be continued from the Drafts folder: double-click or
+  Enter opens it in the composer instead of the reader, and the reader and
+  the message menus offer Continue writing. Drafts written in another mail
+  program open the same way; Nail takes them over as its own draft and
+  replaces the server copy on the next save. The Outbox favorite also shows
+  while saved drafts exist.
+
 ## [0.8.4] — 2026-11-04
 
 ### Fixed (ADRs 0211, 0212)
