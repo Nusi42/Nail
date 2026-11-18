@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: Where the project stands and what to do next — read first when continuing in a new session (0.8.4 released 2026-11-05: WebKit links fix; macOS check by the maintainer pending)
+description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.4 released 2026-11-05: WebKit links fix; macOS check by the maintainer pending)"
 metadata:
   type: project
 ---
@@ -30,6 +30,13 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 **Waiting for the maintainer to try** (newest installer in `<installer folder>\`, payload smoke passed): HTML mail
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
+
+**Continue a draft from the Drafts folder (2026-11-18, on `work-1`, not yet in `main`):** fix commit "fix(mail):
+continue a saved draft from the Drafts folder" (`EditDraftMessage`, `mail.continue-draft`, Outbox favorite also
+while drafts exist); full suite green. A test installer is built from it in `nail-work-2` and copied to the
+installer folder. Waiting for the maintainer to try it; then fast-forward `main` and publish. Open edge cases (in
+the commit's report): non-IMAP draft without Message-ID keeps its original; reply-all drafts from other clients
+come back as plain replies; Markdown drafts from other clients import as HTML.
 
 **Idle work folders (2026-11-08, published):** a folder with nothing running and nothing waiting is
 cleaned with `node scripts/work-folders.mjs clean <n>` (branch to `main`, build output and `node_modules` removed;
