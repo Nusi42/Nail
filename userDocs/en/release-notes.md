@@ -5,7 +5,8 @@ preview versions) are summarized in the project's `CHANGELOG.md`.
 
 ## Nail 0.8.5 (`0.8.5`)
 
-Continue writing your drafts straight from the Drafts folder.
+Continue writing your drafts straight from the Drafts folder, plus security
+updates for HTML mail and sending.
 
 ### Corrected in 0.8.5
 
@@ -17,6 +18,18 @@ Continue writing your drafts straight from the Drafts folder.
   the old copy on the server, so you do not end up with two.
 - **The Outbox in the sidebar** also appears while you have saved drafts,
   so they are easy to find.
+
+### Security in 0.8.5
+
+- **HTML mail is cleaned more thoroughly** — the part of Nail that removes
+  scripts and other active content from HTML mail now also handles crafted
+  SVG and MathML correctly.
+- **Sending mail is safer** — a server or attacker on the network can no
+  longer slip false replies past Nail when the connection is secured, mail
+  text cannot be turned into server commands, and a recipient address in
+  quotes reaches exactly that address.
+- **Connections from AI tools (MCP)** are better protected against
+  oversized requests and answers.
 
 ## Nail 0.8.4 (`0.8.4`)
 

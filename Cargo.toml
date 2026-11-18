@@ -175,7 +175,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 # M1a engines (ADR 0012). TLS everywhere is rustls with the `ring` provider,
 # chosen explicitly per connection (no aws-lc, no process-wide default).
 # SMTP submission: tokio + rustls, raw MIME is built elsewhere.
-lettre = { version = "0.11.23", default-features = false, features = [
+lettre = { version = "0.11.24", default-features = false, features = [
     "smtp-transport",
     "pool",
     "hostname",
@@ -209,19 +209,19 @@ tantivy = "0.27.0"
 base64 = "0.23.1"
 
 # M1b (ADR 0022). Composer: MIME building, Markdown, CSS inlining; the
-# sanitizer (ammonia) is already used by nail-mime.
+# sanitizer (ammonia) is shared with nail-mime.
 mail-builder = "1.0.0"
 # Syntax highlighting through syntect's pure-Rust regex engine (no oniguruma C build).
 comrak = { version = "0.55.0", default-features = false, features = ["syntect-fancy"] }
 # No `http` / `file` features: stylesheets are passed in, never fetched.
 css-inline = { version = "0.21.2", default-features = false }
-ammonia = "4.2.0"
+ammonia = "4.2.5"
 # Rules: regex conditions.
 regex = "1.13.1"
 # MCP server (Streamable HTTP + stdio) and client (tests).
 # Server side here; tests add `client` + `transport-streamable-http-client-reqwest`
 # (reqwest stays on the workspace's `rustls-no-provider` build, no aws-lc).
-rmcp = { version = "3.5.0", features = [
+rmcp = { version = "3.11.0", features = [
     "server",
     "macros",
     "transport-io",

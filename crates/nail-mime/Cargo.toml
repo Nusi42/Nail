@@ -11,7 +11,7 @@ publish.workspace = true
 nail-api.workspace = true
 tracing.workspace = true
 mail-parser = { workspace = true, features = ["full_encoding"] }
-ammonia = "4.2.0"
+ammonia.workspace = true
 # P1 WP190: style blocks and <body> attributes of HTML mail (the tokenizer
 # ammonia parses with); inline images as data: URLs.
 html5ever = "0.40"

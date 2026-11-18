@@ -1437,6 +1437,8 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   release checks run e2e on the `nail` that `cargo test --workspace` built.
 - The Simple MAPI protocol in its own crate (ADR 0215): `nail-mapi` depends on `nail-mapi-protocol`, so the x64 and
   x86 DLL release builds skip `nail-api` (18 s / 13 s cold instead of about 7.5 min each).
+- Dependency advisories before 0.8.5 (ADR 0216): ammonia 4.2.5, lettre 0.11.24, rmcp 3.11.0 (workspace minimums);
+  `nail-mime` takes ammonia from the workspace; chrono / chrono-tz accepted as unmaintained in `deny.toml`.
 - Continuing a draft from a Drafts folder: `EditDraftMessage` (`nail-core` `draft_edit.rs`) answers `DraftSaved` with
   the draft whose server copy the message is (`Store::draft_with_server_copy`, folder + Message-ID), else imports the
   message into a new draft (identity of its account by `From`, recipients incl. `Bcc`, subject, HTML / text,

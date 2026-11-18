@@ -45,6 +45,13 @@ ignore = [
     # no network-facing oracle (ADR 0209). Remove with the next RustCrypto
     # generation.
     { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 timing variability: no fix in this RustCrypto generation; local side channel only (ADR 0209)" },
+    # chrono and chrono-tz are unmaintained (RUSTSEC-2026-0543,
+    # RUSTSEC-2026-0555): no known flaw and no fixed release. Twenty Nail
+    # crates use chrono, and so do calcard, oauth2, rmcp and schemars, so
+    # leaving it means moving those dependencies too (ADR 0216). Remove when
+    # the dependencies have moved to jiff or time and Nail has followed.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained: no known flaw, no replacement while calcard, oauth2, rmcp and schemars use it (ADR 0216)" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained: chrono's zone database, kept with chrono (ADR 0216)" },
 ]
 
 [licenses]

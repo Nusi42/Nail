@@ -17,6 +17,14 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   replaces the server copy on the next save. The Outbox favorite also shows
   while saved drafts exist.
 
+### Security (ADR 0216)
+
+- ammonia 4.2.5 (mutation XSS through SVG and MathML, RUSTSEC-2026-0533),
+  lettre 0.11.24 (STARTTLS reply injection, SMTP command injection, quoted
+  local parts and denial of service, RUSTSEC-2026-0560 to 0566) and rmcp
+  3.11.0 (OAuth SSRF filter and unbounded buffering, RUSTSEC-2026-0457,
+  0461, 0462). chrono and chrono-tz are accepted as unmaintained.
+
 ## [0.8.4] — 2026-11-04
 
 ### Fixed (ADRs 0211, 0212)
