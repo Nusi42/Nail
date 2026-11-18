@@ -28,7 +28,14 @@ import {
   workLogWindow,
 } from "../support/connlog";
 import type { NailServer } from "../support/nail";
-import { messageRows, READER_SUBJECT, runFromPalette, windowById } from "../support/views";
+import {
+  composerWindows,
+  discardComposer,
+  messageRows,
+  READER_SUBJECT,
+  runFromPalette,
+  windowById,
+} from "../support/views";
 
 /**
  * The fixed clock of every screen but the calendar: after the demo mail's
@@ -272,6 +279,12 @@ export const SCREENS: readonly Screen[] = [
       await expect(
         composer.getByRole("button", { name: "Look up the missing key online" }),
       ).toBeVisible();
+    },
+    // Autosave may already have kept the message as a draft; a draft left on
+    // the shared server would show in the sidebar (Drafts count, Outbox) of
+    // every later screen, depending on timing.
+    async close(page) {
+      await discardComposer(page, composerWindows(page).first());
     },
   },
   {
