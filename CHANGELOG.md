@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-11-18
+
 ### Fixed — continuing drafts
 
 - A saved draft can be continued from the Drafts folder: double-click or
@@ -298,6 +300,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.5]: https://github.com/Nusi42/Nail/releases/tag/v0.8.5
 [0.8.4]: https://github.com/Nusi42/Nail/releases/tag/v0.8.4
 [0.8.3]: https://github.com/Nusi42/Nail/releases/tag/v0.8.3
 [0.8.2]: https://github.com/Nusi42/Nail/releases/tag/v0.8.2
