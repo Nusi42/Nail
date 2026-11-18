@@ -9,7 +9,13 @@ import { resetLocalTimeZone, setLocalTimeZone } from "@internationalized/date";
 import { act, screen, waitFor } from "@testing-library/react";
 import { simulateExternalEdit } from "../api/editHistoryMock";
 import type { UserEvent } from "@testing-library/user-event";
-import type { Event as NailEvent, MessageSummary, Request, Response } from "../api/generated";
+import type {
+  Draft,
+  Event as NailEvent,
+  MessageSummary,
+  Request,
+  Response,
+} from "../api/generated";
 import { queryKeys } from "../state/queries";
 import { MockTransport } from "../api/mock";
 import { MOCK_CONVERSATION_ID, addMockConversation } from "../api/mockConversations";
@@ -162,27 +168,37 @@ export function stubPrintEachTest(): { readonly spy: ReturnType<typeof vi.fn> } 
   return stub;
 }
 
+/** A plain-text draft from Ada (unsaved, no recipients) with `patch` applied. */
+export function plainDraft(patch: Partial<Draft> = {}): Draft {
+  return {
+    id: null,
+    identity_id: "ada@example.org",
+    to: [],
+    cc: [],
+    bcc: [],
+    subject: "",
+    mode: "plain",
+    text: "",
+    html: null,
+    markdown: null,
+    attachments: [],
+    context: null,
+    signature: "identity",
+    markdown_part: false,
+    ...patch,
+  };
+}
+
 /** Saves a plain message "Later" to Grace and queues it (`delay` / `sendAt`); the outbox entry. */
 export async function queueLater(env: Env, delay: number | null, sendAt: string | null) {
   const { draft_id } = await env.client.request(
     {
       type: "SaveDraft",
-      draft: {
-        id: null,
-        identity_id: "ada@example.org",
+      draft: plainDraft({
         to: [{ name: "Grace", email: "grace@navy.example" }],
-        cc: [],
-        bcc: [],
         subject: "Later",
-        mode: "plain",
         text: "x",
-        html: null,
-        markdown: null,
-        attachments: [],
-        context: null,
-        signature: "identity",
-        markdown_part: false,
-      },
+      }),
     },
     "DraftSaved",
   );

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { Draft } from "./generated";
 import { createMockData } from "./mockData";
-import { draftSaveRefusal, identityOf } from "./mockDrafts";
+import { draftSaveRefusal, editDraftMessage, identityOf } from "./mockDrafts";
 import type { MockCore } from "./mockMail";
 
 function core(): MockCore {
@@ -53,5 +53,18 @@ describe("mock drafts", () => {
       type: "Error",
       code: "not_found",
     });
+  });
+
+  it("continues a message as a draft of its account, once", () => {
+    const c = core();
+    const message = c.data.messages.find((m) => m.account_id === "acc-work");
+    if (!message) throw new Error("no work message");
+    const first = editDraftMessage(c, message.id);
+    expect(first).toMatchObject({ type: "DraftSaved" });
+    const saved = first.type === "DraftSaved" ? c.data.drafts.get(first.draft_id) : undefined;
+    // Not sent by an identity: the account's first one.
+    expect(saved).toMatchObject({ identity_id: "ada@work.example", subject: message.subject });
+    expect(editDraftMessage(c, message.id)).toEqual(first);
+    expect(editDraftMessage(c, "nope")).toMatchObject({ type: "Error", code: "not_found" });
   });
 });

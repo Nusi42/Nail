@@ -352,12 +352,13 @@ export function useCheckQuery(text: string) {
 }
 
 /** Saved drafts (not in the outbox), fetched afresh whenever shown. */
-export function useDrafts() {
+export function useDrafts(enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.drafts,
     queryFn: async () => (await client.request({ type: "ListDrafts" }, "Drafts")).drafts,
     staleTime: 0,
+    enabled,
   });
 }
 

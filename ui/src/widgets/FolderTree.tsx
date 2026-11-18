@@ -45,6 +45,7 @@ import {
   useAccountStatuses,
   useAccounts,
   useClient,
+  useDrafts,
   useFolders,
   useOutbox,
 } from "../state/queries";
@@ -394,10 +395,13 @@ function FavoritesSection({
   const setSearchInput = useUi((s) => s.setSearchInput);
 
   const outbox = useOutbox(favorites.includes("outbox")).data;
+  const drafts = useDrafts(favorites.includes("outbox")).data;
   const rows = favorites.flatMap((favorite) => {
     const target = FAVORITE_TARGETS[favorite];
-    // The Outbox shows only while mail waits there (M5b review).
-    if (favorite === "outbox" && (outbox?.length ?? 0) === 0) return [];
+    // The Outbox shows only while mail waits there (M5b review) or a saved
+    // draft waits to be continued (its window lists both); its count is
+    // the mail waiting to be sent.
+    if (favorite === "outbox" && (outbox?.length ?? 0) + (drafts?.length ?? 0) === 0) return [];
     const folder = target.kind === "folder" ? unifiedFolder(folders, target.role) : null;
     // A unified folder no account has (no Sent anywhere) is left out.
     if (target.kind === "folder" && folder === null) return [];

@@ -10,8 +10,8 @@
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
 use common::{
-    Multi, TIMEOUT, archive_and_flag, eventually, find, messages, next_matching, request, run_rule,
-    save, save_rule, send_now, subjects,
+    Multi, TIMEOUT, archive_and_flag, body, eventually, find, messages, messages_in, next_matching,
+    request, run_rule, save, save_rule, send_now, subjects,
 };
 
 use std::time::Duration;
@@ -22,8 +22,8 @@ use nail_api::rules::{
     Condition, FolderRef, Rule, RuleAction, RuleRunState, RuleTrigger, TextMatch, TextOp,
 };
 use nail_api::{
-    AccountId, Address, ConfigFile, Draft, DraftContext, DraftContextMode, ErrorCode, Event,
-    Folder, FolderRole, LayoutNodeRef, LayoutPatch, Request, Response,
+    AccountId, Address, ConfigFile, Draft, DraftContext, DraftContextMode, DraftId, ErrorCode,
+    Event, Folder, FolderRole, LayoutNodeRef, LayoutPatch, MessageId, Request, Response,
 };
 use nail_core::Service;
 use nail_core::demo::{MULTI_HOME_ID, MULTI_WORK_EMAIL, MULTI_WORK_ID};
@@ -506,6 +506,224 @@ async fn drafts_are_autosaved_to_the_server_and_removed_after_sending() {
         panic!()
     };
     assert!(drafts.is_empty(), "{drafts:?}");
+    f.service.shutdown().await;
+}
+
+async fn edit_draft_message(service: &Service, message_id: &MessageId) -> DraftId {
+    match request(
+        service,
+        Request::EditDraftMessage {
+            message_id: message_id.clone(),
+        },
+    )
+    .await
+    {
+        Response::DraftSaved { draft_id } => draft_id,
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+async fn stored_draft(service: &Service, draft_id: &DraftId) -> Draft {
+    match request(
+        service,
+        Request::GetDraft {
+            draft_id: draft_id.clone(),
+        },
+    )
+    .await
+    {
+        Response::Draft { draft } => *draft,
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+/// Puts a draft written by another client into the work account's Drafts
+/// folder on the server and waits until it is synced; returns the local
+/// message and its UID on the server.
+async fn foreign_draft(f: &Fixture, subject: &str, raw: String) -> (MessageId, u64) {
+    let delivered = f.control(
+        "imap-deliver",
+        &json!({"mailbox": "Drafts", "flags": ["\\Draft"], "raw": raw}),
+    );
+    request(
+        &f.service,
+        Request::SyncNow {
+            account_id: Some(AccountId::new(MULTI_WORK_ID)),
+        },
+    )
+    .await;
+    let id = common::until_some("the foreign draft synced", || async {
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Drafts)
+            .await
+            .into_iter()
+            .find(|m| m.subject == subject)
+            .map(|m| m.id)
+    })
+    .await;
+    (id, delivered["uid"].as_u64().unwrap())
+}
+
+/// The UIDs in the work account's Drafts mailbox on the server.
+fn server_draft_uids(f: &Fixture) -> Vec<u64> {
+    f.control(
+        "imap-messages",
+        &json!({ "account": MULTI_WORK_ID, "mailbox": "Drafts" }),
+    )
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|m| m["uid"].as_u64().unwrap())
+    .collect()
+}
+
+/// The local message with `subject` in the work Drafts folder that is not
+/// `old`.
+async fn other_copy(f: &Fixture, subject: &str, old: &MessageId) -> MessageId {
+    common::until_some("Nail's copy listed", || async {
+        messages_in(&f.service, MULTI_WORK_ID, FolderRole::Drafts)
+            .await
+            .into_iter()
+            .find(|m| m.subject == subject && &m.id != old)
+            .map(|m| m.id)
+    })
+    .await
+}
+
+#[tokio::test]
+async fn nails_own_draft_copy_continues_its_draft() {
+    let f = setup().await;
+    synced(&f).await;
+    let mut draft = blank_draft("Half written");
+    draft.text = "to be continued".into();
+    let id = save(&f.service, draft).await;
+    eventually("the copy listed in Drafts", || async {
+        subjects(&f.service, MULTI_WORK_ID, FolderRole::Drafts)
+            .await
+            .contains(&"Half written".to_owned())
+    })
+    .await;
+    let copy = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Drafts,
+        "Half written",
+    )
+    .await;
+    assert!(copy.flags.draft);
+    // The copy names its draft: no second draft is made.
+    assert_eq!(edit_draft_message(&f.service, &copy.id).await, id);
+    let Response::Drafts { drafts } = request(&f.service, Request::ListDrafts).await else {
+        panic!()
+    };
+    assert_eq!(drafts.len(), 1);
+    f.service.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_draft_from_another_client_is_imported_and_replaced_on_save() {
+    let f = setup().await;
+    synced(&f).await;
+    let welcome = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Welcome to Nail",
+    )
+    .await;
+    let parent = body(&f.service, &welcome.id)
+        .await
+        .headers
+        .message_id
+        .unwrap();
+    let raw = [
+        format!("From: Ada Lovelace <{MULTI_WORK_EMAIL}>"),
+        "To: Grace <grace@example.net>".into(),
+        "Cc: carol@example.com".into(),
+        "Bcc: dave@example.org".into(),
+        "Subject: Written elsewhere".into(),
+        "Message-ID: <elsewhere-1@example.org>".into(),
+        format!("In-Reply-To: <{parent}>"),
+        "MIME-Version: 1.0".into(),
+        "Content-Type: multipart/mixed; boundary=\"b1\"".into(),
+        String::new(),
+        "--b1".into(),
+        "Content-Type: text/html; charset=utf-8".into(),
+        String::new(),
+        "<p>Started on the <b>phone</b></p>".into(),
+        "--b1".into(),
+        "Content-Type: text/plain; name=\"notes.txt\"".into(),
+        "Content-Disposition: attachment; filename=\"notes.txt\"".into(),
+        String::new(),
+        "step 1".into(),
+        "--b1--".into(),
+        String::new(),
+    ]
+    .join("\r\n");
+    let (message, _) = foreign_draft(&f, "Written elsewhere", raw).await;
+
+    let id = edit_draft_message(&f.service, &message).await;
+    let draft = stored_draft(&f.service, &id).await;
+    assert_eq!(draft.identity_id.as_str(), MULTI_WORK_EMAIL);
+    let emails = |list: &[Address]| list.iter().map(|a| a.email.clone()).collect::<Vec<_>>();
+    assert_eq!(emails(&draft.to), ["grace@example.net"]);
+    assert_eq!(emails(&draft.cc), ["carol@example.com"]);
+    assert_eq!(emails(&draft.bcc), ["dave@example.org"]);
+    assert_eq!(draft.subject, "Written elsewhere");
+    assert_eq!(draft.mode, ComposerMode::Html);
+    let html = draft.html.clone().unwrap_or_default();
+    assert!(html.contains("phone"), "{html}");
+    assert_eq!(draft.attachments.len(), 1);
+    assert_eq!(draft.attachments[0].filename, "notes.txt");
+    assert_eq!(draft.attachments[0].content_id, None);
+    assert_eq!(
+        draft.context,
+        Some(DraftContext {
+            mode: DraftContextMode::Reply,
+            message_id: welcome.id.clone(),
+        })
+    );
+    // Opening it again continues the same draft.
+    assert_eq!(edit_draft_message(&f.service, &message).await, id);
+
+    // Saving replaces the server's message instead of adding a copy.
+    let mut edited = draft;
+    edited.subject = "Written elsewhere, finished here".into();
+    save(&f.service, edited).await;
+    eventually("the message replaced on the server", || async {
+        f.server_subjects(MULTI_WORK_ID, "Drafts") == ["Written elsewhere, finished here"]
+    })
+    .await;
+    eventually("one copy listed locally", || async {
+        subjects(&f.service, MULTI_WORK_ID, FolderRole::Drafts).await
+            == ["Written elsewhere, finished here"]
+    })
+    .await;
+    // The new copy still names the draft.
+    let copy = other_copy(&f, "Written elsewhere, finished here", &message).await;
+    assert_eq!(edit_draft_message(&f.service, &copy).await, id);
+    f.service.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_draft_without_message_id_is_replaced_by_nails_copy_at_once() {
+    let f = setup().await;
+    synced(&f).await;
+    let raw = format!(
+        "From: {MULTI_WORK_EMAIL}\r\nTo: grace@example.net\r\nSubject: No id\r\n\r\nPlain draft\r\n"
+    );
+    let (message, uid) = foreign_draft(&f, "No id", raw).await;
+    let id = edit_draft_message(&f.service, &message).await;
+    let draft = stored_draft(&f.service, &id).await;
+    assert_eq!(draft.mode, ComposerMode::Plain);
+    assert!(draft.text.contains("Plain draft"), "{:?}", draft.text);
+    // Nothing could find it again: Nail's copy replaces it right away.
+    let copy = other_copy(&f, "No id", &message).await;
+    eventually("only Nail's copy on the server", || async {
+        let uids = server_draft_uids(&f);
+        uids.len() == 1 && uids[0] != uid
+    })
+    .await;
+    assert_eq!(edit_draft_message(&f.service, &copy).await, id);
     f.service.shutdown().await;
 }
 

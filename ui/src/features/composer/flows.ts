@@ -291,6 +291,23 @@ export async function openRichDraft(
   if (opened.mode === "html") void loadInlinePreviews(ctx, opened, window);
 }
 
+/**
+ * Continues a message of a Drafts folder in a composer: the core names the
+ * saved draft the message is the server copy of, or makes it a new draft
+ * (`EditDraftMessage`), which then opens like any saved draft.
+ */
+export async function continueDraftMessage(
+  ctx: ComposeContext,
+  messageId: MessageId,
+): Promise<void> {
+  const { draft_id } = await ctx.client.request(
+    { type: "EditDraftMessage", message_id: messageId },
+    "DraftSaved",
+  );
+  void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
+  await openRichDraft(ctx, draft_id);
+}
+
 /** The saves in flight, per UI store and composer window. */
 const saving = new WeakMap<ComposeContext["store"], Map<string, Promise<DraftId | null>>>();
 

@@ -178,6 +178,9 @@ pub struct AttachmentContent {
     /// Decoded bytes. Text parts are returned as UTF-8 (converted from their
     /// charset); `message/rfc822` parts as the raw nested message.
     pub data: Vec<u8>,
+    /// The part's `Content-ID` without angle brackets (as written), `None`
+    /// when it has none: what an HTML body refers to as `cid:<id>`.
+    pub content_id: Option<String>,
 }
 
 /// Parses a raw RFC 5322 message. Never panics; malformed input yields a
@@ -255,12 +258,38 @@ pub fn attachment_content(raw: &[u8], index: u32) -> Option<AttachmentContent> {
     guarded(|| {
         let message = parse(raw)?;
         let part = message.attachment(index)?;
-        Some(AttachmentContent {
-            info: attachment_info(index, part, &shown_for(&message, part)),
-            data: part.contents().to_vec(),
-        })
+        Some(content_of(&message, index, part))
     })
     .flatten()
+}
+
+/// The decoded content of attachment `index` of a parsed message.
+fn content_of(message: &Message<'_>, index: u32, part: &MessagePart<'_>) -> AttachmentContent {
+    AttachmentContent {
+        info: attachment_info(index, part, &shown_for(message, part)),
+        data: part.contents().to_vec(),
+        content_id: part
+            .content_id()
+            .map(|id| {
+                id.trim()
+                    .trim_start_matches('<')
+                    .trim_end_matches('>')
+                    .trim()
+            })
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned),
+    }
+}
+
+/// The `Bcc` addresses of a raw message (a saved draft keeps them; mail
+/// as received has none).
+pub fn bcc_addresses(raw: &[u8]) -> Vec<Address> {
+    guarded(|| {
+        parse(raw).map_or_else(Vec::new, |message| {
+            message.all_bcc().flat_map(|a| addresses(Some(a))).collect()
+        })
+    })
+    .unwrap_or_default()
 }
 
 /// Finds an inline part by `Content-ID` (with or without `cid:` prefix and
@@ -273,10 +302,7 @@ pub fn inline_content_by_cid(raw: &[u8], cid: &str) -> Option<AttachmentContent>
             part.content_id()
                 .is_some_and(|id| normalize_cid(id) == wanted)
         })?;
-        Some(AttachmentContent {
-            info: attachment_info(u32::try_from(index).ok()?, part, &shown_for(&message, part)),
-            data: part.contents().to_vec(),
-        })
+        Some(content_of(&message, u32::try_from(index).ok()?, part))
     })
     .flatten()
 }

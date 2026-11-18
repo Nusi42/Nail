@@ -702,6 +702,14 @@
             "type": "action"
           },
           {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 1,
+            "type": "action"
+          },
+          {
             "type": "spacer"
           },
           {
@@ -810,6 +818,7 @@
         4,
         2,
         1,
+        9,
         0
       ]
     },

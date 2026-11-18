@@ -245,6 +245,14 @@
             "type": "action"
           },
           {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -440,6 +448,14 @@
             "icon": "alarm-clock",
             "label": "@snooze.action.open",
             "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
             "type": "action"
           },
           {
@@ -641,6 +657,14 @@
             "type": "action"
           },
           {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -839,6 +863,14 @@
             "type": "action"
           },
           {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -1034,6 +1066,14 @@
             "icon": "alarm-clock",
             "label": "@snooze.action.open",
             "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
             "type": "action"
           },
           {
@@ -1785,6 +1825,14 @@
             "type": "action"
           },
           {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -1988,6 +2036,14 @@
             "icon": "alarm-clock",
             "label": "@snooze.action.open",
             "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
             "type": "action"
           },
           {
@@ -2197,6 +2253,14 @@
             "type": "action"
           },
           {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -2403,6 +2467,14 @@
             "type": "action"
           },
           {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -2606,6 +2678,14 @@
             "icon": "alarm-clock",
             "label": "@snooze.action.open",
             "shortcut": "b",
+            "type": "action"
+          },
+          {
+            "action": "mail.continue-draft",
+            "args": [],
+            "icon": "square-pen",
+            "label": "@mail.action.continue-draft",
+            "shortcut": null,
             "type": "action"
           },
           {

@@ -509,6 +509,10 @@ impl Service {
             | Request::GetDraftAttachment { draft_id, .. }
             | Request::DeleteDraft { draft_id }
             | Request::SendDraft { draft_id, .. } => self.check_draft(access, draft_id).await,
+            // The message becomes (or names) a draft of its own account.
+            Request::EditDraftMessage { message_id } => {
+                self.check_readable(access, message_id).await
+            }
             Request::CancelSend { outbox_id } => self.check_outbox(access, outbox_id).await,
             Request::RetryOp { op_id } => self.check_op(access, op_id).await,
             Request::NewDraft {

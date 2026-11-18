@@ -360,7 +360,11 @@ blob: string, } | { "type": "ListDrafts" } | { "type": "DeleteDraft",
 /**
  * The draft.
  */
-draft_id: DraftId, } | { "type": "SendDraft", 
+draft_id: DraftId, } | { "type": "EditDraftMessage", 
+/**
+ * The message.
+ */
+message_id: MessageId, } | { "type": "SendDraft", 
 /**
  * The draft (save it first).
  */

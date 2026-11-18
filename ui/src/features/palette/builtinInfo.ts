@@ -57,6 +57,7 @@ const ROWS: readonly Row[] = [
   ["junk.not-junk", MAIL, false],
   ["mail.archive", MAIL, false],
   ["mail.compose", ANY, true],
+  ["mail.continue-draft", MAIL, true],
   ["mail.delete", MAIL, true],
   ["mail.delete-permanently", MAIL, false],
   ["mail.forward", MAIL, false],

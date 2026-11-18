@@ -1138,6 +1138,9 @@ impl Service {
                 self.delete_draft(&draft_id).await?;
                 Response::Done
             }
+            Request::EditDraftMessage { message_id } => Response::DraftSaved {
+                draft_id: self.edit_draft_message(message_id).await?,
+            },
             // M4a: the plug-ins' before-send hooks may veto (`SendVetoed`).
             Request::SendDraft {
                 draft_id,

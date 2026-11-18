@@ -208,6 +208,23 @@ pub(crate) fn quote_strings(
     }
 }
 
+/// The sign / encrypt choice of a draft that answers, forwards or continues
+/// mail with this end-to-end status: encrypted mail stays encrypted (M2a),
+/// signed as the identity signs; `None` for mail that was not encrypted.
+pub(crate) fn encrypted_like(
+    identity: &Identity,
+    security: Option<&nail_api::security::SecurityStatus>,
+) -> Option<nail_api::security::SendCrypto> {
+    security
+        .filter(|s| s.is_encrypted())
+        .map(|security| nail_api::security::SendCrypto {
+            sign: identity.crypto.as_ref().is_some_and(|c| c.sign),
+            encrypt: true,
+            technology: Some(security.technology),
+            protect_headers: None,
+        })
+}
+
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
     Ok(match request {
@@ -334,16 +351,12 @@ impl Service {
             None => None,
         };
         // Answering or forwarding encrypted mail starts encrypted (M2a).
-        let reply_crypto = original
-            .as_ref()
-            .and_then(|(_, _, security)| security.as_ref())
-            .filter(|s| s.is_encrypted())
-            .map(|security| nail_api::security::SendCrypto {
-                sign: identity.crypto.as_ref().is_some_and(|c| c.sign),
-                encrypt: true,
-                technology: Some(security.technology),
-                protect_headers: None,
-            });
+        let reply_crypto = encrypted_like(
+            &identity,
+            original
+                .as_ref()
+                .and_then(|(_, _, security)| security.as_ref()),
+        );
         let original = original.map(|(message, date, _)| (message, date));
         let locale = self.inner.locale.clone();
         let draft = tokio::task::spawn_blocking(move || {
@@ -388,31 +401,10 @@ impl Service {
             let service = self.clone();
             let id = id.clone();
             tokio::task::spawn_blocking(move || -> Result<Vec<DraftAttachment>> {
-                let blobs = service.blobs().clone();
-                let stored = service.store().get_message(&id)?;
-                let Some(hash) = stored.blob_hash else {
-                    return Ok(Vec::new());
-                };
-                let (raw, _) = service.readable_raw(blobs.get(&hash)?);
-                let mut out = Vec::new();
-                for index in 0.. {
-                    let Some(content) = nail_mime::attachment_content(&raw, index) else {
-                        break;
-                    };
-                    let blob = blobs.put(&content.data)?;
-                    out.push(DraftAttachment {
-                        filename: content
-                            .info
-                            .filename
-                            .clone()
-                            .unwrap_or_else(|| format!("attachment-{}", index + 1)),
-                        mime: content.info.mime.clone(),
-                        size: content.data.len() as u64,
-                        blob: blob.as_str().to_owned(),
-                        content_id: None,
-                    });
-                }
-                Ok(out)
+                Ok(match service.readable_message(&id)? {
+                    Some(raw) => service.copy_attachments(&raw, false)?,
+                    None => Vec::new(),
+                })
             })
             .await??
         } else {
@@ -435,6 +427,50 @@ impl Service {
             headers.date,
             security,
         ))
+    }
+
+    /// The stored raw message `id` as the reader shows it (decrypted),
+    /// `None` while its body is not downloaded (blocking).
+    pub(crate) fn readable_message(&self, id: &MessageId) -> Result<Option<Vec<u8>>> {
+        let stored = self.store().get_message(id)?;
+        let Some(hash) = stored.blob_hash else {
+            return Ok(None);
+        };
+        Ok(Some(self.readable_raw(self.blobs().get(&hash)?).0))
+    }
+
+    /// Copies the attachments of a raw message into the blob store as
+    /// draft attachments (blocking). `inline`: the parts its HTML body
+    /// shows keep their `Content-ID`, so the draft's HTML still shows them
+    /// (a continued draft); otherwise every part is a plain attachment (a
+    /// forward).
+    pub(crate) fn copy_attachments(
+        &self,
+        raw: &[u8],
+        inline: bool,
+    ) -> Result<Vec<DraftAttachment>> {
+        let blobs = self.blobs();
+        let mut out = Vec::new();
+        for index in 0.. {
+            let Some(content) = nail_mime::attachment_content(raw, index) else {
+                break;
+            };
+            let blob = blobs.put(&content.data)?;
+            out.push(DraftAttachment {
+                filename: content
+                    .info
+                    .filename
+                    .clone()
+                    .unwrap_or_else(|| format!("attachment-{}", index + 1)),
+                mime: content.info.mime.clone(),
+                size: content.data.len() as u64,
+                blob: blob.as_str().to_owned(),
+                content_id: content
+                    .content_id
+                    .filter(|_| inline && content.info.shown_in_body),
+            });
+        }
+        Ok(out)
     }
 
     /// `UploadAttachment`: stores the bytes as a blob.
@@ -811,16 +847,25 @@ impl Service {
 /// The operation that deletes a draft's server copy, if it still exists
 /// locally.
 fn draft_copy_removal_in(store: &nail_store::Store, copy: &DraftServerCopy) -> Option<Operation> {
-    let old = Service::draft_copy_id(&copy.folder_id, &copy.message_id);
-    store
-        .get_message(&old)
-        .is_ok()
-        .then_some(Operation::DeleteMessage {
-            message_id: old,
-            permanent: true,
-            source: None,
-            trash_folder_id: None,
-        })
+    let own = Service::draft_copy_id(&copy.folder_id, &copy.message_id);
+    let old = if store.get_message(&own).is_ok() {
+        own
+    } else {
+        // A draft continued from another client's message
+        // (`EditDraftMessage`): that message, found by its Message-ID.
+        store
+            .find_messages_by_message_id(&copy.message_id)
+            .ok()?
+            .into_iter()
+            .find(|m| m.folder_id == copy.folder_id)?
+            .id
+    };
+    Some(Operation::DeleteMessage {
+        message_id: old,
+        permanent: true,
+        source: None,
+        trash_folder_id: None,
+    })
 }
 
 #[cfg(test)]

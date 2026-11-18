@@ -53,6 +53,17 @@ export function folderRole(ctx: WriteContext, folderId: FolderId | null): Folder
 }
 
 /**
+ * Whether a message is a draft to continue writing rather than to read:
+ * flagged `\Draft`, or in a Drafts folder (`false` when unknown).
+ */
+export function isDraftMessage(ctx: WriteContext, id: MessageId | null): boolean {
+  if (id === null) return false;
+  const summary = findSummary(ctx.queryClient, id);
+  if (summary === undefined) return false;
+  return summary.flags.draft || folderRole(ctx, summary.folder_id) === "drafts";
+}
+
+/**
  * Whether an action takes its rows out of the list shown: moves out of the
  * listed folder do, flags and tags do not. While searching only Trash and
  * Delete permanently do (hits stay hits wherever they are).

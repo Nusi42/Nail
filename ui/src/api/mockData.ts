@@ -78,6 +78,8 @@ export interface MockData {
   /** Connection state per real account. */
   statuses: AccountStatus[];
   drafts: Map<string, Draft>;
+  /** Drafts continued from a Drafts-folder message (`EditDraftMessage`): message id → draft id. */
+  draftMessages: Map<string, string>;
   outbox: OutboxEntry[];
   /** Discovery answers by domain; unknown domains get a guess. */
   discovery: Record<string, DiscoveredAccount[]>;
@@ -443,6 +445,7 @@ export function createMockData(inboxSize = 250): MockData {
       message: null,
     })),
     drafts: new Map(),
+    draftMessages: new Map(),
     outbox: [],
     oauthFlows: new Map(),
     discovery: {

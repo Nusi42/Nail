@@ -331,6 +331,7 @@ describe("toolbar", () => {
       "Move to…",
       "Flag",
       "Snooze…",
+      "Continue writing",
       "More",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");

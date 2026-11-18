@@ -3,7 +3,8 @@
 
 use nail_api::{Flags, MessageBody};
 use nail_mime::{
-    ParsedMessage, SummaryIds, attachment_content, inline_content_by_cid, parse_message,
+    ParsedMessage, SummaryIds, attachment_content, bcc_addresses, inline_content_by_cid,
+    parse_message,
 };
 use nail_testkit::{corpus_message, demo_corpus};
 
@@ -115,6 +116,7 @@ fn attachments_are_listed_and_decodable() {
     let content = attachment_content(&raw, 0).unwrap();
     assert!(content.data.starts_with(b"%PDF-1.4"));
     assert_eq!(content.data.len() as u64, pdf.size);
+    assert_eq!(content.content_id, None);
     assert!(attachment_content(&raw, 9).is_none());
     assert!(
         !parsed.text.contains("date,service"),
@@ -151,6 +153,15 @@ fn inline_cid_image_is_embedded_as_data_url() {
 
     let image = inline_content_by_cid(&raw, "cid:bench-photo-1@chem.example").unwrap();
     assert!(image.data.starts_with(b"\x89PNG"));
+    // Kept for a draft that is continued (`cid:` references in its HTML).
+    assert_eq!(
+        image.content_id.as_deref(),
+        Some("bench-photo-1@chem.example")
+    );
+    assert_eq!(
+        attachment_content(&raw, 0).unwrap().content_id.as_deref(),
+        Some("bench-photo-1@chem.example")
+    );
     assert!(inline_content_by_cid(&raw, "cid:missing@x").is_none());
 }
 
@@ -401,4 +412,15 @@ Content-Disposition: attachment; filename=\"statement.pdf.exe\"\r\n\r\nMZ\r\n--b
     let mismatch = serde_json::to_value(&warnings[0]).unwrap();
     let n = usize::try_from(mismatch["link"].as_u64().unwrap()).unwrap();
     assert_eq!(links[n].href, "https://bank.example.evil.example/login");
+}
+
+#[test]
+fn bcc_addresses_come_from_the_header() {
+    let raw = b"From: Ada <ada@example.org>\r\nTo: grace@example.net\r\n\
+Bcc: Bob <bob@example.com>, carol@example.com\r\nSubject: Draft\r\n\r\nHi\r\n";
+    let bcc = bcc_addresses(raw);
+    let emails: Vec<&str> = bcc.iter().map(|a| a.email.as_str()).collect();
+    assert_eq!(emails, ["bob@example.com", "carol@example.com"]);
+    assert_eq!(bcc[0].name.as_deref(), Some("Bob"));
+    assert_eq!(bcc_addresses(b"Subject: none\r\n\r\nHi\r\n"), []);
 }

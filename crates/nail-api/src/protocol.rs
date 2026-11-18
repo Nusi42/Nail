@@ -444,6 +444,18 @@ pub enum Request {
         /// The draft.
         draft_id: DraftId,
     },
+    /// Continue writing a message of a Drafts folder (or one flagged
+    /// `\Draft`). Nail's own server copy of a saved draft answers with that
+    /// draft. Any other message (a draft written in another client) becomes
+    /// a new saved draft — identity (from `From`), recipients, subject,
+    /// body, attachments and the replied message (from `In-Reply-To`) —
+    /// whose server copy is that message, so its next save replaces the
+    /// message instead of adding a second one. Answered with
+    /// [`Response::DraftSaved`]; open the draft with [`Request::GetDraft`].
+    EditDraftMessage {
+        /// The message.
+        message_id: MessageId,
+    },
     /// Put a saved draft into the outbox. Answered with
     /// [`Response::SendQueued`]; progress arrives as [`Event::SendStatus`].
     SendDraft {
@@ -3378,7 +3390,7 @@ pub enum Response {
         /// `null` when the query is valid.
         error: Option<SearchError>,
     },
-    /// Answer to [`Request::SaveDraft`].
+    /// Answer to [`Request::SaveDraft`] and [`Request::EditDraftMessage`].
     DraftSaved {
         /// The draft's id (new or unchanged).
         draft_id: DraftId,

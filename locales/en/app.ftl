@@ -26,6 +26,8 @@ mail-action-previous = Previous message
 mail-action-reply = { common-reply }
 mail-action-reply-all = Reply all
 mail-action-forward = { common-forward }
+# Opens a draft from a Drafts folder in the composer.
+mail-action-continue-draft = { outbox-draft-continue }
 mail-action-archive = { common-archive }
 mail-action-delete = { common-delete }
 mail-action-toggle-read = Mark as read/unread

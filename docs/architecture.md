@@ -415,7 +415,9 @@ crates/nail-proxy      SSRF-safe remote-content proxy: signed nail-proxy: tokens
                        (enabled by nail-core's `demo`) for one loopback port (ADR 0038)
 crates/nail-core       Service: routes requests; owns store, search index, accounts.kdl, per-account
                        engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020);
-                       M1b: composer.rs (NewDraft…, server Drafts copy), rules.rs + rule_mail.rs
+                       M1b: composer.rs (NewDraft…, server Drafts copy), draft_edit.rs
+                       (EditDraftMessage: a Drafts-folder message → its draft, or imported into a new one
+                       whose server copy it is; `Store::draft_with_server_copy`), rules.rs + rule_mail.rs
                        (rules.kdl, arrival / on-send / schedule / manual runs, undo), mcp.rs
                        (start_mcp_server, McpRunning), customize.rs (write-back, merge) (ADR 0027);
                        M2a: security.rs (every security request), crypto.rs (keyrings, decrypt/verify
@@ -1435,3 +1437,11 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   release checks run e2e on the `nail` that `cargo test --workspace` built.
 - The Simple MAPI protocol in its own crate (ADR 0215): `nail-mapi` depends on `nail-mapi-protocol`, so the x64 and
   x86 DLL release builds skip `nail-api` (18 s / 13 s cold instead of about 7.5 min each).
+- Continuing a draft from a Drafts folder: `EditDraftMessage` (`nail-core` `draft_edit.rs`) answers `DraftSaved` with
+  the draft whose server copy the message is (`Store::draft_with_server_copy`, folder + Message-ID), else imports the
+  message into a new draft (identity of its account by `From`, recipients incl. `Bcc`, subject, HTML / text,
+  attachments with the `Content-ID` of inline images, reply context from `In-Reply-To`) whose server copy it is, so
+  the next upload deletes it (`draft_copy_removal_in` finds a foreign copy by Message-ID); a message without one is
+  replaced by Nail's copy at once. UI: `mail.continue-draft` (`isDraftMessage`: `flags.draft` or a Drafts-role folder,
+  `continueDraftMessage` → `openRichDraft`); `conversation.open-in-reader` (double-click, Enter) runs it for drafts.
+  The Outbox favorite also shows while saved drafts exist.

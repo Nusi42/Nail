@@ -14,6 +14,7 @@ import { createMockData, type MockData } from "./mockData";
 import * as mail from "./mockMail";
 import { errorResponse, type MockCore } from "./mockMail";
 import * as outbox from "./mockOutbox";
+import { editDraftMessage } from "./mockDrafts";
 import { parseQuery } from "./mockSearch";
 import {
   answerComposer,
@@ -282,6 +283,8 @@ export class MockTransport extends ClosableTransport implements MockCore {
         return outbox.deleteDraft(this, request.draft_id);
       case "ListDrafts":
         return outbox.listDrafts(this);
+      case "EditDraftMessage":
+        return editDraftMessage(this, request.message_id);
       case "SendDraft":
         // M4a: plug-ins' before-send hooks may veto (`SendVetoed`).
         return answerSendDraft(this, request);

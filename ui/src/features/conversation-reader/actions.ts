@@ -13,10 +13,16 @@
  * From the list, Enter / o or a double-click (`conversation.open-in-reader`,
  * `keys context="list"`) move the focus into the reader: onto the selected
  * card's header, else the newest open card, else the message shown alone.
- * A narrow layout that shows the reader in a tab switches to it.
+ * A narrow layout that shows the reader in a tab switches to it. A draft
+ * (`mail.continue-draft`) opens in the composer instead.
  */
 import type { ActionInfo } from "../../actions/palette";
-import { builtinActions, type ActionContext, type ActionHandler } from "../../actions/registry";
+import {
+  builtinActions,
+  CONTINUE_DRAFT_ACTION,
+  type ActionContext,
+  type ActionHandler,
+} from "../../actions/registry";
 import { feedStore, stepStop } from "../../widgets/ThreadViewModel";
 import { MESSAGE_VIEW, THREAD_VIEW } from "./readerStack";
 
@@ -157,6 +163,9 @@ export const conversationActions: Record<string, ActionHandler> = {
   },
   [CONVERSATION_ACTIONS.openInReader]: {
     run: (ctx) => {
+      // A draft opens in the composer to continue writing it.
+      const continueDraft = builtinActions[CONTINUE_DRAFT_ACTION];
+      if (continueDraft?.enabled?.(ctx, []) === true) return continueDraft.run(ctx, []);
       // A narrow layout shows the reader in another (hidden) tab: switch to
       // it, and focus again once it shows; where the reader is in view the
       // first focus holds.

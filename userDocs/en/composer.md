@@ -118,6 +118,14 @@ Drafts survive closing Nail: open **Outbox** (`g` then `o`, or the command
 palette); under **Drafts** each saved
 message has **Continue writing** and **Discard**.
 
+You can also continue a draft from the **Drafts** favorite or an account's
+Drafts folder: double-click it, press `Enter`, or choose **Continue writing**
+in the reader's action bar or the message's right-click menu. It opens in the
+composer instead of the reader. This works for drafts started in another mail
+program too: Nail takes over the sender, recipients, subject, text and
+attachments, and the next save replaces that message in the Drafts folder
+instead of adding a second one.
+
 ## Sending, undo send and send later
 
 **Send** (`Ctrl+Enter`) puts the message in the outbox. It waits a few
@@ -145,7 +153,8 @@ Replying marks the original message as answered.
 
 ## The outbox
 
-**Outbox** (a favorite of the folder pane while messages wait there, with their number; also in the command palette, **Ctrl+K**, or `g` then `o`) lists messages waiting to be
+**Outbox** (a favorite of the folder pane while messages wait there, with their number, or while
+saved drafts wait to be continued; also in the command palette, **Ctrl+K**, or `g` then `o`) lists messages waiting to be
 sent: scheduled ones, ones in their undo-send delay, and ones that failed.
 **Edit** takes a message back into the composer; **Send now** sends it at
 once, for example after a failure has been fixed. Below them, **Drafts**

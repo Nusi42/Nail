@@ -30,6 +30,7 @@ import { must } from "../test/must";
 import { stubProperties } from "../test/stub";
 import { objectContaining } from "../test/matchers";
 import { FIRST, INBOX } from "../test/mockIds";
+import { plainDraft } from "../test/env";
 
 let restoreSizes: () => void;
 beforeEach(() => {
@@ -320,6 +321,17 @@ describe("folder pane after the M5b review", () => {
     renderNode(pane, env);
     const outbox = await screen.findByRole("treeitem", { name: /Outbox/ });
     expect(within(outbox).getByLabelText("One message waiting to be sent")).toHaveTextContent("1");
+  });
+
+  it("lists the Outbox while a saved draft waits to be continued, without a count", async () => {
+    const env = paneEnv();
+    const pane = widget("folder-tree", {
+      options: { ...PANE.options, favorites: "all-inboxes outbox" },
+    });
+    env.transport.data.drafts.set("d1", plainDraft({ id: "d1", subject: "Unfinished" }));
+    renderNode(pane, env);
+    const outbox = await screen.findByRole("treeitem", { name: "Outbox" });
+    expect(outbox.querySelector('[data-part="folder-tree.item.unread-count"]')).toBeNull();
   });
 });
 

@@ -37,6 +37,7 @@ import { useComposeContext } from "../../state/hooks";
 
 export {
   cancelRichSend,
+  continueDraftMessage,
   openRichDraft,
   saveRich,
   sendRich,

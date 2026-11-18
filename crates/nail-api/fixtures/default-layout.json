@@ -815,6 +815,12 @@
       "alias_of": null,
       "args": []
     },
+    "mail.continue-draft": {
+      "label": "@mail.action.continue-draft",
+      "icon": "square-pen",
+      "alias_of": null,
+      "args": []
+    },
     "mail.archive": {
       "label": "@mail.action.archive",
       "icon": "archive",
@@ -2246,6 +2252,14 @@
         "display": "icon"
       },
       {
+        "type": "action",
+        "action": "mail.continue-draft",
+        "args": [],
+        "label": null,
+        "icon": null,
+        "rank": 1
+      },
+      {
         "type": "spacer"
       },
       {
@@ -2514,6 +2528,13 @@
         "icon": null
       },
       {
+        "type": "action",
+        "action": "mail.continue-draft",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
         "type": "separator"
       },
       {
@@ -2763,6 +2784,13 @@
       {
         "type": "action",
         "action": "snooze.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.continue-draft",
         "args": [],
         "label": null,
         "icon": null

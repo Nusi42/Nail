@@ -132,7 +132,7 @@ impl Service {
 
     /// A draft ready to store: its identity exists, its HTML is sanitized
     /// and its attachments are uploaded blobs.
-    fn checked_draft(&self, mut draft: Draft) -> Result<Draft> {
+    pub(crate) fn checked_draft(&self, mut draft: Draft) -> Result<Draft> {
         self.identity(&draft.identity_id)?;
         if let Some(html) = &draft.html {
             draft.html = Some(nail_compose::sanitize_outgoing(html));

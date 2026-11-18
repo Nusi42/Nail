@@ -13,6 +13,7 @@ import type { FolderRole, JsonValue, MoveTarget, ResolvedLayout } from "../api/g
 import type { MessageArgs } from "../i18n/localizer";
 import {
   cancelRichSend,
+  continueDraftMessage,
   discardRich,
   saveRich,
   sendRich,
@@ -26,6 +27,7 @@ import {
   canMark,
   canUndo,
   folderRole,
+  isDraftMessage,
   runMailAction,
   undoLast,
 } from "../features/mail-actions/run";
@@ -47,6 +49,12 @@ export interface ActionContext {
   /** Names of the dialogs features registered (`window.open` can open them). */
   dialogs?: ReadonlySet<string>;
 }
+
+/**
+ * Continue writing the selected draft (a message of a Drafts folder) in the
+ * composer; opening such a message from the list does the same.
+ */
+export const CONTINUE_DRAFT_ACTION = "mail.continue-draft";
 
 /** Layout windows the built-in actions open. */
 export const WINDOWS = {
@@ -228,6 +236,10 @@ export const builtinActions: Record<string, ActionHandler> = {
   "mail.forward": {
     run: (ctx) => startRichReply(ctx, selected(ctx)[0] ?? "", "forward"),
     enabled: hasSelection,
+  },
+  [CONTINUE_DRAFT_ACTION]: {
+    run: (ctx) => continueDraftMessage(ctx, selected(ctx)[0] ?? ""),
+    enabled: (ctx) => isDraftMessage(ctx, ctx.store.getState().selectedMessageId),
   },
   "composer.send": {
     run: async (ctx) => {

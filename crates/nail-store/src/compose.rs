@@ -706,6 +706,30 @@ impl Store {
         })
     }
 
+    /// The draft whose server copy is the message with `Message-ID`
+    /// `message_id` (angle brackets optional) in `folder`, `None` when no
+    /// draft points to it (the reverse of [`Store::draft_server_copy`]).
+    pub fn draft_with_server_copy(
+        &self,
+        folder: &FolderId,
+        message_id: &str,
+    ) -> Result<Option<DraftId>> {
+        let Some(mid) = crate::mail::normalize_msgid(message_id) else {
+            return Ok(None);
+        };
+        self.with_conn(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT id FROM drafts WHERE server_folder_id = ?1 AND server_message_id = ?2
+                     ORDER BY id LIMIT 1",
+                    params![folder.as_str(), mid],
+                    |r| r.get::<_, i64>(0),
+                )
+                .optional()?
+                .map(draft_id))
+        })
+    }
+
     /// Crash recovery: entries left `sending` become `failed` (see the
     /// module docs). Runs on every [`Store::open`].
     pub(crate) fn recover_sending(&self) -> Result<usize> {
@@ -1013,6 +1037,46 @@ mod tests {
                 .set_draft_server_copy(&"draft-9".into(), None)
                 .unwrap_err()
                 .is_not_found()
+        );
+    }
+
+    #[test]
+    fn a_server_copy_finds_its_draft() {
+        let store = store();
+        let id = store.save_draft(&draft("Hi")).unwrap();
+        let other = store.save_draft(&draft("Other")).unwrap();
+        let folder = FolderId::from("drafts");
+        assert_eq!(
+            store.draft_with_server_copy(&folder, "d1@nail").unwrap(),
+            None
+        );
+        let copy = DraftServerCopy {
+            folder_id: folder.clone(),
+            uid: None,
+            message_id: "d1@nail".into(),
+        };
+        store.set_draft_server_copy(&id, Some(&copy)).unwrap();
+        // Angle brackets are optional; another folder or id finds nothing.
+        for wanted in ["d1@nail", "<d1@nail>"] {
+            assert_eq!(
+                store.draft_with_server_copy(&folder, wanted).unwrap(),
+                Some(id.clone())
+            );
+        }
+        assert_eq!(
+            store
+                .draft_with_server_copy(&FolderId::from("inbox"), "d1@nail")
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            store.draft_with_server_copy(&folder, "d2@nail").unwrap(),
+            None
+        );
+        assert_eq!(store.draft_with_server_copy(&folder, " <> ").unwrap(), None);
+        assert_ne!(
+            store.draft_with_server_copy(&folder, "d1@nail").unwrap(),
+            Some(other)
         );
     }
 

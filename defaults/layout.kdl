@@ -228,6 +228,7 @@ layout "default" {
         action "mail.reply"       label="@mail.action.reply"       icon="reply"
         action "mail.reply-all"   label="@mail.action.reply-all"   icon="reply-all"
         action "mail.forward"     label="@mail.action.forward"     icon="forward"
+        action "mail.continue-draft" label="@mail.action.continue-draft" icon="square-pen"
         action "mail.archive"     label="@mail.action.archive"     icon="archive"
         action "mail.move"        label="@mail.action.move"        icon="folder-input"
         action "mail.move-to"     label="@mail.action.move-to"     icon="folder-input"
@@ -635,6 +636,8 @@ layout "default" {
         item "mail.move" rank=6 display="icon"
         item "mail.toggle-flag" rank=7 display="icon"
         item "snooze.open" rank=8 display="icon"
+        // Only for drafts (hidden for other messages).
+        item "mail.continue-draft" rank=1
         spacer
         more {
             header "@toolbar.group.message"
@@ -691,6 +694,7 @@ layout "default" {
         item "mail.move"
         item "mail.toggle-flag"
         item "snooze.open"
+        item "mail.continue-draft"
         separator
         header "@toolbar.group.message"
         item "mail.toggle-read"
@@ -739,6 +743,7 @@ layout "default" {
         item "mail.move"
         item "mail.toggle-flag"
         item "snooze.open"
+        item "mail.continue-draft"
         separator
         header "@toolbar.group.message"
         item "mail.toggle-read"
