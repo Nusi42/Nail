@@ -34,7 +34,8 @@ filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender war
 **0.8.6 (2026-11-19, prepared, not published):** fixes a user report against 0.8.5 (ADR 0217): MCP `update_draft` /
 `send_message` take a draft's message id; an elicitation *decline* (clients that cannot show the form send it at once)
 no longer denies sends and deletes, Nail's confirmation decides. Built with `release:prepare` in the lead folder
-(output `.nail-build/release/0.8.6/`). Waits for the maintainer to try the installer, then `npm run release:publish`.
+(output `.nail-build/release/0.8.6/`, commit `chore(release): release 0.8.6`; re-run with `--skip-checks` after the
+flaky e2e test below). Waits for the maintainer to try the installer, then `npm run release:publish`.
 
 **Released 0.8.5 (2026-11-19):** GitHub release `v0.8.5` (Latest), `main` published; tried by the maintainer before
 publishing. Content: continuing a draft from the Drafts folder (`EditDraftMessage`, `mail.continue-draft`, Outbox
@@ -48,8 +49,9 @@ other clients come back as plain replies; Markdown drafts from other clients imp
 hour, so they cost real time): `nail-core` `exchange::shared_mailboxes_sending_and_free_busy` (a removed shared
 mailbox's Inbox still exists right after `RemoveExchangeMailbox`: likely a race with a running sync that recreates
 the folders, possibly a real core bug: check first); `nail-bench` `a_tiny_run_measures_every_rust_metric`
-(cold start 4651 ms over the 4500 ms budget under load); e2e `m2c` right-click menu (list never loaded) and
-`desktop-health` crashed-page reload (60 s timeout).
+(cold start 4651 ms over the 4500 ms budget under load); e2e `m2c` right-click menu (list never loaded),
+`desktop-health` crashed-page reload (60 s timeout) and (0.8.6 run) `security.spec.ts:382` MCP encrypted grant: the
+Settings form re-rendered after `Client name` was filled, so `Create client` stayed disabled (passed 4/4 alone).
 
 **Idle work folders (2026-11-08, published):** a folder with nothing running and nothing waiting is
 cleaned with `node scripts/work-folders.mjs clean <n>` (branch to `main`, build output and `node_modules` removed;
