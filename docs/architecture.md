@@ -1447,3 +1447,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   replaced by Nail's copy at once. UI: `mail.continue-draft` (`isDraftMessage`: `flags.draft` or a Drafts-role folder,
   `continueDraftMessage` → `openRichDraft`); `conversation.open-in-reader` (double-click, Enter) runs it for drafts.
   The Outbox favorite also shows while saved drafts exist.
+- MCP drafts by message id and declined forms (ADR 0217): `update_draft` / `send_message` resolve a `draft_id` that is
+  no draft id as a readable message flagged `\Draft` or in a Drafts folder, through `McpData::draft_for_message`
+  (`EditDraftMessage`); an elicitation *decline* leaves the decision to Nail's confirmation, only `approve: false`
+  denies.

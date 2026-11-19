@@ -168,7 +168,7 @@ fn tool_result(outcome: &WriteOutcome) -> CallToolResult {
                     CallToolResult::structured_error(value)
                 }
                 McpWriteResult::Denied { .. } => {
-                    value["hint"] = json!("The user denied this action in Nail; nothing changed.");
+                    value["hint"] = json!("The user denied this action; nothing changed.");
                     CallToolResult::structured_error(value)
                 }
                 McpWriteResult::Expired { .. } => {
@@ -471,11 +471,10 @@ impl<D: McpData> Shared<D> {
                     (false, _) => Some(ConfirmationDecision::Deny),
                 }
             }
-            Some(ElicitResult {
-                action: ElicitationAction::Decline,
-                ..
-            }) => Some(ConfirmationDecision::Deny),
-            // Dismissed or failed: Nail's own confirmation still decides.
+            // Declined, dismissed or failed: Nail's own confirmation still
+            // decides. Clients that cannot show the form decline it at once
+            // without asking anyone, so only the form's explicit "no"
+            // (`approve: false`) denies.
             _ => None,
         };
         if let Some(decision) = decision

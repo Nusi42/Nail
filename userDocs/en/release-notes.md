@@ -3,6 +3,21 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.6 (`0.8.6`)
+
+AI agents can work with all your drafts again, and they ask before sending
+or deleting instead of failing.
+
+### Corrected in 0.8.6
+
+- **Agents send and delete again** — when an agent (for example Claude
+  Code) asked to send a draft or delete messages, the request was refused
+  at once and the agent was told you had denied it, without any question.
+  Now Nail asks you in its own window, as it should.
+- **Agents find your drafts** — agents can change and send drafts you wrote
+  in Nail, or that they wrote in an earlier session, using the id they see
+  when they read your Drafts folder.
+
 ## Nail 0.8.5 (`0.8.5`)
 
 Continue writing your drafts straight from the Drafts folder, plus security

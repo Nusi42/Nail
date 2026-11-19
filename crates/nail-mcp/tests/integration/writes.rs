@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::common::{
-    FakeData, call, connect_stateless, create_client, grant, pending, set_grant, start,
+    FakeData, call, connect_stateless, create_client, grant, pending, set_grant, start, start_with,
     start_with_settings, summary, transport,
 };
 use nail_api::agents::{
@@ -103,6 +103,36 @@ fn spawn_call<H: ClientHandler>(
 ) -> tokio::task::JoinHandle<CallToolResult> {
     let client = Arc::clone(client);
     tokio::spawn(async move { call(&client, name, args).await })
+}
+
+/// Calls a tool in a task and waits until its confirmation is raised and,
+/// a moment later, still pending (no answer decided it).
+async fn still_pending<H: ClientHandler>(
+    env: &crate::common::Env,
+    client: &Arc<RunningService<RoleClient, H>>,
+    name: &'static str,
+    args: Value,
+) -> (tokio::task::JoinHandle<CallToolResult>, Confirmation) {
+    let waiting = spawn_call(client, name, args);
+    let confirmation = pending(&env.store).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        env.store.get_confirmation(&confirmation.id).unwrap().state,
+        ConfirmationState::Pending,
+        "{name} is still waiting"
+    );
+    (waiting, confirmation)
+}
+
+/// Calls a tool and waits at most 10 s for its result.
+async fn call_in_time<H: ClientHandler>(
+    client: &RunningService<RoleClient, H>,
+    name: &'static str,
+    args: Value,
+) -> CallToolResult {
+    tokio::time::timeout(Duration::from_secs(10), call(client, name, args))
+        .await
+        .unwrap()
 }
 
 /// The result of a call [`spawn_call`] started (within 10 s).
@@ -668,12 +698,7 @@ async fn elicitation_in_a_session_approves_sends_but_never_deletes() {
             .await
             .unwrap(),
     );
-    let sent = tokio::time::timeout(
-        Duration::from_secs(10),
-        call(&client, "send_message", json!({"draft_id": "d1"})),
-    )
-    .await
-    .unwrap();
+    let sent = call_in_time(&client, "send_message", json!({"draft_id": "d1"})).await;
     assert_eq!(value(&sent)["status"], "done", "{sent:?}");
     let asked = answering.asked();
     assert_eq!(asked.len(), 1);
@@ -688,14 +713,13 @@ async fn elicitation_in_a_session_approves_sends_but_never_deletes() {
     );
 
     // The same "approve" for a delete is not enough: Nail decides.
-    let waiting = spawn_call(&client, "delete_messages", json!({"message_ids": ["m1"]}));
-    let confirmation = pending(&env.store).await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(
-        env.store.get_confirmation(&confirmation.id).unwrap().state,
-        ConfirmationState::Pending,
-        "elicitation cannot approve a delete"
-    );
+    let (waiting, confirmation) = still_pending(
+        &env,
+        &client,
+        "delete_messages",
+        json!({"message_ids": ["m1"]}),
+    )
+    .await;
     assert!(answering.asked()[1].contains("only be approved in Nail"));
     decide(&env.store, &confirmation, true);
     let deleted = finished(waiting).await;
@@ -704,23 +728,66 @@ async fn elicitation_in_a_session_approves_sends_but_never_deletes() {
 }
 
 #[tokio::test]
-async fn declining_the_form_denies_even_a_delete() {
-    let env = start().await;
-    let (id, token) = create_client(&env.store, "Claude").await;
-    grant(&env.store, &id, &[McpScope::Organize], &["work"]).await;
+async fn declining_the_form_leaves_the_decision_to_nail() {
+    // Clients that cannot show the form decline it without asking anyone:
+    // the request stays pending until the user decides in Nail.
+    let (env, _, token) = claude(&[McpScope::Send, McpScope::Organize]).await;
     let answering = Answering::new(ElicitationAction::Decline, None);
+    let client = Arc::new(
+        answering
+            .clone()
+            .serve(transport(env.server.url(), &token))
+            .await
+            .unwrap(),
+    );
+    let (waiting, confirmation) =
+        still_pending(&env, &client, "send_message", json!({"draft_id": "d1"})).await;
+    assert_eq!(answering.asked().len(), 1);
+    decide(&env.store, &confirmation, true);
+    let sent = finished(waiting).await;
+    assert_eq!(value(&sent)["status"], "done", "{sent:?}");
+    assert_eq!(env.data.write_names(), ["SendDraft"]);
+    // A delete's form (approved in Nail only) declined: Nail still asks.
+    let (waiting, confirmation) = still_pending(
+        &env,
+        &client,
+        "delete_messages",
+        json!({"message_ids": ["m1"]}),
+    )
+    .await;
+    decide(&env.store, &confirmation, true);
+    let deleted = finished(waiting).await;
+    assert_eq!(value(&deleted)["status"], "done", "{deleted:?}");
+    assert_eq!(env.data.write_names(), ["SendDraft", "DeleteMessages"]);
+
+    // The same for a stateless client's MRTR round; denying in Nail denies.
+    let (id, token) = create_client(&env.store, "Modern").await;
+    grant(&env.store, &id, &[McpScope::Send], &["work"]).await;
+    let stateless = Arc::new(connect_stateless(answering.clone(), env.server.url(), &token).await);
+    let (waiting, confirmation) =
+        still_pending(&env, &stateless, "send_message", json!({"draft_id": "d1"})).await;
+    assert_eq!(answering.asked().len(), 3);
+    decide(&env.store, &confirmation, false);
+    let denied = finished(waiting).await;
+    assert_eq!(value(&denied)["status"], "denied", "{denied:?}");
+    assert_eq!(
+        value(&denied)["hint"],
+        "The user denied this action; nothing changed."
+    );
+    assert_eq!(env.data.write_names(), ["SendDraft", "DeleteMessages"]);
+}
+
+#[tokio::test]
+async fn saying_no_in_the_form_denies() {
+    let (env, _, token) = claude(&[McpScope::Send]).await;
+    let answering = Answering::new(ElicitationAction::Accept, Some(json!({"approve": false})));
     let client = answering
         .clone()
         .serve(transport(env.server.url(), &token))
         .await
         .unwrap();
-    let result = tokio::time::timeout(
-        Duration::from_secs(10),
-        call(&client, "delete_messages", json!({"message_ids": ["m1"]})),
-    )
-    .await
-    .unwrap();
-    assert_eq!(value(&result)["status"], "denied");
+    let result = call_in_time(&client, "send_message", json!({"draft_id": "d1"})).await;
+    assert_eq!(value(&result)["status"], "denied", "{result:?}");
     assert!(env.data.written().is_empty(), "{:?}", env.data.written());
     drop(client.cancel().await);
 }
@@ -732,12 +799,7 @@ async fn stateless_clients_answer_through_mrtr_rounds() {
     grant(&env.store, &id, &[McpScope::Send], &["work"]).await;
     let answering = Answering::new(ElicitationAction::Accept, Some(json!({"approve": true})));
     let client = connect_stateless(answering.clone(), env.server.url(), &token).await;
-    let result = tokio::time::timeout(
-        Duration::from_secs(10),
-        call(&client, "send_message", json!({"draft_id": "d1"})),
-    )
-    .await
-    .unwrap();
+    let result = call_in_time(&client, "send_message", json!({"draft_id": "d1"})).await;
     assert_eq!(value(&result)["status"], "done", "{result:?}");
     assert_eq!(answering.asked().len(), 1);
     assert_eq!(env.data.write_names(), ["SendDraft"]);
@@ -851,6 +913,83 @@ async fn mail_organizing_validates_and_queues() {
             "SnoozeMessages"
         ]
     );
+    drop(client.cancel().await);
+}
+
+#[tokio::test]
+async fn drafts_are_found_by_the_message_id_reads_show() {
+    // Reads show a saved draft only by its message id: one flagged
+    // `\Draft`, one in the Drafts folder (no flag), one plain message.
+    let mut data = FakeData::default();
+    let mut flagged = summary("m-flagged", "work", "work-inbox", "t8");
+    flagged.flags.draft = true;
+    data.messages.push(flagged);
+    data.messages
+        .push(summary("m-in-drafts", "work", "work-drafts", "t9"));
+    let env = start_with(data).await;
+    let (id, token) = create_client(&env.store, "Claude").await;
+    grant(&env.store, &id, &[McpScope::Draft], &["work"]).await;
+    let client = plain(env.server.url(), &token).await;
+    // Finding a draft by its message id reads that message.
+    let r = call(
+        &client,
+        "update_draft",
+        json!({"draft_id": "m-flagged", "subject": "New"}),
+    )
+    .await;
+    assert_eq!(value(&r)["detail"], "scope `read` not granted", "{r:?}");
+    grant(
+        &env.store,
+        &id,
+        &[McpScope::Read, McpScope::Draft, McpScope::Send],
+        &["work"],
+    )
+    .await;
+    for message in ["m-flagged", "m-in-drafts"] {
+        let r = call(
+            &client,
+            "update_draft",
+            json!({"draft_id": message, "subject": "New"}),
+        )
+        .await;
+        let draft = saved_draft(&env.data, &r);
+        assert_eq!(
+            draft.id.as_ref().unwrap().as_str(),
+            format!("draft-of-{message}")
+        );
+        assert_eq!(draft.subject, "New");
+    }
+    // A message that is not a draft, a message of another account and an
+    // unknown id are refused.
+    let r = call(
+        &client,
+        "update_draft",
+        json!({"draft_id": "m1", "subject": "New"}),
+    )
+    .await;
+    assert_eq!(value(&r)["error"], "invalid_request", "{r:?}");
+    let r = call(
+        &client,
+        "update_draft",
+        json!({"draft_id": "m2", "subject": "New"}),
+    )
+    .await;
+    assert_eq!(value(&r)["error"], "denied", "{r:?}");
+    // Sending by the message id sends the draft it continues.
+    env.store
+        .set_action_policy(
+            &ActionActor::mcp_client(id.clone()),
+            ActionKind::Send,
+            Some(ActionPolicyMode::Allow),
+            0,
+        )
+        .unwrap();
+    let r = call(&client, "send_message", json!({"draft_id": "m-flagged"})).await;
+    assert_eq!(value(&r)["status"], "done", "{r:?}");
+    let Some(Request::SendDraft { draft_id, .. }) = env.data.written().pop() else {
+        panic!("not sent: {:?}", env.data.written())
+    };
+    assert_eq!(draft_id.as_str(), "draft-of-m-flagged");
     drop(client.cancel().await);
 }
 

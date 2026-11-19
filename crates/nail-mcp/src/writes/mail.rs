@@ -135,6 +135,40 @@ impl<D: McpData> Ctx<'_, D> {
         Ok((draft, account))
     }
 
+    /// The saved draft `id` names: a draft id, or the message id of a
+    /// draft (flagged `\Draft` or in a Drafts folder) that the client may
+    /// read. Reads only ever show a draft by its message id, which changes
+    /// with every save; such a message answers with the draft it is the
+    /// server copy of, a draft of another client is imported
+    /// ([`McpData::draft_for_message`]).
+    async fn named_draft(&self, id: &str) -> Result<(DraftId, Draft, AccountId), Failure> {
+        let draft_id = DraftId::new(id);
+        let not_a_draft = match self.writable_draft(&draft_id).await {
+            Ok((draft, account)) => return Ok((draft_id, draft, account)),
+            Err(Failure::Api(err)) if err.code == nail_api::ErrorCode::NotFound => {
+                Failure::Api(err)
+            }
+            Err(other) => return Err(other),
+        };
+        let message = MessageId::new(id);
+        let Ok(summary) = self.shared.data.message_summary(&message).await else {
+            return Err(not_a_draft);
+        };
+        self.shared.readable_message(self.access, &message).await?;
+        let in_drafts = summary.flags.draft
+            || self
+                .folders_of(std::slice::from_ref(&summary.account_id))
+                .await?
+                .get(&summary.folder_id)
+                .is_some_and(|f| f.role == FolderRole::Drafts);
+        if !in_drafts {
+            return Err(invalid(format!("message {id} is not a draft")));
+        }
+        let draft_id = self.shared.data.draft_for_message(&message).await?;
+        let (draft, account) = self.writable_draft(&draft_id).await?;
+        Ok((draft_id, draft, account))
+    }
+
     /// Checks attachment arguments and turns them into uploads.
     async fn uploads(&self, list: &[DraftAttachmentArg]) -> Result<Vec<Upload>, Failure> {
         let mut out = Vec::new();
@@ -1015,8 +1049,7 @@ pub(crate) async fn update_draft<D: McpData>(
     a: UpdateDraftArgs,
 ) -> Result<Plan, Failure> {
     ctx.access.require(McpScope::Draft)?;
-    let id = DraftId::new(a.draft_id.clone());
-    let (before, account) = ctx.writable_draft(&id).await?;
+    let (id, before, account) = ctx.named_draft(&a.draft_id).await?;
     let mut draft = before.clone();
     draft.id = Some(id.clone());
     if let Some(to) = &a.to {
@@ -1077,8 +1110,7 @@ pub(crate) async fn send_message<D: McpData>(
     a: SendMessageArgs,
 ) -> Result<Plan, Failure> {
     ctx.access.require(McpScope::Send)?;
-    let id = DraftId::new(a.draft_id.clone());
-    let (mut draft, account) = ctx.writable_draft(&id).await?;
+    let (id, mut draft, account) = ctx.named_draft(&a.draft_id).await?;
     draft.id = Some(id.clone());
     if let Some(at) = &a.send_at {
         chrono::DateTime::parse_from_rfc3339(at)

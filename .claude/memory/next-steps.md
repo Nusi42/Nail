@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.5 released 2026-11-19: continue drafts, dependency advisories; flaky tests open)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.6 prepared 2026-11-19: MCP drafts by message id, declined forms; waits for the maintainer to try and publish)"
 metadata:
   type: project
 ---
@@ -30,6 +30,11 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 **Waiting for the maintainer to try** (newest installer in `<installer folder>\`, payload smoke passed): HTML mail
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
+
+**0.8.6 (2026-11-19, prepared, not published):** fixes a user report against 0.8.5 (ADR 0217): MCP `update_draft` /
+`send_message` take a draft's message id; an elicitation *decline* (clients that cannot show the form send it at once)
+no longer denies sends and deletes, Nail's confirmation decides. Built with `release:prepare` in the lead folder
+(output `.nail-build/release/0.8.6/`). Waits for the maintainer to try the installer, then `npm run release:publish`.
 
 **Released 0.8.5 (2026-11-19):** GitHub release `v0.8.5` (Latest), `main` published; tried by the maintainer before
 publishing. Content: continuing a draft from the Drafts folder (`EditDraftMessage`, `mail.continue-draft`, Outbox

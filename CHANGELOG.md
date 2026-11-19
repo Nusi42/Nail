@@ -8,6 +8,16 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Fixed — agents (MCP) and drafts (ADR 0217)
+
+- `update_draft` and `send_message` also find a draft by the message id
+  agents see when they read it, so drafts written in Nail or in an earlier
+  agent session can be changed and sent.
+- An agent whose own prompt was declined without asking (some agents do
+  that when they cannot show it) no longer denies the send or delete: the
+  request waits for your answer in Nail. The agent is no longer told that
+  you denied it in Nail when you did not.
+
 ## [0.8.5] — 2026-11-18
 
 ### Fixed — continuing drafts

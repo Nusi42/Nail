@@ -225,7 +225,10 @@ open another message.
   many conversations and messages are affected. Messages outside the
   client's accounts are left alone.
 - **Drafts are never sent by writing them.** Sending is always a separate
-  `send_message`. When you have a draft open, `edit_open_draft` inserts or
+  `send_message`. `update_draft` and `send_message` find a draft by the id
+  `create_draft` returned or by the message id the agent sees when it reads
+  the Drafts folder, so drafts you wrote in Nail can be changed and sent
+  too. When you have a draft open, `edit_open_draft` inserts or
   replaces text in it live (you see it, and can undo it like typing), and
   Nail shows "… is editing your draft".
 - **Plug-ins' checks apply.** When a plug-in's before-send check stops a
@@ -263,7 +266,9 @@ requests stay in the **History** (more in [confirmations](confirmations.md)).
   also show the question in their own window. You can deny anything there,
   and approve everything except deletions, which you approve in Nail only.
   The request in Nail is always shown as well; whichever answer comes first
-  counts.
+  counts. Closing or declining the agent's prompt without answering leaves
+  the decision to Nail: some agents decline it on their own when they
+  cannot show it.
 - **Nail without its window.** When an agent started Nail through
   `nail mcp` and no Nail window is open, answer in the agent's prompt if it
   asks; otherwise the request expires. `nail mcp` writes a line to the

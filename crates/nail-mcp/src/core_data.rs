@@ -391,6 +391,16 @@ impl<C: CoreAccess> McpData for CoreData<C> {
         }
     }
 
+    async fn draft_for_message(&self, id: &MessageId) -> DataResult<DraftId> {
+        let request = Request::EditDraftMessage {
+            message_id: id.clone(),
+        };
+        match self.0.handle(request).await {
+            Response::DraftSaved { draft_id } => Ok(draft_id),
+            other => Err(unexpected(other)),
+        }
+    }
+
     fn emit(&self, event: Event) {
         self.0.emit(event);
     }

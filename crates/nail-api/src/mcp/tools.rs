@@ -318,7 +318,8 @@ pub struct CreateDraftArgs {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct UpdateDraftArgs {
-    /// The draft.
+    /// The draft: the id `create_draft` returned, or the message id
+    /// reads show for a draft (flagged as a draft or in a Drafts folder).
     pub draft_id: String,
     /// New recipients.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -354,7 +355,8 @@ pub struct UpdateDraftArgs {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct SendMessageArgs {
-    /// The draft.
+    /// The draft: the id `create_draft` returned, or the message id
+    /// reads show for a draft (flagged as a draft or in a Drafts folder).
     pub draft_id: String,
     /// Send later (RFC 3339); default: now (after the user's undo-send
     /// delay).

@@ -62,7 +62,7 @@ pub(crate) fn summary(id: &str, account: &str, folder: &str, thread: &str) -> Me
     }
 }
 
-/// Two accounts (`work` with Inbox, HR and Trash, `home`), a virtual
+/// Two accounts (`work` with Inbox, HR, Trash and Drafts, `home`), a virtual
 /// account over both, messages
 /// `m1` (work, with an attachment), `m2` (home), `m3` (work, encrypted),
 /// thread `t1` = m1 + m2.
@@ -191,6 +191,7 @@ impl McpData for FakeData {
                     folder("work-inbox", FolderRole::Inbox),
                     folder("work-hr", FolderRole::Other),
                     folder("work-trash", FolderRole::Trash),
+                    folder("work-drafts", FolderRole::Drafts),
                 ]),
                 "home" => Ok(vec![folder("home-inbox", FolderRole::Inbox)]),
                 _ => Err(ApiError::not_found("account")),
@@ -389,44 +390,57 @@ impl McpData for FakeData {
     }
 
     /// `draft-home`: written from the home identity; `draft-reply-m2`: a
-    /// work draft replying to m2 (home); anything else: a work draft.
+    /// work draft replying to m2 (home); a message id: not found (as in the
+    /// store); anything else: a work draft.
     fn draft(&self, id: &DraftId) -> impl Future<Output = DataResult<Draft>> + Send {
-        std::future::ready({
-            let identity = if id.as_str() == "draft-home" {
-                "me@home.example"
+        std::future::ready(
+            if self.messages.iter().any(|m| m.id.as_str() == id.as_str()) {
+                Err(ApiError::not_found(format!("draft not found: {id}")))
             } else {
-                "me@work.example"
-            };
-            let mut draft = Draft::new(IdentityId::new(identity));
-            draft.id = Some(id.clone());
-            draft.subject = "Re: Plan".into();
-            if id.as_str() != "draft-empty" {
-                draft.to = vec![Address {
-                    name: Some("Bob".into()),
-                    email: "bob@example.org".into(),
-                }];
-                draft.markdown = Some("Hello Bob".into());
-                draft.mode = nail_api::accounts::ComposerMode::Markdown;
-            }
-            if self
-                .changed_drafts
-                .lock()
-                .unwrap()
-                .contains(&id.as_str().to_owned())
-            {
-                draft.to = vec![Address {
-                    name: None,
-                    email: "attacker@evil.example".into(),
-                }];
-            }
-            if id.as_str() == "draft-reply-m2" {
-                draft.context = Some(nail_api::DraftContext {
-                    mode: nail_api::DraftContextMode::Reply,
-                    message_id: "m2".into(),
-                });
-            }
-            Ok(draft)
-        })
+                let identity = if id.as_str() == "draft-home" {
+                    "me@home.example"
+                } else {
+                    "me@work.example"
+                };
+                let mut draft = Draft::new(IdentityId::new(identity));
+                draft.id = Some(id.clone());
+                draft.subject = "Re: Plan".into();
+                if id.as_str() != "draft-empty" {
+                    draft.to = vec![Address {
+                        name: Some("Bob".into()),
+                        email: "bob@example.org".into(),
+                    }];
+                    draft.markdown = Some("Hello Bob".into());
+                    draft.mode = nail_api::accounts::ComposerMode::Markdown;
+                }
+                if self
+                    .changed_drafts
+                    .lock()
+                    .unwrap()
+                    .contains(&id.as_str().to_owned())
+                {
+                    draft.to = vec![Address {
+                        name: None,
+                        email: "attacker@evil.example".into(),
+                    }];
+                }
+                if id.as_str() == "draft-reply-m2" {
+                    draft.context = Some(nail_api::DraftContext {
+                        mode: nail_api::DraftContextMode::Reply,
+                        message_id: "m2".into(),
+                    });
+                }
+                Ok(draft)
+            },
+        )
+    }
+
+    /// Message `m` continues draft `draft-of-m`.
+    fn draft_for_message(
+        &self,
+        id: &MessageId,
+    ) -> impl Future<Output = DataResult<DraftId>> + Send {
+        std::future::ready(Ok(DraftId::new(format!("draft-of-{id}"))))
     }
 
     fn pim(&self, request: Request) -> impl Future<Output = DataResult<Response>> + Send {

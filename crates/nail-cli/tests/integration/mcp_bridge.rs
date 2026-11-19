@@ -127,6 +127,9 @@ impl McpData for Empty {
     fn draft(&self, _: &DraftId) -> impl Future<Output = DataResult<Draft>> + Send {
         std::future::ready(none())
     }
+    fn draft_for_message(&self, _: &MessageId) -> impl Future<Output = DataResult<DraftId>> + Send {
+        std::future::ready(none())
+    }
     fn emit(&self, _: Event) {}
 }
 

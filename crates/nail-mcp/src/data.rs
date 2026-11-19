@@ -159,6 +159,13 @@ pub trait McpData: Send + Sync + 'static {
     /// A saved draft ([`nail_api::Request::GetDraft`]).
     fn draft(&self, id: &DraftId) -> impl Future<Output = DataResult<Draft>> + Send;
 
+    /// The saved draft a message of a Drafts folder continues
+    /// ([`nail_api::Request::EditDraftMessage`]): Nail's own server copy
+    /// answers with its draft, a draft of another client is imported into
+    /// a new one.
+    fn draft_for_message(&self, id: &MessageId)
+    -> impl Future<Output = DataResult<DraftId>> + Send;
+
     /// Answers a calendar, contact or task read (M3a: `ListCalendars`,
     /// `ListEventInstances`, `GetEvent`, `FindFreeTime`, `ListAddressBooks`,
     /// `ListContacts`, `GetContact`, `SearchContacts`, `ListTasks`). The

@@ -93,7 +93,8 @@ composer applies and saves the edit.
    tool; the retry applies the answer and waits). Answers: *accept* with
    `approve` (default true) approves kinds `ConfirmationSource::Elicitation`
    may approve, `approve: false` and *decline* deny anything, *cancel* /
-   errors leave the decision to Nail. Destructive kinds get a form without
+   errors leave the decision to Nail (amended by ADR 0217: *decline* no
+   longer denies). Destructive kinds get a form without
    fields saying they are approved in Nail only; accepting it changes
    nothing. Nail's own confirmation is always raised; the first decision
    wins (the store decides each confirmation once).
