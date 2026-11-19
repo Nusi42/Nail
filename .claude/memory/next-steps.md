@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.4 released 2026-11-05: WebKit links fix; macOS check by the maintainer pending)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.5 released 2026-11-19: continue drafts, dependency advisories; flaky tests open)"
 metadata:
   type: project
 ---
@@ -31,12 +31,20 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
-**Continue a draft from the Drafts folder (2026-11-18, on `work-1`, not yet in `main`):** fix commit "fix(mail):
-continue a saved draft from the Drafts folder" (`EditDraftMessage`, `mail.continue-draft`, Outbox favorite also
-while drafts exist); full suite green. A test installer is built from it in `nail-work-2` and copied to the
-installer folder. Waiting for the maintainer to try it; then fast-forward `main` and publish. Open edge cases (in
-the commit's report): non-IMAP draft without Message-ID keeps its original; reply-all drafts from other clients
-come back as plain replies; Markdown drafts from other clients import as HTML.
+**Released 0.8.5 (2026-11-19):** GitHub release `v0.8.5` (Latest), `main` published; tried by the maintainer before
+publishing. Content: continuing a draft from the Drafts folder (`EditDraftMessage`, `mail.continue-draft`, Outbox
+favorite also while drafts exist) and the dependency advisories of ADR 0216 (ammonia, lettre, rmcp updated; chrono /
+chrono-tz accepted as unmaintained in `deny.toml`). Dependabot alert #39 (minimatch, dev-only linters) dismissed as
+tolerable risk. The visual composer screen now discards its draft (autosave made later screens order-dependent).
+Open edge cases of the draft import: non-IMAP draft without Message-ID keeps its original; reply-all drafts from
+other clients come back as plain replies; Markdown drafts from other clients import as HTML.
+
+**Open: flaky tests seen in the 0.8.5 release runs** (each passed alone 3–5 times; every prepare run takes about an
+hour, so they cost real time): `nail-core` `exchange::shared_mailboxes_sending_and_free_busy` (a removed shared
+mailbox's Inbox still exists right after `RemoveExchangeMailbox`: likely a race with a running sync that recreates
+the folders, possibly a real core bug: check first); `nail-bench` `a_tiny_run_measures_every_rust_metric`
+(cold start 4651 ms over the 4500 ms budget under load); e2e `m2c` right-click menu (list never loaded) and
+`desktop-health` crashed-page reload (60 s timeout).
 
 **Idle work folders (2026-11-08, published):** a folder with nothing running and nothing waiting is
 cleaned with `node scripts/work-folders.mjs clean <n>` (branch to `main`, build output and `node_modules` removed;
@@ -184,6 +192,3 @@ starts in the background, record it here too (workflow / agent, folder, branch),
 branch, and the `docs/plan.md` status lines, then continue with the first unfinished step.
 
 Related: [[work-folders]], [[owner-installer-per-wave]], [[owner-ui-decisions]], [[backlog-real-account-tests]], [[commit-messages]], [[no-private-data-in-git]]
-
-**Open (2026-11-08):** GitHub reports Dependabot alert #39 (moderate) on `main`; `release:prepare` stops while alerts
-are open, so look at it before the next release.
