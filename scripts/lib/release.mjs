@@ -67,8 +67,8 @@ export function releasesCopyDir({ root, master, env = process.env }) {
   const sources = [
     [process.cwd(), env],
     [root, localSettings(root, {})],
-    ...(master === undefined ? [] : [[master, localSettings(master, {})]]),
   ];
+  if (master !== undefined) sources.push([master, localSettings(master, {})]);
   for (const [base, settings] of sources) {
     const value = settings[RELEASES_DIR_SETTING]?.trim();
     if (value) return path.resolve(base, value);
