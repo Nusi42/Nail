@@ -9,7 +9,7 @@ Rule: the master checkout `<master>` is the master directory; work folders live 
 The master must not be used for debugging or development, at most for release builds. We chose not at
 all: releases are also built in a work folder on a `main` commit. Since ADR 0199 the master is marked by
 `NAIL_CHECKOUT_ROLE=master` in its gitignored `.env.local`, not detected by its path, and the concrete paths, the
-public remote and the installer folder live only in the untracked `CLAUDE.local.md` (requirement: everyone who clones the
+public remote and the releases folder live only in the untracked `CLAUDE.local.md` (requirement: everyone who clones the
 repository must be able to set it up on their own).
 
 **Why:** a synced master should hold only sources and Git objects, not `node_modules`, `target/` or test output.

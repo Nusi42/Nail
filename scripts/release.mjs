@@ -14,7 +14,9 @@
  * zip with update signatures, writes the update manifest `latest.json` (every
  * signature checked against packaging/updater/release.pub) and the GitHub
  * release's text, then commits `chore(release): release X.Y.Z` and writes
- * `<build dir>/release/X.Y.Z/release.json`. The update key comes from
+ * `<build dir>/release/X.Y.Z/release.json`; with `NAIL_RELEASES_DIR` set
+ * (environment, `.env.local` or the master's `.env.local`) it copies that
+ * folder to `<NAIL_RELEASES_DIR>/X.Y.Z/`. The update key comes from
  * TAURI_SIGNING_PRIVATE_KEY_PATH (or _KEY) and _PASSWORD, set for this
  * command only; only the installer build sees it. --dry-run builds with
  * the given key (or --dev-updater-key) and commits nothing: the version
@@ -31,7 +33,7 @@
  * Every step checks first, so a re-run after a failure goes on where it
  * stopped. Needs the GitHub CLI (`gh auth login` once).
  */
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { forEachArg } from "./lib/args.mjs";
@@ -56,6 +58,7 @@ import {
   releaseSection,
   releaseTag,
   releasedChangelog,
+  releasesCopyDir,
   updateBase,
   updateNotes,
 } from "./lib/release.mjs";
@@ -272,6 +275,13 @@ function prepare(argv) {
     record.commit = git(["rev-parse", "HEAD"]);
     writeFileSync(path.join(dir, RECORD_FILE), `${JSON.stringify(record, null, 2)}\n`);
     console.log(`\nRelease ${version} committed (${record.commit.slice(0, 8)}); files in ${dir}.`);
+    const copies = releasesCopyDir({ root: repoRoot, master: masterOf(repoRoot) });
+    if (copies !== undefined) {
+      const copy = path.join(copies, version);
+      rmSync(copy, { recursive: true, force: true });
+      cpSync(dir, copy, { recursive: true });
+      console.log(`Copied to ${copy}.`);
+    }
     console.log("Try the installer, then publish it with: npm run release:publish");
   } catch (error) {
     if (!git(["log", "-1", "--format=%s"]).endsWith(`release ${version}`)) restore();

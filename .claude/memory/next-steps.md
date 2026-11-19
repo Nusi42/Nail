@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.6 prepared 2026-11-19: MCP drafts by message id, declined forms; waits for the maintainer to try and publish)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.6 released 2026-11-19: MCP drafts by message id, declined forms; release copies via NAIL_RELEASES_DIR)"
 metadata:
   type: project
 ---
@@ -18,7 +18,7 @@ bypass. Actions is switched off. Pull requests are verified locally before mergi
 requests"). The remote and the push command are in `CLAUDE.local.md`.
 
 **Waiting for the maintainer:** a lawyer's review of the contributor license agreement before any commercial
-license is sold. The installer for 0.8.0 (the newest one in the installer folder predates the license, version and
+license is sold. The installer for 0.8.0 (the newest one in the releases folder predates the license, version and
 wording changes) is built on request.
 
 **History (ADRs 0192, 0198, 0200):** rewritten and reworded before the first push; commit ids in older notes and
@@ -27,15 +27,16 @@ pushed): the maintainer may run `git reflog expire --expire=now --all && git gc 
 purge OneDrive's version history of the master's `.git`. Personal paths, the remote, the identity, the installer
 folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0199).
 
-**Waiting for the maintainer to try** (newest installer in `<installer folder>\`, payload smoke passed): HTML mail
+**Waiting for the maintainer to try** (newest installer in `<releases folder>\`, payload smoke passed): HTML mail
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
-**0.8.6 (2026-11-19, prepared, not published):** fixes a user report against 0.8.5 (ADR 0217): MCP `update_draft` /
+**Released 0.8.6 (2026-11-19):** fixes a user report against 0.8.5 (ADR 0217): MCP `update_draft` /
 `send_message` take a draft's message id; an elicitation *decline* (clients that cannot show the form send it at once)
 no longer denies sends and deletes, Nail's confirmation decides. Built with `release:prepare` in the lead folder
 (output `.nail-build/release/0.8.6/`, commit `chore(release): release 0.8.6`; re-run with `--skip-checks` after the
-flaky e2e test below). Waits for the maintainer to try the installer, then `npm run release:publish`.
+flaky e2e test below). Published as GitHub release `v0.8.6` (Latest). Release copies now go to the
+releases folder by `release:prepare` itself (`NAIL_RELEASES_DIR`, ADR 0218); the old installer folder was moved there.
 
 **Released 0.8.5 (2026-11-19):** GitHub release `v0.8.5` (Latest), `main` published; tried by the maintainer before
 publishing. Content: continuing a draft from the Drafts folder (`EditDraftMessage`, `mail.continue-draft`, Outbox
@@ -161,7 +162,7 @@ run the full local verification (`docs/dev-setup.md` "Verification (no hosted CI
 **Next steps in order:**
 
 0. **Waiting for the maintainer:** results of the real-account test with installer
-   `<installer folder>\Nail_1.0.0-rc.1_2026-10-09_d8491d45-setup.exe` (INBOX stopped at 150 before the
+   `<releases folder>\Nail_1.0.0-rc.1_2026-10-09_d8491d45-setup.exe` (INBOX stopped at 150 before the
    resilient sync, ADR 0191). If it still fails, ask for "Show details → Copy details" and the connection log lines
    (Warnings and errors) before the error, then fix it in a new package. Nothing is running in the background.
 1. The maintainer tests the newest installer: Check for new mail (button, F5 / Ctrl+R), right-click menus (folder pane,

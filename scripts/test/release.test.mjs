@@ -1,6 +1,7 @@
 // Tests of scripts/lib/release.mjs. Run: node --test scripts/test/
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -9,6 +10,7 @@ import {
   ADVISORY_CHECKS,
   CHANGELOG,
   RELEASE_NOTES,
+  RELEASES_DIR_SETTING,
   RELEASE_PUBKEY,
   absoluteLinks,
   dependabotAlertsArgs,
@@ -22,6 +24,7 @@ import {
   releasePage,
   releaseSection,
   releasedChangelog,
+  releasesCopyDir,
   unwrapped,
   updateBase,
   updateManifestUrl,
@@ -256,4 +259,35 @@ test("open Dependabot alerts are listed one per line", () => {
     "#10 high rust zip (Cargo.lock, unknown): GHSA-xxxx-yyyy-zzzz Bad",
   ]);
   assert.throws(() => openAlerts("not json"));
+});
+
+test("releases are copied where the environment, the checkout or its master says", () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "nail-releases-"));
+  try {
+    const work = path.join(tmp, "work");
+    const master = path.join(tmp, "master");
+    const env = (/** @type {string} */ dir, /** @type {string} */ text) => {
+      writeFileSync(path.join(dir, ".env.local"), text);
+    };
+    for (const dir of [work, master]) mkdirSync(dir);
+    // Nothing set: no copy.
+    assert.equal(releasesCopyDir({ root: work, master, env: {} }), undefined);
+    // The master's setting, relative to the master.
+    env(master, `NAIL_CHECKOUT_ROLE=master\n${RELEASES_DIR_SETTING}=releases\n`);
+    assert.equal(releasesCopyDir({ root: work, master, env: {} }), path.join(master, "releases"));
+    assert.equal(releasesCopyDir({ root: work, env: {} }), undefined, "no master, no copy");
+    // The work folder's own setting wins, the environment over both.
+    env(work, `${RELEASES_DIR_SETTING}=out\n`);
+    assert.equal(releasesCopyDir({ root: work, master, env: {} }), path.join(work, "out"));
+    const absolute = path.join(tmp, "elsewhere");
+    assert.equal(
+      releasesCopyDir({ root: work, master, env: { [RELEASES_DIR_SETTING]: absolute } }),
+      absolute,
+    );
+    // A blank value counts as unset.
+    env(work, `${RELEASES_DIR_SETTING}=  \n`);
+    assert.equal(releasesCopyDir({ root: work, master, env: {} }), path.join(master, "releases"));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 });

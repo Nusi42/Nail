@@ -107,7 +107,9 @@ commands in the lead's work folder, on a clean checkout of its branch:
    newest release; there are no update channels), writes
    `latest.json` (every signature checked against
    `packaging/updater/release.pub`) and the release text, and commits
-   `chore(release): release X.Y.Z`. Output: `.nail-build/release/X.Y.Z/`.
+   `chore(release): release X.Y.Z`. Output: `.nail-build/release/X.Y.Z/`;
+   with `NAIL_RELEASES_DIR` set (`docs/dev-setup.md` "Work folders") also
+   copied to `<NAIL_RELEASES_DIR>/X.Y.Z/` (ADR 0218).
    `--dry-run` does all of it without committing (the version files are
    restored); with `--dev-updater-key` it needs no release key.
 3. Install the built installer and try it.

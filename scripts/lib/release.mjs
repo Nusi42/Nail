@@ -14,8 +14,11 @@
  *   `<repository>/releases/latest/download/latest.json` (ADR 0210; no
  *   channels). A pre-release is never marked Latest, so it is never offered.
  */
+import path from "node:path";
+
 import { parseJson } from "./json.mjs";
 import { MANIFEST_FILE, parseVersion } from "./update-manifest.mjs";
+import { localSettings } from "./work-folder.mjs";
 
 /** The user-facing release notes. */
 export const RELEASE_NOTES = "userDocs/en/release-notes.md";
@@ -41,6 +44,37 @@ export const RECORD_FILE = "release.json";
  * @property {string} notes the GitHub release's text (Markdown file)
  * @property {string} manifest the release's `latest.json` (an asset of it too)
  */
+
+/**
+ * The setting naming the folder where `release:prepare` keeps a copy of
+ * each committed release (`<folder>/X.Y.Z/`, the files of the build's
+ * release folder).
+ */
+export const RELEASES_DIR_SETTING = "NAIL_RELEASES_DIR";
+
+/**
+ * Where `release:prepare` copies a release, `undefined` for nowhere. The
+ * setting comes from the environment, the checkout's `.env.local` or, in a
+ * work folder, its master's `.env.local` (the first that has it); a
+ * relative path is relative to the checkout whose file names it (the
+ * current directory for the environment).
+ *
+ * @param {{ root: string, master?: string, env?: NodeJS.ProcessEnv }} where
+ * @returns {string | undefined}
+ */
+export function releasesCopyDir({ root, master, env = process.env }) {
+  /** @type {[string, Record<string, string | undefined>][]} */
+  const sources = [
+    [process.cwd(), env],
+    [root, localSettings(root, {})],
+    ...(master === undefined ? [] : [[master, localSettings(master, {})]]),
+  ];
+  for (const [base, settings] of sources) {
+    const value = settings[RELEASES_DIR_SETTING]?.trim();
+    if (value) return path.resolve(base, value);
+  }
+  return undefined;
+}
 
 /** @param {string} version */
 export function releaseTag(version) {

@@ -41,6 +41,7 @@ Settings come from the environment or from a checkout's gitignored
 | `NAIL_CHECKOUT_ROLE` | (none) | `master` marks the master checkout |
 | `NAIL_WORK_FOLDER_PREFIX` | `nail-work-` | work folder `n` is `<prefix><n>`, next to the folder that creates it |
 | `NAIL_WORK_BRANCH_PREFIX` | `work-` | its branch is `<prefix><n>` |
+| `NAIL_RELEASES_DIR` | (none) | `release:prepare` copies each committed release to `<dir>/X.Y.Z/`; read from the environment, the checkout's or its master's `.env.local`, relative to that checkout (`releases` = the gitignored `/releases/`, ADR 0218) |
 
 ```sh
 node scripts/work-folders.mjs guard-master    # once, from a work folder: mark origin as the master, Cargo refuses there, its hooks on
