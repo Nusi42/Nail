@@ -246,6 +246,13 @@ ${p("search-bar.field")} { display: flex; align-items: center; gap: ${T.sm}; min
 ${p("search-bar.field")}:focus-within { outline: 2px solid ${T.focus}; outline-offset: 0; border-color: ${T.accent}; }
 ${p("search-bar.input")} { flex: 1 1 auto; min-width: 0; border: none; outline: none; font-size: ${T.body}; color: ${T.fg}; background: transparent; }
 ${p("search-bar.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
+${p("search-bar.field")}[data-state~="invalid"] { border-color: ${T.danger}; }
+${p("search-bar.error-indicator")} { flex: 0 0 auto; display: inline-flex; color: ${T.danger}; }
+${p("search-bar.error-indicator.icon")} { width: ${T.icon}; height: ${T.icon}; }
+${p("search-bar")} { position: relative; }
+${p("search-bar.overlay")} { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; pointer-events: none; }
+${p("search-bar.error")} { padding: ${T.sm} ${T.md}; border: 1px solid color-mix(in srgb, ${T.danger} 45%, ${T.border}); border-radius: ${T.rMd}; background-color: ${T.bg}; box-shadow: ${T.overlay}; }
+${p("search-bar.error.note")} { color: ${T.muted}; }
 ${p("search-bar.shortcut")} {
   flex: 0 0 auto; padding: 0 ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.rSm};
   font-family: ${T.fontMono}; font-size: ${T.label}; line-height: calc(${T.label} + ${T.xs}); color: ${T.muted}; background-color: ${T.bg};
@@ -548,11 +555,13 @@ ${p("folder-tree.favorite")}[data-state~="selected"], ${p("folder-tree.smart-fol
 ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.icon")}, ${p("folder-tree.smart-folder")}[data-state~="selected"] ${p("folder-tree.item.icon")} { color: ${T.accent}; }
 ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.unread-count")} { color: ${T.accent}; font-weight: ${T.semibold}; }
 ${p("status-bar")} { display: flex; align-items: center; gap: ${T.md}; min-height: calc(${T.control} - ${T.xs}); padding: 0 ${T.pane}; font-size: ${T.small}; color: ${T.muted}; border-top: 1px solid ${T.border}; background-color: ${T.subtle}; }
-${p("search-bar")} { padding: ${T.md} ${T.pane} ${T.sm}; }`;
+${p("search-bar")} { padding: ${T.md} ${T.pane} ${T.sm}; }
+${p("search-bar")} > ${p("search-bar.overlay")} { inset-inline: ${T.pane}; top: calc(100% - ${T.sm}); }`;
 
 /** The message list header (M5b): search, title with counts, filter chips. */
 const LIST_HEADER = `${p("list-header")} { display: grid; gap: ${T.md}; padding: ${T.md} ${T.pane} ${T.sm}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
 ${p("list-header")} ${p("search-bar")} { padding: 0; }
+${p("list-header")} ${p("search-bar")} > ${p("search-bar.overlay")} { inset-inline: 0; top: 100%; }
 ${p("list-header.heading")} { display: flex; align-items: baseline; gap: ${T.sm}; min-width: 0; }
 ${p("list-header.title")} { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("list-header.counts")} { flex: 0 0 auto; font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; white-space: nowrap; }

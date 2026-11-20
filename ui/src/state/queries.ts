@@ -2,7 +2,7 @@
  * Server data via TanStack Query. Every query goes through the `NailClient`.
  */
 import { createContext, useContext } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, type QueryClient } from "@tanstack/react-query";
 import { NailError, type NailClient } from "../api/client";
 import type {
   AccountId,
@@ -297,15 +297,31 @@ export function nextSearchOffset(last: SearchPage): number | undefined {
   return last.error === null && local > 0 && next < last.total - serverOnly ? next : undefined;
 }
 
+/**
+ * Whether the results of the search keyed `previous` may stay on screen while
+ * the search keyed `next` loads (live search, ADR 0219): only when both have
+ * the same scope and page size, so a typed refinement keeps the list in place
+ * but another account or folder never shows foreign hits. Only the newest
+ * key's own answer replaces them: an older search's late answer lands in its
+ * own cache entry and is never shown.
+ */
+export function keepsSearchResults(
+  previous: readonly unknown[] | undefined,
+  next: readonly unknown[],
+): boolean {
+  return previous?.slice(2).every((part, i) => part === next[i + 2]) ?? false;
+}
+
 export function useSearch(scope: SearchScope | null, pageSize: number) {
   const client = useClient();
+  const key = queryKeys.search(
+    scope?.text ?? "",
+    scope?.accountId ?? null,
+    scope?.folderId ?? null,
+    pageSize,
+  );
   return useInfiniteQuery({
-    queryKey: queryKeys.search(
-      scope?.text ?? "",
-      scope?.accountId ?? null,
-      scope?.folderId ?? null,
-      pageSize,
-    ),
+    queryKey: key,
     queryFn: async ({ pageParam }) => {
       const response = await client.call({
         type: "Search",
@@ -330,15 +346,20 @@ export function useSearch(scope: SearchScope | null, pageSize: number) {
     initialPageParam: 0,
     getNextPageParam: nextSearchOffset,
     enabled: scope !== null && scope.text.trim() !== "",
+    placeholderData: (previous, previousQuery) =>
+      keepsSearchResults(previousQuery?.queryKey, key) ? previous : undefined,
   });
 }
 
-/** Live syntax check of a query (`null` = valid or not checked). */
-export function useCheckQuery(text: string) {
-  const client = useClient();
-  return useQuery({
+/**
+ * The syntax check of a query (`null` = valid, or a core without
+ * `CheckQuery`): one definition for the live check while typing and the check
+ * before a live search runs (`checkQuery`), sharing one cache entry per text.
+ */
+function checkQueryOptions(client: NailClient, text: string) {
+  return {
     queryKey: queryKeys.checkQuery(text),
-    queryFn: async () => {
+    queryFn: async (): Promise<SearchError | null> => {
       try {
         return (await client.request({ type: "CheckQuery", text }, "QueryChecked")).error;
       } catch (error) {
@@ -346,9 +367,23 @@ export function useCheckQuery(text: string) {
         throw error;
       }
     },
-    enabled: text.trim() !== "",
     staleTime: Number.POSITIVE_INFINITY,
-  });
+  };
+}
+
+/** Live syntax check of a query (`null` = valid or not checked). */
+export function useCheckQuery(text: string) {
+  const client = useClient();
+  return useQuery({ ...checkQueryOptions(client, text), enabled: text.trim() !== "" });
+}
+
+/** Checks a query once (from the cache when it was checked before). */
+export function checkQuery(
+  queryClient: QueryClient,
+  client: NailClient,
+  text: string,
+): Promise<SearchError | null> {
+  return queryClient.query(checkQueryOptions(client, text));
 }
 
 /** Saved drafts (not in the outbox), fetched afresh whenever shown. */

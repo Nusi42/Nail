@@ -58,7 +58,13 @@ describe("search-bar", () => {
     const { container } = renderNode(widget("search-bar"), env);
     const input = screen.getByRole("searchbox");
     await user.type(input, "from:ada colour:red");
-    const alert = await screen.findByRole("alert");
+    await waitFor(() => {
+      expect(input).toHaveAttribute("aria-invalid", "true");
+    });
+    // The explanation overlays the content under the field (ADR 0219).
+    const alert = must(document.getElementById(must(input.getAttribute("aria-describedby"))));
+    expect(alert).toHaveAttribute("data-part", "search-bar.error");
+    expect(alert).toBeVisible();
     expect(alert).toHaveTextContent("Unknown search field.");
     expect(alert).toHaveTextContent("At character 10");
     expect(container.querySelector('[data-part="search-bar.error.mark"]')).toHaveTextContent(
@@ -76,8 +82,9 @@ describe("search-bar", () => {
     await user.clear(input);
     await user.type(input, "from:ada");
     await waitFor(() => {
-      expect(screen.queryByRole("alert")).toBeNull();
+      expect(container.querySelector('[data-part="search-bar.error"]')).toBeNull();
     });
+    expect(input).not.toHaveAttribute("aria-invalid");
   });
 
   it("starts a search scoped to the active account and clears it", async () => {
@@ -88,6 +95,9 @@ describe("search-bar", () => {
     renderNode(widget("search-bar", { options: { hints: false } }), env);
     const input = screen.getByRole("searchbox");
     await user.type(input, "is:flagged{Enter}");
+    await waitFor(() => {
+      expect(env.store.getState().search).not.toBeNull();
+    });
     expect(env.store.getState().search).toEqual({
       text: "is:flagged",
       accountId: "acc-work",

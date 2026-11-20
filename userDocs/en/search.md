@@ -1,8 +1,15 @@
 # Searching
 
-Type in the search bar (or press `/` to jump there) and press Enter. The
-message list shows the results, newest first; the line above them says how
-many there are. `Esc` or the × button ends the search.
+Type in the search bar (or press `/` to jump there). Nail searches as you
+type: once you pause for a moment (about half a second), the message list
+shows the results, newest first; the line above them says how many there
+are. Press Enter to search at once without waiting. `Esc`, the × button or
+emptying the field ends the search.
+
+While you keep typing, the list keeps the previous results until the new
+ones arrive, so it does not flicker; results of a query you have already
+typed past are never shown. A query that has not changed (only a trailing
+space added, Enter pressed again) is not searched again.
 
 By default Nail searches the selected account — with "All accounts"
 selected, every account. The `scope` option of the
@@ -74,8 +81,12 @@ While the search bar has focus, it lists the fields you can use; the list
 narrows as you type (`is` shows the `is:` choices). Click a hint to insert
 it.
 
-If a query has a mistake, the search bar says what is wrong, at which
-character, and underlines the spot:
+If a query has a mistake, Nail does not search it: the list keeps showing
+the results of the last query that worked, and the search bar turns red and
+shows a small warning sign. Point at the search bar, or keep it focused, to
+see what is wrong, at which character, with the spot underlined; the
+explanation opens over the list, so the list never jumps. Screen readers
+announce the field as invalid and read the explanation as its description.
 
 | Message | Example |
 | --- | --- |

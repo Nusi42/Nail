@@ -372,7 +372,9 @@ describe("list header (M5b)", () => {
     fireEvent.change(input, { target: { value: "grace" } });
     expect(region.querySelector('[data-part="search-bar.shortcut"]')).toBeNull();
     fireEvent.submit(must(input.closest<HTMLElement>("form")));
-    expect(within(region).getByRole("heading", { name: "Search results" })).toBeInTheDocument();
+    expect(
+      await within(region).findByRole("heading", { name: "Search results" }),
+    ).toBeInTheDocument();
     await settleQueries(env);
   });
 

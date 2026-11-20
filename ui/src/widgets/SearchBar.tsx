@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type SubmitEvent } from "react";
 import type { SearchError } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { optionBool, optionString, type WidgetProps } from "../layout/widgetRegistry";
@@ -6,6 +6,7 @@ import { useCheckQuery } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { Icon } from "./Icon";
 import { useDebounced } from "../state/debounce";
+import { useLiveSearch } from "../features/search/liveSearch";
 
 /** Fields of the query language offered as hints, with their Fluent description ids. */
 export const QUERY_HINTS = [
@@ -65,13 +66,31 @@ export function applyHint(text: string, hint: string): string {
 /** Delay before the query is checked while typing. */
 export const CHECK_DELAY_MS = 250;
 
-function ErrorView({ id, text, error }: { id: string; text: string; error: SearchError }) {
+/**
+ * The explanation of a query mistake: an overlay under the field (ADR 0219),
+ * shown while the pointer is over the search form or focus is in it, and
+ * always the field's `aria-describedby`. `kept` is the text whose results
+ * the list still shows.
+ */
+function ErrorView({
+  id,
+  text,
+  error,
+  open,
+  kept,
+}: {
+  id: string;
+  text: string;
+  error: SearchError;
+  open: boolean;
+  kept: string | null;
+}) {
   const t = useT();
   const start = Math.max(0, Math.min(error.start, text.length));
   const end = Math.max(start, Math.min(error.end, text.length));
   const marked = text.slice(start, end);
   return (
-    <div data-part="search-bar.error" id={id} role="alert" data-kind={error.kind}>
+    <div data-part="search-bar.error" id={id} role="tooltip" data-kind={error.kind} hidden={!open}>
       <span data-part="search-bar.error.message">{t(`search-error-${error.kind}`)}</span>
       <span data-part="search-bar.error.position">
         {t("search-error-position", { column: start + 1 })}
@@ -82,6 +101,9 @@ function ErrorView({ id, text, error }: { id: string; text: string; error: Searc
           {marked}
         </mark>
         <span data-part="search-bar.error.after">{text.slice(end)}</span>
+      </span>
+      <span data-part="search-bar.error.note">
+        {kept === null ? t("search-live-not-run") : t("search-live-kept", { query: kept })}
       </span>
     </div>
   );
@@ -145,17 +167,27 @@ export function SearchForm({
   const folderId = useUi((s) => s.activeFolderId);
   const focusRequest = useUi((s) => s.focusRequest);
   const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
+  const searchScope = useMemo(
+    () => ({
+      accountId: scope === "all" ? null : accountId,
+      folderId: scope === "folder" ? folderId : null,
+    }),
+    [scope, accountId, folderId],
+  );
+  const live = useLiveSearch(text, searchScope);
   const debounced = useDebounced(text, CHECK_DELAY_MS);
   const check = useCheckQuery(liveCheck ? debounced : "");
-  // The core's verdict on the submitted query wins; else the live check of
-  // what is typed (only once it has settled, to avoid flicker).
+  // The core's verdict on the searched query wins; then a committed text the
+  // live search found invalid; else the live check of what is typed (only
+  // once it has settled, to avoid flicker).
+  const typed = text.trim();
   const error =
-    search?.error && search.text === text
+    search?.error && search.text === typed
       ? search.error
-      : debounced === text && text.trim() !== ""
-        ? (check.data ?? null)
-        : null;
+      : (live.rejected?.error ??
+        (debounced === text && typed !== "" ? (check.data ?? null) : null));
 
   useEffect(() => {
     if (focusRequest?.target === "search") {
@@ -166,19 +198,10 @@ export function SearchForm({
 
   const hints = showHints && focused ? hintsFor(text) : [];
 
+  // Enter searches at once (live search, ADR 0219).
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    const query = text.trim();
-    if (query === "") {
-      setSearch(null);
-      return;
-    }
-    setSearch({
-      text: query,
-      accountId: scope === "all" ? null : accountId,
-      folderId: scope === "folder" ? folderId : null,
-      error: null,
-    });
+    live.flush();
   };
 
   const errorId = `${ids}-error`;
@@ -192,6 +215,12 @@ export function SearchForm({
       role="search"
       aria-label={formLabel}
       onSubmit={submit}
+      onMouseEnter={() => {
+        setHovered(true);
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+      }}
       // Hints hide only when focus leaves the whole form, so Tab reaches them
       // (M5b review: hiding on the input's blur dropped focus to <body>).
       onFocus={() => {
@@ -202,7 +231,7 @@ export function SearchForm({
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) setFocused(false);
       }}
     >
-      <div data-part="search-bar.field">
+      <div data-part="search-bar.field" data-state={error ? "invalid" : undefined}>
         <Icon name="search" part="search-bar.icon" />
         <input
           ref={inputRef}
@@ -222,6 +251,11 @@ export function SearchForm({
             setText(event.target.value);
           }}
         />
+        {error && (
+          <span data-part="search-bar.error-indicator" data-kind={error.kind} aria-hidden="true">
+            <Icon name="circle-alert" part="search-bar.error-indicator.icon" />
+          </span>
+        )}
         {shortcut !== null && text === "" && !search && (
           <kbd data-part="search-bar.shortcut" aria-hidden="true">
             {shortcut}
@@ -242,7 +276,18 @@ export function SearchForm({
           </button>
         )}
       </div>
-      {error && <ErrorView id={errorId} text={text} error={error} />}
+      {error && (
+        // The mistake overlays the content under the field (ADR 0220).
+        <div data-part="search-bar.overlay">
+          <ErrorView
+            id={errorId}
+            text={text}
+            error={error}
+            open={focused || hovered}
+            kept={search && search.text !== typed ? search.text : null}
+          />
+        </div>
+      )}
       {hints.length > 0 && (
         <ul data-part="search-bar.hints" id={hintsId} aria-label={t("search-bar-hints")}>
           {hints.map((hint) => (
