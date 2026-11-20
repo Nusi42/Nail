@@ -819,6 +819,16 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
             message_ids: vec![],
             folder_id: None,
         },
+        Request::RunRules {
+            rule_ids: vec![nail_api::RuleId::from("any")],
+            message_ids: vec![message.id.clone()],
+            folder_id: None,
+        },
+        Request::RunRules {
+            rule_ids: vec![nail_api::RuleId::from("any")],
+            message_ids: vec![],
+            folder_id: Some(message.folder_id.clone()),
+        },
         // The folder belongs to an account outside the grant.
         Request::ListMessages {
             folder_id: message.folder_id.clone(),

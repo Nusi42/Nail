@@ -611,6 +611,24 @@ pub enum Request {
         #[serde(default)]
         folder_id: Option<FolderId>,
     },
+    /// Run several saved rules now on one target, one after another in
+    /// file order (the order of `rules.kdl`, not of `rule_ids`). Each rule
+    /// is its own [`RuleRun`] (undone on its own with
+    /// [`Request::UndoRuleRun`]); a `stop` action ends only its own rule.
+    /// Every id is checked first: an unknown or broken rule runs nothing.
+    /// Answered with [`Response::RulesRan`]; progress arrives as
+    /// [`Event::RuleRunFinished`] (R1, ADR 0219).
+    RunRules {
+        /// The rules (at least one; duplicates count once).
+        rule_ids: Vec<RuleId>,
+        /// Run on these messages; empty = on `folder_id` or each rule's
+        /// scope.
+        #[serde(default)]
+        message_ids: Vec<MessageId>,
+        /// Run on this folder; `null` = each rule's scope.
+        #[serde(default)]
+        folder_id: Option<FolderId>,
+    },
     /// Recent rule runs, newest first. Answered with [`Response::RuleRuns`].
     ListRuleRuns {
         /// Runs of this rule; `null` = of all rules.
@@ -3476,6 +3494,11 @@ pub enum Response {
     RuleRan {
         /// The run (usually still `running`).
         run: Box<RuleRun>,
+    },
+    /// Answer to [`Request::RunRules`].
+    RulesRan {
+        /// One run per rule, in file order.
+        runs: Vec<RuleRun>,
     },
     /// Answer to [`Request::ListRuleRuns`].
     RuleRuns {

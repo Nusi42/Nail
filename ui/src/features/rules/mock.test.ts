@@ -2,6 +2,7 @@ import type { Event as NailEvent, Rule } from "../../api/generated";
 import { createEnv } from "../../test/harness";
 import { newRule } from "./model";
 import { must } from "../../test/must";
+import { runRule, runRules, saveRule, undoRuleRun } from "./api";
 
 function setup() {
   const env = createEnv();
@@ -199,6 +200,55 @@ describe("rules mock", () => {
     });
     await client.request({ type: "UndoRuleRun", run_id: ran.id }, "Queued");
     expect(data.messages.find((m) => m.id === target.id)?.folder_id).toBe(inbox?.id);
+  });
+
+  it("runs several rules on a selection in file order, one run each", async () => {
+    const { client, data, events } = setup();
+    data.behaviour.workMs = 0;
+    const flagIt: Rule = {
+      ...rustRule(),
+      name: "Flag it",
+      conditions: { type: "all", conditions: [] },
+      actions: [{ type: "flag", flagged: true }],
+    };
+    const tagIt: Rule = { ...flagIt, name: "Tag it", actions: [{ type: "tag", tag: "seen" }] };
+    const flag = await saveRule(client, flagIt);
+    const tag = await saveRule(client, tagIt);
+    const target = must(data.messages.find((m) => !m.flags.flagged));
+    const selection = { messageIds: [target.id], folderId: null };
+
+    await expect(runRules(client, [], selection)).rejects.toMatchObject({
+      code: "invalid_request",
+    });
+    await expect(runRules(client, [tag.id, "missing"], selection)).rejects.toMatchObject({
+      code: "not_found",
+    });
+    expect(target.tags).not.toContain("seen");
+
+    // Asked in another order and twice: file order, once each.
+    const runs = await runRules(client, [tag.id, flag.id, tag.id], selection);
+    expect(runs.map((r) => r.rule_id)).toEqual([flag.id, tag.id]);
+    expect(runs.every((r) => r.matched === 1)).toBe(true);
+    const now = () => must(data.messages.find((m) => m.id === target.id));
+    expect(now().flags.flagged).toBe(true);
+    expect(now().tags).toContain("seen");
+    await vi.waitFor(() => {
+      expect(events.filter((e) => e.type === "RuleRunFinished")).toHaveLength(2);
+    });
+
+    // Each run undoes on its own.
+    await undoRuleRun(client, must(runs[1]).id);
+    expect(now().tags).not.toContain("seen");
+    expect(now().flags.flagged).toBe(true);
+
+    // One rule on a folder through `RunRule`.
+    const folderRun = await runRule(client, flag.id, {
+      messageIds: [],
+      folderId: target.folder_id,
+    });
+    expect(folderRun.matched).toBe(
+      data.messages.filter((m) => m.folder_id === target.folder_id).length,
+    );
   });
 
   it("converts rules to and from text", async () => {

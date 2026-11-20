@@ -1,16 +1,21 @@
-//! Rules: `create_rule` (a write) and `test_rule` (a dry run, read-only).
+//! Rules: `create_rule` and `run_rules` (writes) and `test_rule` (a dry
+//! run, read-only).
 //!
-//! Rules see every account, so both need a grant for all accounts (as
+//! Rules see every account, so all three need a grant for all accounts (as
 //! `nail://rules` does).
 
 use nail_api::agents::{ActionKind, ActionTargetKind};
 use nail_api::mcp::McpScope;
-use nail_api::mcp::tools::{CreateRuleArgs, TestRuleArgs};
-use nail_api::{ApiError, FolderId, LocalizedMessage, Request, Response, Rule, RuleId};
+use nail_api::mcp::tools::{
+    CreateRuleArgs, MAX_RUN_RULES, RunRulesArgs, TestRuleArgs, rule_action_kind, run_rules_kind,
+};
+use nail_api::{
+    AccountId, ApiError, FolderId, LocalizedMessage, MessageId, Request, Response, Rule, RuleId,
+};
 use rmcp::model::CallToolResult;
 use serde_json::{Value, json};
 
-use super::plan::{Action, Plan, change, invalid, target, unexpected};
+use super::plan::{Action, Plan, accounts, change, count, invalid, not_found, target, unexpected};
 use super::{Ctx, audit};
 use crate::access::{Access, Denial};
 use crate::content::untrusted;
@@ -164,6 +169,134 @@ pub(crate) async fn create_rule<D: McpData>(
             requests: vec![Request::SaveRule {
                 rule: Box::new(rule),
                 position: None,
+            }],
+        },
+    })
+}
+
+/// The saved rules `wanted` names (by id, else by a name only one rule
+/// has), in file order, each once.
+fn chosen_rules(saved: Vec<Rule>, wanted: &[String]) -> Result<Vec<Rule>, Failure> {
+    if wanted.is_empty() || wanted.len() > MAX_RUN_RULES {
+        return Err(invalid(format!("name 1 to {MAX_RUN_RULES} rules")));
+    }
+    let mut ids: Vec<RuleId> = Vec::new();
+    for name in wanted {
+        let id = if let Some(rule) = saved.iter().find(|r| r.id.as_str() == name) {
+            rule.id.clone()
+        } else {
+            let mut named = saved.iter().filter(|r| &r.name == name);
+            match (named.next(), named.next()) {
+                (Some(rule), None) => rule.id.clone(),
+                (Some(_), Some(_)) => {
+                    return Err(invalid(format!(
+                        "several rules are named `{name}`: name it by its id"
+                    )));
+                }
+                (None, _) => return Err(not_found(format!("rule {name}"))),
+            }
+        };
+        ids.push(id);
+    }
+    Ok(saved.into_iter().filter(|r| ids.contains(&r.id)).collect())
+}
+
+/// `run_rules`: runs saved rules now on messages, a folder or each rule's
+/// own messages (R1, ADR 0219). The rules' strongest action decides the
+/// policy, and every kind of action they take needs its scopes.
+pub(crate) async fn run_rules<D: McpData>(
+    ctx: &Ctx<'_, D>,
+    a: RunRulesArgs,
+) -> Result<Plan, Failure> {
+    ctx.access.require(McpScope::Rules)?;
+    ctx.access.require(McpScope::Organize)?;
+    if !ctx.access.all_accounts() {
+        return Err(Denial::AllAccounts.into());
+    }
+    let response = ctx.shared.data.query(Request::ListRules).await?;
+    let Response::Rules { rules: saved } = response else {
+        return Err(unexpected(&response));
+    };
+    let rules = chosen_rules(saved, &a.rules)?;
+    for action in rules.iter().flat_map(|r| &r.actions) {
+        for scope in rule_action_kind(action).mcp_scopes() {
+            ctx.access.require(*scope)?;
+        }
+    }
+    let kind = run_rules_kind(rules.iter().flat_map(|r| &r.actions));
+    let mut targets: Vec<_> = rules
+        .iter()
+        .map(|r| target(ActionTargetKind::Rule, r.id.as_str(), &r.name))
+        .collect();
+    let mut audit_lines = vec![audit(
+        "rules",
+        None,
+        Some(
+            rules
+                .iter()
+                .map(|r| r.id.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
+    )];
+    let mut account_ids: Vec<AccountId> = Vec::new();
+    let mut message_ids: Vec<MessageId> = Vec::new();
+    let mut folder_id = None;
+    let mut sends = 0;
+    if !a.message_ids.is_empty() {
+        let messages = ctx.target_messages(&a.message_ids).await?;
+        targets.extend(
+            messages
+                .iter()
+                .map(|m| target(ActionTargetKind::Message, m.id.as_str(), &m.subject)),
+        );
+        audit_lines.push(audit("messages", None, count(messages.len())));
+        account_ids = accounts(messages.iter().map(|m| &m.account_id));
+        let send_actions = rules
+            .iter()
+            .flat_map(|r| &r.actions)
+            .filter(|action| rule_action_kind(action) == ActionKind::Send)
+            .count();
+        sends = u32::try_from(send_actions.saturating_mul(messages.len())).unwrap_or(u32::MAX);
+        message_ids = messages.into_iter().map(|m| m.id).collect();
+    } else if let Some(id) = a.folder_id {
+        let folder = ctx.writable_folder(&FolderId::new(id)).await?;
+        targets.push(target(
+            ActionTargetKind::Folder,
+            folder.id.as_str(),
+            &folder.name,
+        ));
+        audit_lines.push(audit("folder", None, Some(folder.id.as_str().to_owned())));
+        account_ids = vec![folder.account_id.clone()];
+        folder_id = Some(folder.id);
+    }
+    let first = rules.first().map(|r| r.name.clone()).unwrap_or_default();
+    Ok(Plan {
+        kind,
+        summary: LocalizedMessage::new("confirmation-summary-run-rules")
+            .arg("actor", ctx.actor())
+            .arg("count", rules.len())
+            .arg("name", first.as_str()),
+        targets,
+        changes: vec![change(
+            "action-field-rule",
+            None,
+            Some(
+                rules
+                    .iter()
+                    .map(|r| r.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+        )],
+        accounts: account_ids,
+        audit: audit_lines,
+        sends,
+        action: Action::Requests {
+            requests: vec![Request::RunRules {
+                rule_ids: rules.into_iter().map(|r| r.id).collect(),
+                message_ids,
+                folder_id,
             }],
         },
     })

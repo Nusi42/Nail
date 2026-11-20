@@ -499,6 +499,19 @@ message_ids: Array<MessageId>,
 /**
  * Run on this folder; `null` = the rule's scope.
  */
+folder_id: FolderId | null, } | { "type": "RunRules", 
+/**
+ * The rules (at least one; duplicates count once).
+ */
+rule_ids: Array<RuleId>, 
+/**
+ * Run on these messages; empty = on `folder_id` or each rule's
+ * scope.
+ */
+message_ids: Array<MessageId>, 
+/**
+ * Run on this folder; `null` = each rule's scope.
+ */
 folder_id: FolderId | null, } | { "type": "ListRuleRuns", 
 /**
  * Runs of this rule; `null` = of all rules.

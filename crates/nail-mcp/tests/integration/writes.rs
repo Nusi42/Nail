@@ -365,6 +365,7 @@ async fn every_write_checks_the_grant() {
         ("upsert_contact", json!({"full_name": "Ada"}), "pim"),
         ("upsert_task", json!({"title": "x"}), "pim"),
         ("create_rule", json!({"text": "rule \"x\" {}"}), "rules"),
+        ("run_rules", json!({"rules": ["receipts"]}), "rules"),
         (
             "edit_open_draft",
             json!({"op": "insert", "text": "x"}),
@@ -1350,6 +1351,77 @@ async fn rules_need_all_accounts_and_ask_first() {
         "a new rule, never a replacement"
     );
     assert!(!rule.enabled);
+}
+
+/// R1 (ADR 0219): `run_rules` names saved rules by id or name, asks as
+/// their strongest action and needs the scopes of every action they take.
+#[tokio::test]
+async fn running_rules_asks_as_their_strongest_action() {
+    let (env, id, token) = claude(&[McpScope::Rules, McpScope::Organize]).await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let receipts = json!({"rules": ["receipts"], "message_ids": ["m1"]});
+    let r = call(&client, "run_rules", receipts.clone()).await;
+    assert_eq!(value(&r)["detail"], "needs a grant for all accounts");
+    grant_all(&env.store, &id, &[McpScope::Rules, McpScope::Organize]).await;
+    for (args, error) in [
+        (json!({"rules": []}), "invalid_request"),
+        (json!({"rules": ["nope"]}), "not_found"),
+        // Two rules share the name: only the id is clear.
+        (json!({"rules": ["Spam"]}), "invalid_request"),
+    ] {
+        let r = call(&client, "run_rules", args).await;
+        assert_eq!(value(&r)["error"], error, "{r:?}");
+    }
+    let r = call(&client, "run_rules", json!({"rules": ["Forward bills"]})).await;
+    assert_eq!(value(&r)["detail"], "scope `send` not granted");
+    assert_eq!(env.data.written(), Vec::<Request>::new());
+
+    // Organizing runs at once (the default policy); the runs come back.
+    let r = call(&client, "run_rules", receipts).await;
+    assert_eq!(value(&r)["status"], "done", "{r:?}");
+    assert_eq!(value(&r)["created"], json!(["run-1"]));
+    let Some(Request::RunRules {
+        rule_ids,
+        message_ids,
+        folder_id,
+    }) = env.data.written().pop()
+    else {
+        panic!("{:?}", env.data.written())
+    };
+    assert_eq!(rule_ids, [nail_api::RuleId::from("receipts")]);
+    assert_eq!(message_ids, [nail_api::MessageId::new("m1")]);
+    assert_eq!(folder_id, None);
+
+    // A deleting rule asks first; asked in another order, the file's
+    // order runs.
+    let waiting = spawn_call(
+        &client,
+        "run_rules",
+        json!({"rules": ["spam", "Receipts"], "folder_id": "work-inbox"}),
+    );
+    let confirmation = pending(&env.store).await;
+    assert_eq!(confirmation.kind, ActionKind::Trash);
+    assert_eq!(confirmation.summary.id, "confirmation-summary-run-rules");
+    assert_eq!(confirmation.summary.args["count"], 2u32.into());
+    decide(&env.store, &confirmation, true);
+    let result = finished(waiting).await;
+    assert_eq!(value(&result)["created"], json!(["run-1", "run-2"]));
+    let Some(Request::RunRules {
+        rule_ids,
+        folder_id,
+        ..
+    }) = env.data.written().pop()
+    else {
+        panic!()
+    };
+    assert_eq!(
+        rule_ids,
+        [
+            nail_api::RuleId::from("receipts"),
+            nail_api::RuleId::from("spam")
+        ]
+    );
+    assert_eq!(folder_id, Some(nail_api::FolderId::new("work-inbox")));
 }
 
 /// Review M4a: an idempotency key names one request. Reusing it for other

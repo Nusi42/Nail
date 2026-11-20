@@ -305,6 +305,13 @@ impl<D: McpData> Shared<D> {
                 }
             }
             Response::RuleSaved { rule } => done.created.push(rule.id.as_str().to_owned()),
+            // R1: one run per rule (the user undoes them in Nail).
+            Response::RulesRan { runs } => {
+                for run in runs {
+                    done.op_ids.extend(op_ids(&run.op_ids));
+                    done.created.push(run.id.as_str().to_owned());
+                }
+            }
             other => return Err(unexpected(other)),
         }
         Ok(())

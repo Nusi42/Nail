@@ -68,6 +68,10 @@ confirmation-summary-pim-delete = { $actor } wants to delete { $count ->
    *[other] { $count } items
 } from your calendars, contacts or tasks.
 confirmation-summary-rule = { $actor } wants to save the filter rule “{ $name }”.
+confirmation-summary-run-rules = { $actor } wants to run { $count ->
+    [one] the filter rule “{ $name }”
+   *[other] { $count } filter rules
+} now.
 confirmation-summary-plugin-tool = { $actor } wants to run “{ $tool }”.
 
 ## Before / after lines (ACTION_FIELD_IDS)

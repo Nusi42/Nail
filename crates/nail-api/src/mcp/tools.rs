@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::agents::ActionKind;
 use crate::mcp::McpScope;
+use crate::rules::RuleAction;
 
 /// Longest idempotency key (characters).
 pub const MAX_IDEMPOTENCY_KEY: usize = 128;
@@ -130,6 +131,14 @@ pub const MCP_TOOLS: &[McpToolSpec] = &[
     ),
     write("upsert_task", &[McpScope::Pim], ActionKind::Task, None),
     write("create_rule", &[McpScope::Rules], ActionKind::Rule, None),
+    write(
+        "run_rules",
+        &[McpScope::Rules, McpScope::Organize],
+        ActionKind::Organize,
+        Some(
+            "the strongest action of the rules decides (`run_rules_kind`): forward / redirect /              reply is `send` and needs `send`, a permanent delete is `permanent-delete` and needs              `permanent-delete`, a delete is `trash`",
+        ),
+    ),
     write(
         "edit_open_draft",
         &[McpScope::Context, McpScope::Draft],
@@ -605,6 +614,59 @@ pub struct TestRuleArgs {
     pub limit: Option<u32>,
 }
 
+/// `run_rules`: run saved filter rules now, on named messages, a folder, or
+/// each rule's default messages (its folders, else the inboxes).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct RunRulesArgs {
+    /// The rules, by id or exact name as in `nail://rules` (1 to
+    /// [`MAX_RUN_RULES`]); they run in the file's order.
+    pub rules: Vec<String>,
+    /// Run on these messages (at most [`MAX_BATCH`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub message_ids: Vec<String>,
+    /// Run on this folder's messages (ignored with `message_ids`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
+    /// Repeating the key repeats the first call's result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+}
+
+/// Most rules one `run_rules` call may name.
+pub const MAX_RUN_RULES: usize = 100;
+
+/// The kind of what one rule action does, for agents running rules
+/// (`run_rules`): deletes, sends (forward / redirect / reply), else
+/// organizing.
+pub fn rule_action_kind(action: &RuleAction) -> ActionKind {
+    match action {
+        RuleAction::Delete { permanent: true } => ActionKind::PermanentDelete,
+        RuleAction::Delete { permanent: false } => ActionKind::Trash,
+        RuleAction::Forward { .. } | RuleAction::Redirect { .. } | RuleAction::Reply { .. } => {
+            ActionKind::Send
+        }
+        _ => ActionKind::Organize,
+    }
+}
+
+/// The kind whose policy decides about running rules with these actions:
+/// the strongest one (permanent delete, then sending, then Trash, else
+/// organizing).
+pub fn run_rules_kind<'a>(actions: impl IntoIterator<Item = &'a RuleAction>) -> ActionKind {
+    let rank = |kind: ActionKind| match kind {
+        ActionKind::PermanentDelete => 3,
+        ActionKind::Send => 2,
+        ActionKind::Trash => 1,
+        _ => 0,
+    };
+    actions
+        .into_iter()
+        .map(rule_action_kind)
+        .max_by_key(|kind| rank(*kind))
+        .unwrap_or(ActionKind::Organize)
+}
+
 /// How `edit_open_draft` changes the open composer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -706,7 +768,7 @@ mod tests {
             tool("delete_messages").unwrap().kind,
             Some(ActionKind::Trash)
         );
-        assert_eq!(write_tool_names().len(), 12);
+        assert_eq!(write_tool_names().len(), 13);
         for t in MCP_TOOLS {
             assert!(!t.scopes.is_empty(), "{}", t.name);
             if let Some(kind) = t.kind {
@@ -720,6 +782,31 @@ mod tests {
             }
         }
         assert_eq!(tool("nope"), None);
+    }
+
+    #[test]
+    fn running_rules_asks_as_their_strongest_action() {
+        let tag = RuleAction::Tag { tag: "x".into() };
+        let trash = RuleAction::Delete { permanent: false };
+        let gone = RuleAction::Delete { permanent: true };
+        let forward = RuleAction::Forward {
+            to: vec!["a@example.org".into()],
+            identity_id: None,
+        };
+        assert_eq!(run_rules_kind([]), ActionKind::Organize);
+        assert_eq!(
+            run_rules_kind([&tag, &RuleAction::Stop]),
+            ActionKind::Organize
+        );
+        assert_eq!(run_rules_kind([&tag, &trash]), ActionKind::Trash);
+        assert_eq!(run_rules_kind([&trash, &forward]), ActionKind::Send);
+        assert_eq!(
+            run_rules_kind([&forward, &gone, &tag]),
+            ActionKind::PermanentDelete
+        );
+        let args: RunRulesArgs = serde_json::from_value(json!({"rules": ["receipts"]})).unwrap();
+        assert!(args.message_ids.is_empty() && args.folder_id.is_none());
+        assert_eq!(tool("run_rules").unwrap().kind, Some(ActionKind::Organize));
     }
 
     #[test]

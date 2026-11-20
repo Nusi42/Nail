@@ -412,7 +412,11 @@ matches: Array<RuleMatch>, } | { "type": "RuleRan",
 /**
  * The run (usually still `running`).
  */
-run: RuleRun, } | { "type": "RuleRuns", 
+run: RuleRun, } | { "type": "RulesRan", 
+/**
+ * One run per rule, in file order.
+ */
+runs: Array<RuleRun>, } | { "type": "RuleRuns", 
 /**
  * Newest first.
  */

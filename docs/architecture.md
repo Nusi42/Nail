@@ -1451,3 +1451,13 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   no draft id as a readable message flagged `\Draft` or in a Drafts folder, through `McpData::draft_for_message`
   (`EditDraftMessage`); an elicitation *decline* leaves the decision to Nail's confirmation, only `approve: false`
   denies.
+
+### R1
+
+- Rules on demand (ADR 0219): `RunRules { rule_ids, message_ids, folder_id }` → `RulesRan` (core `rules.rs`
+  `run_rules_now` / `rules_to_run`; `RunRule` runs through it): the rules in file order, each its own manual run
+  (`run_one_rule`), every id checked first. MCP `run_rules` (`nail-mcp` `writes/rules.rs`; `nail_api::mcp::tools`
+  `RunRulesArgs`, `rule_action_kind`, `run_rules_kind`): policy by the rules' strongest action, scopes of every
+  action kind. UI: `features/rules/api.ts` `runRules` / `runRule` with `RuleRunTarget`; mock `features/rules/mock.ts`.
+- Live search (ADR 0219): `LIVE_SEARCH_PAUSE_MS` and `useDebouncedAction` in `ui/src/state/debounce.ts`; UI slot
+  `ui/src/features/search/`, texts `search.ftl`.

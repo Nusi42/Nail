@@ -735,6 +735,7 @@ pub const CONFIRMATION_SUMMARY_IDS: &[&str] = &[
     "confirmation-summary-task",
     "confirmation-summary-pim-delete",
     "confirmation-summary-rule",
+    "confirmation-summary-run-rules",
     "confirmation-summary-plugin-tool",
 ];
 

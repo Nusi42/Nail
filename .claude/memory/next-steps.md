@@ -31,6 +31,13 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
+**Wave R1 (rules on demand, live search; 2026-11-20):** contract done (ADR 0219, `docs/plan.md` "Wave R1"):
+`RunRules` (file order, one undoable run per rule), MCP `run_rules` (policy by the rules' strongest action),
+`runRules` / `RuleRunTarget` in `ui/src/features/rules/api.ts`, `LIVE_SEARCH_PAUSE_MS` + `useDebouncedAction`, slot
+`ui/src/features/search/` + `search.ftl`. Next: WR1 (rules on demand UI, Editor / Text switch bug) and WR2 (live
+search, compact error indicator) in parallel from `main`. Adding a `.ftl` file may need the Vitest cache cleared
+(`node_modules/.vitest-cache`): the catalog glob is cached.
+
 **Released 0.8.6 (2026-11-19):** fixes a user report against 0.8.5 (ADR 0217): MCP `update_draft` /
 `send_message` take a draft's message id; an elicitation *decline* (clients that cannot show the form send it at once)
 no longer denies sends and deletes, Nail's confirmation decides. Built with `release:prepare` in the lead folder

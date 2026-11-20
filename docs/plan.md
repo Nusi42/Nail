@@ -997,6 +997,30 @@ A package's work list: `node scripts/check-duplicates.mjs --owner WP-… --list`
 
 *Status (merge + verify):* the fixes from the maintainer's review (`work-6`, ADRs 0180–0184) and the connection log / resilient IMAP sync (`work-7`, ADRs 0190, 0191) are merged onto Q2 and made to follow its rules (ADR 0185): the taps sit on `nail-net` (one logged HTTP path in `ApiClient` / `send_logged`), generated enum lists, `common.ftl`, shared skins and test helpers; `check-duplicates --strict` = 0. Leftovers fixed: `NAIL_DEMO_NOW` pins demo-multi's calendar dates and demo clock (visual suite at `MAIN_TIME`; the 10 `calendar-year` baselines refreshed once, two runs identical); every desktop e2e launch has its own WebView2 folder; installer smoke beside an installation (`installer-payload-smoke.ps1`, ADR 0186). Verify on the merged tree: `npm run check`, `cargo test --workspace`, `npm test`, `npm run e2e` (incl. desktop) and `npm run visual` green. Next: the owner's human gate on the installer of this tree.
 
+### Wave R1 (rules on demand, live search)
+
+Maintainer feedback of 2026-11-20: rules can only be run by hand on their default messages (Run now in the rules editor); the maintainer wants to run a rule, or the selected rules, on a message selection or a folder — from the message list, the folder tree and the rules window itself, so a rule just written can be applied at once — and agents cannot run rules. The search field's parse error pushes the content down; search should run while typing; switching the rules editor from Editor to Text and back shows a red error. Contract ADR 0219.
+
+#### Scope decisions for R1
+
+- **Several rules, one request:** `RunRules { rule_ids, message_ids, folder_id }` → `RulesRan { runs }`. The rules run in file order (duplicates once), each as its own manual `RuleRun` that undoes on its own; `stop` ends only its own rule; every id is checked before anything runs. Target as for `RunRule`: the named messages, else the folder, else each rule's own messages.
+- **Agents:** MCP write tool `run_rules` (rules by id or exact name; `rules` + `organize` scopes, all accounts). The rules' strongest action decides the confirmation policy (`permanent-delete` > `send` > `trash` > `organize`) and every kind of action they take needs its own scopes.
+- **Rules window (WR1):** a run-target control next to Run now — the rule's own messages, the selected messages, the selected folder — and running the rules selected in the list; the undo of a run of several rules undoes each run. Functional and minimal in layout: the design review of the rules window runs separately and its redesign (including the misplaced dry-run list) is a later wave.
+- **Menus (WR1):** a "Run rule" entry in the message-list row menu and the folder-tree folder menu that lists the saved rules (and "all manual rules"), running on the selection / the folder.
+- **Live search (WR2):** the search field searches after `LIVE_SEARCH_PAUSE_MS` (400 ms, `ui/src/state/debounce.ts` `useDebouncedAction`), Enter at once; an invalid query does not search. The parse error becomes a compact indicator in the field whose explanation is an overlay (hover / focus) that never moves the content below it.
+- No new crates. New slot `ui/src/features/search/` with `locales/*/search.ftl`; WR1 keeps `ui/src/features/rules/` and `rules.ftl`.
+
+#### Packages of R1
+
+- **Contract (done):** ADR 0219, `RunRules` / `RulesRan` (core: `run_rules_now`, `RunRule` through it; remote grant checks; remote-auth scope), MCP `run_rules` (`RunRulesArgs`, `MAX_RUN_RULES`, `rule_action_kind`, `run_rules_kind`, `confirmation-summary-run-rules`), TS regenerated, mock core `RunRules`, `features/rules/api.ts` `runRules` / `runRule` with `RuleRunTarget`, `LIVE_SEARCH_PAUSE_MS` + `useDebouncedAction`, the `search` slot, user docs of the MCP tool.
+- **WR1 — rules on demand (parallel):** `ui/src/features/rules/` (the run-target control and running the selected rules in `RuleEditor` / `RuleManager`; the Editor / Text switch bug: reproduce in a test first, then fix), the "Run rule" submenu in `context:message-list.row` and `context:folder-tree.folder` (`defaults/layout.kdl` menus plus the rules feature's actions; a submenu that lists the rules may need a dynamic menu source in `features/menus/` — keep it inside the rules slot where possible), `locales/en/rules.ftl`, `userDocs/en/rules.md`, `e2e/tests/r1-rules-on-demand.spec.ts`.
+- **WR2 — live search (parallel):** `ui/src/widgets/SearchBar.tsx` and its skin, the search parts of `ui/src/state/uiStore.ts` / `queries.ts`, `ui/src/features/search/`, `locales/en/search.ftl` (moving the field's texts there is allowed), `userDocs/en/search.md`, `e2e/tests/r1-live-search.spec.ts` (typing searches after the pause, Enter at once, an invalid query keeps the list and shows the indicator without moving it).
+- **Integration:** rebase, renumber ADRs, the full suite incl. the r1 specs and `npm run visual` (baselines only for intended changes), memory `next-steps`.
+
+Gates as in P3: every suite green, the responsive standard on changed screens, the maintainer's human gate on the real app (a fresh rule applied to a selection from the rules window and from the list menu, live search while typing, an invalid query).
+
+*Status (contract):* done (ADR 0219). `RunRules` in the core (file order, one undoable run per rule, ids checked first), remote and MCP (`run_rules`, policy by the strongest action), TS and mock, `runRules` / `RuleRunTarget` in the rules slot, the live-search pause and `useDebouncedAction`, the `search` slot and catalogs. Next: WR1 and WR2 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

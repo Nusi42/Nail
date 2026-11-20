@@ -3,7 +3,7 @@
  * `MockTransport` (`../../api/mock.ts` routes exactly these requests here).
  * State lives in `data.features.rules` ([`createRulesMockState`]).
  *
- * Rules are kept in memory in file order; `TestRule` and `RunRule` use the
+ * Rules are kept in memory in file order; `TestRule` and `RunRule(s)` use the
  * mock evaluator (`mockEval.ts`); a run's writes go through the mock's
  * queued writes (`updateFlags`, `moveMessages`, `deleteMessages`) and are
  * undone as one unit.
@@ -39,6 +39,7 @@ export const RULES_REQUESTS = [
   "ReorderRules",
   "TestRule",
   "RunRule",
+  "RunRules",
   "ListRuleRuns",
   "UndoRuleRun",
   "RuleToText",
@@ -284,17 +285,9 @@ function apply(
   }
 }
 
-function runRule(
-  core: MockCore,
-  ruleId: string,
-  messageIds: readonly string[],
-  folderId: string | null,
-): Response {
+/** Runs one rule on messages as its own run (finished on the next tick). */
+function runOne(core: MockCore, rule: Rule, messages: readonly MessageSummary[]): RuleRun {
   const s = state(core);
-  const rule = s.rules.find((r) => r.id === ruleId);
-  if (!rule) return errorResponse("not_found", `rule ${ruleId} not found`);
-  const messages = pool(core, folderId, messageIds);
-  if (!messages) return errorResponse("not_found", `folder ${String(folderId)} not found`);
   const d = core.data;
   const matching = messages.filter((m) => explain(d, rule, m).matched);
   const runId = core.nextId("run-");
@@ -333,7 +326,28 @@ function runRule(
     run.undoable = !irreversible && opIds.length > 0;
     core.emit({ type: "RuleRunFinished", run: { ...run } });
   });
-  return { type: "RuleRan", run: { ...run } };
+  return { ...run };
+}
+
+/**
+ * `RunRules` (and `RunRule`, one rule): the rules in file order, each once
+ * and as its own run, on the named messages, the folder, or every message
+ * (the mock's stand-in for each rule's scope). Every id is checked first.
+ */
+function runRules(
+  core: MockCore,
+  ruleIds: readonly string[],
+  messageIds: readonly string[],
+  folderId: string | null,
+): RuleRun[] | Response {
+  const s = state(core);
+  if (ruleIds.length === 0)
+    return errorResponse("invalid_request", "name at least one rule to run");
+  const missing = ruleIds.find((id) => !s.rules.some((r) => r.id === id));
+  if (missing !== undefined) return errorResponse("not_found", `rule ${missing} not found`);
+  const messages = pool(core, folderId, messageIds);
+  if (!messages) return errorResponse("not_found", `folder ${String(folderId)} not found`);
+  return s.rules.filter((r) => ruleIds.includes(r.id)).map((rule) => runOne(core, rule, messages));
 }
 
 function undoRun(core: MockCore, runId: string): Response {
@@ -408,8 +422,16 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
       }
       return { type: "RuleTested", scanned, matches };
     }
-    case "RunRule":
-      return runRule(core, request.rule_id, request.message_ids, request.folder_id);
+    case "RunRule": {
+      const runs = runRules(core, [request.rule_id], request.message_ids, request.folder_id);
+      if (!Array.isArray(runs)) return runs;
+      const [run] = runs;
+      return run ? { type: "RuleRan", run } : errorResponse("internal", "the rule run was lost");
+    }
+    case "RunRules": {
+      const runs = runRules(core, request.rule_ids, request.message_ids, request.folder_id);
+      return Array.isArray(runs) ? { type: "RulesRan", runs } : runs;
+    }
     case "ListRuleRuns":
       return {
         type: "RuleRuns",

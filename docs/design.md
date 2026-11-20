@@ -497,6 +497,7 @@ Nail exposes all of its data (every message with headers, bodies, raw source and
 | `create_event`, `update_event`, `respond_to_invite` | calendar | Calendar writes; sending invites needs `send` |
 | `upsert_contact`, `upsert_task` | pim | Contact and task writes |
 | `create_rule`, `test_rule` | rules | Add filters; `test_rule` is read-only |
+| `run_rules` | rules + organize (+ the scopes of the rules' actions) | Run saved rules now on messages, a folder or their own messages; asks as the rules' strongest action (ADR 0219) |
 | `get_ui_context`, `edit_open_draft` | context (+ draft for edits) | Read the current message and open draft; insert or replace text in the open composer, shown live to the user. Sending still needs `send_message` |
 
 **Prompts:** `summarize_thread`, `triage_folder`, `draft_reply`, `prepare_meeting` (event + related mail + attendees).

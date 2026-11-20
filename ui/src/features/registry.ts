@@ -38,6 +38,7 @@ import * as print from "./print";
 import * as remote from "./remote";
 import * as rules from "./rules";
 import * as scheduling from "./scheduling";
+import * as search from "./search";
 import * as security from "./security";
 import * as settings from "./settings";
 import * as shell from "./shell";
@@ -97,6 +98,8 @@ export const features: Readonly<Record<string, Feature>> = {
   messageSource,
   // ADR 0196: folder management.
   folders,
+  // R1 (ADR 0219): live search (WR2).
+  search,
 };
 
 /** The merged registries. */

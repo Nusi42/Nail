@@ -564,6 +564,11 @@ impl Service {
                 message_ids,
                 folder_id,
                 ..
+            }
+            | Request::RunRules {
+                message_ids,
+                folder_id,
+                ..
             } => {
                 if message_ids.is_empty() && folder_id.is_none() {
                     return check_full(access);

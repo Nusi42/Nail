@@ -58,7 +58,7 @@ The writing permissions:
 | Send mail | Send drafts, invitations and answers to invitations (asks first unless you allow it) | `send_message`; mail to attendees |
 | Change calendars | Create and change events and answer invitations | `create_event`, `update_event`, `respond_to_invite` |
 | Change contacts and tasks | Create and change contacts and tasks | `upsert_contact`, `upsert_task` |
-| Filter rules | Create filter rules (asks first unless you allow it) and test them on existing mail | `create_rule`, `test_rule` |
+| Filter rules | Create filter rules (asks first unless you allow it), test them on existing mail, and run your saved rules on messages or a folder | `create_rule`, `test_rule`, `run_rules` |
 
 A writing permission alone reads nothing: give *Read mail* too, so the
 agent can find what it should change. To change something, the client
@@ -215,6 +215,7 @@ open another message.
 | `upsert_contact`, `upsert_task` | Change contacts and tasks | No, unless you make it ask |
 | `create_rule` | Filter rules | Yes, unless you allow it |
 | `test_rule` | Filter rules | Changes nothing |
+| `run_rules` | Filter rules + Organize mail (+ Send mail or Delete mail permanently when a rule forwards, replies or deletes for good) | As the rules' strongest action: always when a rule deletes, yes when it sends unless you allow it, else no unless you make it ask |
 
 - **Everything is undoable.** Changes go through Nail's operation queue,
   like your own: they appear in the undo history, sync to your servers the
@@ -224,6 +225,11 @@ open another message.
   them the way Nail's own conversation rows do; the confirmation names how
   many conversations and messages are affected. Messages outside the
   client's accounts are left alone.
+- **Running rules.** `run_rules` runs your saved filter rules, in the order
+  of your rule list, on the messages or the folder the agent names (or on
+  each rule's own folders). Each rule's run shows up in the rule's history
+  in the Rules window, where you can undo it; mail a rule forwarded or
+  answered stays sent.
 - **Drafts are never sent by writing them.** Sending is always a separate
   `send_message`. `update_draft` and `send_message` find a draft by the id
   `create_draft` returned or by the message id the agent sees when it reads

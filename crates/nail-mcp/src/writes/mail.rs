@@ -87,7 +87,7 @@ impl<D: McpData> Ctx<'_, D> {
     }
 
     /// A folder a write moves to: in a granted account, not excluded.
-    async fn writable_folder(&self, id: &FolderId) -> Result<Folder, Failure> {
+    pub(crate) async fn writable_folder(&self, id: &FolderId) -> Result<Folder, Failure> {
         if !self.access.allows_folder(id) {
             return Err(Denial::Folder(id.clone()).into());
         }

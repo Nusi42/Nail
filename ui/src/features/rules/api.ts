@@ -5,7 +5,14 @@
  */
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type { NailClient } from "../../api/client";
-import type { Event as NailEvent, FolderId, Rule, RuleId } from "../../api/generated";
+import type {
+  Event as NailEvent,
+  FolderId,
+  MessageId,
+  Rule,
+  RuleId,
+  RuleRun,
+} from "../../api/generated";
 import { useClient } from "../../state/queries";
 import type { ExplainedMatch } from "./types";
 
@@ -62,13 +69,57 @@ export async function testRule(
   return { scanned: r.scanned, matches: r.matches };
 }
 
-export async function runRule(client: NailClient, ruleId: RuleId, messageIds: string[] = []) {
+/**
+ * Where a run by hand acts: the named messages, else the folder, else each
+ * rule's own messages (its folders, else the inboxes). R1, ADR 0219.
+ */
+export interface RuleRunTarget {
+  messageIds: readonly MessageId[];
+  folderId: FolderId | null;
+}
+
+/** Each rule's own messages. */
+export const RULE_SCOPE_TARGET: RuleRunTarget = { messageIds: [], folderId: null };
+
+/** Runs one saved rule now on `target`. */
+export async function runRule(
+  client: NailClient,
+  ruleId: RuleId,
+  target: RuleRunTarget = RULE_SCOPE_TARGET,
+): Promise<RuleRun> {
   return (
     await client.request(
-      { type: "RunRule", rule_id: ruleId, message_ids: messageIds, folder_id: null },
+      {
+        type: "RunRule",
+        rule_id: ruleId,
+        message_ids: [...target.messageIds],
+        folder_id: target.folderId,
+      },
       "RuleRan",
     )
   ).run;
+}
+
+/**
+ * Runs several saved rules now on `target`, in file order, one run each
+ * (each undone on its own with `undoRuleRun`).
+ */
+export async function runRules(
+  client: NailClient,
+  ruleIds: readonly RuleId[],
+  target: RuleRunTarget = RULE_SCOPE_TARGET,
+): Promise<RuleRun[]> {
+  return (
+    await client.request(
+      {
+        type: "RunRules",
+        rule_ids: [...ruleIds],
+        message_ids: [...target.messageIds],
+        folder_id: target.folderId,
+      },
+      "RulesRan",
+    )
+  ).runs;
 }
 
 export async function undoRuleRun(client: NailClient, runId: string): Promise<void> {

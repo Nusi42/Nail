@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use nail_api::mcp::tools::{
     CreateDraftArgs, CreateEventArgs, CreateRuleArgs, DeleteMessagesArgs, EditOpenDraftArgs,
-    RespondToInviteArgs, SendMessageArgs, TestRuleArgs, UpdateDraftArgs, UpdateEventArgs,
-    UpdateMessagesArgs, UpsertContactArgs, UpsertTaskArgs,
+    RespondToInviteArgs, RunRulesArgs, SendMessageArgs, TestRuleArgs, UpdateDraftArgs,
+    UpdateEventArgs, UpdateMessagesArgs, UpsertContactArgs, UpsertTaskArgs,
 };
 use nail_api::mcp::{McpCallKind, McpClient, McpOutcome, McpScope};
 use nail_api::search::RESTRICTED_SCAN;
@@ -89,7 +89,7 @@ pub struct NoArgs {}
 
 /// Names of the tools, in [`nail_api::mcp::tools::MCP_TOOLS`] order (M3a
 /// adds the read-only PIM tools, M4a `test_rule` and the writes).
-pub const TOOL_NAMES: [&str; 22] = [
+pub const TOOL_NAMES: [&str; 23] = [
     "search_messages",
     "get_message",
     "get_thread",
@@ -111,6 +111,7 @@ pub const TOOL_NAMES: [&str; 22] = [
     "upsert_contact",
     "upsert_task",
     "create_rule",
+    "run_rules",
     "edit_open_draft",
 ];
 
@@ -242,6 +243,13 @@ fn write_definitions() -> Vec<Tool> {
             schema_for_type::<CreateRuleArgs>(),
             false,
             false,
+        ),
+        write(
+            "run_rules",
+            "Run saved filter rules now (by id or name from nail://rules, in the file's order) on              message_ids, a folder_id, or each rule's own folders. Each rule is one run the user              can undo in Nail. Asks first as the rules' strongest action: deleting, forwarding or              replying needs those grants too (rules and organize grants for all accounts).",
+            schema_for_type::<RunRulesArgs>(),
+            true,
+            true,
         ),
         write(
             "edit_open_draft",

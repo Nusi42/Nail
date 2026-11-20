@@ -170,6 +170,7 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::ReorderRules { .. } => ("ReorderRules", Scope(S::Rules)),
         Request::TestRule { .. } => ("TestRule", Scope(S::Rules)),
         Request::RunRule { .. } => ("RunRule", Scope(S::Rules)),
+        Request::RunRules { .. } => ("RunRules", Scope(S::Rules)),
         Request::ListRuleRuns { .. } => ("ListRuleRuns", Scope(S::Read)),
         Request::UndoRuleRun { .. } => ("UndoRuleRun", Scope(S::Rules)),
         Request::RuleToText { .. } => ("RuleToText", Scope(S::Rules)),

@@ -855,6 +855,7 @@ async fn plan_for<D: McpData>(
         "upsert_contact" => pim::upsert_contact(&ctx, crate::tools::args(request)?).await,
         "upsert_task" => pim::upsert_task(&ctx, crate::tools::args(request)?).await,
         "create_rule" => rules::create_rule(&ctx, crate::tools::args(request)?).await,
+        "run_rules" => rules::run_rules(&ctx, crate::tools::args(request)?).await,
         _ => {
             return Err(ErrorData::invalid_params(
                 format!("unknown tool {}", crate::http::audited_path(tool)),

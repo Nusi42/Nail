@@ -1199,6 +1199,7 @@ impl Service {
             | Request::ReorderRules { .. }
             | Request::TestRule { .. }
             | Request::RunRule { .. }
+            | Request::RunRules { .. }
             | Request::ListRuleRuns { .. }
             | Request::UndoRuleRun { .. }
             | Request::RuleToText { .. }

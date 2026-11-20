@@ -639,6 +639,22 @@ impl McpData for FakeData {
                         op_ids: op(),
                     }
                 }
+                Request::RunRules { rule_ids, .. } => Response::RulesRan {
+                    runs: rule_ids
+                        .iter()
+                        .enumerate()
+                        .map(|(n, rule)| {
+                            serde_json::from_value(serde_json::json!({
+                                "id": format!("run-{}", n + 1), "rule_id": rule,
+                                "rule_name": rule, "cause": "manual", "state": "done",
+                                "started_at": "2026-11-20T08:00:00Z",
+                                "finished_at": "2026-11-20T08:00:01Z", "matched": 1,
+                                "op_ids": ["op-1"], "undoable": true, "message": null,
+                            }))
+                            .unwrap()
+                        })
+                        .collect(),
+                },
                 Request::SaveRule { rule, .. } => {
                     let mut rule = *rule;
                     rule.id = "rule-new".into();
@@ -861,6 +877,35 @@ pub(crate) fn pim_answer(request: Request) -> DataResult<Response> {
                 }
             }
         }
+        // R1: the saved rules `run_rules` names (file order).
+        Request::ListRules => Response::Rules {
+            rules: [
+                (
+                    "receipts",
+                    "Receipts",
+                    serde_json::json!({"type": "tag", "tag": "paid"}),
+                ),
+                (
+                    "forward-bills",
+                    "Forward bills",
+                    serde_json::json!({"type": "forward", "to": ["ada@example.org"]}),
+                ),
+                ("spam", "Spam", serde_json::json!({"type": "delete"})),
+                (
+                    "spam-2",
+                    "Spam",
+                    serde_json::json!({"type": "flag", "flagged": true}),
+                ),
+            ]
+            .into_iter()
+            .map(|(id, name, action)| {
+                serde_json::from_value(
+                    serde_json::json!({"id": id, "name": name, "actions": [action]}),
+                )
+                .unwrap()
+            })
+            .collect(),
+        },
         Request::TestRule { .. } => Response::RuleTested {
             scanned: 3,
             matches: ["m1", "m2", "m3"]

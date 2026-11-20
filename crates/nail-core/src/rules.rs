@@ -225,6 +225,28 @@ fn issues_error(issues: &[nail_rules::RuleIssue]) -> ApiError {
 }
 
 /// A stored run as the protocol shows it.
+/// The saved rules `ids` names, in file order (duplicates once). An empty
+/// list is refused, an unknown or broken rule fails the whole request.
+fn rules_to_run<'s>(set: &'s RuleSet, ids: &[RuleId]) -> Result<Vec<&'s CompiledRule>> {
+    if ids.is_empty() {
+        return Err(ApiError::invalid_request("name at least one rule to run").into());
+    }
+    for id in ids {
+        if set.get(id).is_none() {
+            return Err(match set.broken().iter().find(|(broken, _)| broken == id) {
+                Some((_, issues)) => issues_error(issues),
+                None => ApiError::not_found(format!("rule {id}")),
+            }
+            .into());
+        }
+    }
+    Ok(set
+        .rules()
+        .iter()
+        .filter(|rule| ids.contains(&rule.rule().id))
+        .collect())
+}
+
 fn to_run(record: RuleRunRecord) -> RuleRun {
     RuleRun {
         id: record.id,
@@ -445,6 +467,15 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     .await?,
             ),
         },
+        Request::RunRules {
+            rule_ids,
+            message_ids,
+            folder_id,
+        } => Response::RulesRan {
+            runs: service
+                .run_rules_now(&rule_ids, &message_ids, folder_id.as_ref())
+                .await?,
+        },
         Request::ListRuleRuns { rule_id, limit } => {
             let limit = limit.clamp(1, MAX_RUNS);
             let records = service
@@ -651,30 +682,47 @@ impl Service {
     }
 
     /// `RunRule`: runs one rule now on the named messages, the folder, or
-    /// its default candidates.
+    /// its default candidates (`RunRules` with one rule).
     async fn run_rule_now(
         &self,
         rule_id: &RuleId,
         message_ids: Vec<MessageId>,
         folder_id: Option<FolderId>,
     ) -> Result<RuleRun> {
+        self.run_rules_now(
+            std::slice::from_ref(rule_id),
+            &message_ids,
+            folder_id.as_ref(),
+        )
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::internal("the rule run was not recorded").into())
+    }
+
+    /// `RunRules`: runs the rules now, one after another in file order,
+    /// each as its own run, on the named messages, the folder, or each
+    /// rule's default candidates. Every id is checked before anything
+    /// runs (ADR 0219).
+    async fn run_rules_now(
+        &self,
+        rule_ids: &[RuleId],
+        message_ids: &[MessageId],
+        folder_id: Option<&FolderId>,
+    ) -> Result<Vec<RuleRun>> {
         let set = self.inner.rules.set();
-        let Some(compiled) = set.get(rule_id) else {
-            return Err(match set.broken().iter().find(|(id, _)| id == rule_id) {
-                Some((_, issues)) => issues_error(issues),
-                None => ApiError::not_found(format!("rule {rule_id}")),
-            }
-            .into());
-        };
-        let ids = if message_ids.is_empty() {
-            self.candidate_messages(folder_id, compiled.rule()).await?
-        } else {
-            message_ids
-        };
-        let run = self
-            .run_one_rule(compiled, RuleRunCause::Manual, ids)
-            .await?;
-        Ok(run)
+        let compiled = rules_to_run(&set, rule_ids)?;
+        let mut runs = Vec::with_capacity(compiled.len());
+        for rule in compiled {
+            let ids = if message_ids.is_empty() {
+                self.candidate_messages(folder_id.cloned(), rule.rule())
+                    .await?
+            } else {
+                message_ids.to_vec()
+            };
+            runs.push(self.run_one_rule(rule, RuleRunCause::Manual, ids).await?);
+        }
+        Ok(runs)
     }
 
     /// Runs one rule on messages and records the run (also when nothing

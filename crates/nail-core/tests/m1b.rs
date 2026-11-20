@@ -939,6 +939,137 @@ async fn arrival_rules_move_new_mail_and_runs_can_be_undone() {
     f.service.shutdown().await;
 }
 
+/// R1 (ADR 0219): several rules run on one selection, in file order, each
+/// as its own run that undoes on its own; a bad id runs nothing.
+#[tokio::test]
+async fn several_rules_run_on_a_selection_in_file_order() {
+    let f = setup().await;
+    synced(&f).await;
+    f.control(
+        "imap-deliver",
+        &json!({"raw": "From: Shop <shop@example.org>
+Subject: Batch invoice 7
+Message-ID: <batch7@example.org>
+
+Pay.
+"}),
+    );
+    eventually("new mail arrived", || async {
+        subjects(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .iter()
+            .any(|s| s == "Batch invoice 7")
+    })
+    .await;
+    let message = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Batch invoice 7",
+    )
+    .await;
+    let manual = || vec![RuleTrigger::Manual];
+    let flag = save_rule(
+        &f.service,
+        common::subject_rule(
+            "Flag batches",
+            manual(),
+            "batch invoice",
+            vec![RuleAction::Flag { flagged: true }],
+        ),
+    )
+    .await;
+    let tag = save_rule(
+        &f.service,
+        common::subject_rule(
+            "Tag batches",
+            manual(),
+            "batch invoice",
+            vec![RuleAction::Tag {
+                tag: "batch".into(),
+            }],
+        ),
+    )
+    .await;
+    let run_rules = |rule_ids: Vec<nail_api::RuleId>| Request::RunRules {
+        rule_ids,
+        message_ids: vec![message.id.clone()],
+        folder_id: None,
+    };
+
+    // Refused before anything runs: no rules, or one unknown rule.
+    for (ids, code) in [
+        (vec![], ErrorCode::InvalidRequest),
+        (vec![flag.id.clone(), "missing".into()], ErrorCode::NotFound),
+    ] {
+        let response = request(&f.service, run_rules(ids)).await;
+        assert!(
+            matches!(&response, Response::Error { code: c, .. } if *c == code),
+            "{response:?}"
+        );
+    }
+    let Response::RuleRuns { runs } = request(
+        &f.service,
+        Request::ListRuleRuns {
+            rule_id: None,
+            limit: 10,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    assert!(runs.is_empty(), "a refused request runs nothing: {runs:?}");
+
+    // Asked in another order (and twice), run in file order, once each.
+    let Response::RulesRan { runs } = request(
+        &f.service,
+        run_rules(vec![tag.id.clone(), flag.id.clone(), tag.id.clone()]),
+    )
+    .await
+    else {
+        panic!("RulesRan expected")
+    };
+    let order: Vec<&str> = runs.iter().map(|r| r.rule_id.as_str()).collect();
+    assert_eq!(order, [flag.id.as_str(), tag.id.as_str()]);
+    assert!(runs.iter().all(|r| r.matched == 1), "{runs:?}");
+    eventually("flagged and tagged", || async {
+        let m = find(
+            &f.service,
+            MULTI_WORK_ID,
+            FolderRole::Inbox,
+            "Batch invoice 7",
+        )
+        .await;
+        m.flags.flagged && m.tags.iter().any(|t| t == "batch")
+    })
+    .await;
+
+    // Each run undoes on its own.
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::UndoRuleRun {
+                run_id: runs[1].id.clone()
+            }
+        )
+        .await,
+        Response::Queued { .. }
+    ));
+    eventually("the tag is gone, the flag stays", || async {
+        let m = find(
+            &f.service,
+            MULTI_WORK_ID,
+            FolderRole::Inbox,
+            "Batch invoice 7",
+        )
+        .await;
+        m.flags.flagged && !m.tags.iter().any(|t| t == "batch")
+    })
+    .await;
+    f.service.shutdown().await;
+}
+
 fn rule_id() -> nail_api::RuleId {
     "invoices-to-archive".into()
 }
