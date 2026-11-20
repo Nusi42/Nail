@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { defaultTheme } from "../api/mockData";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { SKIN_CSS } from "../theme/skin";
@@ -35,6 +35,36 @@ describe("ProblemIndicator", () => {
     expect(details).toHaveAttribute("popover", "auto");
     expect(button.getAttribute("popovertarget")).toBe(details.id);
     expect(root.querySelector('[data-part="problem.icon"]')).not.toBeNull();
+  });
+
+  it("closes its open details on Escape without closing the window around it", () => {
+    withTheme(
+      <ProblemIndicator severity="warning" label={TWO_MISSING}>
+        {DETAILS}
+      </ProblemIndicator>,
+    );
+    const button = screen.getByRole("button", { name: TWO_MISSING });
+    const details = must(document.getElementById(must(button.getAttribute("aria-describedby"))));
+    const hide = vi.fn();
+    let open = false;
+    vi.spyOn(details, "matches").mockImplementation(
+      (selector) => selector === ":popover-open" && open,
+    );
+    details.hidePopover = hide;
+    const reached = vi.fn();
+    document.addEventListener("keydown", reached);
+    try {
+      // Closed: Escape goes on to the window's binding.
+      fireEvent.keyDown(button, { key: "Escape" });
+      expect(reached).toHaveBeenCalledTimes(1);
+      // Open: Escape closes the details only.
+      open = true;
+      fireEvent.keyDown(button, { key: "Escape" });
+      expect(hide).toHaveBeenCalledTimes(1);
+      expect(reached).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener("keydown", reached);
+    }
   });
 
   it("announces only errors, not warnings", () => {

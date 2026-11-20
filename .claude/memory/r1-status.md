@@ -30,6 +30,16 @@ metadata:
 - Python on Windows writes CRLF unless the file is opened with `newline=''`; a CRLF `layout.kdl` breaks the golden
   tests. Prettier must not run over `docs/**/*.md` (not prettier-managed; it rewrites `*x*` and wrapped code spans).
 
-**Deferred:** rules window redesign (incl. the misplaced Test rule results, visible labels for the two row
-checkboxes), a hover submenu for Run rule (dynamic menu source in `features/menus`), rule names starting with `@`
+**Review fixes (done):** `run_rules` needs `message_ids` for rules that send and a target for grants with excluded
+folders; run panel under the editor's buttons with "Save and run" (`runPlan`), folder target off during a search
+(`listTitle`), rule list grid with a header row, Escape stops at the problem popover, shared `widgets/Toast.tsx`
+(one toast at a time), `expandTargets` in `actions/mailTargets.ts`, search live region `search-bar.status`, wrapping
+query line, hoverable explanation, `searchOwnerFor` (last focused field commits). Committed with the
+run panel's text-view fix: the editor reads edited text after a typing pause, so the panel names and judges the rule
+Save would write; a save from the text view writes the saved rule back as the text (Vitest in `runOnDemand.test.tsx`).
+The rule text field is lower (`rules.text.source` min-height 120) so "Save and run" stays in view at 1024x700. Full
+suites green at commit: `npm run check` (17 steps), `npm test`, `cargo test --workspace` (4100 passed), `npm run e2e`
+(306 passed, 4 skipped, no flakes).
+
+**Deferred:** rules window redesign (incl. the misplaced Test rule results), a hover submenu for Run rule (dynamic menu source in `features/menus`), rule names starting with `@`
 read as Fluent ids in that menu, query hints still push content down, a folder change keeps the typed search text.

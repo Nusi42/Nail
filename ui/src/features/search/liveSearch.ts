@@ -9,17 +9,22 @@
  * - **Checked first.** A committed text is checked (`CheckQuery`, cached per
  *   text) before it is searched. An invalid one is not searched: the list
  *   keeps the last valid results and the field shows the mistake.
+ * - **One field commits.** Every search field shows the shared typed text;
+ *   only the field the user last worked in (`claim`, on focus) commits it,
+ *   so two fields of a layout never race with their own scopes.
  * - **Newest wins.** A check that answers after the text moved on is
  *   dropped, so an older query can never replace a newer one; the search
  *   results themselves are keyed by their text (`useSearch`), so a late
  *   answer for an older text is never shown either.
  */
 import { useEffect, useRef, useState } from "react";
+import { useStore } from "zustand";
+import { createStore, type StoreApi } from "zustand/vanilla";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AccountId, FolderId, SearchError } from "../../api/generated";
 import { LIVE_SEARCH_PAUSE_MS, useDebouncedAction } from "../../state/debounce";
 import { checkQuery, useClient } from "../../state/queries";
-import { useUi, type SearchState } from "../../state/uiStore";
+import { useUi, useUiStoreApi, type SearchState, type UiStore } from "../../state/uiStore";
 
 /** Where a search from the field runs. */
 export interface LiveSearchScope {
@@ -48,19 +53,36 @@ export interface RejectedQuery {
   error: SearchError;
 }
 
+const owners = new WeakMap<UiStore, StoreApi<{ owner: string | null }>>();
+
+/** Which search field of a UI store commits the typed text (its id; created on first use). */
+export function searchOwnerFor(ui: UiStore): StoreApi<{ owner: string | null }> {
+  let store = owners.get(ui);
+  if (!store) {
+    store = createStore<{ owner: string | null }>()(() => ({ owner: null }));
+    owners.set(ui, store);
+  }
+  return store;
+}
+
 /** What the search field needs from live search. */
 export interface LiveSearch {
   /** Searches the current text at once (Enter). */
   flush: () => void;
+  /** Makes this field the one that commits the typed text (it got the focus). */
+  claim: () => void;
   /** The last committed text that was invalid, while it is still typed. */
   rejected: RejectedQuery | null;
 }
 
 /**
  * Searches `text` (the field's text) after the typing pause or on `flush`;
- * `scope` is where a new search runs.
+ * `scope` is where a new search runs; `field` names the field (only the
+ * field that claimed last commits after a pause).
  */
-export function useLiveSearch(text: string, scope: LiveSearchScope): LiveSearch {
+export function useLiveSearch(text: string, scope: LiveSearchScope, field: string): LiveSearch {
+  const ownerStore = searchOwnerFor(useUiStoreApi());
+  const owner = useStore(ownerStore, (s) => s.owner);
   const client = useClient();
   const queryClient = useQueryClient();
   const active = useUi((s) => s.search);
@@ -97,7 +119,11 @@ export function useLiveSearch(text: string, scope: LiveSearchScope): LiveSearch 
     });
   };
 
-  const flush = useDebouncedAction(text, LIVE_SEARCH_PAUSE_MS, commit);
+  // Before any field had the focus (a test, a search set from elsewhere) nobody commits.
+  const flush = useDebouncedAction(text, LIVE_SEARCH_PAUSE_MS, commit, owner === field);
+  const claim = () => {
+    if (ownerStore.getState().owner !== field) ownerStore.setState({ owner: field });
+  };
   const shown = rejected !== null && rejected.text === text.trim() ? rejected : null;
-  return { flush, rejected: shown };
+  return { flush, claim, rejected: shown };
 }

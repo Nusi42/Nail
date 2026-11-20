@@ -42,6 +42,17 @@ describe("theme compiler", () => {
     );
   });
 
+  it("wraps a long query in the search mistake's explanation and lets the pointer rest on it", () => {
+    // Review R1: `white-space: pre` cut the query off before the marked mistake.
+    expect(css).toContain(
+      '[data-part="search-bar.error.query"] { white-space: pre-wrap; overflow-wrap: anywhere; }',
+    );
+    const follow = /\[data-part="problem\.details"\]\[data-mode="follow"\] \{[^}]*\}/.exec(css);
+    expect(follow?.[0]).toBeDefined();
+    expect(follow?.[0]).not.toContain("pointer-events: none");
+    expect(css).toContain('[data-part="search-bar.status"] {');
+  });
+
   it("keeps part rules in source order", () => {
     const plain = css.indexOf('[data-part="status-bar.button"] {');
     const hover = css.indexOf('[data-part="status-bar.button"]:hover {');

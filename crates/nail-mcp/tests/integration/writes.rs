@@ -1424,6 +1424,54 @@ async fn running_rules_asks_as_their_strongest_action() {
     assert_eq!(folder_id, Some(nail_api::FolderId::new("work-inbox")));
 }
 
+/// Review R1: rules that send run only on named messages (so each send is
+/// counted against `sends_per_hour`), and a grant with excluded folders
+/// must name the target (the rules' own folders are not checked).
+#[tokio::test]
+async fn running_rules_never_sends_uncounted_or_reaches_excluded_folders() {
+    let (env, id, token) = claude(&[McpScope::Rules]).await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let scopes = [McpScope::Rules, McpScope::Organize, McpScope::Send];
+    grant_all(&env.store, &id, &scopes).await;
+    for args in [
+        json!({"rules": ["Forward bills"]}),
+        json!({"rules": ["receipts", "Forward bills"], "folder_id": "work-inbox"}),
+    ] {
+        let r = call(&client, "run_rules", args).await;
+        assert_eq!(value(&r)["error"], "invalid_request", "{r:?}");
+        assert_eq!(
+            value(&r)["detail"],
+            "rules that forward, redirect or reply run only on named `message_ids`"
+        );
+    }
+    set_grant(
+        &env.store,
+        &id,
+        McpGrant {
+            scopes: scopes.to_vec(),
+            all_accounts: true,
+            excluded_folders: vec!["work-hr".into()],
+            ..McpGrant::default()
+        },
+    )
+    .await;
+    let r = call(&client, "run_rules", json!({"rules": ["receipts"]})).await;
+    assert_eq!(value(&r)["error"], "invalid_request", "{r:?}");
+    assert_eq!(
+        value(&r)["detail"],
+        "the grant excludes folders: name `message_ids` or a `folder_id`"
+    );
+    assert_eq!(env.data.written(), Vec::<Request>::new());
+    // A named folder or named messages still run.
+    let r = call(
+        &client,
+        "run_rules",
+        json!({"rules": ["receipts"], "folder_id": "work-inbox"}),
+    )
+    .await;
+    assert_eq!(value(&r)["status"], "done", "{r:?}");
+}
+
 /// Review M4a: an idempotency key names one request. Reusing it for other
 /// arguments (or another tool) while the first waits is refused, so an
 /// approval of what the user saw never runs something else.

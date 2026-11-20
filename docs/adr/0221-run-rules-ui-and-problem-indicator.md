@@ -13,12 +13,19 @@ rules window and the search field needed a compact way to show a mistake.
 ## Decision
 
 - **Run panel in the rules window** (`ui/src/features/rules/RunPanel.tsx`,
-  under the rule list): it runs the rule being edited, or the rules checked in
-  the list (a checkbox per row, `picked` in the rules store), on one target —
+  under the editor's Save / Test buttons; alone in the editor column while no
+  rule is open): it runs the rule being edited, or the rules checked in
+  the list (the "Run" checkbox per row, `picked` in the rules store; the list
+  is a grid whose header row names its columns "Run", "Rule", "On"), on one
+  target —
   each rule's own mail (what "Run now" always did), the folder the list shows,
   or the selected messages (a selected conversation stands for all its
   messages in that folder). A target that is not available is disabled with
-  the reason. The outcome line ("N rules ran: X messages matched, Y changes
+  the reason; "the open folder" is unavailable while the list shows a search,
+  a smart folder or a favorite, and it is named as the list header names it
+  (`listTitle`). The core runs saved rules only, so a new rule, or one with
+  unsaved changes that is among the rules to run, shows **Save and run**:
+  the editor's rule is saved first, the old saved one never runs instead. The outcome line ("N rules ran: X messages matched, Y changes
   queued.") always takes its line, so a result moves nothing; Undo takes back
   every run of the last click (`runTargets.ts`).
 - **"Run rule" in the row and folder menus.** The layout names one item,
@@ -27,8 +34,10 @@ rules window and the search field needed a compact way to show a mistake.
   context menu in place with a menu built at run time (`runMenu.ts`, through
   `menuStoreFor().show`): "All rules that are on" (with several), the rules
   that are on, then the rules that are off. `rules.run` runs the chosen rule
-  on the menu's target; a toast (`RunToast.tsx`, wearing the shared
-  `mail-actions.toast` parts) reports the outcome with Undo.
+  on the menu's target; a toast (`RunToast.tsx`) reports the outcome with
+  Undo. Mail actions and rule runs share one toast widget
+  (`ui/src/widgets/Toast.tsx`: look, `TOAST_MS`, Dismiss, hold on hover or
+  focus) and one place: a newer toast dismisses the one shown.
 - **One problem indicator** (`ui/src/widgets/ProblemIndicator.tsx`, parts
   `problem*`, look in the shared skin's `PROBLEM`): a small icon, with an
   optional short label, whose details float over the content instead of
@@ -39,7 +48,8 @@ rules window and the search field needed a compact way to show a mistake.
   host opens the details while the field has hover or focus, and the field
   names them in `aria-describedby`. The popover is anchored under its button
   where the engine supports CSS anchor positioning, else the browser centres
-  it.
+  it. Escape on open details closes only them: the indicator stops the key,
+  so the window's own Escape binding does not close the window.
 - **The new rule's text round-trip.** The core no longer writes `id=""` for a
   rule without an id (`render_rule`), so a new rule switched to Text, edited
   and switched back reads again; the UI also skips re-reading text that was

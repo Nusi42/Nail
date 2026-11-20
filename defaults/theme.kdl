@@ -952,19 +952,37 @@ theme "default" mode="system" {
         min-height 0
         overflow-y "auto"
     }
+    // A grid: each row (and the header row) shares its columns — run
+    // check box, the rule, on / off, Up, Down — so no control is squeezed.
     part "rules.list.items" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xxs"
+        display "grid"
+        grid-template-columns "auto minmax(0, 1fr) auto auto auto"
+        row-gap "$space.xxs"
         margin 0
         padding 0
     }
     part "rules.list.item" {
-        display "flex"
+        display "grid"
+        grid-column "1 / -1"
+        grid-template-columns "subgrid"
         align-items "center"
-        gap "$space.xs"
+        column-gap "$space.xs"
         padding "$space.xxs" "$space.xs"
         border-radius "$radius.sm"
+    }
+    part "rules.list.head" {
+        display "grid"
+        grid-column "1 / -1"
+        grid-template-columns "subgrid"
+        column-gap "$space.xs"
+        padding "0" "$space.xs"
+    }
+    part "rules.list.main" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs"
+        min-width 0
     }
     part "rules.list.item[selected=\"true\"]" {
         color "$color.selection-fg"
@@ -973,6 +991,8 @@ theme "default" mode="system" {
     part "rules.list.item[enabled=\"false\"]" { opacity "$opacity.muted"; }
     part "rules.list.select" {
         flex-grow 1
+        min-width 0
+        overflow-wrap "anywhere"
         padding "$space.xs"
         border "none"
         text-align "left"
@@ -1069,8 +1089,9 @@ theme "default" mode="system" {
         flex-direction "column"
         gap "$space.xs"
     }
+    // Low enough that the run panel's button stays in view under it.
     part "rules.text.source" {
-        min-height 240
+        min-height 120
         padding "$space.sm"
         border "$border.control"
         border-radius "$radius.sm"

@@ -2259,9 +2259,9 @@
       "conditions": [],
       "ancestors": [],
       "declarations": {
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": "var(--nail-space-xxs)",
+        "display": "grid",
+        "grid-template-columns": "auto minmax(0, 1fr) auto auto auto",
+        "row-gap": "var(--nail-space-xxs)",
         "margin": "0",
         "padding": "0"
       },
@@ -2273,11 +2273,41 @@
       "conditions": [],
       "ancestors": [],
       "declarations": {
-        "display": "flex",
+        "display": "grid",
+        "grid-column": "1 / -1",
+        "grid-template-columns": "subgrid",
         "align-items": "center",
-        "gap": "var(--nail-space-xs)",
+        "column-gap": "var(--nail-space-xs)",
         "padding": "var(--nail-space-xxs) var(--nail-space-xs)",
         "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.head",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-column": "1 / -1",
+        "grid-template-columns": "subgrid",
+        "column-gap": "var(--nail-space-xs)",
+        "padding": "0 var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.main",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "min-width": "0"
       },
       "source": null
     },
@@ -2319,6 +2349,8 @@
       "ancestors": [],
       "declarations": {
         "flex-grow": "1",
+        "min-width": "0",
+        "overflow-wrap": "anywhere",
         "padding": "var(--nail-space-xs)",
         "border": "none",
         "text-align": "left",
@@ -2553,7 +2585,7 @@
       "conditions": [],
       "ancestors": [],
       "declarations": {
-        "min-height": "240px",
+        "min-height": "120px",
         "padding": "var(--nail-space-sm)",
         "border": "var(--nail-border-control)",
         "border-radius": "var(--nail-radius-sm)",

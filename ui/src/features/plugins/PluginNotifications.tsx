@@ -9,12 +9,13 @@
 import { useEffect } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import { Icon } from "../../widgets/Icon";
+import { TOAST_MS as TOAST_KIND_MS } from "../../widgets/Toast";
 import { usePluginName } from "./PluginDialogs";
 import { partAttrs } from "./parts";
 import { usePluginsState, type Toast } from "./store";
 
-/** How long a toast stays (ms). */
-export const TOAST_MS = 8000;
+/** How long a toast stays (ms): as long as the app's other toasts that report something done. */
+export const TOAST_MS = TOAST_KIND_MS.done;
 
 function levelOf(toast: Toast) {
   return toast.kind === "plugin" ? (toast.notification.spec.level ?? "info") : toast.level;

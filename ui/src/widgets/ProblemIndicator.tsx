@@ -8,8 +8,10 @@
  * Two modes:
  * - **toggle** (no `open` prop): the indicator is a button. Its hover text is
  *   `title`; Enter / Space or a click opens the details as a native popover
- *   in the top layer (Escape and a click outside close it). The details are
- *   the button's description, so a screen reader reads them with it.
+ *   in the top layer (Escape and a click outside close it). Escape closes
+ *   only the details: it never reaches the window's own Escape binding
+ *   (review R1: it closed the whole rules window). The details are the
+ *   button's description, so a screen reader reads them with it.
  * - **follow** (`open` given): the host decides when the details show (the
  *   search field: while the pointer is over the form or focus is in it). The
  *   icon is decorative; the details float under the nearest positioned
@@ -21,7 +23,7 @@
  * `problem.icon`, `problem.label`, `problem.details` (same data attributes).
  * The look is the shared skin's (`theme/skin.ts`, `PROBLEM`).
  */
-import { useId, type ReactNode } from "react";
+import { useId, type KeyboardEvent, type ReactNode } from "react";
 import { Icon } from "./Icon";
 
 /** `error`: something failed; `warning`: something is not ready yet. */
@@ -41,6 +43,28 @@ export interface ProblemIndicatorProps {
   detailsId?: string | undefined;
   /** The details, already localized. */
   children: ReactNode;
+}
+
+/** Whether a popover is shown (`false` where the engine has no popovers). */
+function popoverOpen(element: HTMLElement): boolean {
+  try {
+    return element.matches(":popover-open");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Escape on open details closes them and goes no further (the key bindings
+ * listen on the document, so window-level Escape would close the window).
+ */
+export function closeOpenDetails(event: KeyboardEvent<HTMLElement>): void {
+  if (event.key !== "Escape") return;
+  const details = event.currentTarget.querySelector<HTMLElement>('[data-part="problem.details"]');
+  if (details === null || !popoverOpen(details)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  details.hidePopover();
 }
 
 export function ProblemIndicator({
@@ -75,7 +99,12 @@ export function ProblemIndicator({
     );
   }
   return (
-    <span data-part="problem" {...data} role={severity === "error" ? "alert" : undefined}>
+    <span
+      data-part="problem"
+      {...data}
+      role={severity === "error" ? "alert" : undefined}
+      onKeyDown={closeOpenDetails}
+    >
       <button
         type="button"
         data-part="problem.badge"

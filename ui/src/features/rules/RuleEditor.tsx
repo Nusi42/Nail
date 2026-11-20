@@ -1,16 +1,20 @@
 /**
  * Editing one rule: name, triggers, scope, the condition tree and the
  * actions (visual editor), or the same rule as `rules.kdl` text; testing
- * it against existing mail; its recent runs and their undo (running rules
- * is the run panel's, `./RunPanel.tsx`).
+ * it against existing mail; running it (and the rules checked in the list)
+ * now with the run panel (`./RunPanel.tsx`) under the buttons, which saves
+ * unsaved changes first; its recent runs and their undo.
  *
  * Switching to the text view and back without changing the text keeps the
  * rule as it was: only edited text is parsed (R1: a new rule's text did not
- * read back). Problems and errors are the compact `Issues` indicator in the
- * view switch's row, so they never push the editor around.
+ * read back). Edited text is read in the background after a typing pause,
+ * so the run panel names and judges the rule Save would write, in both
+ * views; saving from the text view writes the saved rule back as the text.
+ * Problems and errors are the compact `Issues` indicator in the view
+ * switch's row, so they never push the editor around.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type {
   Condition,
@@ -21,6 +25,7 @@ import type {
   RuleTrigger,
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
+import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
 import { useAccounts, useClient } from "../../state/queries";
 import { CheckField, NumberField, Section, SelectField, TextField } from "../../widgets/forms";
 import { ActionEditor } from "./ActionEditor";
@@ -36,6 +41,7 @@ import {
 } from "./api";
 import { ConditionEditor } from "./ConditionEditor";
 import { Issues } from "./Issues";
+import { RunPanel } from "./RunPanel";
 import {
   TRIGGER_KINDS,
   comparePaths,
@@ -54,6 +60,16 @@ type Notice = { kind: "ok" | "error"; id: string } | null;
 /** The root condition as a group, so the editor can add to it. */
 function asGroup(c: Condition): Condition {
   return c.type === "all" || c.type === "any" ? c : { type: "all", conditions: [c] };
+}
+
+/** A rule as the editor holds it (its root condition a group). */
+function editable(rule: Rule): Rule {
+  return { ...rule, conditions: asGroup(rule.conditions) };
+}
+
+/** Whether the editor's rule differs from the saved one. */
+export function ruleChanged(edited: Rule, saved: Rule): boolean {
+  return JSON.stringify(edited) !== JSON.stringify(saved);
 }
 
 function TriggerFields({ rule, onChange }: { rule: Rule; onChange: (rule: Rule) => void }) {
@@ -314,15 +330,16 @@ export function RuleEditor({
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [rule, setRule] = useState<Rule>(() => ({
-    ...initial,
-    conditions: asGroup(initial.conditions),
-  }));
+  const [rule, setRule] = useState<Rule>(() => editable(initial));
+  // The rule as last saved (what "Run now" would run).
+  const [savedRule, setSavedRule] = useState<Rule>(() => editable(initial));
   const [view, setView] = useState<"visual" | "text">("visual");
   const [text, setText] = useState("");
   // The text as the core wrote it: unchanged text needs no parsing.
   const [written, setWritten] = useState("");
   const [textErrors, setTextErrors] = useState<ConfigIssue[]>([]);
+  // Edited text as last read in the background (`rule` null: it does not read).
+  const [read, setRead] = useState<{ text: string; rule: Rule | null } | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
   const [tested, setTested] = useState<{ scanned: number; matches: ExplainedMatch[] } | null>(null);
@@ -345,16 +362,41 @@ export function RuleEditor({
     }
   };
 
+  /** A rule read from the text: it keeps this rule's identity whatever the text says. */
+  const own = (parsed: Rule): Rule => editable({ ...parsed, id: rule.id, source: rule.source });
+
   /** Reads the text view into the rule; `null` when it has errors. */
   const fromText = async (): Promise<Rule | null> => {
     const parsed = await ruleFromText(client, text);
     setTextErrors(parsed.errors);
     if (!parsed.rule) return null;
-    // The rule keeps its identity whatever the text says about its id.
-    const next = { ...parsed.rule, id: rule.id, source: rule.source };
-    setRule({ ...next, conditions: asGroup(next.conditions) });
+    const next = own(parsed.rule);
+    setRule(next);
     return next;
   };
+
+  // Edited text is read once typing pauses (quietly: errors show on Save,
+  // Apply or the switch back), so the run panel knows what Save would write.
+  const textEdited = view === "text" && text !== written;
+  const typed = useDebounced(text, TYPING_PAUSE_MS);
+  useEffect(() => {
+    if (view !== "text" || typed !== text || typed === written) return;
+    let live = true;
+    const settle = (read: Rule | null) => {
+      if (live) setRead({ text: typed, rule: read });
+    };
+    ruleFromText(client, typed).then(
+      (parsed) => {
+        settle(parsed.rule);
+      },
+      () => {
+        settle(null);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [client, view, typed, text, written]);
 
   const showText = () =>
     run(async () => {
@@ -376,16 +418,39 @@ export function RuleEditor({
   const current = async (): Promise<Rule | null> =>
     view === "text" && text !== written ? fromText() : rule;
 
+  /** Saves the rule as edited; the saved rule, or `null` when it is not ready. */
+  const persist = async (): Promise<Rule | null> => {
+    const next = await current();
+    if (!next || ruleProblems(next).length > 0) return null;
+    const saved = editable(await saveRule(client, next));
+    if (view === "text") {
+      // The text now shows the rule as saved, so it counts as unchanged.
+      const savedText = await ruleToText(client, saved);
+      setText(savedText);
+      setWritten(savedText);
+    }
+    setRule(saved);
+    setSavedRule(saved);
+    setNotice({ kind: "ok", id: "rules-saved" });
+    await queryClient.invalidateQueries({ queryKey: rulesKeys.rules });
+    onSaved(saved);
+    return saved;
+  };
+
   const save = () =>
     run(async () => {
-      const next = await current();
-      if (!next || ruleProblems(next).length > 0) return;
-      const saved = await saveRule(client, next);
-      setRule({ ...saved, conditions: asGroup(saved.conditions) });
-      setNotice({ kind: "ok", id: "rules-saved" });
-      await queryClient.invalidateQueries({ queryKey: rulesKeys.rules });
-      onSaved(saved);
+      await persist();
     });
+
+  // The rule Save would write: `undefined` while edited text is not read
+  // yet, `null` when it does not read.
+  const draft: Rule | null | undefined = !textEdited
+    ? rule
+    : read?.text === text
+      ? read.rule && own(read.rule)
+      : undefined;
+  const unsaved = isNew || !draft || ruleChanged(draft, savedRule);
+  const blocked = draft === null || (draft !== undefined && ruleProblems(draft).length > 0);
 
   const test = () =>
     run(async () => {
@@ -517,6 +582,15 @@ export function RuleEditor({
           </button>
         )}
       </div>
+      <RunPanel
+        edited={{
+          id: isNew ? null : rule.id,
+          name: draft?.name ?? rule.name,
+          unsaved,
+          blocked,
+          save: async () => (await persist())?.id ?? null,
+        }}
+      />
       {tested && <TestResults rule={rule} result={tested} />}
       {!isNew && <RunHistory ruleId={rule.id} onNotice={setNotice} />}
     </form>

@@ -218,4 +218,36 @@ describe("live search", () => {
     // The described-by text stays in the DOM for screen readers.
     expect(input).toHaveAttribute("aria-describedby", tip.id);
   });
+
+  it("announces a new mistake while the field keeps the focus", async () => {
+    const { input, user, view } = searchBar();
+    await user.type(input, "frm:ada");
+    const form = must(view.container.querySelector('[data-part="search-bar"]'));
+    const status = must(form.querySelector('[data-part="search-bar.status"]'));
+    expect(status).toHaveAttribute("role", "status");
+    await waitFor(() => {
+      expect(status).toHaveTextContent("Unknown search field. (At character 1)");
+    });
+    await user.clear(input);
+    await user.type(input, "is:flagged");
+    await waitFor(() => {
+      expect(status).toHaveTextContent(/^$/);
+    });
+  });
+
+  it("commits only from the search field the user works in", async () => {
+    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    const seen = searchHistory(env);
+    // Two fields of one layout: one searches the open folder, one everywhere.
+    renderNode(widget("search-bar", { options: { hints: false, scope: "folder" } }), env);
+    renderNode(widget("search-bar", { options: { hints: false, scope: "all" } }), env);
+    const everywhere = must(screen.getAllByRole("searchbox", { name: "Search mail" })[1]);
+    await userEvent.setup().type(everywhere, "from:ada");
+    await waitFor(() => {
+      expect(env.store.getState().search?.text).toBe("from:ada");
+    });
+    await pause(LIVE_SEARCH_PAUSE_MS * 2);
+    // One search, where the typing field searches: no second one from the other field.
+    expect(seen).toEqual([{ text: "from:ada", accountId: null, folderId: null, error: null }]);
+  });
 });

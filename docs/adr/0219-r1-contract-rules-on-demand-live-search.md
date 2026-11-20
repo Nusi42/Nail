@@ -67,8 +67,12 @@ Maintainer feedback of 2026-11-20:
   of the elicitation leaves the decision to Nail's confirmation, ADR 0217).
   The confirmation lists the rules, then the messages or the folder; summary
   `confirmation-summary-run-rules`; the counted `sends` are the send actions
-  times the named messages (unknown, so 0, for a folder or the rules' own
-  messages).
+  times the named messages. Rules that send (forward / redirect / reply) run
+  only on named `message_ids` (review R1): a folder's or the rules' own
+  messages are not known in advance, so their sends could not be counted
+  against `sends_per_hour`. A grant with excluded folders must name the
+  messages or a folder (review R1): without a target the rules run on their
+  own folders, else every Inbox, which the grant cannot check.
 - The result lists the operations queued and, as `created`, the run ids.
 
 ### UI contract

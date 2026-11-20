@@ -5,7 +5,7 @@
  */
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { listSelectionFor, NO_LIST_SCOPE } from "../../actions/mailTargets";
+import { expandTargets, listSelectionFor, NO_LIST_SCOPE } from "../../actions/mailTargets";
 import type { Rule, RuleRun } from "../../api/generated";
 import { MOCK_CONVERSATION_ID, addMockConversation } from "../../api/mockConversations";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
@@ -18,7 +18,8 @@ import { actions } from "./index";
 import { Issues } from "./Issues";
 import { RuleManagerView } from "./RuleManager";
 import { ALL_RULES, RUN_MENU_NAME, runMenuItems } from "./runMenu";
-import { mayUndo, messageIdsOf, outcomeOf } from "./runTargets";
+import { runPlan, type EditedRule } from "./RunPanel";
+import { mayUndo, outcomeOf } from "./runTargets";
 import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
 import { showTextView } from "./testing";
@@ -32,6 +33,36 @@ function setup(state: Parameters<typeof createEnv>[0] = {}): Env {
     onRulesEvent(event, env.queryClient);
   });
   return env;
+}
+
+/** A manual rule that flags every message, as `rules.kdl` text. */
+const FLAG_THEM = `rule "Flag them" trigger="manual" {
+    then {
+        flag
+    }
+}
+`;
+
+/**
+ * Renders the rules window and opens the editor with the button named
+ * `button` ("New rule", or a rule's name in the list).
+ */
+async function openEditor(env: Env, button: string) {
+  const user = userEvent.setup({ delay: null });
+  renderWithProviders(<RuleManagerView />, env);
+  await user.click(await screen.findByRole("button", { name: button }));
+  const editor = await screen.findByRole("form", { name: "Rule" });
+  return { user, editor, panel: within(editor).getByRole("region", { name: "Run rules" }) };
+}
+
+/** Opens a new rule in the text view, with `FLAG_THEM` typed into it. */
+async function newRuleAsText() {
+  const env = setup({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+  const opened = await openEditor(env, "New rule");
+  const source = await showTextView(opened.user, opened.editor);
+  await opened.user.clear(source);
+  await opened.user.paste(FLAG_THEM);
+  return { ...opened, env, source };
 }
 
 /** A second rule that tags every message. */
@@ -133,10 +164,7 @@ describe("the rules window's run panel", () => {
 
   it("runs the rule being edited on the open folder", async () => {
     const env = setup({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
-    const user = userEvent.setup({ delay: null });
-    renderWithProviders(<RuleManagerView />, env);
-    await user.click(await screen.findByRole("button", { name: "Rust announcements" }));
-    const panel = rulesRunPanel();
+    const { user, panel } = await openEditor(env, "Rust announcements");
     await user.click(await within(panel).findByRole("radio", { name: "The open folder “Inbox”" }));
     await user.click(within(panel).getByRole("button", { name: "Run now" }));
     await within(panel).findByText(/^The rule ran:/);
@@ -154,9 +182,109 @@ describe("the rules window's run panel", () => {
     expect(messages).toHaveAccessibleDescription("Select messages in the list first.");
     expect(within(panel).getByRole("radio", { name: /The open folder/ })).toBeDisabled();
     // Nothing chosen yet: nothing to run.
-    expect(within(panel).getByText(/Choose a saved rule/)).toBeInTheDocument();
+    expect(within(panel).getByText(/Choose a rule/)).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(within(panel).getByRole("button", { name: "Undo" })).toBeDisabled();
+  });
+
+  it("saves an edited rule before running it, never the old saved one", async () => {
+    const env = setup({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    const { user, editor, panel } = await openEditor(env, "Rust announcements");
+    // Saved and unchanged: it runs as saved.
+    expect(within(panel).getByRole("button", { name: "Run now" })).toBeEnabled();
+    const name = within(editor).getByRole("textbox", { name: "Name" });
+    await user.clear(name);
+    await user.type(name, "Rust news");
+    expect(within(panel).getByText("Saves “Rust news”, then runs it.")).toBeInTheDocument();
+    await user.click(within(panel).getByRole("radio", { name: "The open folder “Inbox”" }));
+    await user.click(within(panel).getByRole("button", { name: "Save and run" }));
+    await within(panel).findByText(/^The rule ran:/);
+    const saved = must(requestsOf(env, "SaveRule")[0]);
+    expect(saved.rule.name).toBe("Rust news");
+    expect(requestsOf(env, "RunRules")).toEqual([
+      { type: "RunRules", rule_ids: ["rust-announcements"], message_ids: [], folder_id: INBOX },
+    ]);
+    // Saved now: the next click runs it as it is.
+    expect(within(panel).getByRole("button", { name: "Run now" })).toBeEnabled();
+  });
+
+  it("saves a new rule and runs it from its editor", async () => {
+    const env = setup({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    const { user, editor, panel } = await openEditor(env, "New rule");
+    // Nothing to do yet: the reason is shown, the button waits.
+    expect(within(panel).getByText(/Fix what the rule still misses/)).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Save and run" })).toBeDisabled();
+    await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Fresh");
+    await user.selectOptions(within(editor).getByRole("combobox", { name: "Action" }), "archive");
+    await user.click(within(editor).getByRole("button", { name: "Add action" }));
+    await user.click(within(panel).getByRole("button", { name: "Save and run" }));
+    await within(panel).findByText(/^The rule ran:/);
+    const [request] = requestsOf(env, "RunRules");
+    const created = env.transport.data.features.rules.rules.find((r) => r.name === "Fresh");
+    expect(request?.rule_ids).toEqual([must(created).id]);
+  });
+
+  it("names the rule typed in a new rule's text view, as Save would write it", async () => {
+    const { user, panel, source } = await newRuleAsText();
+    // Read once typing pauses: the name of the rule in the text, not "".
+    expect(await within(panel).findByText("Saves “Flag them”, then runs it.")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Save and run" })).toBeEnabled();
+    // Text that does not read cannot be saved, so the run waits for a fix.
+    await user.clear(source);
+    await user.paste('rule "Broken" {');
+    expect(await within(panel).findByText(/Fix what the rule still misses/)).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Save and run" })).toBeDisabled();
+  });
+
+  it("runs a rule saved from the text view as saved, without saving it again", async () => {
+    const { env, user, editor, panel, source } = await newRuleAsText();
+    await user.click(within(editor).getByRole("button", { name: "Save rule" }));
+    await within(editor).findByText("The rule is saved.");
+    // The text shows the saved rule, so nothing is left to save.
+    expect(await within(panel).findByText("Runs “Flag them”.")).toBeInTheDocument();
+    expect(source.value).toContain('rule "Flag them"');
+    await user.click(within(panel).getByRole("radio", { name: "The open folder “Inbox”" }));
+    await user.click(within(panel).getByRole("button", { name: "Run now" }));
+    await within(panel).findByText(/^The rule ran:/);
+    expect(requestsOf(env, "SaveRule")).toHaveLength(1);
+  });
+
+  it("offers no folder while the list shows search results", async () => {
+    const env = setup({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    act(() => {
+      env.store.getState().setSearch({
+        text: "is:flagged",
+        accountId: null,
+        folderId: null,
+        error: null,
+      });
+    });
+    renderWithProviders(<RuleManagerView />, env);
+    const folder = await within(rulesRunPanel()).findByRole("radio", { name: /The open folder/ });
+    expect(folder).toBeDisabled();
+    expect(folder).toHaveAccessibleDescription(
+      "Not while the list shows search results: open a folder.",
+    );
+  });
+
+  it("names the list's columns, so the run and on check boxes are told apart", async () => {
+    const env = setup();
+    const { container } = renderWithProviders(<RuleManagerView />, env);
+    await screen.findByRole("button", { name: "Rust announcements" });
+    const head = must(container.querySelector('[data-part="rules.list.head"]'));
+    expect(head).toHaveAttribute("aria-hidden", "true");
+    expect(
+      [...head.querySelectorAll('[data-part="rules.list.head.cell"]')].map((c) => c.textContent),
+    ).toEqual(["Run", "Rule", "On"]);
+    const row = must(container.querySelector('[data-part="rules.list.item"]'));
+    // Pick box, the rule, the on box, Up, Down: one control per header column.
+    expect([...row.children].map((c) => c.getAttribute("data-part"))).toEqual([
+      "form.checkbox",
+      "rules.list.main",
+      "form.check",
+      "form.button",
+      "form.button",
+    ]);
   });
 
   it("forgets a deleted rule that was checked", async () => {
@@ -177,10 +305,7 @@ describe("the rules window's run panel", () => {
 describe("the editor's view switch", () => {
   it("goes Editor → Text → Editor on a new rule without reading the text back", async () => {
     const env = setup();
-    const user = userEvent.setup({ delay: null });
-    renderWithProviders(<RuleManagerView />, env);
-    await user.click(await screen.findByRole("button", { name: "New rule" }));
-    const editor = await screen.findByRole("form", { name: "Rule" });
+    const { user, editor } = await openEditor(env, "New rule");
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Fresh");
     const source = await showTextView(user, editor);
     expect(source.value).toContain('rule "Fresh"');
@@ -308,6 +433,28 @@ describe("the run toast", () => {
 });
 
 describe("run helpers", () => {
+  const edited = (fields: Partial<EditedRule>): EditedRule => ({
+    id: "a",
+    name: "A",
+    unsaved: false,
+    blocked: false,
+    save: () => Promise.resolve("a"),
+    ...fields,
+  });
+
+  it("plans a click: the checked rules, else the edited one, saved first when changed", () => {
+    expect(runPlan([], null)).toEqual({ ids: [], saveFirst: false });
+    expect(runPlan([], edited({}))).toEqual({ ids: ["a"], saveFirst: false });
+    expect(runPlan([], edited({ unsaved: true }))).toEqual({ ids: [], saveFirst: true });
+    expect(runPlan([], edited({ id: null, unsaved: true }))).toEqual({ ids: [], saveFirst: true });
+    // Checked rules run; the edited one is saved first only when it is one of them.
+    expect(runPlan(["b"], edited({ unsaved: true }))).toEqual({ ids: ["b"], saveFirst: false });
+    expect(runPlan(["b", "a"], edited({ unsaved: true }))).toEqual({
+      ids: ["b", "a"],
+      saveFirst: true,
+    });
+  });
+
   const runOf = (fields: Partial<RuleRun>): RuleRun => ({
     id: "r",
     rule_id: "x",
@@ -339,10 +486,11 @@ describe("run helpers", () => {
   it("names each message of the targets once", async () => {
     const env = setup();
     const added = addMockConversation(env.transport.data);
-    const ids = await messageIdsOf(env.client, [
+    const found = await expandTargets(env.client, [
       { kind: "message", message_id: must(added[0]).id },
       { kind: "conversation", thread_id: MOCK_CONVERSATION_ID, folder_id: null },
     ]);
+    const ids = found.map((m) => m.id);
     expect(ids[0]).toBe(must(added[0]).id);
     expect(new Set(ids).size).toBe(ids.length);
   });

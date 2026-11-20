@@ -42,8 +42,15 @@ content under the field down. This records how it was built.
   `role="tooltip"`, the field's `aria-describedby`, always in the DOM, and
   open while the pointer is over the search form or focus is in it. They
   float absolutely under the search form (the skin's `problem.details` rules
-  in `ui/src/theme/skin.ts`), so they never move the list, and let clicks
-  through (`pointer-events: none`) to the rows they cover. The explanation
+  in `ui/src/theme/skin.ts`), so they never move the list. They take the
+  pointer (review R1, WCAG 1.4.13: content shown on hover stays while the
+  pointer is on it), with a strip over the gap to the field; the query line
+  wraps, so a mistake late in a long query stays visible. While the field has
+  the focus, a visually hidden `role="status"` region (`search-bar.status`)
+  announces the mistake and its position, since a changed description of a
+  focused field is not read again. Only the search field the user last
+  focused commits typed text (`searchOwnerFor`), so two fields of a layout
+  never race with their own scopes. The explanation
   also says whether the list still shows an earlier search
   (`search-live-kept`) or nothing was searched (`search-live-not-run`).
 

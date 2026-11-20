@@ -22,7 +22,7 @@ import { useLabel, useT } from "../i18n/I18nProvider";
 import { useLayoutConfig } from "../layout/LayoutContext";
 import { optionBool, type WidgetProps } from "../layout/widgetRegistry";
 import { useAccounts, useFolders } from "../state/queries";
-import { useUi } from "../state/uiStore";
+import { useUi, type SearchState } from "../state/uiStore";
 import { wordsOption } from "./folderPane";
 import { LIST_FILTERS } from "./listFilter";
 import { SearchForm } from "./SearchBar";
@@ -66,6 +66,19 @@ export function folderTitle(
   return role ? { id: role } : { text: folder.name };
 }
 
+/**
+ * The list's title as the header shows it: "Search results" while a search
+ * (a typed query, a smart folder or a favorite) fills the list, else the
+ * folder's title (`folderTitle`).
+ */
+export function listTitle(
+  search: SearchState | null,
+  folder: Folder | undefined,
+  accountId: AccountId | null,
+): { id: string } | { text: string } | null {
+  return search !== null ? { id: "common-search-results" } : folderTitle(folder, accountId);
+}
+
 /** How many real accounts a unified view covers (`null` for one account). */
 export function accountCount(
   accountId: AccountId | null,
@@ -94,13 +107,8 @@ export function ListHeader({ node }: WidgetProps) {
   const folder = folders?.find((f) => f.id === folderId);
   const binding = showHint ? searchShortcut(layout) : null;
 
-  let title: string | null = null;
-  if (search !== null) {
-    title = t("common-search-results");
-  } else {
-    const named = folderTitle(folder, accountId);
-    if (named) title = "id" in named ? t(named.id) : named.text;
-  }
+  const named = listTitle(search, folder, accountId);
+  const title = named === null ? null : "id" in named ? t(named.id) : named.text;
   let counts: string | null = null;
   if (search === null && folder) {
     const unread = t("list-header-unread", { count: folder.unread });

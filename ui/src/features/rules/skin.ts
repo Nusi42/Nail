@@ -6,9 +6,13 @@
  * - `rules.issues.items`: the list of problems inside the shared problem
  *   indicator's details (`./Issues.tsx`; the indicator's own look is the
  *   shared skin's `PROBLEM`, ADR 0221).
- * - `rules.run-panel`: the run panel under the rule list (`./RunPanel.tsx`);
- *   its outcome line `rules.run.outcome` keeps one line of room, so a result
- *   arriving moves nothing.
+ * - `rules.run-panel`: the run panel under the editor's buttons
+ *   (`./RunPanel.tsx`); its outcome line `rules.run.outcome` keeps one line
+ *   of room, so a result arriving moves nothing.
+ * - `rules.notice` in the view switch's row takes no more height than the
+ *   switch, so "The rule is saved." moves nothing either.
+ * - `rules.list.head`: the list's column names (`theme.kdl` makes the list a
+ *   grid whose rows share its columns).
  */
 import { p } from "../../theme/selectors";
 import { LINE_BOX } from "../../theme/declarations";
@@ -21,5 +25,7 @@ ${p("rules.run-panel")} {
   display: flex; flex-direction: column; gap: ${T.sm}; padding-top: ${T.sm};
   border-top: 1px solid ${T.border};
 }
+${p("rules.views")} ${p("rules.notice")} { padding-block: 0; line-height: ${LINE_BOX}; }
+${p("rules.list.head.cell")} { font-size: ${T.small}; color: ${T.muted}; }
 ${p("rules.run.outcome")} { min-height: ${LINE_BOX}; margin: 0; font-size: ${T.small}; color: ${T.muted}; }
 `;

@@ -100,6 +100,35 @@ test("an invalid query keeps the list and explains the mistake over it", async (
   await expect(messageRows(page)).toHaveCount(VALID_HITS);
 });
 
+test("a long query wraps in the explanation, which the pointer can rest on", async ({ page }) => {
+  const size = { width: 1024, height: 700 };
+  await ready(page, size);
+  const input = searchBox(page);
+  await input.fill('subject:"a very long query text that goes on and on" AND frm:ada');
+  await expect(indicator(page)).toBeVisible();
+  // Screen readers hear the mistake while typing.
+  await expect(page.locator('[data-part="search-bar.status"]')).toHaveText(
+    /Unknown search field\. \(At character \d+\)/,
+  );
+  const mark = tip(page).locator('[data-part="search-bar.error.mark"]');
+  await expect(mark).toHaveText("frm:");
+  // The marked mistake is inside the card, not cut off at its edge.
+  const card = await tip(page).boundingBox();
+  const marked = await mark.boundingBox();
+  expect(card).not.toBeNull();
+  expect(marked).not.toBeNull();
+  if (card && marked) {
+    expect(marked.x + marked.width).toBeLessThanOrEqual(card.x + card.width);
+    expect(marked.x).toBeGreaterThanOrEqual(card.x);
+  }
+  // Hovered (not focused), the explanation stays while the pointer moves onto it.
+  await input.blur();
+  await field(page).hover();
+  await expect(tip(page)).toBeVisible();
+  if (card) await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2, { steps: 5 });
+  await expect(tip(page)).toBeVisible();
+});
+
 test("the indicator and its explanation fit at 1024×700", async ({ page }) => {
   const size = { width: 1024, height: 700 };
   await ready(page, size);

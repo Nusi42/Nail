@@ -227,9 +227,12 @@ open another message.
   client's accounts are left alone.
 - **Running rules.** `run_rules` runs your saved filter rules, in the order
   of your rule list, on the messages or the folder the agent names (or on
-  each rule's own folders). Each rule's run shows up in the rule's history
-  in the Rules window, where you can undo it; mail a rule forwarded or
-  answered stays sent.
+  each rule's own folders). Rules that forward, redirect or reply run only
+  on messages the agent names, so each mail they send counts against the
+  agent's hourly send limit. An agent whose access leaves out some folders
+  must name the messages or a folder. Each rule's run shows up in the rule's
+  history in the Rules window, where you can undo it; mail a rule forwarded
+  or answered stays sent.
 - **Drafts are never sent by writing them.** Sending is always a separate
   `send_message`. `update_draft` and `send_message` find a draft by the id
   `create_draft` returned or by the message id the agent sees when it reads

@@ -242,7 +242,7 @@ ${[
   .map((part) => `[data-part="${part}"]`)
   .join(", ")} { list-style: none; }
 [data-part="mcp-audit.table"] { border-collapse: collapse; }
-[data-part="search-bar.error.query"] { white-space: pre; }
+[data-part="search-bar.error.query"] { white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-part="search-bar.input"]::-webkit-search-cancel-button { display: none; }
 ${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${String(d)}"], [data-part="folder-picker.item"][data-depth="${String(d)}"] { margin-inline-start: ${String(d * 16)}px; }`).join("\n")}
 [data-part="context-menu"] { position: fixed; z-index: 1000; }

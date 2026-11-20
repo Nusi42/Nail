@@ -223,13 +223,18 @@ rules-target-legend = Run on
 rules-target-scope = Each rule’s own mail (its folders, else the Inboxes)
 rules-target-folder = The open folder “{ $folder }”
 rules-target-no-folder = Open a folder first.
+rules-target-searching = Not while the list shows search results: open a folder.
 rules-target-messages = { $count ->
     [0] The selected messages
    *[other] The selected messages ({ $count })
 }
 rules-target-no-messages = Select messages in the list first.
-rules-run-which-none = Choose a saved rule, or check rules in the list.
+rules-run-which-none = Choose a rule, or check rules in the list.
 rules-run-which-current = Runs “{ $name }”.
+rules-run-which-save = Saves “{ $name }”, then runs it.
+rules-run-which-fix = Fix what the rule still misses to save and run it.
+rules-save-and-run = Save and run
+rules-list-head-run = Run
 rules-run-which-checked = { $count ->
     [one] Runs the checked rule.
    *[other] Runs the { $count } checked rules.

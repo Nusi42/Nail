@@ -1,8 +1,13 @@
 /**
  * The `rule-manager` widget: the ordered rule list (enable, reorder,
- * select, new, check for running) with the run panel (R1) next to the
- * editor of the selected rule. Also shown as the `rules` dialog when the
- * layout has no `window "rules"`.
+ * select, new, check for running) next to the editor of the selected rule,
+ * whose run panel (R1) runs it or the checked rules; with no rule open the
+ * run panel stands alone, for the checked rules. Also shown as the `rules`
+ * dialog when the layout has no `window "rules"`.
+ *
+ * The list is a grid with a header row naming its columns ("Run", "Rule",
+ * "On"), so the two check boxes of a row are told apart at a glance and
+ * keep their room (review R1).
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { ExchangeRuleBadges } from "../exchange";
@@ -77,6 +82,12 @@ function RuleList({
         <p data-part="rules.hint">{t("rules-empty")}</p>
       ) : (
         <ol data-part="rules.list.items" aria-label={t("rules-list-label")}>
+          {/* Column names for the eye; each control has its own accessible name. */}
+          <li data-part="rules.list.head" aria-hidden="true">
+            <span data-part="rules.list.head.cell">{t("rules-list-head-run")}</span>
+            <span data-part="rules.list.head.cell">{t("common-rule")}</span>
+            <span data-part="rules.list.head.cell">{t("common-on")}</span>
+          </li>
           {rules.map((rule, index) => (
             <li
               key={rule.id}
@@ -95,22 +106,24 @@ function RuleList({
                   pick(rule.id, event.target.checked);
                 }}
               />
-              <button
-                type="button"
-                data-part="rules.list.select"
-                aria-pressed={rule.id === selected}
-                onClick={() => {
-                  select(rule.id);
-                }}
-              >
-                {rule.name}
-              </button>
-              <span data-part="rules.list.triggers">
-                {triggerSummary(rule.triggers)
-                  .map((id) => t(id))
-                  .join(t("rules-list-separator"))}
+              <span data-part="rules.list.main">
+                <button
+                  type="button"
+                  data-part="rules.list.select"
+                  aria-pressed={rule.id === selected}
+                  onClick={() => {
+                    select(rule.id);
+                  }}
+                >
+                  {rule.name}
+                </button>
+                <span data-part="rules.list.triggers">
+                  {triggerSummary(rule.triggers)
+                    .map((id) => t(id))
+                    .join(t("rules-list-separator"))}
+                </span>
+                <ExchangeRuleBadges ruleId={rule.id} />
               </span>
-              <ExchangeRuleBadges ruleId={rule.id} />
               <label data-part="form.check">
                 <input
                   data-part="form.checkbox"
@@ -146,7 +159,6 @@ function RuleList({
           ))}
         </ol>
       )}
-      <RunPanel rules={rules} current={selected} />
     </div>
   );
 }
@@ -184,7 +196,10 @@ export function RuleManagerView() {
           }}
         />
       ) : (
-        <p data-part="rules.hint">{t("rules-select-hint")}</p>
+        <div data-part="rules.editor" data-state="none">
+          <p data-part="rules.hint">{t("rules-select-hint")}</p>
+          <RunPanel edited={null} />
+        </div>
       )}
     </section>
   );

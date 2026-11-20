@@ -250,6 +250,7 @@ ${p("search-bar.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
 ${p("search-bar.field")}[data-state~="invalid"] { border-color: ${T.danger}; }
 ${p("search-bar")} { position: relative; }
 ${p("search-bar.error.note")} { color: ${T.muted}; }
+${p("search-bar.status")} { ${VISUALLY_HIDDEN} }
 ${p("search-bar.shortcut")} {
   flex: 0 0 auto; padding: 0 ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.rSm};
   font-family: ${T.fontMono}; font-size: ${T.label}; line-height: calc(${T.label} + ${T.xs}); color: ${T.muted}; background-color: ${T.bg};
@@ -333,7 +334,8 @@ ${p("problem.details")}[data-mode="toggle"] { max-width: ${floatingWidth(PROBLEM
 @supports (position-area: bottom) {
   ${p("problem.details")}[data-mode="toggle"] { inset: auto; margin: ${T.xs} 0 0; position-area: bottom span-right; position-try-fallbacks: flip-block, flip-inline; }
 }
-${p("problem.details")}[data-mode="follow"] { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; pointer-events: none; }`;
+${p("problem.details")}[data-mode="follow"] { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; }
+${p("problem.details")}[data-mode="follow"]::before { content: ""; position: absolute; inset-inline: 0; bottom: 100%; height: calc(${T.xs} + 1px); }`;
 
 const MENUS = `${p("context-menu")} {
   width: max-content; min-width: calc(16 * ${T.lg}); max-width: ${MENU_MAX_WIDTH};

@@ -117,6 +117,7 @@ search-bar-placeholder = Search, e.g. from:ada is:unread
 search-bar-clear = Clear search
 search-bar-hints = Search fields
 search-error-position = At character { $column }
+search-error-announce = { $message } ({ search-error-position })
 search-hint-from = Sender name or address
 search-hint-to = Recipient name or address
 search-hint-subject = Words in the subject

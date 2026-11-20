@@ -201,6 +201,26 @@ fn chosen_rules(saved: Vec<Rule>, wanted: &[String]) -> Result<Vec<Rule>, Failur
     Ok(saved.into_iter().filter(|r| ids.contains(&r.id)).collect())
 }
 
+/// Refuses a `run_rules` target whose size or folders the grant cannot
+/// check. Rules that send run only on named messages, so every send counts
+/// against the agent's `sends_per_hour` (a folder's or the rules' own
+/// messages are not known in advance). Without a target the rules run on
+/// their own folders (else every Inbox), which a grant with excluded
+/// folders cannot vouch for, so such a grant must name the target.
+fn check_run_target(access: &Access, a: &RunRulesArgs, send_actions: usize) -> Result<(), Failure> {
+    if send_actions > 0 && a.message_ids.is_empty() {
+        return Err(invalid(
+            "rules that forward, redirect or reply run only on named `message_ids`",
+        ));
+    }
+    if a.message_ids.is_empty() && a.folder_id.is_none() && access.excludes_folders() {
+        return Err(invalid(
+            "the grant excludes folders: name `message_ids` or a `folder_id`",
+        ));
+    }
+    Ok(())
+}
+
 /// `run_rules`: runs saved rules now on messages, a folder or each rule's
 /// own messages (R1, ADR 0219). The rules' strongest action decides the
 /// policy, and every kind of action they take needs its scopes.
@@ -239,6 +259,12 @@ pub(crate) async fn run_rules<D: McpData>(
                 .join(","),
         ),
     )];
+    let send_actions = rules
+        .iter()
+        .flat_map(|r| &r.actions)
+        .filter(|action| rule_action_kind(action) == ActionKind::Send)
+        .count();
+    check_run_target(ctx.access, &a, send_actions)?;
     let mut account_ids: Vec<AccountId> = Vec::new();
     let mut message_ids: Vec<MessageId> = Vec::new();
     let mut folder_id = None;
@@ -252,11 +278,6 @@ pub(crate) async fn run_rules<D: McpData>(
         );
         audit_lines.push(audit("messages", None, count(messages.len())));
         account_ids = accounts(messages.iter().map(|m| &m.account_id));
-        let send_actions = rules
-            .iter()
-            .flat_map(|r| &r.actions)
-            .filter(|action| rule_action_kind(action) == ActionKind::Send)
-            .count();
         sends = u32::try_from(send_actions.saturating_mul(messages.len())).unwrap_or(u32::MAX);
         message_ids = messages.into_iter().map(|m| m.id).collect();
     } else if let Some(id) = a.folder_id {

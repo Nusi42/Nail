@@ -12,7 +12,8 @@ import { violations } from "../../test/axe";
 import { appWindowEachTest, eventually, renderApp, settleUntil } from "../../test/app";
 import { createEnv, type Env } from "../../test/harness";
 import { must } from "../../test/must";
-import { TOAST_MS, toastMessage } from "./Toast";
+import { TOAST_MS } from "../../widgets/Toast";
+import { toastMessage } from "./Toast";
 import { mailActionsStoreFor } from "./store";
 import { removesRows } from "./run";
 

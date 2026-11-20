@@ -9,48 +9,33 @@
  * - `RunRules` answers with one run per rule; one click is undone by
  *   undoing each of them.
  */
+import { expandTargets } from "../../actions/mailTargets";
 import type { NailClient } from "../../api/client";
-import type { FolderId, MessageId, MessageTarget, RuleRun } from "../../api/generated";
+import type { FolderId, MessageTarget, RuleRun } from "../../api/generated";
 import { RULE_SCOPE_TARGET, undoRuleRun, type RuleRunTarget } from "./api";
 
 /** Where the rules window runs rules: each rule's own messages, a folder, the selected mail. */
 export const RUN_TARGET_KINDS = ["scope", "folder", "messages"] as const;
 export type RunTargetKind = (typeof RUN_TARGET_KINDS)[number];
 
-/** The message ids of mail-action targets, each once, in order. */
-export async function messageIdsOf(
-  client: NailClient,
-  targets: readonly MessageTarget[],
-): Promise<MessageId[]> {
-  const ids: MessageId[] = [];
-  for (const target of targets) {
-    if (target.kind === "message") {
-      ids.push(target.message_id);
-    } else {
-      const conversation = await client.request(
-        { type: "GetConversation", thread_id: target.thread_id, folder_id: target.folder_id },
-        "Conversation",
-      );
-      ids.push(...conversation.messages.map((m) => m.id));
-    }
-  }
-  return [...new Set(ids)];
-}
+/** What a run acts on, as the rules window and the menus name it. */
+export type RunTarget =
+  | { kind: "scope" }
+  | { kind: "folder"; folderId: FolderId }
+  | { kind: "messages"; targets: readonly MessageTarget[] };
 
-/** The run target of a kind; `null` when it has nothing to act on. */
-export async function runTargetOf(
+/** The core's run target of `target`; `null` when it has no messages to act on. */
+export async function ruleRunTargetOf(
   client: NailClient,
-  kind: RunTargetKind,
-  folderId: FolderId | null,
-  targets: readonly MessageTarget[],
+  target: RunTarget,
 ): Promise<RuleRunTarget | null> {
-  switch (kind) {
+  switch (target.kind) {
     case "scope":
       return RULE_SCOPE_TARGET;
     case "folder":
-      return folderId === null ? null : { messageIds: [], folderId };
+      return { messageIds: [], folderId: target.folderId };
     case "messages": {
-      const messageIds = await messageIdsOf(client, targets);
+      const messageIds = (await expandTargets(client, target.targets)).map((m) => m.id);
       return messageIds.length === 0 ? null : { messageIds, folderId: null };
     }
   }

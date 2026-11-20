@@ -67,6 +67,12 @@ export function applyHint(text: string, hint: string): string {
 /** Delay before the query is checked while typing. */
 export const CHECK_DELAY_MS = 250;
 
+/** Where a query mistake starts and ends in `text` (clamped to it). */
+export function errorSpan(text: string, error: SearchError): { start: number; end: number } {
+  const start = Math.max(0, Math.min(error.start, text.length));
+  return { start, end: Math.max(start, Math.min(error.end, text.length)) };
+}
+
 /**
  * The explanation of a query mistake, the details of the field's problem
  * indicator (`ProblemIndicator`, follow mode, ADR 0221). `kept` is the text
@@ -82,8 +88,7 @@ function ErrorView({
   kept: string | null;
 }) {
   const t = useT();
-  const start = Math.max(0, Math.min(error.start, text.length));
-  const end = Math.max(start, Math.min(error.end, text.length));
+  const { start, end } = errorSpan(text, error);
   const marked = text.slice(start, end);
   return (
     <div data-part="search-bar.error" data-kind={error.kind}>
@@ -172,7 +177,7 @@ export function SearchForm({
     }),
     [scope, accountId, folderId],
   );
-  const live = useLiveSearch(text, searchScope);
+  const live = useLiveSearch(text, searchScope, ids);
   const debounced = useDebounced(text, CHECK_DELAY_MS);
   const check = useCheckQuery(liveCheck ? debounced : "");
   // The core's verdict on the searched query wins; then a committed text the
@@ -221,6 +226,7 @@ export function SearchForm({
       // (M5b review: hiding on the input's blur dropped focus to <body>).
       onFocus={() => {
         setFocused(true);
+        live.claim();
       }}
       onBlur={(event) => {
         const next = event.relatedTarget;
@@ -261,6 +267,19 @@ export function SearchForm({
               kept={search && search.text !== typed ? search.text : null}
             />
           </ProblemIndicator>
+        )}
+        {/* The mistake for screen readers while typing: the details only
+            describe the field, which is not read again while it keeps the
+            focus. The region is there before a mistake, so it is announced. */}
+        {focused && (
+          <span data-part="search-bar.status" role="status">
+            {error
+              ? t("search-error-announce", {
+                  message: t(`search-error-${error.kind}`),
+                  column: errorSpan(text, error).start + 1,
+                })
+              : ""}
+          </span>
         )}
         {shortcut !== null && text === "" && !search && (
           <kbd data-part="search-bar.shortcut" aria-hidden="true">

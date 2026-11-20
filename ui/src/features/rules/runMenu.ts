@@ -20,12 +20,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { ActionContext } from "../../actions/registry";
 import { currentTargets } from "../../actions/mailTargets";
 import { errorMessageIdOf } from "../../api/client";
-import type { FolderId, MessageTarget, ResolvedMenuEntry, Rule, RuleId } from "../../api/generated";
+import type { ResolvedMenuEntry, Rule, RuleId } from "../../api/generated";
 import type { UiStore } from "../../state/uiStore";
 import { contextTarget, menuStoreFor } from "../menus";
 import type { Feature } from "../types";
-import { rulesKeys, rulesQuery, runRules, type RuleRunTarget } from "./api";
-import { messageIdsOf } from "./runTargets";
+import { rulesKeys, rulesQuery, runRules } from "./api";
+import { ruleRunTargetOf, type RunTarget } from "./runTargets";
 import { rulesStore } from "./store";
 
 export const RUN_MENU_ACTION = "rules.run-menu";
@@ -38,9 +38,8 @@ export const RUN_MENU_NAME = "rules:run";
 /** Opens the rules window (also "No rules yet" of the rules menu). */
 export const OPEN_RULES_ACTION = "rules.open";
 
-/** What a menu's run acts on. */
-export type MenuRunTarget =
-  { kind: "folder"; folderId: FolderId } | { kind: "messages"; targets: MessageTarget[] };
+/** What a menu's run acts on: a folder or list rows (never the rules' own mail). */
+export type MenuRunTarget = Exclude<RunTarget, { kind: "scope" }>;
 
 /** The target of the open menu: its folder, or the list rows it stands for. */
 export function menuRunTarget(ui: UiStore): MenuRunTarget | null {
@@ -97,12 +96,6 @@ export function ruleIdsOf(arg: string, rules: readonly Rule[]): RuleId[] {
   return arg === ALL_RULES ? rules.filter((r) => r.enabled).map((r) => r.id) : [arg];
 }
 
-async function runTargetOfMenu(ctx: ActionContext, target: MenuRunTarget): Promise<RuleRunTarget> {
-  return target.kind === "folder"
-    ? { messageIds: [], folderId: target.folderId }
-    : { messageIds: await messageIdsOf(ctx.client, target.targets), folderId: null };
-}
-
 /** Refetches the run histories after runs or undos. */
 export function refreshRuns(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: rulesKeys.allRuns });
@@ -136,7 +129,9 @@ export const runMenuActions: Feature["actions"] = {
       const toast = rulesStore(ctx.client).getState();
       try {
         const ids = arg === ALL_RULES ? ruleIdsOf(arg, await savedRules(ctx)) : [arg];
-        const runs = await runRules(ctx.client, ids, await runTargetOfMenu(ctx, target));
+        const runTarget = await ruleRunTargetOf(ctx.client, target);
+        if (runTarget === null) return;
+        const runs = await runRules(ctx.client, ids, runTarget);
         toast.showToast({ kind: "ran", runs });
         await refreshRuns(ctx.queryClient);
       } catch (error) {

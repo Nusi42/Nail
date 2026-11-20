@@ -6,7 +6,7 @@
  */
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { currentTargets, type ActionTargets } from "../../actions/mailTargets";
+import { currentTargets, expandTargets, type ActionTargets } from "../../actions/mailTargets";
 import type { NailClient } from "../../api/client";
 import type { MailActionResult, MessageSummary } from "../../api/generated";
 import { findSummary, type WriteContext } from "../../state/mailOps";
@@ -67,20 +67,11 @@ export async function targetMessages(
   queryClient: QueryClient,
   { targets }: ActionTargets,
 ): Promise<MessageSummary[]> {
-  const out = new Map<string, MessageSummary>();
-  for (const target of targets) {
-    if (target.kind === "message") {
-      const found = findSummary(queryClient, target.message_id);
-      if (found) out.set(found.id, found);
-      continue;
-    }
-    const answer = await client.request(
-      { type: "GetConversation", thread_id: target.thread_id, folder_id: target.folder_id },
-      "Conversation",
-    );
-    for (const m of answer.messages) out.set(m.id, m);
-  }
-  return [...out.values()];
+  const messages = await expandTargets(client, targets);
+  return messages.flatMap((m) => {
+    const summary = m.summary ?? findSummary(queryClient, m.id);
+    return summary ? [summary] : [];
+  });
 }
 
 /** Counts the tags of `messages`. */

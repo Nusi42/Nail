@@ -42,18 +42,24 @@ menu. They are listed in the order they run.
 A rule does not have to wait for new mail: you can run it, or several
 rules, on mail you already have — for example right after writing it.
 
-**In the rules window**, the **Run rules** part under the list runs the
-rule you are editing, or the rules whose checkbox you ticked in the list
-(they run in list order, each once). Choose what they run on:
+**In the rules window**, the **Run rules** part under the editor's
+**Save rule** and **Test** buttons runs the rule you are editing, or the
+rules whose **Run** checkbox you ticked in the list (they run in list
+order, each once; the **On** checkbox beside it turns a rule on or off).
+With no rule open, the part stands on its own for the ticked rules. Choose
+what they run on:
 
 - **Each rule's own mail** — the folders the rule applies to, else the
   Inboxes (this is what **Run now** always did);
-- **The open folder** — the folder the message list shows;
+- **The open folder** — the folder the message list shows (unavailable
+  while the list shows search results, a smart folder or a favorite);
 - **The selected messages** — the messages selected in the list (it shows
   how many). A selected conversation counts with all its messages in that
   folder. Without a selection this choice is unavailable and says why.
 
-Then press **Run now**. The line below says what happened ("2 rules ran: 5
+Then press **Run now**. A new rule, or one with changes you have not saved
+yet, shows **Save and run** instead: it saves the rule as you see it, then
+runs it, so the run never uses an older version. The line below says what happened ("2 rules ran: 5
 messages matched, 5 changes queued.") and **Undo** takes back everything
 that click did. Each rule's run also appears in its **Recent runs**.
 

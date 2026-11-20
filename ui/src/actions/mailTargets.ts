@@ -16,7 +16,14 @@
  */
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import type { FolderId, MessageId, MessageTarget, ThreadId } from "../api/generated";
+import type { NailClient } from "../api/client";
+import type {
+  FolderId,
+  MessageId,
+  MessageSummary,
+  MessageTarget,
+  ThreadId,
+} from "../api/generated";
 import { contextTarget, type ContextTarget } from "../features/menus";
 import { useUiStoreApi, type UiStore } from "../state/uiStore";
 
@@ -156,6 +163,37 @@ export function hasTargets(ui: UiStore): boolean {
 /** The message ids of the message targets (for actions on single messages). */
 export function messageIdsOf(targets: readonly MessageTarget[]): MessageId[] {
   return targets.flatMap((t) => (t.kind === "message" ? [t.message_id] : []));
+}
+
+/** One message behind a target; `summary` only when it came with the conversation. */
+export interface TargetMessage {
+  id: MessageId;
+  summary: MessageSummary | null;
+}
+
+/**
+ * The messages behind targets, each once, in order: a message target is
+ * its message, a conversation every message of it in the listed folder
+ * (`GetConversation`, which also brings their summaries).
+ */
+export async function expandTargets(
+  client: NailClient,
+  targets: readonly MessageTarget[],
+): Promise<TargetMessage[]> {
+  const out = new Map<MessageId, TargetMessage>();
+  for (const target of targets) {
+    if (target.kind === "message") {
+      if (!out.has(target.message_id))
+        out.set(target.message_id, { id: target.message_id, summary: null });
+      continue;
+    }
+    const answer = await client.request(
+      { type: "GetConversation", thread_id: target.thread_id, folder_id: target.folder_id },
+      "Conversation",
+    );
+    for (const m of answer.messages) out.set(m.id, { id: m.id, summary: m });
+  }
+  return [...out.values()];
 }
 
 /** The thread ids of the conversation targets. */
