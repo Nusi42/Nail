@@ -6,6 +6,7 @@
 window-rules = { common-filter-rules }
 rules-action-open = { common-filter-rules }
 rules-action-create-from-message = Create rule from message
+rules-action-run-menu = Run rule
 
 ## Rule list
 
@@ -176,7 +177,6 @@ rules-text-apply = Check text
 
 ## Saving, testing, running
 
-rules-problems = Before saving:
 rules-error-name = Give the rule a name.
 rules-error-no-actions = Add at least one action.
 rules-error-condition = Fill in every condition.
@@ -198,7 +198,6 @@ rules-test-why = Why it matches
 rules-hit = { $condition } matched
 rules-hit-value = { $condition } matched: { $value }
 rules-run = Run now
-rules-run-started = The rule is running on your mail.
 rules-runs-title = Recent runs
 rules-runs-none = This rule has not run yet.
 rules-run-summary = { $cause }: { $matched ->
@@ -215,3 +214,48 @@ rules-run-state-failed = { rules-auth-result-fail }
 rules-run-state-undone = undone
 rules-undo = Undo this run
 rules-undone = The run was undone.
+
+## Running rules on demand (R1): the run panel, the "Run rule" menu, the toast
+
+rules-pick-rule = Check “{ $name }” to run it with other rules
+rules-run-title = Run rules
+rules-target-legend = Run on
+rules-target-scope = Each rule’s own mail (its folders, else the Inboxes)
+rules-target-folder = The open folder “{ $folder }”
+rules-target-no-folder = Open a folder first.
+rules-target-messages = { $count ->
+    [0] The selected messages
+   *[other] The selected messages ({ $count })
+}
+rules-target-no-messages = Select messages in the list first.
+rules-run-which-none = Choose a saved rule, or check rules in the list.
+rules-run-which-current = Runs “{ $name }”.
+rules-run-which-checked = { $count ->
+    [one] Runs the checked rule.
+   *[other] Runs the { $count } checked rules.
+}
+rules-ran = { $rules ->
+    [one] The rule ran
+   *[other] { $rules } rules ran
+}: { $matched ->
+    [0] no message matched
+    [one] one message matched
+   *[other] { $matched } messages matched
+}, { $changes ->
+    [0] nothing to change.
+    [one] one change queued.
+   *[other] { $changes } changes queued.
+}
+rules-undo-all = { common-undo }
+rules-undone-all = Everything the run did was undone.
+rules-menu-all = All rules that are on
+rules-menu-off = { common-off }
+rules-menu-none = No rules yet: open { common-filter-rules }
+rules-issues-errors = { $count ->
+    [one] One error
+   *[other] { $count } errors
+}
+rules-issues-warnings = { $count ->
+    [one] One thing to fix
+   *[other] { $count } things to fix
+}

@@ -26,12 +26,51 @@ menu. They are listed in the order they run.
 - **Test rule** checks the rule against the mail you already have, without
   changing anything. It lists the messages that match, what would happen
   to each, and why it matched ("Subject matched: [rust-announce] …").
-- **Run now** runs a saved rule on your mail. **Recent runs** lists what
-  each run did; **Undo this run** takes back everything the run changed in
-  one step (moves, tags, flags, read state, deletes to Trash). Forwards,
-  redirects, replies, copies and permanent deletes cannot be undone. If you
-  changed some of the messages yourself in the meantime (moved one back,
-  deleted one), undo restores the others and leaves those alone.
+- **Recent runs** (under the rule) lists what each run of the rule did;
+  **Undo this run** takes back everything that run changed in one step
+  (moves, tags, flags, read state, deletes to Trash). Forwards, redirects,
+  replies, copies and permanent deletes cannot be undone. If you changed
+  some of the messages yourself in the meantime (moved one back, deleted
+  one), undo restores the others and leaves those alone.
+- Problems never push the window around: what is still missing before a
+  rule can be saved ("One thing to fix") and errors ("One error") show as a
+  small indicator next to **Editor** / **Text**. Point at it to read the
+  details, or press it (Enter or Space) to open them; Escape closes them.
+
+## Running rules by hand
+
+A rule does not have to wait for new mail: you can run it, or several
+rules, on mail you already have — for example right after writing it.
+
+**In the rules window**, the **Run rules** part under the list runs the
+rule you are editing, or the rules whose checkbox you ticked in the list
+(they run in list order, each once). Choose what they run on:
+
+- **Each rule's own mail** — the folders the rule applies to, else the
+  Inboxes (this is what **Run now** always did);
+- **The open folder** — the folder the message list shows;
+- **The selected messages** — the messages selected in the list (it shows
+  how many). A selected conversation counts with all its messages in that
+  folder. Without a selection this choice is unavailable and says why.
+
+Then press **Run now**. The line below says what happened ("2 rules ran: 5
+messages matched, 5 changes queued.") and **Undo** takes back everything
+that click did. Each rule's run also appears in its **Recent runs**.
+
+**From the message list**: right-click a message (or press Shift+F10 or
+the menu key) and choose **Run rule**. The menu that opens lists **All
+rules that are on** (when you have several), your rules that are on, and
+under **Off** the rules that are off — running a rule by hand works for
+those too. The rule runs on the message, or on all selected messages when
+you right-click one of them. **From the folder pane**: right-click a folder
+and choose **Run rule** to run a rule on every message in that folder.
+
+A small message then says what the run did, with **Undo** for all of it;
+it disappears after a few seconds unless you point at it.
+
+Running rules by hand is like **Run now** on each of them: a rule that
+stops processing ("Stop processing more rules") only ends its own run, the
+next rule still runs.
 
 ## The editor and the text view
 
@@ -39,7 +78,9 @@ The **Editor** view builds a rule from menus: add conditions, put them in
 groups ("All of these", "Any of these", "None of these") and add actions.
 The **Text** view shows the same rule in the `rules.kdl` syntax described
 below; edit it there and switch back, or press **Check text** to see
-mistakes with their line and column.
+mistakes with their line and column (in the indicator next to **Text**).
+Switching to **Text** and back without editing changes nothing, even for
+a rule that is not finished yet.
 
 All rules are stored in `rules.kdl` in your configuration folder. You can
 edit that file by hand too; Nail keeps your comments and layout when it

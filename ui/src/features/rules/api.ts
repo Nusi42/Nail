@@ -22,12 +22,18 @@ export const rulesKeys = {
   allRuns: ["rule-runs"] as const,
 };
 
+/** The saved rules, in file order. */
+export async function listRules(client: NailClient): Promise<Rule[]> {
+  return (await client.request({ type: "ListRules" }, "Rules")).rules;
+}
+
+/** The query of the saved rules (shared by the window and the menus). */
+export function rulesQuery(client: NailClient) {
+  return { queryKey: rulesKeys.rules, queryFn: () => listRules(client) };
+}
+
 export function useRules() {
-  const client = useClient();
-  return useQuery({
-    queryKey: rulesKeys.rules,
-    queryFn: async () => (await client.request({ type: "ListRules" }, "Rules")).rules,
-  });
+  return useQuery(rulesQuery(useClient()));
 }
 
 export function useRuleRuns(ruleId: RuleId | null, limit = 10) {

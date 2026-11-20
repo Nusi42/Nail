@@ -1,5 +1,8 @@
 /**
  * Feature slot of M1b WP22 (rules): filter rules: rule list, visual and text editor, test-rule preview, run history with undo.
+ * R1 (ADR 0219): running rules on demand — the run panel of the rules
+ * window, "Run rule" in the message-list row and folder menus
+ * (`./runMenu.ts`) and the toast of a menu's run (`./RunToast.tsx`).
  *
  * Only WP22 edits the files in this directory. The central registry
  * (`../registry.ts`) merges these exports into the app; see `../README.md`.
@@ -10,6 +13,8 @@ import type { Feature } from "../types";
 import { onRulesEvent } from "./api";
 import { ruleFromMessage } from "./model";
 import { RuleManager, RulesDialog } from "./RuleManager";
+import { OPEN_RULES_ACTION, RUN_ACTION, RUN_MENU_ACTION, runMenuActions } from "./runMenu";
+import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
 
 /** The window (or, without one in the layout, the dialog) with the rules. */
@@ -28,7 +33,7 @@ function selectedSummary(ctx: ActionContext) {
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   /** Opens the rules window. */
-  "rules.open": {
+  [OPEN_RULES_ACTION]: {
     run: (ctx) => {
       ctx.store.getState().openWindow(RULES_WINDOW);
     },
@@ -43,7 +48,21 @@ export const actions: Feature["actions"] = {
     },
     enabled: (ctx) => selectedSummary(ctx) !== undefined,
   },
+  /** "Run rule" (menus) and running one rule, or every rule that is on, from it. */
+  ...runMenuActions,
 };
+
+/**
+ * Palette descriptions: the run actions only make sense in their menus
+ * (hidden); their icon is described here, the layout names only the item.
+ */
+export const actionInfo: NonNullable<Feature["actionInfo"]> = {
+  [RUN_MENU_ACTION]: { title: "rules-action-run-menu", hidden: true, icon: "list-checks" },
+  [RUN_ACTION]: { title: "rules-action-run-menu", hidden: true, icon: "list-checks" },
+};
+
+/** Background components: the toast of a run from a menu. */
+export const effects: NonNullable<Feature["effects"]> = [RunToast];
 
 /** Named dialogs (opened with `window.open "<name>"`). */
 export const dialogs: NonNullable<Feature["dialogs"]> = {

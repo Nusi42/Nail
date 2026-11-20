@@ -2,13 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { nailPerTest, control, serverMessages } from "../support/nail";
-import {
-  readerAction,
-  runFromPalette,
-  messageRows,
-  DEMO_MULTI_CONVERSATIONS,
-  openMail,
-} from "../support/views";
+import { newRuleFromText as enterRuleText, openRulesWindow } from "../support/rules";
+import { readerAction, messageRows, DEMO_MULTI_CONVERSATIONS, openMail } from "../support/views";
 
 /**
  * Filter rules (ADR 0024) against the `demo-multi` mock servers: an arrival
@@ -23,18 +18,12 @@ const rulesFile = () => readFileSync(path.join(server.configDir, "rules.kdl"), "
 
 async function openRules(page: Page): Promise<Locator> {
   await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
-  await runFromPalette(page, "filter rules", "Filter rules");
-  const window = page.getByRole("dialog", { name: "Filter rules" });
-  await expect(window).toBeVisible();
-  return window;
+  return openRulesWindow(page);
 }
 
-/** Starts a new rule and enters it in the text view. */
+/** Starts a new rule, enters it in the text view and goes back to the editor. */
 async function newRuleFromText(window: Locator, text: string): Promise<Locator> {
-  await window.getByRole("button", { name: "New rule" }).click();
-  const editor = window.getByRole("form", { name: "Rule" });
-  await editor.getByRole("button", { name: "Text" }).click();
-  await editor.getByRole("textbox", { name: "The rule in rules.kdl syntax" }).fill(text);
+  const editor = await enterRuleText(window, text);
   await editor.getByRole("button", { name: "Editor" }).click();
   return editor;
 }

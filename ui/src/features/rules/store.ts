@@ -1,12 +1,14 @@
 /**
- * UI state of the rules feature: which rule is being edited, and a rule
- * pre-filled by "create rule from message" waiting for the editor. One
+ * UI state of the rules feature: which rule is being edited, a rule
+ * pre-filled by "create rule from message" waiting for the editor, and the
+ * rules checked in the list to run together and the outcome of a run from
+ * a menu (R1). One
  * store per client (so every app instance, and every test, has its own).
  */
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { NailClient } from "../../api/client";
-import type { Rule, RuleId } from "../../api/generated";
+import type { Rule, RuleId, RuleRun } from "../../api/generated";
 import { useClient } from "../../state/queries";
 
 /**
@@ -17,6 +19,17 @@ import { useClient } from "../../state/queries";
 export type Editing =
   { kind: "saved"; id: RuleId; key: string } | { kind: "new"; rule: Rule; key: string };
 
+/**
+ * What a run from a menu did (R1), shown by `RunToast`: the runs of one
+ * click (undone together), their undo, or the core's error (Fluent id).
+ */
+export type RunToast =
+  | { kind: "ran"; seq: number; runs: readonly RuleRun[] }
+  | { kind: "undone"; seq: number }
+  | { kind: "error"; seq: number; id: string };
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
 export interface RulesUiState {
   editing: Editing | null;
   /** Edits a saved rule. */
@@ -25,6 +38,16 @@ export interface RulesUiState {
   saved: (id: RuleId) => void;
   /** Starts a new rule from `rule` (a blank rule or one from a message). */
   startNew: (rule: Rule) => void;
+  /** Rules checked in the list to run together (R1), in the order checked. */
+  picked: readonly RuleId[];
+  /** Checks or unchecks a rule for running. */
+  pick: (id: RuleId, on: boolean) => void;
+  /** Keeps only the checked rules that still exist (after a delete). */
+  prunePicked: (existing: readonly RuleId[]) => void;
+  /** The outcome of the last run from a menu, `null` when dismissed. */
+  toast: RunToast | null;
+  showToast: (toast: DistributiveOmit<RunToast, "seq">) => void;
+  dismissToast: () => void;
 }
 
 const stores = new WeakMap<NailClient, StoreApi<RulesUiState>>();
@@ -43,6 +66,26 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
       },
       startNew: (rule) => {
         set({ editing: { kind: "new", rule, key: `new-${String(++seq)}` } });
+      },
+      picked: [],
+      pick: (id, on) => {
+        set((s) => {
+          const rest = s.picked.filter((p) => p !== id);
+          return { picked: on ? [...rest, id] : rest };
+        });
+      },
+      prunePicked: (existing) => {
+        set((s) => {
+          const kept = s.picked.filter((p) => existing.includes(p));
+          return kept.length === s.picked.length ? s : { picked: kept };
+        });
+      },
+      toast: null,
+      showToast: (toast) => {
+        set({ toast: { ...toast, seq: ++seq } });
+      },
+      dismissToast: () => {
+        set({ toast: null });
       },
     }));
     stores.set(client, store);

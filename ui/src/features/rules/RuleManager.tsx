@@ -1,18 +1,21 @@
 /**
  * The `rule-manager` widget: the ordered rule list (enable, reorder,
- * select, new) next to the editor of the selected rule. Also shown as the
- * `rules` dialog when the layout has no `window "rules"`.
+ * select, new, check for running) with the run panel (R1) next to the
+ * editor of the selected rule. Also shown as the `rules` dialog when the
+ * layout has no `window "rules"`.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { ExchangeRuleBadges } from "../exchange";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { Rule, RuleTrigger } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { reorderRules, rulesKeys, saveRule, useRules } from "./api";
 import { moveItem, newRule } from "./model";
+import { Issues } from "./Issues";
 import { RuleEditor } from "./RuleEditor";
+import { RunPanel } from "./RunPanel";
 import { useRulesUi } from "./store";
 
 function triggerSummary(triggers: readonly RuleTrigger[]): string[] {
@@ -24,10 +27,12 @@ function triggerSummary(triggers: readonly RuleTrigger[]): string[] {
 function RuleList({
   rules,
   selected,
+  error,
   onError,
 }: {
   rules: readonly Rule[];
   selected: string | null;
+  error: string | null;
   onError: (id: string) => void;
 }) {
   const t = useT();
@@ -35,6 +40,8 @@ function RuleList({
   const queryClient = useQueryClient();
   const select = useRulesUi((s) => s.select);
   const startNew = useRulesUi((s) => s.startNew);
+  const picked = useRulesUi((s) => s.picked);
+  const pick = useRulesUi((s) => s.pick);
   const refresh = () => queryClient.invalidateQueries({ queryKey: rulesKeys.rules });
   const act = async (work: () => Promise<unknown>) => {
     try {
@@ -53,16 +60,19 @@ function RuleList({
     );
   return (
     <div data-part="rules.list">
-      <button
-        type="button"
-        data-part="form.button"
-        data-action="new-rule"
-        onClick={() => {
-          startNew(newRule());
-        }}
-      >
-        {t("rules-new")}
-      </button>
+      <div data-part="rules.buttons">
+        <button
+          type="button"
+          data-part="form.button"
+          data-action="new-rule"
+          onClick={() => {
+            startNew(newRule());
+          }}
+        >
+          {t("rules-new")}
+        </button>
+        <Issues kind="error" lines={error === null ? [] : [t(error)]} />
+      </div>
       {rules.length === 0 ? (
         <p data-part="rules.hint">{t("rules-empty")}</p>
       ) : (
@@ -74,6 +84,17 @@ function RuleList({
               data-selected={rule.id === selected}
               data-enabled={rule.enabled}
             >
+              <input
+                data-part="form.checkbox"
+                data-field="rule-pick"
+                type="checkbox"
+                checked={picked.includes(rule.id)}
+                aria-label={t("rules-pick-rule", { name: rule.name })}
+                title={t("rules-pick-rule", { name: rule.name })}
+                onChange={(event) => {
+                  pick(rule.id, event.target.checked);
+                }}
+              />
               <button
                 type="button"
                 data-part="rules.list.select"
@@ -125,6 +146,7 @@ function RuleList({
           ))}
         </ol>
       )}
+      <RunPanel rules={rules} current={selected} />
     </div>
   );
 }
@@ -136,23 +158,20 @@ export function RuleManagerView() {
   const editing = useRulesUi((s) => s.editing);
   const select = useRulesUi((s) => s.select);
   const saved = useRulesUi((s) => s.saved);
+  const prunePicked = useRulesUi((s) => s.prunePicked);
   const [error, setError] = useState<string | null>(null);
   const list = rules.data ?? [];
+  // A deleted rule is no longer checked for running.
+  useEffect(() => {
+    if (rules.data) prunePicked(rules.data.map((r) => r.id));
+  }, [rules.data, prunePicked]);
   const selectedRule =
     editing?.kind === "saved" ? list.find((r) => r.id === editing.id) : undefined;
   const initial = editing?.kind === "new" ? editing.rule : selectedRule;
+  const current = editing?.kind === "saved" ? editing.id : null;
   return (
     <section data-part="rules" aria-label={t("rules-title")}>
-      <RuleList
-        rules={list}
-        selected={editing?.kind === "saved" ? editing.id : null}
-        onError={setError}
-      />
-      {error && (
-        <p data-part="rules.notice" data-kind="error" role="alert">
-          {t(error)}
-        </p>
-      )}
+      <RuleList rules={list} selected={current} error={error} onError={setError} />
       {initial ? (
         <RuleEditor
           key={editing?.key}

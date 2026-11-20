@@ -20,6 +20,8 @@ export const notMessages: readonly string[] = [
   "rule-text",
   "rule-up",
   "rule-down",
+  // The run panel's checkbox of a rule (`data-field`).
+  "rule-pick",
   // Query key of the run history.
   "rule-runs",
   // Prefixes of the on/off action choices (`<prefix>-label`, `-on`, `-off`).
@@ -37,6 +39,9 @@ export function runtimeIds(): string[] {
     "window-rules",
     "rules-action-open",
     "rules-action-create-from-message",
+    // R1: the "Run rule" menu item and the labels of the rules menu (`./runMenu.ts`).
+    "rules-action-run-menu",
+    ...["all", "off", "none"].map((k) => `rules-menu-${k}`),
     ...CONDITION_KINDS.map((k) => `rules-cond-${k}`),
     ...ACTION_KINDS.map((k) => `rules-do-${k}`),
     ...TEXT_OPS.map((k) => `rules-op-${k}`),

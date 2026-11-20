@@ -1,7 +1,13 @@
 /**
  * Editing one rule: name, triggers, scope, the condition tree and the
  * actions (visual editor), or the same rule as `rules.kdl` text; testing
- * it against existing mail; running it and undoing its runs.
+ * it against existing mail; its recent runs and their undo (running rules
+ * is the run panel's, `./RunPanel.tsx`).
+ *
+ * Switching to the text view and back without changing the text keeps the
+ * rule as it was: only edited text is parsed (R1: a new rule's text did not
+ * read back). Problems and errors are the compact `Issues` indicator in the
+ * view switch's row, so they never push the editor around.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -23,13 +29,13 @@ import {
   ruleFromText,
   ruleToText,
   rulesKeys,
-  runRule,
   saveRule,
   testRule,
   undoRuleRun,
   useRuleRuns,
 } from "./api";
 import { ConditionEditor } from "./ConditionEditor";
+import { Issues } from "./Issues";
 import {
   TRIGGER_KINDS,
   comparePaths,
@@ -133,12 +139,10 @@ function ScopeField({ rule, onChange }: { rule: Rule; onChange: (rule: Rule) => 
 /** The editor's text view: the rule in `rules.kdl` syntax. */
 function TextView({
   text,
-  errors,
   onText,
   onApply,
 }: {
   text: string;
-  errors: readonly ConfigIssue[];
   onText: (text: string) => void;
   onApply: () => void;
 }) {
@@ -157,24 +161,20 @@ function TextView({
           }}
         />
       </label>
-      {errors.length > 0 && (
-        <ul data-part="rules.text.errors" role="alert">
-          {errors.map((e, i) => (
-            <li key={i} data-part="rules.text.error">
-              {t("common-error-at-line", {
-                line: e.line,
-                column: e.column,
-                message: e.localized ? t(e.localized.id, e.localized.args) : e.message,
-              })}
-            </li>
-          ))}
-        </ul>
-      )}
       <button type="button" data-part="form.button" data-action="apply-text" onClick={onApply}>
         {t("rules-text-apply")}
       </button>
     </div>
   );
+}
+
+/** A text-view error with its position. */
+function issueText(t: ReturnType<typeof useT>, e: ConfigIssue): string {
+  return t("common-error-at-line", {
+    line: e.line,
+    column: e.column,
+    message: e.localized ? t(e.localized.id, e.localized.args) : e.message,
+  });
 }
 
 /** How a condition is named in explanations: its kind, plus a group's mode. */
@@ -320,12 +320,18 @@ export function RuleEditor({
   }));
   const [view, setView] = useState<"visual" | "text">("visual");
   const [text, setText] = useState("");
+  // The text as the core wrote it: unchanged text needs no parsing.
+  const [written, setWritten] = useState("");
   const [textErrors, setTextErrors] = useState<ConfigIssue[]>([]);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
   const [tested, setTested] = useState<{ scanned: number; matches: ExplainedMatch[] } | null>(null);
   const isNew = initial.id === "";
   const problems = ruleProblems(rule);
+  const errors = [
+    ...(notice?.kind === "error" ? [t(notice.id)] : []),
+    ...(view === "text" ? textErrors.map((e) => issueText(t, e)) : []),
+  ];
 
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -352,17 +358,23 @@ export function RuleEditor({
 
   const showText = () =>
     run(async () => {
-      setText(await ruleToText(client, rule));
+      const next = await ruleToText(client, rule);
+      setText(next);
+      setWritten(next);
       setTextErrors([]);
       setView("text");
     });
 
   const showVisual = () =>
     run(async () => {
-      if ((await fromText()) !== null) setView("visual");
+      if (text === written || (await fromText()) !== null) {
+        setTextErrors([]);
+        setView("visual");
+      }
     });
 
-  const current = async (): Promise<Rule | null> => (view === "text" ? fromText() : rule);
+  const current = async (): Promise<Rule | null> =>
+    view === "text" && text !== written ? fromText() : rule;
 
   const save = () =>
     run(async () => {
@@ -380,13 +392,6 @@ export function RuleEditor({
       const next = await current();
       if (!next) return;
       setTested(await testRule(client, next, null, TEST_LIMIT));
-    });
-
-  const runNow = () =>
-    run(async () => {
-      await runRule(client, rule.id);
-      setNotice({ kind: "ok", id: "rules-run-started" });
-      await queryClient.invalidateQueries({ queryKey: rulesKeys.allRuns });
     });
 
   const remove = () =>
@@ -425,11 +430,17 @@ export function RuleEditor({
         >
           {t("rules-view-text")}
         </button>
+        <Issues kind="error" lines={errors} />
+        <Issues kind="warning" lines={view === "visual" ? problems.map((id) => t(id)) : []} />
+        {notice?.kind === "ok" && (
+          <span data-part="rules.notice" data-kind="ok" role="status">
+            {t(notice.id)}
+          </span>
+        )}
       </div>
       {view === "text" ? (
         <TextView
           text={text}
-          errors={textErrors}
           onText={setText}
           onApply={() =>
             void run(async () => {
@@ -476,23 +487,6 @@ export function RuleEditor({
           </Section>
         </>
       )}
-      {view === "visual" && problems.length > 0 && (
-        <div data-part="rules.problems">
-          <p data-part="rules.problems.title">{t("rules-problems")}</p>
-          <ul data-part="rules.problems.items">
-            {problems.map((id) => (
-              <li key={id} data-part="rules.problem">
-                {t(id)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {notice && (
-        <p data-part="rules.notice" data-kind={notice.kind} role="status">
-          {t(notice.id)}
-        </p>
-      )}
       <div data-part="rules.buttons">
         <button
           type="submit"
@@ -512,26 +506,15 @@ export function RuleEditor({
           {t("rules-test")}
         </button>
         {!isNew && (
-          <>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="run-rule"
-              disabled={busy}
-              onClick={() => void runNow()}
-            >
-              {t("rules-run")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="delete-rule"
-              disabled={busy}
-              onClick={() => void remove()}
-            >
-              {t("rules-delete")}
-            </button>
-          </>
+          <button
+            type="button"
+            data-part="form.button"
+            data-action="delete-rule"
+            disabled={busy}
+            onClick={() => void remove()}
+          >
+            {t("rules-delete")}
+          </button>
         )}
       </div>
       {tested && <TestResults rule={rule} result={tested} />}

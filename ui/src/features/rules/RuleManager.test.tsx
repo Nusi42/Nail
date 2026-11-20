@@ -8,6 +8,7 @@ import { onRulesEvent } from "./api";
 import { actions, dialogs, widgets } from "./index";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
+import { showTextView } from "./testing";
 import { must } from "../../test/must";
 import { actionContext } from "../../test/env";
 
@@ -39,7 +40,12 @@ describe("rule manager", () => {
   it("is registered as a widget, a dialog and actions", () => {
     expect(appRegistry.widgets["rule-manager"]).toBe(widgets["rule-manager"]);
     expect(appRegistry.dialogs.rules).toBe(dialogs.rules);
-    expect(Object.keys(actions)).toEqual(["rules.open", "rules.create-from-message"]);
+    expect(Object.keys(actions)).toEqual([
+      "rules.open",
+      "rules.create-from-message",
+      "rules.run-menu",
+      "rules.run",
+    ]);
   });
 
   it("lists the rules and edits the selected one", async () => {
@@ -126,8 +132,11 @@ describe("rule manager", () => {
       kind: "saved",
       id: "invoices",
     });
-    // The editor stays, now for a saved rule.
-    expect(within(editor).getByRole("button", { name: "Run now" })).toBeInTheDocument();
+    // The editor stays, now for a saved rule, and the rule can run at once.
+    expect(within(editor).getByRole("button", { name: "Delete rule" })).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "Run rules" });
+    expect(within(panel).getByText("Runs “Invoices”.")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Run now" })).toBeEnabled();
   });
 
   it("removes conditions and changes group modes", async () => {
@@ -143,20 +152,20 @@ describe("rule manager", () => {
   it("edits the same rule as text and back", async () => {
     const env = setup();
     const { user, view, editor } = await openSample(env);
-    await user.click(within(editor).getByRole("button", { name: "Text" }));
-    const source = await within(editor).findByRole<HTMLTextAreaElement>("textbox", {
-      name: "The rule in rules.kdl syntax",
-    });
+    const source = await showTextView(user, editor);
     expect(source.value).toContain('rule "Rust announcements" trigger="arrival" {');
     expect(source.value).toContain('tag "rust"');
 
-    // An error is shown with its position; the view stays on the text.
+    // An error is a compact indicator with its position as the hover text;
+    // the view stays on the text.
     await user.clear(source);
     await user.type(source, 'rule "X" {{\n  then {{ explode }\n}');
     await user.click(within(editor).getByRole("button", { name: "Editor" }));
-    expect(
-      await within(editor).findByText(/Line 2, column \d+: unknown action `explode`/),
-    ).toBeInTheDocument();
+    const badge = await within(editor).findByRole("button", { name: "One error" });
+    expect(badge.getAttribute("title")).toMatch(/Line 2, column \d+: unknown action `explode`/);
+    expect(within(editor).getByRole("textbox", { name: "The rule in rules.kdl syntax" })).toBe(
+      source,
+    );
 
     await user.clear(source);
     await user.type(source, 'rule "Renamed" {{\n  then {{\n    tag "lang-rust"\n  }\n}');
@@ -203,10 +212,18 @@ describe("rule manager", () => {
     const env = setup();
     const { user, editor } = await openSample(env);
     expect(await within(editor).findByText("This rule has not run yet.")).toBeInTheDocument();
-    await user.click(within(editor).getByRole("button", { name: "Run now" }));
-    expect(
-      await within(editor).findByText("The rule is running on your mail."),
-    ).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "Run rules" });
+    // Run now acts on the rule's own messages, as it always did.
+    expect(within(panel).getByRole("radio", { name: /Each rule’s own mail/ })).toBeChecked();
+    await user.click(within(panel).getByRole("button", { name: "Run now" }));
+    expect(await within(panel).findByRole("status")).toHaveTextContent(
+      "The rule ran: 2 messages matched, 2 changes queued.",
+    );
+    expect(env.transport.requests.find((r) => r.type === "RunRules")).toMatchObject({
+      rule_ids: ["rust-announcements"],
+      message_ids: [],
+      folder_id: null,
+    });
     const history = within(editor).getByRole("region", { name: "Recent runs" });
     const undo = await within(history).findByRole("button", { name: "Undo this run" });
     expect(within(history).getByText("By hand: 2 messages, done")).toBeInTheDocument();
@@ -260,7 +277,11 @@ describe("rule manager", () => {
     await user.clear(field(view.container, "c-0-value"));
     await user.type(field(view.container, "c-0-value"), "(unclosed");
     await user.click(within(editor).getByRole("button", { name: "Save rule" }));
-    expect(await within(editor).findByRole("status")).toHaveAttribute("data-kind", "error");
+    // A compact indicator in the view switch's row, the text as its hover text.
+    const alert = await within(editor).findByRole("alert");
+    expect(alert).toHaveAttribute("data-kind", "error");
+    expect(alert.closest('[data-part="rules.views"]')).not.toBeNull();
+    expect(within(alert).getByRole("button", { name: "One error" })).toHaveAttribute("title");
   });
 });
 
