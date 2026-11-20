@@ -641,6 +641,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        theme/skin.ts (token-only default look of the primitives, between BASE_CSS and the theme's
                        part rules — the base theme has no rules for those parts), widgets/lucideIcons.ts + Icon.tsx
                        (theme icon → Lucide → nothing), widgets/primitives.tsx (Switch, Segmented, Tag, Avatar),
+                       widgets/ProblemIndicator.tsx (the compact problem indicator of the search field and the rules
+                       window, parts `problem*`, skin `PROBLEM`; ADR 0221),
                        widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download; name /
                        badge / Open button → OpenAttachment, else download; ADR 0211) + OpenAttachment.tsx (the
                        `mail-open-attachment` confirmation for flagged files) + MailConfirm.tsx (shared body of the
@@ -1461,3 +1463,19 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   action kind. UI: `features/rules/api.ts` `runRules` / `runRule` with `RuleRunTarget`; mock `features/rules/mock.ts`.
 - Live search (ADR 0219): `LIVE_SEARCH_PAUSE_MS` and `useDebouncedAction` in `ui/src/state/debounce.ts`; UI slot
   `ui/src/features/search/`, texts `search.ftl`.
+- Running rules from the UI (ADR 0221): `features/rules/RunPanel.tsx` (the run panel under the rule list: the edited
+  rule or the rules checked in the list, `picked` in `store.ts`, on their own mail / the open folder / the selected
+  messages), `runTargets.ts` (targets, outcome, undo of every run of one click), `runMenu.ts` (actions
+  `rules.run-menu` / `rules.run`: replaces the open context menu in place through `menuStoreFor().show` with the
+  saved rules), `RunToast.tsx` (an effect wearing the `mail-actions.toast` parts with `data-source="rules"`),
+  `Issues.tsx` (the rules window's problems), `skin.ts` `RULES_SKIN_CSS` (registered in `theme/compile.ts`). The
+  layout's `rules.run-menu` action sits in the row and folder menus. Core: `render_rule` writes no `id=""` for a new
+  rule, so its text form reads back. e2e helper `e2e/support/rules.ts`.
+- One compact problem indicator (ADR 0221): `ui/src/widgets/ProblemIndicator.tsx` (parts `problem*`, skin `PROBLEM`
+  in `theme/skin.ts`): toggle mode (button + native popover; the rules window) and follow mode (the host opens the
+  details; the search field).
+- Live search (ADR 0220): `ui/src/features/search/liveSearch.ts` (`useLiveSearch` / `planLiveSearch`: commit on the
+  settled pause or Enter, `CheckQuery` before searching, stale checks dropped); `SearchForm` shows the query mistake as
+  the `ProblemIndicator` in follow mode (details = `search-bar.error`, the field's `aria-describedby`); `useSearch`
+  keeps the previous results of the same scope (`keepsSearchResults`); one check definition (`checkQuery` /
+  `useCheckQuery`, `state/queries.ts`).

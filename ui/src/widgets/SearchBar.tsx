@@ -5,6 +5,7 @@ import { optionBool, optionString, type WidgetProps } from "../layout/widgetRegi
 import { useCheckQuery } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { Icon } from "./Icon";
+import { ProblemIndicator } from "./ProblemIndicator";
 import { useDebounced } from "../state/debounce";
 import { useLiveSearch } from "../features/search/liveSearch";
 
@@ -67,22 +68,17 @@ export function applyHint(text: string, hint: string): string {
 export const CHECK_DELAY_MS = 250;
 
 /**
- * The explanation of a query mistake: an overlay under the field (ADR 0219),
- * shown while the pointer is over the search form or focus is in it, and
- * always the field's `aria-describedby`. `kept` is the text whose results
- * the list still shows.
+ * The explanation of a query mistake, the details of the field's problem
+ * indicator (`ProblemIndicator`, follow mode, ADR 0221). `kept` is the text
+ * whose results the list still shows.
  */
 function ErrorView({
-  id,
   text,
   error,
-  open,
   kept,
 }: {
-  id: string;
   text: string;
   error: SearchError;
-  open: boolean;
   kept: string | null;
 }) {
   const t = useT();
@@ -90,7 +86,7 @@ function ErrorView({
   const end = Math.max(start, Math.min(error.end, text.length));
   const marked = text.slice(start, end);
   return (
-    <div data-part="search-bar.error" id={id} role="tooltip" data-kind={error.kind} hidden={!open}>
+    <div data-part="search-bar.error" data-kind={error.kind}>
       <span data-part="search-bar.error.message">{t(`search-error-${error.kind}`)}</span>
       <span data-part="search-bar.error.position">
         {t("search-error-position", { column: start + 1 })}
@@ -252,9 +248,19 @@ export function SearchForm({
           }}
         />
         {error && (
-          <span data-part="search-bar.error-indicator" data-kind={error.kind} aria-hidden="true">
-            <Icon name="circle-alert" part="search-bar.error-indicator.icon" />
-          </span>
+          // The mistake floats over the content under the field (ADR 0220, 0221).
+          <ProblemIndicator
+            severity="error"
+            kind={error.kind}
+            open={focused || hovered}
+            detailsId={errorId}
+          >
+            <ErrorView
+              text={text}
+              error={error}
+              kept={search && search.text !== typed ? search.text : null}
+            />
+          </ProblemIndicator>
         )}
         {shortcut !== null && text === "" && !search && (
           <kbd data-part="search-bar.shortcut" aria-hidden="true">
@@ -276,18 +282,6 @@ export function SearchForm({
           </button>
         )}
       </div>
-      {error && (
-        // The mistake overlays the content under the field (ADR 0220).
-        <div data-part="search-bar.overlay">
-          <ErrorView
-            id={errorId}
-            text={text}
-            error={error}
-            open={focused || hovered}
-            kept={search && search.text !== typed ? search.text : null}
-          />
-        </div>
-      )}
       {hints.length > 0 && (
         <ul data-part="search-bar.hints" id={hintsId} aria-label={t("search-bar-hints")}>
           {hints.map((hint) => (

@@ -58,6 +58,7 @@
  */
 import { HC, p, ps, pss } from "./selectors";
 import {
+  floatingWidth,
   ACCENT_BAR,
   AVATAR_FG,
   CAPS_TIGHT,
@@ -247,11 +248,7 @@ ${p("search-bar.field")}:focus-within { outline: 2px solid ${T.focus}; outline-o
 ${p("search-bar.input")} { flex: 1 1 auto; min-width: 0; border: none; outline: none; font-size: ${T.body}; color: ${T.fg}; background: transparent; }
 ${p("search-bar.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
 ${p("search-bar.field")}[data-state~="invalid"] { border-color: ${T.danger}; }
-${p("search-bar.error-indicator")} { flex: 0 0 auto; display: inline-flex; color: ${T.danger}; }
-${p("search-bar.error-indicator.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("search-bar")} { position: relative; }
-${p("search-bar.overlay")} { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; pointer-events: none; }
-${p("search-bar.error")} { padding: ${T.sm} ${T.md}; border: 1px solid color-mix(in srgb, ${T.danger} 45%, ${T.border}); border-radius: ${T.rMd}; background-color: ${T.bg}; box-shadow: ${T.overlay}; }
 ${p("search-bar.error.note")} { color: ${T.muted}; }
 ${p("search-bar.shortcut")} {
   flex: 0 0 auto; padding: 0 ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.rSm};
@@ -305,6 +302,38 @@ ${p("badge")} {
   color: ${T.accentFg}; background-color: ${T.accent};
 }
 ${p("badge")}[data-tone="danger"] { color: ${T.bg}; background-color: ${T.danger}; }`;
+
+/** The widest a problem's details get in toggle mode (a few lines of errors). */
+const PROBLEM_DETAILS_WIDTH = "36em";
+
+/**
+ * The compact problem indicator (`widgets/ProblemIndicator`, ADR 0221): a
+ * small icon (an outlined pill with a label in toggle mode) that never
+ * changes the height of its row; its details are a floating card. Toggle
+ * mode: a popover in the top layer, anchored under its button where the
+ * engine supports anchor positioning (else the browser centres it). Follow
+ * mode: absolutely under the nearest positioned ancestor, letting clicks
+ * through to the content below.
+ */
+const PROBLEM = `${p("problem")} { flex: 0 0 auto; display: inline-flex; align-items: center; }
+${p("problem.badge")} {
+  display: inline-flex; align-items: center; gap: ${T.xxs}; padding: 0; border: none;
+  font: inherit; font-size: ${T.small}; line-height: ${T.tight}; color: ${T.danger}; background: transparent;
+}
+${p("problem")}[data-severity="warning"] ${p("problem.badge")} { color: ${T.warning}; }
+${p("problem")}[data-mode="toggle"] ${p("problem.badge")} { padding: 0 ${T.xs}; border: 1px solid currentColor; border-radius: ${T.pill}; cursor: help; }
+${p("problem.badge")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 1px; }
+${p("problem.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
+${p("problem.details")} {
+  padding: ${T.sm} ${T.md}; border: 1px solid ${T.border}; border-radius: ${T.rMd}; box-shadow: ${T.overlay};
+  color: ${T.fg}; background-color: ${T.bg}; font-family: ${T.fontUi}; font-size: ${T.body}; text-align: start;
+}
+${p("problem.details")}[data-severity="error"] { border-color: color-mix(in srgb, ${T.danger} 45%, ${T.border}); }
+${p("problem.details")}[data-mode="toggle"] { max-width: ${floatingWidth(PROBLEM_DETAILS_WIDTH)}; }
+@supports (position-area: bottom) {
+  ${p("problem.details")}[data-mode="toggle"] { inset: auto; margin: ${T.xs} 0 0; position-area: bottom span-right; position-try-fallbacks: flip-block, flip-inline; }
+}
+${p("problem.details")}[data-mode="follow"] { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; pointer-events: none; }`;
 
 const MENUS = `${p("context-menu")} {
   width: max-content; min-width: calc(16 * ${T.lg}); max-width: ${MENU_MAX_WIDTH};
@@ -556,12 +585,12 @@ ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.icon"
 ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.unread-count")} { color: ${T.accent}; font-weight: ${T.semibold}; }
 ${p("status-bar")} { display: flex; align-items: center; gap: ${T.md}; min-height: calc(${T.control} - ${T.xs}); padding: 0 ${T.pane}; font-size: ${T.small}; color: ${T.muted}; border-top: 1px solid ${T.border}; background-color: ${T.subtle}; }
 ${p("search-bar")} { padding: ${T.md} ${T.pane} ${T.sm}; }
-${p("search-bar")} > ${p("search-bar.overlay")} { inset-inline: ${T.pane}; top: calc(100% - ${T.sm}); }`;
+${p("search-bar")} ${p("problem.details")} { inset-inline: ${T.pane}; top: calc(100% - ${T.sm}); }`;
 
 /** The message list header (M5b): search, title with counts, filter chips. */
 const LIST_HEADER = `${p("list-header")} { display: grid; gap: ${T.md}; padding: ${T.md} ${T.pane} ${T.sm}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
 ${p("list-header")} ${p("search-bar")} { padding: 0; }
-${p("list-header")} ${p("search-bar")} > ${p("search-bar.overlay")} { inset-inline: 0; top: 100%; }
+${p("list-header")} ${p("search-bar")} ${p("problem.details")} { inset-inline: 0; top: 100%; }
 ${p("list-header.heading")} { display: flex; align-items: baseline; gap: ${T.sm}; min-width: 0; }
 ${p("list-header.title")} { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("list-header.counts")} { flex: 0 0 auto; font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; white-space: nowrap; }
@@ -653,6 +682,7 @@ export const SKIN_CSS = [
   SWITCH,
   CHIPS_TAGS_BADGES,
   MENUS,
+  PROBLEM,
   TABS,
   CARDS_WINDOWS,
   PANES,

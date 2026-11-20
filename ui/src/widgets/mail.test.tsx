@@ -63,7 +63,8 @@ describe("search-bar", () => {
     });
     // The explanation overlays the content under the field (ADR 0219).
     const alert = must(document.getElementById(must(input.getAttribute("aria-describedby"))));
-    expect(alert).toHaveAttribute("data-part", "search-bar.error");
+    expect(alert).toHaveAttribute("data-part", "problem.details");
+    expect(alert.querySelector('[data-part="search-bar.error"]')).not.toBeNull();
     expect(alert).toBeVisible();
     expect(alert).toHaveTextContent("Unknown search field.");
     expect(alert).toHaveTextContent("At character 10");

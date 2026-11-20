@@ -694,6 +694,23 @@ fn text_form_of_one_rule() {
         n
     });
 
+    // A new rule (no id yet) reads back with the id derived from its name.
+    let new_rule = Rule {
+        id: RuleId::new(""),
+        name: "Fresh rule".into(),
+        enabled: true,
+        triggers: vec![RuleTrigger::Manual],
+        scope: vec![],
+        conditions: Condition::All {
+            conditions: vec![Condition::Tag { tag: "a".into() }],
+        },
+        actions: vec![],
+        source: None,
+    };
+    let text = rule_to_text(&new_rule);
+    assert!(!text.contains("id="), "{text}");
+    assert_eq!(parse_rule_text(&text).unwrap().id.as_str(), "fresh-rule");
+
     let errors = parse_rule_text("").unwrap_err();
     assert!(errors[0].message.contains("found none"));
     let errors = parse_rule_text("rule \"a\" {}\nrule \"b\" {}").unwrap_err();

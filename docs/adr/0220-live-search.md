@@ -1,4 +1,4 @@
-# 0220 — WR2: live search and the overlaid query mistake
+# 0220 — Live search and the overlaid query mistake
 
 Status: accepted (2026-11-20)
 
@@ -7,7 +7,7 @@ Status: accepted (2026-11-20)
 ADR 0219 set the contract for wave R1: the search field searches while the
 user types (`LIVE_SEARCH_PAUSE_MS`, `useDebouncedAction`), Enter at once, an
 invalid query is not searched, and the query mistake no longer pushes the
-content under the field down. This records how the package built it.
+content under the field down. This records how it was built.
 
 ## Decision
 
@@ -36,16 +36,16 @@ content under the field down. This records how the package built it.
   keeps the previous results of the same scope (`keepsSearchResults`, TanStack
   `placeholderData`) instead of flashing "Loading".
 - **The mistake overlays.** The field is marked `aria-invalid` and
-  `data-state="invalid"` and shows a compact indicator
-  (`search-bar.error-indicator`, a `circle-alert` icon). The explanation
-  (`search-bar.error`, `role="tooltip"`, the field's `aria-describedby`,
-  always in the DOM) opens while the pointer is over the search form or focus
-  is in it. It sits in `search-bar.overlay`, positioned absolutely under the
-  search form by the skin (`ui/src/theme/skin.ts`), so it never moves the
-  list, and lets clicks through (`pointer-events: none`) to the rows it
-  covers. The explanation also says whether the list still shows an
-  earlier search (`search-live-kept`) or nothing was searched
-  (`search-live-not-run`).
+  `data-state="invalid"` and shows the shared compact problem indicator
+  (`ProblemIndicator` in follow mode, ADR 0221: a `circle-alert` icon). Its
+  details hold the explanation (`search-bar.error`); they are
+  `role="tooltip"`, the field's `aria-describedby`, always in the DOM, and
+  open while the pointer is over the search form or focus is in it. They
+  float absolutely under the search form (the skin's `problem.details` rules
+  in `ui/src/theme/skin.ts`), so they never move the list, and let clicks
+  through (`pointer-events: none`) to the rows they cover. The explanation
+  also says whether the list still shows an earlier search
+  (`search-live-kept`) or nothing was searched (`search-live-not-run`).
 
 ## Consequences
 

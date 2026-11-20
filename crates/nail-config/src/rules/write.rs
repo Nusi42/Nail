@@ -90,7 +90,9 @@ fn folder_line(name: &str, folder: &FolderRef) -> Line {
 /// One rule in the canonical layout, ending with a newline.
 pub(crate) fn render_rule(rule: &Rule, indent: &str) -> String {
     let mut line = Line::new("rule").arg(&rule.name);
-    if rule.id.as_str() != rule_id_base(&rule.name) {
+    // A new rule has no id yet: the reader derives it from the name, and
+    // `id=""` would not read back.
+    if !rule.id.as_str().is_empty() && rule.id.as_str() != rule_id_base(&rule.name) {
         line = line.prop("id", rule.id.as_str());
     }
     if !rule.enabled {

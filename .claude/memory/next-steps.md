@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.6 released 2026-11-19: MCP drafts by message id, declined forms; release copies via NAIL_RELEASES_DIR)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (wave R1 integrated 2026-11-20: rules on demand, live search; 0.8.6 released 2026-11-19)"
 metadata:
   type: project
 ---
@@ -31,12 +31,13 @@ folder and where the old history is kept: the untracked `CLAUDE.local.md` (ADR 0
 filling the reader (ADR 0193), Show source (ADR 0194), the look-alike sender warning (ADR 0195), folder management
 (ADR 0196).
 
-**Wave R1 (rules on demand, live search; 2026-11-20):** contract done (ADR 0219, `docs/plan.md` "Wave R1"):
-`RunRules` (file order, one undoable run per rule), MCP `run_rules` (policy by the rules' strongest action),
-`runRules` / `RuleRunTarget` in `ui/src/features/rules/api.ts`, `LIVE_SEARCH_PAUSE_MS` + `useDebouncedAction`, slot
-`ui/src/features/search/` + `search.ftl`. Next: WR1 (rules on demand UI, Editor / Text switch bug) and WR2 (live
-search, compact error indicator) in parallel from `main`. Adding a `.ftl` file may need the Vitest cache cleared
-(`node_modules/.vitest-cache`): the catalog glob is cached.
+**Wave R1 (rules on demand, live search; 2026-11-20):** integrated (ADRs 0219-0221, [[r1-status]]): run panel in
+the rules window, "Run rule" in the row and folder menus, the Editor / Text fix, live search, one shared
+`ProblemIndicator`. Waiting for the maintainer: the human gate on the real app (a fresh rule applied to a selection
+from the rules window and from the list menu, live search while typing, an invalid query) and one decision: should
+the line / column of broken rule text stay visible inline in the text view (now only in the indicator's details)?
+Next: the rules window redesign (incl. the misplaced Test rule results) as its own wave. Adding a `.ftl` file may
+need the Vitest cache cleared (`node_modules/.vitest-cache`): the catalog glob is cached.
 
 **Released 0.8.6 (2026-11-19):** fixes a user report against 0.8.5 (ADR 0217): MCP `update_draft` /
 `send_message` take a draft's message id; an elicitation *decline* (clients that cannot show the form send it at once)

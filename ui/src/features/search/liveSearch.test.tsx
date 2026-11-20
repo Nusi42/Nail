@@ -180,13 +180,15 @@ describe("live search", () => {
 
     const field = must(view.container.querySelector('[data-part="search-bar.field"]'));
     expect(field).toHaveAttribute("data-state", "invalid");
-    expect(field.querySelector('[data-part="search-bar.error-indicator"]')).toHaveAttribute(
+    expect(field.querySelector('[data-part="problem"]')).toHaveAttribute(
       "data-kind",
       "unknown-field",
     );
     const tip = must(document.getElementById(must(input.getAttribute("aria-describedby"))));
-    expect(tip).toHaveAttribute("data-part", "search-bar.error");
-    expect(tip.closest('[data-part="search-bar.overlay"]')).not.toBeNull();
+    expect(tip).toHaveAttribute("data-part", "problem.details");
+    expect(tip).toHaveAttribute("data-mode", "follow");
+    expect(tip).toHaveAttribute("role", "tooltip");
+    expect(tip.querySelector('[data-part="search-bar.error"]')).not.toBeNull();
     expect(tip).toHaveTextContent("Unknown search field.");
     expect(tip).toHaveTextContent("The list still shows the results for “is:flagged”.");
     expect(tip.querySelector('[data-part="search-bar.error.mark"]')).toHaveTextContent("colour");

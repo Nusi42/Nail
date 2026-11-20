@@ -264,6 +264,7 @@ layout "default" {
         action "edit.select-all"  label="@edit.action.select-all"  icon="text-select"
         action "rules.open"       label="@rules.action.open"       icon="funnel"
         action "rules.create-from-message" label="@rules.action.create-from-message" icon="funnel"
+        action "rules.run-menu"   label="@rules.action.run-menu"   icon="list-checks"
         action "mcp.indicator.dismiss" label="@mcp.indicator.dismiss" icon="x"
         action "inspector.toggle" label="@customize.action.inspector" icon="scan-search"
         action "customize.merge"  label="@customize.action.merge" icon="git-merge"
@@ -712,6 +713,8 @@ layout "default" {
         item "calendar.event-from-message"
         item "tasks.from-message"
         item "rules.create-from-message"
+        // "Run rule": the saved rules, opened in place of this menu.
+        item "rules.run-menu"
     }
 
     // A card of the reader's feed (right-click, or its "More" button): its
@@ -775,6 +778,8 @@ layout "default" {
         item "folder.rename"
         item "folder.move"
         item "folder.delete"
+        separator
+        item "rules.run-menu"
     }
 
     // An account's heading in the folder pane (M5b).

@@ -11,3 +11,4 @@
 - [Backlog: real-account tests](backlog-real-account-tests.md) — Google/Exchange real-service tests parked in docs/backlog.md
 - [Zero-warnings policy](zero-warnings-policy.md) — linters/formatters for all files, 0 warnings/0 errors, never disable good lints; expect-with-reason only
 - [Maintainer UI decisions](owner-ui-decisions.md) — no fit-to-width for wide HTML mail (scrollbar is fine); accent override ignored in High contrast (ADR 0161)
+- [R1 status](r1-status.md) — rules on demand + live search integrated (ADRs 0219-0221); shared ProblemIndicator; layout snapshot pitfalls

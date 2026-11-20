@@ -369,6 +369,14 @@
             "label": "@rules.action.create-from-message",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-list.row"
@@ -573,6 +581,14 @@
             "args": [],
             "icon": "funnel",
             "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
             "shortcut": null,
             "type": "action"
           }
@@ -781,6 +797,14 @@
             "label": "@rules.action.create-from-message",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-list.row"
@@ -987,6 +1011,14 @@
             "label": "@rules.action.create-from-message",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-list.row"
@@ -1191,6 +1223,14 @@
             "args": [],
             "icon": "funnel",
             "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
             "shortcut": null,
             "type": "action"
           }
@@ -2901,6 +2941,17 @@
             "label": "@folders.action.delete",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:folder-tree.folder"
@@ -2987,6 +3038,17 @@
             "args": [],
             "icon": "trash",
             "label": "@folders.action.delete",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
             "shortcut": null,
             "type": "action"
           }
@@ -3077,6 +3139,17 @@
             "label": "@folders.action.delete",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:folder-tree.folder"
@@ -3165,6 +3238,17 @@
             "label": "@folders.action.delete",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:folder-tree.folder"
@@ -3251,6 +3335,17 @@
             "args": [],
             "icon": "trash",
             "label": "@folders.action.delete",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "rules.run-menu",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@rules.action.run-menu",
             "shortcut": null,
             "type": "action"
           }

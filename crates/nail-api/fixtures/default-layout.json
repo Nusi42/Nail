@@ -1023,6 +1023,12 @@
       "alias_of": null,
       "args": []
     },
+    "rules.run-menu": {
+      "label": "@rules.action.run-menu",
+      "icon": "list-checks",
+      "alias_of": null,
+      "args": []
+    },
     "mcp.indicator.dismiss": {
       "label": "@mcp.indicator.dismiss",
       "icon": "x",
@@ -2638,6 +2644,13 @@
         "args": [],
         "label": null,
         "icon": null
+      },
+      {
+        "type": "action",
+        "action": "rules.run-menu",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ],
     "context:thread-view.message": [
@@ -2971,6 +2984,16 @@
       {
         "type": "action",
         "action": "folder.delete",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "rules.run-menu",
         "args": [],
         "label": null,
         "icon": null

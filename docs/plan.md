@@ -1021,6 +1021,8 @@ Gates as in P3: every suite green, the responsive standard on changed screens, t
 
 *Status (contract):* done (ADR 0219). `RunRules` in the core (file order, one undoable run per rule, ids checked first), remote and MCP (`run_rules`, policy by the strongest action), TS and mock, `runRules` / `RuleRunTarget` in the rules slot, the live-search pause and `useDebouncedAction`, the `search` slot and catalogs. Next: WR1 and WR2 in parallel.
 
+*Status (integration):* done (ADRs 0220, 0221). WR1: the run panel under the rule list (the edited rule or the rules checked in the list, on their own mail / the open folder / the selected messages; outcome line; Undo of every run of a click), "Run rule" in the row and folder menus (the open menu replaced in place by the saved rules; toast with Undo), the Editor / Text switch of a new rule fixed (core `render_rule` writes no `id=""`; unedited text is not re-read). WR2: live search (commit on the settled pause or Enter, `CheckQuery` first, stale checks dropped, previous results kept while loading). Both show mistakes with one shared compact indicator, `widgets/ProblemIndicator.tsx` (toggle mode in the rules window, follow mode in the search field). Deferred: the rules window redesign including the misplaced Test rule (dry run) results, and visible labels for the two checkboxes per rule row; a hover submenu for "Run rule" (needs a dynamic menu source in `features/menus`); rule names starting with `@` read as Fluent ids in that menu; the query hints still push the content down; changing folder keeps the typed search text without re-running it. Next: the maintainer's human gate.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

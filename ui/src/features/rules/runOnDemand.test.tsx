@@ -350,6 +350,6 @@ describe("run helpers", () => {
   it("renders no indicator without problems", () => {
     const env = setup();
     const { container } = renderWithProviders(<Issues kind="error" lines={[]} />, env);
-    expect(container.querySelector('[data-part="rules.issues"]')).toBeNull();
+    expect(container.querySelector('[data-part="problem"]')).toBeNull();
   });
 });

@@ -18,8 +18,9 @@ const VALID_HITS = 3;
 
 const searchBox = (page: Page) => page.getByRole("searchbox", { name: "Search mail" });
 const field = (page: Page) => page.locator('[data-part="search-bar.field"]');
-const indicator = (page: Page) => page.locator('[data-part="search-bar.error-indicator"]');
-const tip = (page: Page) => page.locator('[data-part="search-bar.error"]');
+const indicator = (page: Page) =>
+  page.locator('[data-part="search-bar.field"] [data-part="problem.badge"]');
+const tip = (page: Page) => page.locator('[data-part="search-bar"] [data-part="problem.details"]');
 
 async function ready(page: Page, size?: { width: number; height: number }) {
   await openMail(page, server.url, {
