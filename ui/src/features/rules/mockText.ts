@@ -552,12 +552,14 @@ function scope(spec: string, account: string | null, at: Node | Entry): RuleScop
   return err(at, `invalid scope ${JSON.stringify(spec)}`);
 }
 
-function rule(n: Node): Rule {
+function rule(n: Node, gaps: ConfigIssue[]): Rule {
   const [nameEntry] = args(n);
-  if (!nameEntry || typeof nameEntry.value !== "string" || nameEntry.value.trim() === "") {
+  if (!nameEntry || typeof nameEntry.value !== "string") {
     return err(n, '`rule` needs a name: rule "<name>" { … }');
   }
   const name = nameEntry.value.trim();
+  // An empty name is a gap: an error, or (draft, ADR 0222) reported only.
+  if (name === "") gaps.push({ line: n.line, column: n.column, message: "a rule needs a name" });
   const triggers: RuleTrigger[] = [];
   const scopes: RuleScope[] = [];
   const triggerProp = prop(n, "trigger");
@@ -619,8 +621,15 @@ function rule(n: Node): Rule {
   };
 }
 
-/** Reads the text form of exactly one rule (like `parse_rule_text`). */
-export function ruleFromText(text: string): { rule: Rule | null; errors: ConfigIssue[] } {
+/**
+ * Reads the text form of exactly one rule (like `parse_rule_text`); a
+ * `draft` keeps a rule without a name and reports the gap (like
+ * `parse_rule_draft`, R2 ADR 0222). The mock checks only the name.
+ */
+export function ruleFromText(
+  text: string,
+  draft = false,
+): { rule: Rule | null; errors: ConfigIssue[] } {
   try {
     const nodes = parseKdl(text);
     if (nodes.length !== 1) {
@@ -640,7 +649,9 @@ export function ruleFromText(text: string): { rule: Rule | null; errors: ConfigI
     }
     const [node] = nodes as [Node];
     if (node.name !== "rule") err(node, `unknown node \`${node.name}\``);
-    return { rule: rule(node), errors: [] };
+    const gaps: ConfigIssue[] = [];
+    const parsed = rule(node, gaps);
+    return { rule: draft || gaps.length === 0 ? parsed : null, errors: gaps };
   } catch (e) {
     if (e instanceof Issue) {
       return { rule: null, errors: [{ line: e.line, column: e.column, message: e.message }] };

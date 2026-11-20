@@ -1025,6 +1025,74 @@ Gates as in P3: every suite green, the responsive standard on changed screens, t
 
 *Status (review fixes):* done. Agents: `run_rules` refuses rules that send without named `message_ids` (each send counts against `sends_per_hour`) and, for a grant with excluded folders, a run without a target. Rules window: the run panel moved under the editor's Save / Test buttons and saves unsaved or new rules first ("Save and run"); "the open folder" is unavailable while the list shows a search or smart folder; the rule list became a grid with "Run" / "Rule" / "On" column names; Escape on a problem's details no longer closes the window; the "saved" notice no longer moves the editor. One shared toast widget (`widgets/Toast.tsx`, one toast at a time) and one target-expansion helper (`expandTargets`). Search: the mistake is announced in a live region, the long query wraps, the explanation can be hovered, and only the last focused search field commits. Still deferred: the rules window redesign (including the Test rule results), the hover submenu, `@` rule names, the hints pushing content down.
 
+### Wave R2 (rules dialog redesign, shared pickers)
+
+Maintainer feedback of 2026-11-20 after wave R1: the design review of the rules window (must / should / could) is
+wanted in full; when the rules window is opened from a mail, condition fields should offer that mail's values; every
+field that names a folder, account, tag, address / contact, mailing list or header name gets a browse / search /
+select picker (folders as a searchable tree, free text stays allowed), everywhere such fields exist; plus the R1
+leftovers. Contract ADR 0222.
+
+#### Scope decisions for R2
+
+- **Rules window (design review, all items):** a fixed footer with the shared problem badge (hover / focus lists
+  the problems; `aria-invalid` on the field, `aria-describedby` on Save), "Saved" that fades, Delete… (confirmed) on
+  the left, "Run on" (selected messages, current folder — the default when opened from a mail —, where the rule
+  applies) with Run, Test and Save on the right; "Save and run" for unsaved rules; a confirmation with the preview
+  count for destructive actions; unsaved-changes prompt on close / Escape / switching rules. A lower panel with the
+  tabs Preview / Recent runs (N) next to the form (Test switches to Preview; rows with actions and their values,
+  why it matched, click opens the message, "Apply to these N"); Recent runs with time and target, a hover text why
+  an older run cannot be undone. The rule name as a heading field with On / Off, Editor / Text as a segmented
+  radiogroup; a compact WHEN / WHERE / IF / THEN form; "+ Add condition" as a menu button; a window that follows the
+  screen (stacked below about 760 px); empty state with "Create rule from message" and starter rules; list filter;
+  drag handle and Alt+Up / Down; syntax highlighting and line numbers in the Text view; one look in Settings and in
+  the window; the Exchange badges as a compact ⓘ count with the reasons in hover / focus text.
+- **Core (contract):** `RuleFromText { draft }` keeps an unfinished rule (empty name / values are problems, not
+  parse errors); `RuleRun.target` (`scope` | `messages` | `folder`, schema v21); `DeleteRule` deletes the rule's
+  runs; `GetMessageFacts` (a message's values for conditions); `SuggestValues` (tags, mailing lists, header names
+  for pickers).
+- **Pickers:** one generic `Picker` (`ui/src/widgets/pickers/`) with a source per kind, not one component per kind.
+- **Values from the mail:** the rules store's `origin` names the message the window was opened from; the editor
+  places `ValuesFromMessage` beside condition values.
+- **R1 leftovers:** "Run rule" as a hover submenu through a dynamic menu source (`features/menus/sources.ts`), rule
+  names starting with `@` shown as written, the search hints as an overlay (closed by a click outside and Escape),
+  a folder change re-runs the typed search, the mock's `RunRules` answers finished runs like the core.
+- No new crates. New slots: `ui/src/widgets/pickers/` (texts `pickers.ftl`), `ui/src/features/rules/fromMessage/`
+  (texts `rules-from-message.ftl`), `ui/src/features/menus/sources.ts`, `ui/src/api/mockValues.ts`,
+  `crates/nail-core/src/values.rs`.
+
+#### Packages of R2
+
+- **Contract (done):** ADR 0222, the core changes above with tests (nail-config draft read, store v21 and
+  `delete_rule_runs` / `suggest_tags` / `recent_blob_hashes`, core `values.rs`, remote scopes), TS regenerated, the
+  mock core, the picker / values-from-mail / menu-source interfaces as stubs, the theme regions `rules.header*`,
+  `rules.segmented*`, `rules.form*`, `rules.lower*`, `rules.footer*`, `rules.empty`, `picker`, `picker.input`.
+- **WR3 — rules dialog redesign (parallel):** `ui/src/features/rules/` except `fromMessage/` and the mock's
+  `RunRules`, the badges in `ui/src/features/exchange/Rules.tsx`, the rules window in `defaults/layout.kdl`, theme
+  parts `rules.*`, `locales/en/rules.ftl`, `userDocs/en/rules.md`, e2e rules scenarios. Places the shared `Picker`
+  and `ValuesFromMessage` in the condition and action rows.
+- **WR4 — shared pickers (parallel):** `ui/src/widgets/pickers/` (list, folder tree, keyboard model, sources),
+  `ui/src/api/mockValues.ts`, the pickers in the virtual folder editor, the search field's helpers and Settings,
+  `locales/en/pickers.ftl`, theme parts `picker.*`, e2e picker scenarios.
+- **WR5 — values from the selected mail (parallel):** `ui/src/features/rules/fromMessage/` (`valuesForCondition`,
+  `ValuesFromMessage`, the mock's facts), `crates/nail-core/src/values.rs` if the facts need more, the context-menu
+  entry points that open the rules window from a mail (setting `origin`), `locales/en/rules-from-message.ftl`, its e2e
+  scenario.
+- **WR6 — R1 leftovers (parallel):** `ui/src/features/menus/` (hover submenu of a source, `literalMenuLabel`),
+  "Run rule" on a source (`features/rules/runMenu.ts` and its registration), the search hints overlay and the
+  folder-change re-run (`widgets/SearchBar.tsx`, `features/search/`, the search state), `RunRules` in
+  `features/rules/mock.ts`.
+- **Integration:** rebase, renumber ADRs, regenerate the layout / theme snapshots once, the full suite incl. the r2
+  specs and `npm run visual` (baselines only for intended changes), memory `next-steps`.
+
+Gates as in R1: every suite green, the responsive standard on the rules window (1024×700 and 1600×1000, stacked
+below about 760 px), the maintainer's human gate on the real app (a new rule from a mail with values from it, the
+pickers in the rules editor and the virtual folder editor, Run rule as a submenu, the search hints overlay).
+
+*Status (contract):* done (ADR 0222). Core: draft reads, run targets (schema v21), runs deleted with their rule,
+`GetMessageFacts`, `SuggestValues`; TS regenerated; mock core; stubs for `Picker`, `ValuesFromMessage` /
+`valuesForCondition`, menu sources; theme regions. Next: WR3–WR6 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

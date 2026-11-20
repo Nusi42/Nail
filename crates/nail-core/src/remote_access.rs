@@ -236,6 +236,10 @@ impl Service {
             Request::SuggestAddresses { .. } if !full(&access) => Response::AddressSuggestions {
                 addresses: Vec::new(),
             },
+            // Tags, lists and header names span every account (R2).
+            Request::SuggestValues { .. } if !full(&access) => {
+                Response::ValueSuggestions { values: Vec::new() }
+            }
             other => self.handle(other).await,
         };
         self.narrow_remote_response(&access, response).await
@@ -269,6 +273,7 @@ impl Service {
             | Request::ListOutbox
             | Request::UploadAttachment { .. }
             | Request::SuggestAddresses { .. }
+            | Request::SuggestValues { .. }
             | Request::RuleToText { .. }
             | Request::RuleFromText { .. }
             | Request::GetUiContext
@@ -609,7 +614,8 @@ impl Service {
             Request::GetFolderSyncPolicy { folder_id } => {
                 self.check_folder(access, folder_id).await
             }
-            Request::RuleFromMessage { message_id } => {
+            Request::RuleFromMessage { message_id }
+            | Request::GetMessageFacts { message_id } => {
                 self.check_readable(access, message_id).await
             }
 

@@ -671,7 +671,13 @@ async fn old_mcp_audit_entries_and_rule_runs_are_purged() {
             })
             .unwrap();
         let run = store
-            .start_rule_run(&"r".into(), "R", nail_api::rules::RuleRunCause::Manual, at)
+            .start_rule_run(
+                &"r".into(),
+                "R",
+                nail_api::rules::RuleRunCause::Manual,
+                &nail_api::rules::RuleRunTarget::Scope,
+                at,
+            )
             .unwrap();
         store
             .finish_rule_run(&run, nail_api::rules::RuleRunState::Done, 0, None, at)

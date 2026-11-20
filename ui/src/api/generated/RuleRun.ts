@@ -5,6 +5,7 @@ import type { RuleId } from "./RuleId";
 import type { RuleRunCause } from "./RuleRunCause";
 import type { RuleRunId } from "./RuleRunId";
 import type { RuleRunState } from "./RuleRunState";
+import type { RuleRunTarget } from "./RuleRunTarget";
 
 /**
  * One run of a rule: the unit shown in the history and undone together.
@@ -38,6 +39,10 @@ started_at: string,
  * End (RFC 3339), `null` while running.
  */
 finished_at: string | null, 
+/**
+ * What it ran on (R2, ADR 0222).
+ */
+target: RuleRunTarget, 
 /**
  * Messages matched.
  */

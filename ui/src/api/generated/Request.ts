@@ -121,6 +121,7 @@ import type { SendCrypto } from "./SendCrypto";
 import type { SendVetoId } from "./SendVetoId";
 import type { SmartcardKeyRef } from "./SmartcardKeyRef";
 import type { SmartcardSettings } from "./SmartcardSettings";
+import type { SuggestKind } from "./SuggestKind";
 import type { SystemAppearance } from "./SystemAppearance";
 import type { TaskFields } from "./TaskFields";
 import type { TaskId } from "./TaskId";
@@ -532,7 +533,31 @@ rule: Rule, } | { "type": "RuleFromText",
 /**
  * One `rule "<name>" { … }` node.
  */
-text: string, } | { "type": "ListMcpClients" } | { "type": "CreateMcpClient", 
+text: string, 
+/**
+ * Read it as an editor's draft (R2, ADR 0222): an empty name or an
+ * empty value is reported in `errors` but the rule still comes
+ * back, so the editor can switch from Text to Editor with a rule
+ * that is not finished yet. Only KDL syntax errors and unknown
+ * nodes or values leave `rule` `null`.
+ */
+draft: boolean, } | { "type": "GetMessageFacts", 
+/**
+ * The message.
+ */
+message_id: MessageId, } | { "type": "SuggestValues", 
+/**
+ * What to suggest.
+ */
+kind: SuggestKind, 
+/**
+ * What the user typed.
+ */
+prefix: string, 
+/**
+ * Maximum number of values.
+ */
+limit: number, } | { "type": "ListMcpClients" } | { "type": "CreateMcpClient", 
 /**
  * Display name (unique among active clients; `conflict` otherwise).
  */

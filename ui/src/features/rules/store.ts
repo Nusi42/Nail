@@ -8,7 +8,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { NailClient } from "../../api/client";
-import type { Rule, RuleId, RuleRun } from "../../api/generated";
+import type { FolderId, MessageId, Rule, RuleId, RuleRun } from "../../api/generated";
 import { useClient } from "../../state/queries";
 
 /**
@@ -28,6 +28,16 @@ export type RunToast =
   | { kind: "undone"; seq: number }
   | { kind: "error"; seq: number; id: string };
 
+/**
+ * The message the rules window was opened from (R2, ADR 0222): its values
+ * are offered next to condition fields (`./fromMessage`) and its folder is
+ * the default "Run on" target.
+ */
+export interface RulesOrigin {
+  messageId: MessageId;
+  folderId: FolderId;
+}
+
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 export interface RulesUiState {
@@ -38,6 +48,9 @@ export interface RulesUiState {
   saved: (id: RuleId) => void;
   /** Starts a new rule from `rule` (a blank rule or one from a message). */
   startNew: (rule: Rule) => void;
+  /** The message the window was opened from, `null` when opened otherwise. */
+  origin: RulesOrigin | null;
+  setOrigin: (origin: RulesOrigin | null) => void;
   /** Rules checked in the list to run together (R1), in the order checked. */
   picked: readonly RuleId[];
   /** Checks or unchecks a rule for running. */
@@ -66,6 +79,10 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
       },
       startNew: (rule) => {
         set({ editing: { kind: "new", rule, key: `new-${String(++seq)}` } });
+      },
+      origin: null,
+      setOrigin: (origin) => {
+        set({ origin });
       },
       picked: [],
       pick: (id, on) => {

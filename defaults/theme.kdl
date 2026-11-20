@@ -935,6 +935,27 @@ theme "default" mode="system" {
         color "$color.fg-muted"
     }
 
+    // ---- Shared pickers (R2, ADR 0222): folder, account, tag, address,
+    // mailing list and header-name fields with a list to choose from ----
+    part "picker" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xxs"
+        min-width 0
+    }
+    part "picker.input" {
+        flex-grow 1
+        min-width 0
+        min-height "$size.control"
+        padding 0 "$space.sm"
+        border "$border.control"
+        border-radius "$radius.sm"
+        font-size "$font-size.body"
+        color "$color.fg"
+        background-color "$color.bg-subtle"
+    }
+    part "picker.input:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset 0; }
+
     // ---- Filter rules (ADR 0024) ----
 
     part "rules" {
@@ -1194,6 +1215,115 @@ theme "default" mode="system" {
     }
     part "rules.run:failed" { color "$color.danger"; }
     part "rules.run:undone" { color "$color.fg-muted"; }
+    // R2 (ADR 0222): the regions of the redesigned rules window. The editor
+    // column is a header (name, On / Off, Editor | Text), the form, the lower
+    // panel (Preview / Recent runs) and a footer that stays in view.
+    part "rules.header" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "rules.header.name" {
+        flex-grow 1
+        min-width 0
+        font-size "$font-size.lg"
+        font-weight "$font-weight.bold"
+    }
+    part "rules.segmented" {
+        display "inline-flex"
+        border "$border.control"
+        border-radius "$radius.sm"
+    }
+    part "rules.segmented.option" {
+        padding "$space.xxs" "$space.sm"
+        border "none"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "rules.segmented.option[selected=\"true\"]" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "rules.form" {
+        display "grid"
+        grid-template-columns "max-content minmax(0, 1fr)"
+        align-items "start"
+        gap "$space.sm" "$space.md"
+    }
+    part "rules.form.section" {
+        display "grid"
+        grid-column "1 / -1"
+        grid-template-columns "subgrid"
+    }
+    part "rules.form.label" {
+        padding-top "$space.xs"
+        font-size "$font-size.sm"
+        font-weight "$font-weight.bold"
+        color "$color.fg-muted"
+    }
+    part "rules.form.body" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        min-width 0
+    }
+    part "rules.lower" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        min-height 0
+        border-top "$border.thin"
+        padding-top "$space.sm"
+    }
+    part "rules.lower.tabs" {
+        display "flex"
+        gap "$space.xs"
+    }
+    part "rules.lower.tab" {
+        padding "$space.xxs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "rules.lower.tab[selected=\"true\"]" { background-color "$color.bg-raised"; }
+    part "rules.lower.panel" {
+        min-height 0
+        overflow-y "auto"
+    }
+    part "rules.footer" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding-top "$space.sm"
+        border-top "$border.thin"
+    }
+    part "rules.footer.status" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        flex-grow 1
+        min-width 0
+    }
+    part "rules.footer.start" {
+        display "flex"
+        gap "$space.sm"
+    }
+    part "rules.footer.end" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "rules.empty" {
+        display "flex"
+        flex-direction "column"
+        align-items "flex-start"
+        gap "$space.sm"
+        color "$color.fg-muted"
+    }
 
     // ---- MCP clients and the agent indicator (ADR 0025) ----
 

@@ -14,6 +14,7 @@ import type { WidgetRegistry } from "../layout/widgetRegistry";
 import type { WindowTitleRegistry } from "../layout/windowSpecs";
 import type { UiStore } from "../state/uiStore";
 import type { WindowRegistry } from "../state/windows";
+import type { MenuSourceRegistry } from "./menus/sources";
 
 /** What an event handler of a feature may use. */
 export interface FeatureEventContext {
@@ -65,6 +66,11 @@ export interface Feature {
    * its subject. `null` = the kind's `window-<kind>` text. Optional.
    */
   windowTitles?: WindowTitleRegistry;
+  /**
+   * Dynamic submenus (R2, ADR 0222): by the action id of a layout menu
+   * item, the source of its entries (`./menus/sources.ts`). Optional.
+   */
+  menuSources?: MenuSourceRegistry;
   /** Handlers for the events the core pushes. Optional. */
   events?: readonly FeatureEventHandler[];
   /**

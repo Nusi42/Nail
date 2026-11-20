@@ -102,15 +102,31 @@ fn names<T>(table: &[(&str, T)]) -> String {
 
 type R<T> = Result<T, ConfigError>;
 
-/// Reads every `rule` node. Returns the valid rules and every error.
-pub(crate) fn read(src: &Source<'_>) -> (Vec<Rule>, Vec<ConfigError>) {
+/// How strictly [`read`] reads (R2, ADR 0222).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Mode {
+    /// `rules.kdl`: a rule with any error is dropped.
+    Strict,
+    /// An editor's draft: an empty name or an empty value is reported (in
+    /// the second list of [`read`]'s answer) but keeps the rule.
+    Draft,
+}
+
+/// Reads every `rule` node. Returns the valid rules, every error, and (in
+/// [`Mode::Draft`]) the empty names and values that did not drop a rule.
+pub(crate) fn read(
+    src: &Source<'_>,
+    mode: Mode,
+) -> (Vec<Rule>, Vec<ConfigError>, Vec<ConfigError>) {
     let doc = match src.parse() {
         Ok(doc) => doc,
-        Err(e) => return (Vec::new(), vec![e]),
+        Err(e) => return (Vec::new(), vec![e], Vec::new()),
     };
     let reader = Reader {
         src,
+        mode,
         errors: RefCell::new(Vec::new()),
+        unfinished: RefCell::new(Vec::new()),
     };
     // Explicit ids first, so derived ids never take them.
     let mut explicit: HashSet<String> = HashSet::new();
@@ -144,12 +160,19 @@ pub(crate) fn read(src: &Source<'_>) -> (Vec<Rule>, Vec<ConfigError>) {
             rules.push(rule);
         }
     }
-    (rules, reader.errors.into_inner())
+    (
+        rules,
+        reader.errors.into_inner(),
+        reader.unfinished.into_inner(),
+    )
 }
 
 struct Reader<'s, 'a> {
     src: &'s Source<'a>,
+    mode: Mode,
     errors: RefCell<Vec<ConfigError>>,
+    /// Empty names and values of a draft ([`Mode::Draft`]).
+    unfinished: RefCell<Vec<ConfigError>>,
 }
 
 impl Reader<'_, '_> {
@@ -159,6 +182,18 @@ impl Reader<'_, '_> {
 
     fn error_count(&self) -> usize {
         self.errors.borrow().len()
+    }
+
+    /// An empty name or value: an error in `rules.kdl`, a reported gap
+    /// that keeps `value` in a draft.
+    fn unfinished<T>(&self, error: ConfigError, value: T) -> R<T> {
+        match self.mode {
+            Mode::Strict => Err(error),
+            Mode::Draft => {
+                self.unfinished.borrow_mut().push(error);
+                Ok(value)
+            }
+        }
     }
 
     /// Records the error of `result`, if any.
@@ -229,9 +264,11 @@ impl Reader<'_, '_> {
     fn nonempty<'e>(&self, entry: &'e KdlEntry, what: &str) -> R<&'e str> {
         let s = self.string(entry, what)?;
         if s.trim().is_empty() {
-            return Err(self
-                .src
-                .entry_err(entry, msg("config-empty").arg("what", what)));
+            return self.unfinished(
+                self.src
+                    .entry_err(entry, msg("config-empty").arg("what", what)),
+                s,
+            );
         }
         Ok(s)
     }
@@ -403,9 +440,11 @@ impl Reader<'_, '_> {
         };
         let value = self.string(entry, &format!("`{}`", name_of(TEXT_OPS, &op)))?;
         if value.is_empty() && op != TextOp::Equals {
-            return Err(self
-                .src
-                .entry_err(entry, msg("config-rule-comparison-empty")));
+            self.unfinished(
+                self.src
+                    .entry_err(entry, msg("config-rule-comparison-empty")),
+                (),
+            )?;
         }
         Ok(Some(TextMatch {
             op,
@@ -426,10 +465,15 @@ impl Reader<'_, '_> {
         let header = (|| -> R<(String, Option<RuleId>, bool)> {
             self.check_props(node, &["id", "enabled", "trigger", "scope"])?;
             self.check_args(node, 1, 1, "config-rule-needs-name")?;
-            let name = self
-                .nonempty(args(node)[0], "the rule name")?
-                .trim()
-                .to_owned();
+            let entry = args(node)[0];
+            let name = self.string(entry, "`rule`")?.trim().to_owned();
+            if name.is_empty() {
+                self.unfinished(
+                    self.src
+                        .entry_err(entry, msg("config-rule-needs-name-value")),
+                    (),
+                )?;
+            }
             let id = match node.entry("id") {
                 None => None,
                 Some(entry) => {
@@ -1072,7 +1116,8 @@ impl Reader<'_, '_> {
                 let mut to = Vec::new();
                 for entry in args(node) {
                     let address = self.nonempty(entry, &format!("`{}`", name(node)))?.trim();
-                    if !is_plausible_address(address) {
+                    // A draft's empty address was reported by `nonempty`.
+                    if !address.is_empty() && !is_plausible_address(address) {
                         return Err(self.src.entry_err(
                             entry,
                             msg("config-rule-address-invalid").arg("found", format!("{address:?}")),

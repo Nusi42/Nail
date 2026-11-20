@@ -109,7 +109,7 @@ fn sender_condition(message: &dyn MessageView) -> Option<(Condition, String)> {
 /// `List-Id: [phrase] <id>` → the id and the phrase (unquoted; `None` when
 /// empty or still an encoded word). A value without angle brackets is taken
 /// as the id itself (seen in the wild).
-pub(crate) fn parse_list_id(value: &str) -> Option<(String, Option<String>)> {
+pub fn parse_list_id(value: &str) -> Option<(String, Option<String>)> {
     let value = value.trim();
     let (id, phrase) = match (value.rfind('<'), value.rfind('>')) {
         (Some(open), Some(close)) if open < close => {

@@ -463,6 +463,7 @@ describe("run helpers", () => {
     state: "done",
     started_at: "",
     finished_at: null,
+    target: { kind: "scope" },
     matched: 0,
     op_ids: [],
     undoable: false,

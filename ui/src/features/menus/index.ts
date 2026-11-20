@@ -46,3 +46,9 @@ export { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
 export { contextTarget, menuStoreFor, openContextMenu } from "./store";
 export type { ContextTarget } from "./targets";
 export { ariaShortcut, chordText, keyLabel } from "./keyLabels";
+export {
+  literalMenuLabel,
+  menuSourceFor,
+  type MenuSource,
+  type MenuSourceRegistry,
+} from "./sources";

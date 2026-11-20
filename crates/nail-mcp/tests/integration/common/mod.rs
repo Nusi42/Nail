@@ -647,7 +647,7 @@ impl McpData for FakeData {
                             serde_json::from_value(serde_json::json!({
                                 "id": format!("run-{}", n + 1), "rule_id": rule,
                                 "rule_name": rule, "cause": "manual", "state": "done",
-                                "started_at": "2026-11-20T08:00:00Z",
+                                "started_at": "2026-11-20T08:00:00Z", "target": {"kind": "scope"},
                                 "finished_at": "2026-11-20T08:00:01Z", "matched": 1,
                                 "op_ids": ["op-1"], "undoable": true, "message": null,
                             }))
@@ -854,7 +854,7 @@ pub(crate) fn pim_answer(request: Request) -> DataResult<Response> {
                 draft: Box::new(draft),
             }
         }
-        Request::RuleFromText { text } => {
+        Request::RuleFromText { text, .. } => {
             if text.contains("broken") {
                 Response::RuleParsed {
                     rule: None,

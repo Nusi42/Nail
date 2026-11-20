@@ -48,6 +48,7 @@ import * as system from "./system";
 import * as toolbarEditor from "./toolbar-editor";
 import * as triage from "./triage";
 import * as windows from "./windows";
+import type { MenuSource, MenuSourceRegistry } from "./menus/sources";
 import type { Feature } from "./types";
 
 /** The feature slots, by name. */
@@ -115,6 +116,8 @@ export interface AppRegistry {
   windows: WindowRegistry;
   /** Window titles by kind from the UI state (M5c). */
   windowTitles: WindowTitleRegistry;
+  /** Dynamic submenus by action id (R2, ADR 0222). */
+  menuSources: MenuSourceRegistry;
   events: NonNullable<Feature["events"]>;
   effects: NonNullable<Feature["effects"]>;
 }
@@ -152,6 +155,7 @@ export function mergeFeatures(
   const settings: Record<string, SettingsWidgetInfo> = {};
   const windowSpecs: Record<string, WindowRegistration> = {};
   const windowTitles: Record<string, WindowTitleFn> = {};
+  const menuSources: Record<string, MenuSource> = {};
   mergeInto(widgets, builtins.widgets, "widget", "the built-ins", owners);
   mergeInto(actions, builtins.actions, "action", "the built-ins", owners);
   const events: NonNullable<Feature["events"]>[number][] = [];
@@ -165,6 +169,7 @@ export function mergeFeatures(
     mergeInto(settings, feature.settings ?? {}, "settings info", owner, owners);
     mergeInto(windowSpecs, feature.windows ?? {}, "window", owner, owners);
     mergeInto(windowTitles, feature.windowTitles ?? {}, "window title", owner, owners);
+    mergeInto(menuSources, feature.menuSources ?? {}, "menu source", owner, owners);
     events.push(...(feature.events ?? []));
     effects.push(...(feature.effects ?? []));
   }
@@ -176,6 +181,7 @@ export function mergeFeatures(
     dialogs,
     windows: windowSpecs,
     windowTitles,
+    menuSources,
     events,
     effects,
   };

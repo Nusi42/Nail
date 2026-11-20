@@ -1204,6 +1204,10 @@ impl Service {
             | Request::UndoRuleRun { .. }
             | Request::RuleToText { .. }
             | Request::RuleFromText { .. }) => crate::rules::handle(self, request).await?,
+            // R2 (ADR 0222): values from a message, values for pickers.
+            request @ (Request::GetMessageFacts { .. } | Request::SuggestValues { .. }) => {
+                crate::values::handle(self, request).await?
+            }
             #[expect(
                 clippy::unnested_or_patterns,
                 reason = "a request group (nail_api::request_groups) expands to an or-pattern of its own"

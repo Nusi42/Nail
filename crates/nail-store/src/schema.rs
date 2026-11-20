@@ -386,6 +386,8 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(crate::sync_errors::V19),
     // Schema v20 (ADR 0196): queued folder changes, the IMAP delimiter.
     Migration::sql(crate::folder_ops::V20),
+    // Schema v21 (ADR 0222): what a rule run acted on.
+    Migration::sql(crate::rules::V21),
 ];
 
 /// The schema version this build creates and understands.

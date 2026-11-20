@@ -255,10 +255,13 @@ describe("rules mock", () => {
     const { client } = setup();
     const text = (await client.request({ type: "RuleToText", rule: rustRule() }, "RuleText")).text;
     expect(text).toContain('rule "Rust list" trigger="arrival"');
-    const parsed = await client.request({ type: "RuleFromText", text }, "RuleParsed");
+    const parsed = await client.request({ type: "RuleFromText", text, draft: false }, "RuleParsed");
     expect(parsed.errors).toEqual([]);
     expect(parsed.rule?.actions).toEqual(rustRule().actions);
-    const bad = await client.request({ type: "RuleFromText", text: "nonsense {" }, "RuleParsed");
+    const bad = await client.request(
+      { type: "RuleFromText", text: "nonsense {", draft: false },
+      "RuleParsed",
+    );
     expect(bad.rule).toBeNull();
     expect(bad.errors.length).toBe(1);
   });

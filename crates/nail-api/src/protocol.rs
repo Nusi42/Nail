@@ -655,6 +655,31 @@ pub enum Request {
     RuleFromText {
         /// One `rule "<name>" { … }` node.
         text: String,
+        /// Read it as an editor's draft (R2, ADR 0222): an empty name or an
+        /// empty value is reported in `errors` but the rule still comes
+        /// back, so the editor can switch from Text to Editor with a rule
+        /// that is not finished yet. Only KDL syntax errors and unknown
+        /// nodes or values leave `rule` `null`.
+        #[serde(default)]
+        draft: bool,
+    },
+    /// The values of one message a rule condition can test, for "values
+    /// from this mail" in the rules window (R2, ADR 0222). Answered with
+    /// [`Response::MessageFacts`].
+    GetMessageFacts {
+        /// The message.
+        message_id: MessageId,
+    },
+    /// Values for a picker (R2 shared pickers, ADR 0222): tags, mailing
+    /// lists or header names that start with `prefix` (case-insensitive;
+    /// empty = the most used). Answered with [`Response::ValueSuggestions`].
+    SuggestValues {
+        /// What to suggest.
+        kind: crate::rules::SuggestKind,
+        /// What the user typed.
+        prefix: String,
+        /// Maximum number of values.
+        limit: u32,
     },
 
     // --- MCP clients (M1b WP23) ---
@@ -3512,10 +3537,21 @@ pub enum Response {
     },
     /// Answer to [`Request::RuleFromText`].
     RuleParsed {
-        /// The rule, `null` when the text has errors.
+        /// The rule, `null` when the text has errors (for a draft: errors
+        /// other than empty names and values).
         rule: Option<Box<Rule>>,
         /// Every error found (positions within `text`).
         errors: Vec<ConfigIssue>,
+    },
+    /// Answer to [`Request::GetMessageFacts`].
+    MessageFacts {
+        /// The message's values.
+        facts: Box<crate::rules::MessageFacts>,
+    },
+    /// Answer to [`Request::SuggestValues`].
+    ValueSuggestions {
+        /// Most used first.
+        values: Vec<crate::rules::ValueSuggestion>,
     },
     /// Answer to [`Request::ListMcpClients`].
     McpClients {

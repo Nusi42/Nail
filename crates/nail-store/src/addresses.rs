@@ -8,7 +8,7 @@ use crate::error::Result;
 use crate::store::Store;
 
 /// Longest prefix [`Store::suggest_addresses`] accepts; longer input is cut.
-const MAX_PREFIX: usize = 256;
+pub(crate) const MAX_PREFIX: usize = 256;
 
 impl Store {
     /// Records addresses as used at `at` (Unix seconds): new ones are

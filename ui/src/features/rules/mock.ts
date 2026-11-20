@@ -16,6 +16,7 @@ import type {
   Rule,
   RuleAction,
   RuleRun,
+  RuleRunTarget,
 } from "../../api/generated";
 import {
   deleteMessages,
@@ -26,6 +27,7 @@ import {
   type MockCore,
 } from "../../api/mockMail";
 import { MOCK_NOW } from "../../api/mockData";
+import { answerMessageFacts } from "./fromMessage/mock";
 import { explain, resolveFolder } from "./mockEval";
 import { ruleFromMessage } from "./model";
 import { ruleFromText, ruleIdBase, ruleToText } from "./mockText";
@@ -45,6 +47,8 @@ export const RULES_REQUESTS = [
   "RuleToText",
   "RuleFromText",
   "RuleFromMessage",
+  // R2 (ADR 0222): "values from this mail" (`./fromMessage/mock.ts`).
+  "GetMessageFacts",
 ] as const satisfies readonly Request["type"][];
 
 export type RulesRequest = Extract<Request, { type: (typeof RULES_REQUESTS)[number] }>;
@@ -286,7 +290,12 @@ function apply(
 }
 
 /** Runs one rule on messages as its own run (finished on the next tick). */
-function runOne(core: MockCore, rule: Rule, messages: readonly MessageSummary[]): RuleRun {
+function runOne(
+  core: MockCore,
+  rule: Rule,
+  messages: readonly MessageSummary[],
+  target: RuleRunTarget,
+): RuleRun {
   const s = state(core);
   const d = core.data;
   const matching = messages.filter((m) => explain(d, rule, m).matched);
@@ -313,6 +322,7 @@ function runOne(core: MockCore, rule: Rule, messages: readonly MessageSummary[])
     state: "running",
     started_at: new Date(MOCK_NOW).toISOString(),
     finished_at: null,
+    target,
     matched: matching.length,
     op_ids: opIds,
     undoable: false,
@@ -347,7 +357,15 @@ function runRules(
   if (missing !== undefined) return errorResponse("not_found", `rule ${missing} not found`);
   const messages = pool(core, folderId, messageIds);
   if (!messages) return errorResponse("not_found", `folder ${String(folderId)} not found`);
-  return s.rules.filter((r) => ruleIds.includes(r.id)).map((rule) => runOne(core, rule, messages));
+  const target: RuleRunTarget =
+    messageIds.length > 0
+      ? { kind: "messages", count: messageIds.length }
+      : folderId !== null
+        ? { kind: "folder", folder_id: folderId }
+        : { kind: "scope" };
+  return s.rules
+    .filter((r) => ruleIds.includes(r.id))
+    .map((rule) => runOne(core, rule, messages, target));
 }
 
 function undoRun(core: MockCore, runId: string): Response {
@@ -381,6 +399,8 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
         return errorResponse("not_found", `rule ${request.rule_id} not found`);
       }
       s.rules = locate(s.rules.filter((r) => r.id !== request.rule_id));
+      // R2 (ADR 0222): the history goes with the rule.
+      s.runs = s.runs.filter((r) => r.rule_id !== request.rule_id);
       queueMicrotask(() => {
         core.emit({ type: "RulesChanged" });
       });
@@ -447,7 +467,7 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
     case "RuleToText":
       return { type: "RuleText", text: ruleToText(request.rule) };
     case "RuleFromText": {
-      const { rule, errors } = ruleFromText(request.text);
+      const { rule, errors } = ruleFromText(request.text, request.draft);
       return { type: "RuleParsed", rule, errors };
     }
     case "RuleFromMessage": {
@@ -455,5 +475,7 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
       if (!message) return errorResponse("not_found", `message ${request.message_id} not found`);
       return { type: "RuleSuggested", rule: ruleFromMessage(message) };
     }
+    case "GetMessageFacts":
+      return answerMessageFacts(core, request.message_id);
   }
 }

@@ -350,6 +350,8 @@ pub fn required_access(request: &Request) -> RequestAccess {
 
         // --- Rules from messages ---
         Request::RuleFromMessage { .. } => ("RuleFromMessage", Scope(S::Rules)),
+        Request::GetMessageFacts { .. } => ("GetMessageFacts", Scope(S::Read)),
+        Request::SuggestValues { .. } => ("SuggestValues", Scope(S::Read)),
 
         // --- Plug-ins (M2d, ADR 0050). Plug-ins read mail with their own
         // grants, so using them needs a grant for every account (the core
@@ -774,6 +776,14 @@ mod tests {
             Request::GetMcpSettings,
             Request::RuleFromMessage {
                 message_id: "m1".into(),
+            },
+            Request::GetMessageFacts {
+                message_id: "m1".into(),
+            },
+            Request::SuggestValues {
+                kind: nail_api::rules::SuggestKind::Tag,
+                prefix: String::new(),
+                limit: 5,
             },
             Request::ListPlugins,
             Request::LoadDevPlugin {

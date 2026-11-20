@@ -60,7 +60,7 @@ pub const RULE_TEXT_SOURCE: &str = "rule";
 /// every error found is returned, in file order.
 pub fn parse_rules(text: &str, file: &str) -> Result<Vec<Rule>, Vec<ConfigError>> {
     let src = Source::new(file, text);
-    let (rules, errors) = read::read(&src);
+    let (rules, errors, _) = read::read(&src, read::Mode::Strict);
     if errors.is_empty() {
         Ok(rules)
     } else {
@@ -73,19 +73,31 @@ pub fn parse_rules(text: &str, file: &str) -> Result<Vec<Rule>, Vec<ConfigError>
 /// errors is [`RULE_TEXT_SOURCE`]. Without `id=` the id is derived from the
 /// name.
 pub fn parse_rule_text(text: &str) -> Result<Rule, Vec<ConfigError>> {
+    match one_rule(text, read::Mode::Strict) {
+        (Some(rule), _) => Ok(rule),
+        (None, errors) => Err(errors),
+    }
+}
+
+/// Parses the text form of one rule as an editor's draft (R2, ADR 0222):
+/// like [`parse_rule_text`], but an empty name or an empty value is
+/// reported in the errors and the rule still comes back, so a rule that is
+/// not finished yet survives a switch between the text view and the
+/// visual editor. Every other error returns no rule.
+pub fn parse_rule_draft(text: &str) -> (Option<Rule>, Vec<ConfigError>) {
+    one_rule(text, read::Mode::Draft)
+}
+
+fn one_rule(text: &str, mode: read::Mode) -> (Option<Rule>, Vec<ConfigError>) {
     let src = Source::new(RULE_TEXT_SOURCE, text);
-    let (mut rules, mut errors) = read::read(&src);
-    if !errors.is_empty() {
-        return Err(errors);
+    let (mut rules, mut errors, unfinished) = read::read(&src, mode);
+    if errors.is_empty() && rules.len() != 1 {
+        let message = msg("config-rule-text-count").arg("count", rules.len());
+        errors.push(ConfigError::invalid(&src.loc_at(0), message));
     }
-    match rules.len() {
-        1 => Ok(rules.remove(0)),
-        n => {
-            let message = msg("config-rule-text-count").arg("count", n);
-            errors.push(ConfigError::invalid(&src.loc_at(0), message));
-            Err(errors)
-        }
-    }
+    let rule = errors.is_empty().then(|| rules.remove(0));
+    errors.extend(unfinished);
+    (rule, errors)
 }
 
 /// The text form of one rule in the canonical layout (four-space

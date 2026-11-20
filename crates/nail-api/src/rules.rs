@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::config::SourceLocation;
-use crate::domain::{FolderRole, MessageSummary};
-use crate::ids::{AccountId, IdentityId, OpId, RuleId, RuleRunId};
+use crate::domain::{Address, FolderRole, MessageSummary};
+use crate::ids::{AccountId, FolderId, IdentityId, MessageId, OpId, RuleId, RuleRunId};
 use crate::localized::LocalizedMessage;
 
 /// A filter rule.
@@ -531,6 +531,8 @@ pub struct RuleRun {
     pub started_at: String,
     /// End (RFC 3339), `null` while running.
     pub finished_at: Option<String>,
+    /// What it ran on (R2, ADR 0222).
+    pub target: RuleRunTarget,
     /// Messages matched.
     pub matched: u32,
     /// Operations the run queued.
@@ -545,6 +547,82 @@ pub struct RuleRun {
     pub localized: Option<LocalizedMessage>,
     /// Diagnostic detail when `failed` (English), else `null`.
     pub message: Option<String>,
+}
+
+/// What a rule run acted on (R2, ADR 0222): shown in the recent runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum RuleRunTarget {
+    /// The rule's own messages (its folders, else every Inbox); also every
+    /// run started by new mail, sending or the schedule (its cause says
+    /// which messages).
+    Scope,
+    /// Messages named by the request.
+    Messages {
+        /// How many were named.
+        count: u32,
+    },
+    /// One folder.
+    Folder {
+        /// The folder.
+        folder_id: FolderId,
+    },
+}
+
+/// The values of one stored message a rule condition can test (R2, ADR
+/// 0222): what the rules window offers as "values from this mail". The
+/// addresses come from the message's headers (the summary's when its raw
+/// form is not stored).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct MessageFacts {
+    /// The message.
+    pub message_id: MessageId,
+    /// Its account.
+    pub account_id: AccountId,
+    /// Its folder.
+    pub folder_id: FolderId,
+    /// Subject (decoded).
+    pub subject: String,
+    /// `From`.
+    pub from: Vec<Address>,
+    /// `Sender`, when present.
+    pub sender: Vec<Address>,
+    /// `To`.
+    pub to: Vec<Address>,
+    /// `Cc`.
+    pub cc: Vec<Address>,
+    /// `Reply-To`.
+    pub reply_to: Vec<Address>,
+    /// The `List-Id` (the part in angle brackets), when present.
+    pub list_id: Option<String>,
+    /// Every header name, once each (first spelling), in message order.
+    pub header_names: Vec<String>,
+}
+
+/// What [`crate::Request::SuggestValues`] suggests (R2 shared pickers, ADR
+/// 0222). Folders, accounts and addresses have their own requests
+/// (`ListFolders`, `ListAccounts`, `SuggestAddresses`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum SuggestKind {
+    /// Tags (IMAP keywords) used on stored messages.
+    Tag,
+    /// `List-Id`s of recent mail.
+    MailingList,
+    /// Header names of recent mail.
+    HeaderName,
+}
+
+/// One suggested value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ValueSuggestion {
+    /// The value to insert.
+    pub value: String,
+    /// A human-readable description when the value has one (a list's
+    /// name from its `List-Id`), else `null`.
+    pub label: Option<String>,
+    /// How many messages carry it (of those examined).
+    pub count: u32,
 }
 
 #[cfg(test)]

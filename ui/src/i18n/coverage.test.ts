@@ -25,6 +25,7 @@ import * as connlogMessages from "../features/connlog/messages";
 import * as messageSourceMessages from "../features/message-source/messages";
 import * as foldersMessages from "../features/folders/messages";
 import * as searchMessages from "../features/search/messages";
+import * as pickersMessages from "../widgets/pickers/messages";
 import * as customizationMessages from "../features/customization/messages";
 import * as exchangeMessages from "../features/exchange/messages";
 import * as gmailMessages from "../features/gmail/messages";
@@ -85,6 +86,8 @@ const FEATURE_MESSAGES = [
   messageSourceMessages,
   foldersMessages,
   searchMessages,
+  // R2 (ADR 0222): the shared pickers.
+  pickersMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

@@ -41,6 +41,7 @@ impl<D: McpData> Shared<D> {
             .data
             .query(Request::RuleFromText {
                 text: text.to_owned(),
+                draft: false,
             })
             .await?;
         match response {

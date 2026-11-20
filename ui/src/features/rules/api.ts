@@ -136,8 +136,13 @@ export async function ruleToText(client: NailClient, rule: Rule): Promise<string
   return (await client.request({ type: "RuleToText", rule }, "RuleText")).text;
 }
 
-export async function ruleFromText(client: NailClient, text: string) {
-  return client.request({ type: "RuleFromText", text }, "RuleParsed");
+/**
+ * Parses the text form of one rule. A `draft` (R2, ADR 0222) keeps a rule
+ * whose name or values are still empty and reports those gaps in `errors`,
+ * so the editor can switch from Text back to Editor without losing it.
+ */
+export async function ruleFromText(client: NailClient, text: string, draft = false) {
+  return client.request({ type: "RuleFromText", text, draft }, "RuleParsed");
 }
 
 /** Refetches what an event changed. */

@@ -642,7 +642,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        part rules — the base theme has no rules for those parts), widgets/lucideIcons.ts + Icon.tsx
                        (theme icon → Lucide → nothing), widgets/primitives.tsx (Switch, Segmented, Tag, Avatar),
                        widgets/ProblemIndicator.tsx (the compact problem indicator of the search field and the rules
-                       window, parts `problem*`, skin `PROBLEM`; ADR 0221),
+                       window, parts `problem*`, skin `PROBLEM`; ADR 0221), widgets/pickers/ (the shared `Picker` for
+                       folders, accounts, tags, addresses, mailing lists and header names; ADR 0222),
                        widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download; name /
                        badge / Open button → OpenAttachment, else download; ADR 0211) + OpenAttachment.tsx (the
                        `mail-open-attachment` confirmation for flagged files) + MailConfirm.tsx (shared body of the
@@ -1479,3 +1480,16 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   the `ProblemIndicator` in follow mode (details = `search-bar.error`, the field's `aria-describedby`); `useSearch`
   keeps the previous results of the same scope (`keepsSearchResults`); one check definition (`checkQuery` /
   `useCheckQuery`, `state/queries.ts`).
+
+### R2
+
+- Contract (ADR 0222): core `RuleFromText { draft }` (`nail_config::rules::parse_rule_draft`, `read::Mode::Draft`:
+  empty names and values are reported, the rule kept), `RuleRun.target` (`RuleRunTarget`; store `rule_runs.target`,
+  schema v21 `nail_store::rules::V21`), `DeleteRule` deletes the rule's runs (`Store::delete_rule_runs`),
+  `GetMessageFacts` and `SuggestValues` in `crates/nail-core/src/values.rs` (`facts_of`, `rank`; store
+  `values.rs` `suggest_tags` / `recent_blob_hashes`; `nail_rules::parse_list_id`). UI: shared pickers
+  `ui/src/widgets/pickers/` (`Picker`, `PICKER_KINDS`, sources, texts `pickers.ftl`), values from the mail
+  `ui/src/features/rules/fromMessage/` (`useMessageFacts`, `valuesForCondition`, `ValuesFromMessage`; the rules
+  store's `origin`; texts `rules-from-message.ftl`), dynamic menu sources `ui/src/features/menus/sources.ts`
+  (`Feature.menuSources`, `AppRegistry.menuSources`), mock `ui/src/api/mockValues.ts`; theme regions `rules.header*`,
+  `rules.segmented*`, `rules.form*`, `rules.lower*`, `rules.footer*`, `rules.empty`, `picker*`.

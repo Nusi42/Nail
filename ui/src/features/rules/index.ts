@@ -35,15 +35,21 @@ export const actions: Feature["actions"] = {
   /** Opens the rules window. */
   [OPEN_RULES_ACTION]: {
     run: (ctx) => {
+      rulesStore(ctx.client).getState().setOrigin(null);
       ctx.store.getState().openWindow(RULES_WINDOW);
     },
   },
-  /** "Create rule from message": a new rule pre-filled from the selected message. */
+  /**
+   * "Create rule from message": a new rule pre-filled from the selected
+   * message; the window remembers the message (R2: values from this mail).
+   */
   "rules.create-from-message": {
     run: (ctx) => {
       const message = selectedSummary(ctx);
       if (!message) return;
-      rulesStore(ctx.client).getState().startNew(ruleFromMessage(message));
+      const rules = rulesStore(ctx.client).getState();
+      rules.setOrigin({ messageId: message.id, folderId: message.folder_id });
+      rules.startNew(ruleFromMessage(message));
       ctx.store.getState().openWindow(RULES_WINDOW);
     },
     enabled: (ctx) => selectedSummary(ctx) !== undefined,

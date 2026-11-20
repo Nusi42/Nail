@@ -75,6 +75,7 @@ import type { McpClient } from "./McpClient";
 import type { McpServerInfo } from "./McpServerInfo";
 import type { McpSettings } from "./McpSettings";
 import type { MessageBody } from "./MessageBody";
+import type { MessageFacts } from "./MessageFacts";
 import type { MessageId } from "./MessageId";
 import type { MessageSource } from "./MessageSource";
 import type { MessageSummary } from "./MessageSummary";
@@ -147,6 +148,7 @@ import type { TotpEnrollment } from "./TotpEnrollment";
 import type { UiContext } from "./UiContext";
 import type { UpdateStatus } from "./UpdateStatus";
 import type { VacationSettings } from "./VacationSettings";
+import type { ValueSuggestion } from "./ValueSuggestion";
 import type { VaultStatus } from "./VaultStatus";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
 import type { WindowState } from "./WindowState";
@@ -426,13 +428,22 @@ runs: Array<RuleRun>, } | { "type": "RuleText",
  */
 text: string, } | { "type": "RuleParsed", 
 /**
- * The rule, `null` when the text has errors.
+ * The rule, `null` when the text has errors (for a draft: errors
+ * other than empty names and values).
  */
 rule: Rule | null, 
 /**
  * Every error found (positions within `text`).
  */
-errors: Array<ConfigIssue>, } | { "type": "McpClients", 
+errors: Array<ConfigIssue>, } | { "type": "MessageFacts", 
+/**
+ * The message's values.
+ */
+facts: MessageFacts, } | { "type": "ValueSuggestions", 
+/**
+ * Most used first.
+ */
+values: Array<ValueSuggestion>, } | { "type": "McpClients", 
 /**
  * Clients, oldest first.
  */

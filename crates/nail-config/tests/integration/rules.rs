@@ -8,8 +8,8 @@ use nail_api::rules::{
 };
 use nail_api::{FolderRole, RuleId};
 use nail_config::rules::{
-    RULE_TEXT_SOURCE, RULES_FILE, normalize_rule, parse_rule_text, parse_rules, render_rules,
-    rule_to_text,
+    RULE_TEXT_SOURCE, RULES_FILE, normalize_rule, parse_rule_draft, parse_rule_text, parse_rules,
+    render_rules, rule_to_text,
 };
 use pretty_assertions::assert_eq;
 
@@ -529,7 +529,7 @@ fn syntax_errors_are_a_single_error() {
 fn specific_errors() {
     let cases: &[(&str, &str)] = &[
         ("rule {}", "needs a name"),
-        ("rule \"\" {}", "must not be empty"),
+        ("rule \"\" {}", "a rule needs a name"),
         ("rule \"a\" \"b\" {}", "too many arguments"),
         ("rule \"a\" color=\"red\" {}", "unknown property `color`"),
         ("rule \"a\" id=\"Bad Id\" {}", "invalid rule id"),
@@ -718,6 +718,58 @@ fn text_form_of_one_rule() {
     let errors = parse_rule_text("rule \"a\" {\n  when { nope }\n}").unwrap_err();
     assert_eq!(errors[0].file, RULE_TEXT_SOURCE);
     assert_eq!((errors[0].line, errors[0].column), (2, 10));
+}
+
+/// R2 (ADR 0222): an unfinished rule (no name yet, an empty value) comes
+/// back from a draft read with the gaps as errors, and survives the round
+/// trip editor → text → editor; other errors still return no rule.
+#[test]
+fn drafts_keep_unfinished_rules() {
+    let unfinished = Rule {
+        id: RuleId::new(""),
+        name: String::new(),
+        enabled: true,
+        triggers: vec![RuleTrigger::Manual],
+        scope: vec![],
+        conditions: Condition::All {
+            conditions: vec![
+                Condition::Subject {
+                    matches: tm(TextOp::Contains, ""),
+                },
+                Condition::Tag { tag: String::new() },
+            ],
+        },
+        actions: vec![RuleAction::Forward {
+            to: vec![String::new()],
+            identity_id: None,
+        }],
+        source: None,
+    };
+    let text = rule_to_text(&unfinished);
+    assert!(!text.contains("id="), "{text}");
+    assert!(parse_rule_text(&text).is_err(), "strict reading refuses it");
+
+    let (rule, errors) = parse_rule_draft(&text);
+    let mut rule = rule.expect("the draft comes back");
+    assert_eq!(rule.name, "");
+    rule.id = RuleId::new("");
+    rule.source = None;
+    assert_eq!(normalize_rule(rule), normalize_rule(unfinished));
+    let messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+    assert_eq!(messages.len(), 4, "{messages:#?}");
+    assert!(messages[0].contains("a rule needs a name"), "{messages:#?}");
+    assert!(errors.iter().all(|e| e.file == RULE_TEXT_SOURCE));
+    assert_eq!(errors[0].line, 1);
+
+    // A finished rule has no errors either way.
+    let (rule, errors) = parse_rule_draft("rule \"a\" { when { tag \"x\" } }");
+    assert!(rule.is_some() && errors.is_empty(), "{errors:#?}");
+    // Real mistakes still return no rule.
+    let (rule, errors) = parse_rule_draft("rule \"\" {\n  when { nope }\n}");
+    assert!(rule.is_none());
+    assert_eq!(errors.len(), 2, "{errors:#?}");
+    let (rule, errors) = parse_rule_draft("rule \"a\" {}\nrule \"b\" {}");
+    assert!(rule.is_none() && errors[0].message.contains("found 2"));
 }
 
 #[test]

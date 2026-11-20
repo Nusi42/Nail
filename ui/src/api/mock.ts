@@ -32,6 +32,7 @@ import {
 } from "../features/appearance/mock";
 import { answerAttachment, isAttachmentRequest } from "./mockAttachments";
 import { answerOpenLink } from "./mockLinks";
+import { answerValues, isValuesRequest } from "./mockValues";
 import { answerMailAction, isMailActionRequest } from "./mockMailActions";
 import { answerUiState, isUiStateRequest } from "./uiStateMock";
 import { answerWindowState, isWindowStateRequest } from "./windowStateMock";
@@ -156,6 +157,8 @@ export class MockTransport extends ClosableTransport implements MockCore {
     if (isAttachmentRequest(request)) return answerAttachment(this, request);
     // ADR 0194: "Show source".
     if (isSourceRequest(request)) return answerSource(this, request);
+    // R2 (ADR 0222): values for the shared pickers.
+    if (isValuesRequest(request)) return answerValues(this, request);
     // ADR 0196: folder management.
     if (isFolderRequest(request)) return answerFolder(this, request);
     // P3 (ADR 0164): Gmail-like actions on conversations with one undo.

@@ -11,7 +11,11 @@ metadata:
 [[r1-status]]): `main` = 560645e8, published to GitHub. A design review of the rules dialog was published to the
 maintainer as an artifact; the maintainer asked for all of it.
 
-**Next: wave R2** (maintainer request 2026-11-20), four packages: (1) rules dialog redesign per the design review
+**Wave R2 contract done 2026-11-21** (ADR 0222, `docs/plan.md` "Wave R2"): core draft reads, run targets
+(schema v21), runs deleted with their rule, `GetMessageFacts`, `SuggestValues`; stubs `widgets/pickers/`,
+`features/rules/fromMessage/`, `features/menus/sources.ts`; theme regions. Packages WR3-WR6 start from `main`.
+
+**Wave R2** (maintainer request 2026-11-20), four packages: (1) rules dialog redesign per the design review
 (fixed footer with a problem badge, Run on target select, Test/Run/Save; Preview + Recent runs panel; compact
 WHEN/WHERE/IF/THEN form; delete/close confirmations; responsive window; segmented Editor/Text; empty state and
 starter rules; core fix: `nail-config` rules `write.rs` must not write `id=""`; Recent runs with time and target,

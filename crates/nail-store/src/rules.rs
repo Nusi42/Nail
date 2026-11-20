@@ -8,13 +8,18 @@
 //! * the "rule inbox": new messages waiting for the arrival rules, so a
 //!   restart does not skip them.
 
-use nail_api::rules::{RuleAction, RuleRunCause, RuleRunState};
+use nail_api::rules::{RuleAction, RuleRunCause, RuleRunState, RuleRunTarget};
 use nail_api::{MessageId, RuleId, RuleRunId};
 use rusqlite::{OptionalExtension, Row, params};
 
 use crate::error::{Error, Result};
 use crate::queue::{OpId, Operation};
 use crate::store::Store;
+
+/// Schema v21 (R2, ADR 0222): what a run acted on
+/// ([`RuleRunTarget`] JSON; `NULL` = the rule's own messages, also for
+/// every run before v21).
+pub(crate) const V21: &str = "ALTER TABLE rule_runs ADD COLUMN target TEXT;";
 
 fn run_id(n: i64) -> RuleRunId {
     RuleRunId(format!("run-{n}"))
@@ -86,6 +91,8 @@ pub struct RuleRunRecord {
     pub started_at: i64,
     /// End (Unix seconds).
     pub finished_at: Option<i64>,
+    /// What it ran on.
+    pub target: RuleRunTarget,
     /// Messages matched.
     pub matched: u32,
     /// Diagnostic detail of a failure.
@@ -122,7 +129,7 @@ pub struct RuleRunUndo {
 }
 
 const RUN_COLS: &str =
-    "id, rule_id, rule_name, cause, state, started_at, finished_at, matched, message";
+    "id, rule_id, rule_name, cause, state, started_at, finished_at, matched, message, target";
 
 fn run_from_row(row: &Row<'_>) -> rusqlite::Result<RuleRunRecord> {
     let cause: String = row.get(3)?;
@@ -137,6 +144,11 @@ fn run_from_row(row: &Row<'_>) -> rusqlite::Result<RuleRunRecord> {
         finished_at: row.get(6)?,
         matched: row.get(7)?,
         message: row.get(8)?,
+        target: row
+            .get::<_, Option<String>>(9)?
+            .map(|t| from_json(9, &t))
+            .transpose()?
+            .unwrap_or(RuleRunTarget::Scope),
         op_ids: Vec::new(),
         undoable: false,
     })
@@ -218,18 +230,24 @@ impl Store {
         })
     }
 
-    /// Starts a run (state `running`) at `at` (Unix seconds).
+    /// Starts a run (state `running`) on `target` at `at` (Unix seconds).
     pub fn start_rule_run(
         &self,
         rule: &RuleId,
         rule_name: &str,
         cause: RuleRunCause,
+        target: &RuleRunTarget,
         at: i64,
     ) -> Result<RuleRunId> {
+        let target = match target {
+            RuleRunTarget::Scope => None,
+            other => Some(serde_json::to_string(other)?),
+        };
         self.with_conn(|conn| {
             conn.execute(
-                "INSERT INTO rule_runs (rule_id, rule_name, cause, started_at) VALUES (?1, ?2, ?3, ?4)",
-                params![rule.as_str(), rule_name, cause_str(cause), at],
+                "INSERT INTO rule_runs (rule_id, rule_name, cause, started_at, target)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![rule.as_str(), rule_name, cause_str(cause), at, target],
             )?;
             Ok(run_id(conn.last_insert_rowid()))
         })
@@ -438,6 +456,15 @@ impl Store {
         })
     }
 
+    /// Deletes every run of a rule with its actions (R2, ADR 0222: a
+    /// deleted rule takes its history along, so a new rule that gets the
+    /// same id never shows it). Returns how many runs were deleted.
+    pub fn delete_rule_runs(&self, rule: &RuleId) -> Result<usize> {
+        self.with_conn(|conn| {
+            Ok(conn.execute("DELETE FROM rule_runs WHERE rule_id = ?1", [rule.as_str()])?)
+        })
+    }
+
     /// Deletes finished runs started before `before` (Unix seconds).
     /// Returns how many were deleted.
     pub fn purge_rule_runs(&self, before: i64) -> Result<usize> {
@@ -528,7 +555,13 @@ mod tests {
         let store = store_with_message();
         let rule = RuleId::from("r1");
         let run = store
-            .start_rule_run(&rule, "Flag it", RuleRunCause::Manual, 100)
+            .start_rule_run(
+                &rule,
+                "Flag it",
+                RuleRunCause::Manual,
+                &RuleRunTarget::Scope,
+                100,
+            )
             .unwrap();
         assert_eq!(run.as_str(), "run-1");
         store
@@ -627,7 +660,13 @@ mod tests {
         // The run moved m1 and m2 to Archive and flagged m3. Since then the
         // user moved m1 back by hand and m3 was expunged.
         let run = store
-            .start_rule_run(&"r1".into(), "Archive", RuleRunCause::Manual, 1)
+            .start_rule_run(
+                &"r1".into(),
+                "Archive",
+                RuleRunCause::Manual,
+                &RuleRunTarget::Scope,
+                1,
+            )
             .unwrap();
         let archive = RuleAction::Archive;
         for (n, (message, undo)) in [
@@ -678,7 +717,13 @@ mod tests {
     fn a_refused_undo_changes_nothing() {
         let store = store_with_message();
         let run = store
-            .start_rule_run(&"r1".into(), "Move", RuleRunCause::Manual, 1)
+            .start_rule_run(
+                &"r1".into(),
+                "Move",
+                RuleRunCause::Manual,
+                &RuleRunTarget::Scope,
+                1,
+            )
             .unwrap();
         // Still running: not undoable, and nothing is queued or marked.
         store
@@ -711,7 +756,13 @@ mod tests {
         let store = store_with_message();
         let rule = RuleId::from("r1");
         let run = store
-            .start_rule_run(&rule, "Move", RuleRunCause::Arrival, 1)
+            .start_rule_run(
+                &rule,
+                "Move",
+                RuleRunCause::Arrival,
+                &RuleRunTarget::Scope,
+                1,
+            )
             .unwrap();
         store
             .record_rule_action(
@@ -734,7 +785,13 @@ mod tests {
             .unwrap();
         assert!(!done.undoable);
         let failed_run = store
-            .start_rule_run(&"r2".into(), "Other", RuleRunCause::Schedule, 3)
+            .start_rule_run(
+                &"r2".into(),
+                "Other",
+                RuleRunCause::Schedule,
+                &RuleRunTarget::Scope,
+                3,
+            )
             .unwrap();
         store
             .finish_rule_run(&failed_run, RuleRunState::Failed, 0, Some("boom"), 4)
@@ -748,6 +805,38 @@ mod tests {
         assert_eq!(all[0].message.as_deref(), Some("boom"));
         assert_eq!(store.list_rule_runs(Some(&rule), 10).unwrap().len(), 1);
         assert_eq!(store.purge_rule_runs(3).unwrap(), 1);
+        assert_eq!(store.list_rule_runs(None, 10).unwrap().len(), 1);
+    }
+
+    /// R2 (ADR 0222): runs keep their target and go with their rule.
+    #[test]
+    fn runs_keep_their_target_and_go_with_their_rule() {
+        let store = store_with_message();
+        let (a, b) = (RuleId::from("a"), RuleId::from("b"));
+        let folder = RuleRunTarget::Folder {
+            folder_id: "inbox".into(),
+        };
+        let messages = RuleRunTarget::Messages { count: 3 };
+        store
+            .start_rule_run(&a, "A", RuleRunCause::Manual, &folder, 1)
+            .unwrap();
+        store
+            .start_rule_run(&a, "A", RuleRunCause::Manual, &messages, 2)
+            .unwrap();
+        let other = store
+            .start_rule_run(&b, "B", RuleRunCause::Arrival, &RuleRunTarget::Scope, 3)
+            .unwrap();
+        let runs = store.list_rule_runs(Some(&a), 10).unwrap();
+        assert_eq!(
+            runs.iter().map(|r| r.target.clone()).collect::<Vec<_>>(),
+            [messages, folder]
+        );
+        assert_eq!(
+            store.get_rule_run(&other).unwrap().target,
+            RuleRunTarget::Scope
+        );
+        assert_eq!(store.delete_rule_runs(&a).unwrap(), 2);
+        assert_eq!(store.list_rule_runs(Some(&a), 10).unwrap(), Vec::new());
         assert_eq!(store.list_rule_runs(None, 10).unwrap().len(), 1);
     }
 

@@ -906,7 +906,7 @@ async fn arrival_rules_move_new_mail_and_runs_can_be_undone() {
     let Response::RuleParsed {
         rule: parsed,
         errors,
-    } = request(&f.service, Request::RuleFromText { text }).await
+    } = request(&f.service, Request::RuleFromText { text, draft: false }).await
     else {
         panic!()
     };
@@ -916,6 +916,7 @@ async fn arrival_rules_move_new_mail_and_runs_can_be_undone() {
         &f.service,
         Request::RuleFromText {
             text: "rule \"x\" {\n    when {\n        subject regex=\"(\"\n    }\n}\n".into(),
+            draft: false,
         },
     )
     .await
@@ -1067,6 +1068,200 @@ Pay.
         m.flags.flagged && !m.tags.iter().any(|t| t == "batch")
     })
     .await;
+    f.service.shutdown().await;
+}
+
+/// R2 (ADR 0222): a message's values for rule conditions, picker values,
+/// drafts that survive the text view, and a run history that records its
+/// target and goes with its rule.
+#[tokio::test]
+async fn rule_values_drafts_and_run_history() {
+    let f = setup().await;
+    synced(&f).await;
+    f.control(
+        "imap-deliver",
+        &json!({"raw": "From: News Desk <desk@example.org>
+To: Ann <ann@example.com>
+Cc: team@example.net
+Reply-To: replies@example.org
+List-Id: \"Daily news\" <daily.example.org>
+X-Mailer: Example
+Subject: Daily list 12
+Message-ID: <daily12@example.org>
+
+Read me.
+"}),
+    );
+    eventually("new mail arrived", || async {
+        subjects(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .iter()
+            .any(|s| s == "Daily list 12")
+    })
+    .await;
+    let message = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Daily list 12",
+    )
+    .await;
+    let facts = || async {
+        match request(
+            &f.service,
+            Request::GetMessageFacts {
+                message_id: message.id.clone(),
+            },
+        )
+        .await
+        {
+            Response::MessageFacts { facts } => facts,
+            other => panic!("MessageFacts expected: {other:?}"),
+        }
+    };
+    eventually("the raw message is stored", || async {
+        facts().await.list_id.is_some()
+    })
+    .await;
+    let facts = facts().await;
+    assert_eq!(facts.list_id.as_deref(), Some("daily.example.org"));
+    assert_eq!(facts.from[0].email, "desk@example.org");
+    assert_eq!(facts.cc[0].email, "team@example.net");
+    assert_eq!(facts.reply_to[0].email, "replies@example.org");
+    assert_eq!(facts.folder_id, message.folder_id);
+    assert!(facts.header_names.iter().any(|n| n == "X-Mailer"));
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::GetMessageFacts {
+                message_id: "missing".into(),
+            },
+        )
+        .await,
+        Response::Error {
+            code: ErrorCode::NotFound,
+            ..
+        }
+    ));
+    let suggest = |kind, prefix: &str| {
+        let prefix = prefix.to_owned();
+        let service = &f.service;
+        async move {
+            match request(
+                service,
+                Request::SuggestValues {
+                    kind,
+                    prefix,
+                    limit: 10,
+                },
+            )
+            .await
+            {
+                Response::ValueSuggestions { values } => values,
+                other => panic!("ValueSuggestions expected: {other:?}"),
+            }
+        }
+    };
+    let lists = suggest(nail_api::rules::SuggestKind::MailingList, "daily").await;
+    assert_eq!(lists[0].value, "daily.example.org");
+    assert_eq!(lists[0].label.as_deref(), Some("Daily news"));
+    let headers = suggest(nail_api::rules::SuggestKind::HeaderName, "x-mail").await;
+    assert_eq!(headers[0].value, "X-Mailer");
+
+    // Runs record what they ran on.
+    let rule = save_rule(
+        &f.service,
+        common::subject_rule(
+            "Tag lists",
+            vec![RuleTrigger::Manual],
+            "daily list",
+            vec![RuleAction::Tag {
+                tag: "listed".into(),
+            }],
+        ),
+    )
+    .await;
+    for (message_ids, folder_id, target) in [
+        (
+            vec![message.id.clone()],
+            None,
+            nail_api::rules::RuleRunTarget::Messages { count: 1 },
+        ),
+        (
+            vec![],
+            Some(message.folder_id.clone()),
+            nail_api::rules::RuleRunTarget::Folder {
+                folder_id: message.folder_id.clone(),
+            },
+        ),
+    ] {
+        let Response::RulesRan { runs } = request(
+            &f.service,
+            Request::RunRules {
+                rule_ids: vec![rule.id.clone()],
+                message_ids,
+                folder_id,
+            },
+        )
+        .await
+        else {
+            panic!("RulesRan expected")
+        };
+        assert_eq!(runs[0].target, target);
+    }
+    eventually("the tag is suggested", || async {
+        suggest(nail_api::rules::SuggestKind::Tag, "LIST")
+            .await
+            .iter()
+            .any(|v| v.value == "listed")
+    })
+    .await;
+
+    // A draft without a name survives the text view.
+    let Response::RuleParsed {
+        rule: draft,
+        errors,
+    } = request(
+        &f.service,
+        Request::RuleFromText {
+            text: "rule \"\" {\n    when {\n        subject contains=\"\"\n    }\n}\n".into(),
+            draft: true,
+        },
+    )
+    .await
+    else {
+        panic!("RuleParsed expected")
+    };
+    assert_eq!(draft.expect("the draft comes back").name, "");
+    assert_eq!(errors.len(), 2, "{errors:?}");
+
+    // Deleting the rule deletes its runs.
+    let runs_of = || async {
+        match request(
+            &f.service,
+            Request::ListRuleRuns {
+                rule_id: Some(rule.id.clone()),
+                limit: 10,
+            },
+        )
+        .await
+        {
+            Response::RuleRuns { runs } => runs,
+            other => panic!("RuleRuns expected: {other:?}"),
+        }
+    };
+    assert_eq!(runs_of().await.len(), 2);
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::DeleteRule {
+                rule_id: rule.id.clone()
+            }
+        )
+        .await,
+        Response::Done
+    ));
+    assert_eq!(runs_of().await, Vec::new());
     f.service.shutdown().await;
 }
 

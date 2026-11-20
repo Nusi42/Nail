@@ -67,6 +67,9 @@ impl std::fmt::Display for RuleIssue {
     }
 }
 
+/// The Fluent id of [`validate`]'s issue for a rule without a name.
+pub const NAME_EMPTY_ISSUE: &str = "rule-issue-name-empty";
+
 /// Every problem of a rule: invalid regular expressions, queries and
 /// dates, empty names, tags and recipient lists, zero intervals.
 pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
@@ -100,7 +103,7 @@ fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
         push(
             IssueLocation::Rule,
             "the rule needs a name",
-            "rule-issue-name-empty",
+            NAME_EMPTY_ISSUE,
         );
     }
     for (i, trigger) in rule.triggers.iter().enumerate() {

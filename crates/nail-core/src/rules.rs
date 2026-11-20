@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use nail_api::rules::{Rule, RuleMatch, RuleRun, RuleRunCause, RuleRunState};
+use nail_api::rules::{Rule, RuleMatch, RuleRun, RuleRunCause, RuleRunState, RuleRunTarget};
 use nail_api::{
     Address, ApiError, ConfigIssue, ErrorCode, Event, FolderId, FolderRole, MessageId,
     MessageSummary, Request, Response, RuleId, RuleRunId,
@@ -256,6 +256,7 @@ fn to_run(record: RuleRunRecord) -> RuleRun {
         state: record.state,
         started_at: nail_util::time::rfc3339_utc(record.started_at),
         finished_at: nail_util::time::rfc3339_utc_opt(record.finished_at),
+        target: record.target,
         matched: record.matched,
         op_ids: record.op_ids.into_iter().map(crate::ids::op_id).collect(),
         undoable: record.undoable,
@@ -384,6 +385,20 @@ fn parse_addresses(value: &str) -> Vec<Address> {
         .collect()
 }
 
+/// The rule checks of a parsed rule, at the rule's position.
+fn validation_issues(rule: &Rule) -> Vec<ConfigIssue> {
+    let (line, column) = rule.source.as_ref().map_or((1, 1), |s| (s.line, s.column));
+    nail_rules::validate(rule)
+        .into_iter()
+        .map(|issue| ConfigIssue {
+            line,
+            column,
+            message: issue.to_string(),
+            localized: Some(issue.localized.clone()),
+        })
+        .collect()
+}
+
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
     Ok(match request {
@@ -409,6 +424,13 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             if !removed {
                 return Err(ApiError::not_found(format!("rule {rule_id}")).into());
             }
+            // R2 (ADR 0222): the history goes with the rule, so a new rule
+            // that gets the same id (it derives from the name) starts empty.
+            service
+                .inner
+                .store
+                .call(move |s| s.delete_rule_runs(&rule_id))
+                .await?;
             Response::Done
         }
         Request::ReorderRules { rule_ids } => {
@@ -429,28 +451,39 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::RuleToText { rule } => Response::RuleText {
             text: nail_config::rules::rule_to_text(&rule),
         },
-        Request::RuleFromText { text } => match nail_config::rules::parse_rule_text(&text) {
-            Ok(rule) => {
-                let (line, column) = rule.source.as_ref().map_or((1, 1), |s| (s.line, s.column));
-                let errors = nail_rules::validate(&rule)
-                    .into_iter()
-                    .map(|issue| ConfigIssue {
-                        line,
-                        column,
-                        message: issue.to_string(),
-                        localized: Some(issue.localized.clone()),
-                    })
-                    .collect();
-                Response::RuleParsed {
-                    rule: Some(Box::new(rule)),
-                    errors,
-                }
+        Request::RuleFromText { text, draft: true } => {
+            let (rule, errors) = nail_config::rules::parse_rule_draft(&text);
+            let mut errors: Vec<ConfigIssue> = errors.iter().map(ConfigError::to_issue).collect();
+            if let Some(rule) = &rule {
+                // The draft read already reported an empty name, at its
+                // position; the rule check would report it again.
+                errors.extend(validation_issues(rule).into_iter().filter(|issue| {
+                    issue
+                        .localized
+                        .as_ref()
+                        .is_none_or(|l| l.id != nail_rules::NAME_EMPTY_ISSUE)
+                }));
             }
-            Err(errors) => Response::RuleParsed {
-                rule: None,
-                errors: errors.iter().map(ConfigError::to_issue).collect(),
-            },
-        },
+            Response::RuleParsed {
+                rule: rule.map(Box::new),
+                errors,
+            }
+        }
+        Request::RuleFromText { text, draft: false } => {
+            match nail_config::rules::parse_rule_text(&text) {
+                Ok(rule) => {
+                    let errors = validation_issues(&rule);
+                    Response::RuleParsed {
+                        rule: Some(Box::new(rule)),
+                        errors,
+                    }
+                }
+                Err(errors) => Response::RuleParsed {
+                    rule: None,
+                    errors: errors.iter().map(ConfigError::to_issue).collect(),
+                },
+            }
+        }
         Request::TestRule {
             rule,
             folder_id,
@@ -712,6 +745,15 @@ impl Service {
     ) -> Result<Vec<RuleRun>> {
         let set = self.inner.rules.set();
         let compiled = rules_to_run(&set, rule_ids)?;
+        let target = match (message_ids, folder_id) {
+            ([], None) => RuleRunTarget::Scope,
+            ([], Some(folder_id)) => RuleRunTarget::Folder {
+                folder_id: folder_id.clone(),
+            },
+            (ids, _) => RuleRunTarget::Messages {
+                count: u32::try_from(ids.len()).unwrap_or(u32::MAX),
+            },
+        };
         let mut runs = Vec::with_capacity(compiled.len());
         for rule in compiled {
             let ids = if message_ids.is_empty() {
@@ -720,7 +762,10 @@ impl Service {
             } else {
                 message_ids.to_vec()
             };
-            runs.push(self.run_one_rule(rule, RuleRunCause::Manual, ids).await?);
+            runs.push(
+                self.run_one_rule(rule, RuleRunCause::Manual, &target, ids)
+                    .await?,
+            );
         }
         Ok(runs)
     }
@@ -731,6 +776,7 @@ impl Service {
         &self,
         compiled: &CompiledRule,
         cause: RuleRunCause,
+        target: &RuleRunTarget,
         ids: Vec<MessageId>,
     ) -> Result<RuleRun> {
         let (views, mailbox) = self.load_views(ids).await?;
@@ -743,11 +789,11 @@ impl Service {
             nail_rules::run_rule(compiled, cause, views.iter().map(|(d, _)| as_view(d)), &env)
         };
         let rule = compiled.rule();
-        let (id, name) = (rule.id.clone(), rule.name.clone());
+        let (id, name, target) = (rule.id.clone(), rule.name.clone(), target.clone());
         let started = self
             .inner
             .store
-            .call(move |s| s.start_rule_run(&id, &name, cause, unix_now()))
+            .call(move |s| s.start_rule_run(&id, &name, cause, &target, unix_now()))
             .await?;
         let mut runs = HashMap::from([(
             rule.id.clone(),
@@ -779,7 +825,9 @@ impl Service {
                     match self
                         .inner
                         .store
-                        .call(move |s| s.start_rule_run(&id, &name, cause, unix_now()))
+                        .call(move |s| {
+                            s.start_rule_run(&id, &name, cause, &RuleRunTarget::Scope, unix_now())
+                        })
                         .await
                     {
                         Ok(run) => {
@@ -1087,7 +1135,7 @@ impl Service {
             let rule_id = compiled.rule().id.clone();
             let ids = self.candidate_messages(None, compiled.rule()).await?;
             if let Err(err) = self
-                .run_one_rule(compiled, RuleRunCause::Schedule, ids)
+                .run_one_rule(compiled, RuleRunCause::Schedule, &RuleRunTarget::Scope, ids)
                 .await
             {
                 tracing::warn!(%err, rule = %rule_id, "a scheduled rule run failed");
@@ -1192,11 +1240,13 @@ mod tests {
             state: RuleRunState::Done,
             started_at: 0,
             finished_at: Some(60),
+            target: RuleRunTarget::Messages { count: 2 },
             matched: 2,
             message: None,
             op_ids: vec![nail_store::OpId(7)],
             undoable: true,
         });
+        assert_eq!(run.target, RuleRunTarget::Messages { count: 2 });
         assert_eq!(run.started_at, "1970-01-01T00:00:00Z");
         assert_eq!(run.finished_at.as_deref(), Some("1970-01-01T00:01:00Z"));
         assert_eq!(run.op_ids, vec![crate::ids::op_id(nail_store::OpId(7))]);

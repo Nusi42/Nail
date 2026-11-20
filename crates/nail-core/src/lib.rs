@@ -89,6 +89,7 @@ pub mod testing;
 mod triage;
 mod ui_log;
 mod ui_state;
+mod values;
 mod vault;
 mod virtuals;
 mod watch;
