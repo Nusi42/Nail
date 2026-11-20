@@ -7,6 +7,21 @@ metadata:
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
 
+**Wave R1 done 2026-11-20** (rules on demand, live search, shared problem indicator; ADRs 0219-0221;
+[[r1-status]]): `main` = 560645e8, published to GitHub. A design review of the rules dialog was published to the
+maintainer as an artifact; the maintainer asked for all of it.
+
+**Next: wave R2** (maintainer request 2026-11-20), four packages: (1) rules dialog redesign per the design review
+(fixed footer with a problem badge, Run on target select, Test/Run/Save; Preview + Recent runs panel; compact
+WHEN/WHERE/IF/THEN form; delete/close confirmations; responsive window; segmented Editor/Text; empty state and
+starter rules; core fix: `nail-config` rules `write.rs` must not write `id=""`; Recent runs with time and target,
+removed with their rule); (2) shared searchable pickers (folder tree, account, tag, address/contact, mailing list,
+header name; free text stays) used in rules, virtual folders, search and settings; (3) when the rules dialog is
+opened from a mail, conditions offer that mail's values (sender, recipients, subject, list, reply-to, account,
+folder); (4) R1 leftovers: Run rule as a real hover submenu (dynamic menu source), `@`-prefixed rule names in that
+menu, search hints as an overlay, re-run live search after a folder change, align the mock RunRules. Known load
+flakes (WebView2 e2e crashes, nail-vault migration, nail-plugins cpu quota) stay out of R2 unless asked.
+
 **State:** M0-M5, the polish waves P1-P3 and the quality waves Q1-Q2 are done and verified
 (status lines in `docs/plan.md`, notes by milestone in `docs/architecture.md`); later changes have their own ADRs
 (0180-0201). Version 0.8.0. `main` = `work-1`, pushed to GitHub.
