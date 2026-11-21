@@ -7,7 +7,8 @@
 import type { RuleRunCause, RuleRunState } from "../../api/generated";
 import { FOLDER_ROLES } from "../../api/contract";
 import { ADDRESS_FIELDS, AUTH_METHODS, AUTH_RESULTS, FLAGS } from "./ConditionEditor";
-import { ACTION_KINDS, CONDITION_KINDS, TEXT_OPS, TRIGGER_KINDS } from "./model";
+import { ACTION_KINDS, CONDITION_KINDS, GROUP_KINDS, TEXT_OPS, TRIGGER_KINDS } from "./model";
+import { STARTER_IDS } from "./starters";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["rules-", "rule-"];
@@ -18,10 +19,9 @@ export const notMessages: readonly string[] = [
   "rule-name",
   "rule-enabled",
   "rule-text",
-  "rule-up",
-  "rule-down",
-  // The run panel's checkbox of a rule (`data-field`).
-  "rule-pick",
+  // The list's filter and the editor's view switch (`name`).
+  "rule-filter",
+  "rule-view",
   // Query key of the run history.
   "rule-runs",
   // Prefixes of the on/off action choices (`<prefix>-label`, `-on`, `-off`).
@@ -54,7 +54,7 @@ export function runtimeIds(): string[] {
     ...AUTH_RESULTS.map((k) => `rules-auth-result-${k}`),
     ...["greater", "less"].flatMap((k) => [`rules-size-${k}`, `rules-age-${k}`]),
     ...["before", "after"].map((k) => `rules-date-${k}`),
-    ...["all", "any", "not"].map((k) => `rules-group-${k}`),
+    ...GROUP_KINDS.map((k) => `rules-group-${k}`),
     ...["set", "unset"].map((k) => `rules-flag-state-${k}`),
     ...["flag", "read", "notify"].flatMap((k) => [
       `rules-set-${k}-label`,
@@ -63,5 +63,7 @@ export function runtimeIds(): string[] {
     ]),
     ...RUN_STATES.map((s) => `rules-run-state-${s}`),
     ...RUN_CAUSES.map((c) => `rules-run-cause-${c}`),
+    // R2: the starter rules of the empty rules window (`./starters.ts`).
+    ...STARTER_IDS.flatMap((id) => [`rules-starter-${id}-name`, `rules-starter-${id}-hint`]),
   ];
 }

@@ -45,6 +45,9 @@ export const CONDITION_KINDS: readonly ConditionKind[] = [
   "not",
 ];
 
+/** The condition kinds that are groups (listed last in "+ Add condition"). */
+export const GROUP_KINDS = ["all", "any", "not"] as const satisfies readonly ConditionKind[];
+
 /** Action kinds offered in the editor, in menu order. */
 export const ACTION_KINDS: readonly ActionKind[] = [
   "move",
@@ -267,78 +270,109 @@ export function moveItem<T>(items: readonly T[], index: number, delta: -1 | 1): 
   return next;
 }
 
-/** Problems that keep a rule from being saved (Fluent ids). */
-export function ruleProblems(rule: Rule): string[] {
-  const problems = new Set<string>();
-  if (rule.name.trim() === "") problems.add("rules-error-name");
-  if (rule.actions.length === 0) problems.add("rules-error-no-actions");
-  const walk = (c: Condition) => {
-    switch (c.type) {
-      case "header":
-        if (c.name.trim() === "") problems.add("rules-error-condition");
-        break;
-      case "address":
-      case "subject":
-      case "body":
-        if (c.matches.value === "") problems.add("rules-error-condition");
-        break;
-      case "query":
-        if (c.query.trim() === "") problems.add("rules-error-condition");
-        break;
-      case "date":
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date)) problems.add("rules-error-condition");
-        break;
-      case "tag":
-        if (c.tag.trim() === "") problems.add("rules-error-condition");
-        break;
-      case "account":
-        if (c.account_id === "") problems.add("rules-error-condition");
-        break;
-      case "folder":
-        if (c.folder.type === "path" && c.folder.path.trim() === "") {
-          problems.add("rules-error-condition");
-        }
-        break;
-      default:
-        break;
-    }
-    childrenOf(c).forEach(walk);
-  };
-  walk(rule.conditions);
-  for (const a of rule.actions) {
-    switch (a.type) {
-      case "move":
-      case "copy":
-        if (a.folder.type === "path" && a.folder.path.trim() === "") {
-          problems.add("rules-error-action");
-        }
-        break;
-      case "tag":
-      case "untag":
-        if (a.tag.trim() === "") problems.add("rules-error-action");
-        break;
-      case "forward":
-      case "redirect":
-        if (a.to.length === 0 || a.to.some((t) => !t.includes("@"))) {
-          problems.add("rules-error-action");
-        }
-        break;
-      case "reply":
-        if (a.template.trim() === "") problems.add("rules-error-action");
-        break;
-      default:
-        break;
-    }
+/**
+ * Where a problem is, so the editor marks that field (`aria-invalid`):
+ * the name, a condition by its path, an action by its index, a trigger.
+ */
+export type IssueAt =
+  | { kind: "name" }
+  | { kind: "condition"; path: ConditionPath }
+  | { kind: "action"; index: number }
+  | { kind: "trigger"; trigger: TriggerKind };
+
+/** One problem that keeps a rule from being saved: its Fluent id and its field. */
+export interface RuleIssue {
+  id: string;
+  at: IssueAt;
+}
+
+/** Whether a (non-group) condition still misses its value. */
+function conditionIncomplete(c: Condition): boolean {
+  switch (c.type) {
+    case "header":
+      return c.name.trim() === "";
+    case "address":
+    case "subject":
+    case "body":
+      return c.matches.value === "";
+    case "query":
+      return c.query.trim() === "";
+    case "date":
+      return !/^\d{4}-\d{2}-\d{2}$/.test(c.date);
+    case "tag":
+      return c.tag.trim() === "";
+    case "account":
+      return c.account_id === "";
+    case "folder":
+      return c.folder.type === "path" && c.folder.path.trim() === "";
+    default:
+      return false;
   }
+}
+
+/** Whether an action still misses its value. */
+function actionIncomplete(a: RuleAction): boolean {
+  switch (a.type) {
+    case "move":
+    case "copy":
+      return a.folder.type === "path" && a.folder.path.trim() === "";
+    case "tag":
+    case "untag":
+      return a.tag.trim() === "";
+    case "forward":
+    case "redirect":
+      return a.to.length === 0 || a.to.some((t) => !t.includes("@"));
+    case "reply":
+      return a.template.trim() === "";
+    default:
+      return false;
+  }
+}
+
+/** Every problem that keeps a rule from being saved, with the field it is in. */
+export function ruleIssues(rule: Rule): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  if (rule.name.trim() === "") issues.push({ id: "rules-error-name", at: { kind: "name" } });
+  if (rule.actions.length === 0) {
+    issues.push({ id: "rules-error-no-actions", at: { kind: "action", index: -1 } });
+  }
+  const walk = (c: Condition, path: ConditionPath) => {
+    if (conditionIncomplete(c)) {
+      issues.push({ id: "rules-error-condition", at: { kind: "condition", path } });
+    }
+    childrenOf(c).forEach((child, i) => {
+      walk(child, [...path, i]);
+    });
+  };
+  walk(rule.conditions, []);
+  rule.actions.forEach((a, index) => {
+    if (actionIncomplete(a))
+      issues.push({ id: "rules-error-action", at: { kind: "action", index } });
+  });
   for (const t of rule.triggers) {
     if (
       (t.type === "schedule" && t.interval_minutes < 1) ||
       (t.type === "older-than" && t.days < 1)
     ) {
-      problems.add("rules-error-trigger");
+      issues.push({ id: "rules-error-trigger", at: { kind: "trigger", trigger: t.type } });
     }
   }
-  return [...problems];
+  return issues;
+}
+
+/** Problems that keep a rule from being saved (Fluent ids, each once). */
+export function ruleProblems(rule: Rule): string[] {
+  return [...new Set(ruleIssues(rule).map((i) => i.id))];
+}
+
+/** Whether `issues` has one at the condition `path`. */
+export function conditionInvalid(issues: readonly RuleIssue[], path: ConditionPath): boolean {
+  return issues.some((i) => i.at.kind === "condition" && comparePaths(i.at.path, path) === 0);
+}
+
+/** Whether `issues` has one at the action `index`. */
+export function actionInvalid(issues: readonly RuleIssue[], index: number): boolean {
+  return issues.some((i) => i.at.kind === "action" && i.at.index === index);
 }
 
 /** Adds or removes a trigger kind (with default parameters). */
@@ -385,4 +419,60 @@ export function ruleFromMessage(message: MessageSummary): Rule {
     name: nonEmpty(message.from?.name) ?? nonEmpty(from) ?? message.subject,
     conditions: { type: "all", conditions },
   };
+}
+
+/**
+ * A condition with `value` (picked from the message the window was opened
+ * from, R2) as its value: the text a comparison tests, the header's name,
+ * the tag, the account or the folder path. Kinds without a text value stay
+ * as they are.
+ */
+export function withPickedValue(condition: Condition, value: string): Condition {
+  switch (condition.type) {
+    case "address":
+    case "subject":
+    case "body":
+      return { ...condition, matches: { ...condition.matches, value } };
+    case "list-id":
+      return { ...condition, matches: { ...(condition.matches ?? textMatch()), value } };
+    case "header":
+      return { ...condition, name: value };
+    case "query":
+      return { ...condition, query: value };
+    case "tag":
+      return { ...condition, tag: value };
+    case "account":
+      return { ...condition, account_id: value };
+    case "folder":
+      return {
+        ...condition,
+        folder: { type: "path", path: value, account_id: condition.folder.account_id },
+      };
+    default:
+      return condition;
+  }
+}
+
+/**
+ * Whether running the rule can take mail away from where it is (it moves,
+ * archives or deletes): such a run asks first, with the number of messages.
+ */
+export function isDestructive(rule: Rule): boolean {
+  return rule.actions.some((a) => a.type === "move" || a.type === "archive" || a.type === "delete");
+}
+
+/** The rules whose name contains `text` (case-insensitive); all for empty text. */
+export function filterRules<R extends Pick<Rule, "name">>(rules: readonly R[], text: string): R[] {
+  const needle = text.trim().toLocaleLowerCase();
+  if (needle === "") return [...rules];
+  return rules.filter((r) => r.name.toLocaleLowerCase().includes(needle));
+}
+
+/** Moves the item at `from` to `to` (drag and drop); unchanged when either is out of range. */
+export function moveItemTo<T>(items: readonly T[], from: number, to: number): T[] {
+  if (from < 0 || from >= items.length || to < 0 || to >= items.length) return [...items];
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item as T);
+  return next;
 }

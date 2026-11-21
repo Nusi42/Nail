@@ -14,11 +14,12 @@ import { onRulesEvent } from "./api";
 import { ruleFromMessage } from "./model";
 import { RuleManager, RulesDialog } from "./RuleManager";
 import { OPEN_RULES_ACTION, RUN_ACTION, RUN_MENU_ACTION, runMenuActions } from "./runMenu";
+import { RULES_WINDOW, RulesCloseGuard } from "./closeGuard";
 import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
 
 /** The window (or, without one in the layout, the dialog) with the rules. */
-export const RULES_WINDOW = "rules";
+export { RULES_WINDOW };
 
 /** Layout widget kinds → components. */
 export const widgets: Feature["widgets"] = {
@@ -67,8 +68,11 @@ export const actionInfo: NonNullable<Feature["actionInfo"]> = {
   [RUN_ACTION]: { title: "rules-action-run-menu", hidden: true, icon: "list-checks" },
 };
 
-/** Background components: the toast of a run from a menu. */
-export const effects: NonNullable<Feature["effects"]> = [RunToast];
+/**
+ * Background components: the toast of a run from a menu, and the guard that
+ * keeps the rules window open while its rule has unsaved changes (R2).
+ */
+export const effects: NonNullable<Feature["effects"]> = [RunToast, RulesCloseGuard];
 
 /** Named dialogs (opened with `window.open "<name>"`). */
 export const dialogs: NonNullable<Feature["dialogs"]> = {

@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { nailPerTest, control, serverMessages } from "../support/nail";
-import { newRuleFromText as enterRuleText, openRulesWindow } from "../support/rules";
+import {
+  addFromMenu,
+  newRuleFromText as enterRuleText,
+  openRulesWindow,
+  rulesFooter,
+  saveRule,
+} from "../support/rules";
 import { readerAction, messageRows, DEMO_MULTI_CONVERSATIONS, openMail } from "../support/views";
 
 /**
@@ -24,7 +30,7 @@ async function openRules(page: Page): Promise<Locator> {
 /** Starts a new rule, enters it in the text view and goes back to the editor. */
 async function newRuleFromText(window: Locator, text: string): Promise<Locator> {
   const editor = await enterRuleText(window, text);
-  await editor.getByRole("button", { name: "Editor" }).click();
+  await editor.getByRole("radio", { name: "Editor" }).click();
   return editor;
 }
 
@@ -43,8 +49,7 @@ test("an arrival rule moves new mail and its run can be undone", async ({ page }
   const window = await openRules(page);
   const editor = await newRuleFromText(window, INVOICE_RULE);
   await expect(editor.getByRole("textbox", { name: "Name" })).toHaveValue("Invoices to Archive");
-  await editor.getByRole("button", { name: "Save rule" }).click();
-  await expect(editor.getByText("The rule is saved.")).toBeVisible();
+  await saveRule(editor);
   expect(rulesFile()).toContain('rule "Invoices to Archive"');
 
   // New mail arrives (IDLE) and the rule files it in Archive, flagged.
@@ -68,11 +73,14 @@ test("an arrival rule moves new mail and its run can be undone", async ({ page }
     .toBe(true);
   expect(archived).toBeDefined();
 
-  // The run is in the history and undone as one unit.
+  // The run is in the history (with its time and target) and undone as one unit.
+  await editor.getByRole("tab", { name: /^Recent runs/ }).click();
   const runs = editor.getByRole("region", { name: "Recent runs" });
   await expect(runs.getByText(/^New mail: one message, done$/)).toBeVisible({ timeout: 15_000 });
+  await expect(runs.locator('[data-part="rules.run.time"]')).toBeVisible();
+  await expect(runs.getByText("where the rule applies")).toBeVisible();
   await runs.getByRole("button", { name: "Undo this run" }).click();
-  await expect(editor.getByText("The run was undone.")).toBeVisible();
+  await expect(rulesFooter(editor).getByText("The run was undone.")).toBeVisible();
   await expect(runs.getByText(/^New mail: one message, undone$/)).toBeVisible();
   await expect
     .poll(async () => (await serverMessages(server, "INBOX")).map((m) => m.subject), {
@@ -105,14 +113,18 @@ test("the test-rule preview lists matches and explains them", async ({ page }) =
 }
 `,
   );
-  await editor.getByRole("button", { name: "Test rule" }).click();
+  await rulesFooter(editor).getByRole("button", { name: "Test rule" }).click();
   const results = editor.getByRole("region", { name: "Test results" });
   await expect(results.getByRole("status")).toHaveText(/^\d+ messages of \d+ match/);
   const kickoff = results
     .locator('[data-part="rules.test.match"]')
     .filter({ hasText: "Project Nightingale kickoff" })
     .first();
-  await expect(kickoff.getByRole("list", { name: "What would happen" })).toContainText("Add tag");
+  await expect(kickoff.getByRole("list", { name: "What would happen" })).toContainText(
+    "Add tag: project",
+  );
+  // Why it matched is folded under the row.
+  await kickoff.getByText("Why it matches").click();
   await expect(kickoff.getByRole("list", { name: "Why it matches" })).toContainText(
     "Subject matched:",
   );
@@ -130,10 +142,9 @@ test("a rule is created from a message", async ({ page }) => {
   await expect(editor.locator('[data-part="rules.condition"]').first()).toBeVisible();
   // The rule matches the sender and the list's subject tag; the user adds
   // where it goes.
-  await editor.getByRole("button", { name: "Add action" }).click();
+  await addFromMenu(editor, "Add action", "Move to folder");
   await editor.getByRole("textbox", { name: "Folder path" }).fill("Lists");
-  await editor.getByRole("button", { name: "Save rule" }).click();
-  await expect(editor.getByText("The rule is saved.")).toBeVisible();
+  await saveRule(editor);
   const text = rulesFile();
   expect(text).toContain('from equals="users@lists.nail.example"');
   expect(text).toContain('subject starts-with="[nail-users]"');

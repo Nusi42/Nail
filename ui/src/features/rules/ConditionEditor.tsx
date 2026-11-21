@@ -1,10 +1,18 @@
 /**
  * The visual editor of a rule's conditions: nested all / any / not groups
  * and one row per condition, each kind with its own fields.
+ *
+ * R2 (design review, item 9): the root group is the IF row's "Match all /
+ * any of:" — no box and no second legend; nested groups keep their box.
+ * "+ Add condition" is a menu button. Every value that names a folder,
+ * account, tag, address, mailing list or header name is a shared picker
+ * (`./PickerField`); beside each condition the window offers the values of
+ * the message it was opened from (`./fromMessage`, `ValuesFromMessage`). A
+ * condition that still misses its value is marked (`aria-invalid`) and
+ * names the footer's problem badge.
  */
-import { useId, useState } from "react";
+import { useId } from "react";
 import {
-  type Account,
   ADDRESS_FIELD_VALUES,
   type AddressField,
   AUTH_METHOD_VALUES,
@@ -20,21 +28,28 @@ import {
   type TextOp,
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { useAccounts } from "../../state/queries";
 import { CheckField, NumberField, SelectField, TextField, type Choice } from "../../widgets/forms";
+import type { PickerKind } from "../../widgets/pickers";
+import { AddMenu } from "./AddMenu";
+import { ValuesFromMessage } from "./fromMessage";
 import {
   CONDITION_KINDS,
+  GROUP_KINDS,
   TEXT_OPS,
   addChild,
   childrenOf,
   conditionAt,
+  conditionInvalid,
   newCondition,
   removeAt,
   replaceAt,
   textMatch,
+  withPickedValue,
   type ConditionKind,
   type ConditionPath,
+  type RuleIssue,
 } from "./model";
+import { PickerField } from "./PickerField";
 import { FOLDER_ROLES } from "../../api/contract";
 export {
   ADDRESS_FIELD_VALUES as ADDRESS_FIELDS,
@@ -46,29 +61,46 @@ export {
 const choices = (values: readonly string[], prefix: string): Choice[] =>
   values.map((value) => ({ value, label: `${prefix}${value}` }));
 
-/** Operator, text and case of a comparison; `optional` adds "any" / "exists". */
+/** Whether a field misses its value, and the problem badge that says so. */
+export interface Marked {
+  invalid?: boolean | undefined;
+  describedBy?: string | undefined;
+}
+
+/**
+ * Operator, text and case of a comparison; `optional` adds "any" /
+ * "exists"; `picker` makes the text a shared picker of that kind.
+ */
 function TextMatchFields({
   name,
   value,
   optional,
+  picker,
+  invalid,
+  describedBy,
   onChange,
 }: {
   name: string;
   value: TextMatch | null;
   /** Fluent id of the choice meaning "no comparison" (`null`). */
   optional?: string;
+  picker?: PickerKind;
   onChange: (value: TextMatch | null) => void;
-}) {
+} & Marked) {
   const ops: Choice[] = [
     ...(optional ? [{ value: "", label: optional }] : []),
     ...choices(TEXT_OPS, "rules-op-"),
   ];
+  const setText = (text: string) => {
+    if (value) onChange({ ...value, value: text });
+  };
   return (
     <>
       <SelectField
         labelId="rules-op"
         name={`${name}-op`}
         value={value?.op ?? ""}
+        width="content"
         choices={ops}
         onChange={(op) => {
           onChange(op === "" ? null : { ...(value ?? textMatch()), op: op as TextOp });
@@ -76,14 +108,25 @@ function TextMatchFields({
       />
       {value && (
         <>
-          <TextField
-            labelId="rules-value"
-            name={`${name}-value`}
-            value={value.value}
-            onChange={(text) => {
-              onChange({ ...value, value: text });
-            }}
-          />
+          {picker ? (
+            <PickerField
+              kind={picker}
+              labelId="rules-value"
+              name={`${name}-value`}
+              value={value.value}
+              invalid={invalid}
+              describedBy={describedBy}
+              onChange={setText}
+            />
+          ) : (
+            <TextField
+              labelId="rules-value"
+              name={`${name}-value`}
+              value={value.value}
+              invalid={invalid === true}
+              onChange={setText}
+            />
+          )}
           <CheckField
             labelId="rules-case-sensitive"
             name={`${name}-case`}
@@ -98,24 +141,22 @@ function TextMatchFields({
   );
 }
 
-/** A folder: by path or special role, in the message's account or a named one. */
+/**
+ * A folder: by path (a folder picker over the named account, else every
+ * account) or special role, in the message's account or a named one (an
+ * account picker; empty = the message's account).
+ */
 export function FolderRefFields({
   name,
   value,
-  accounts,
+  invalid,
+  describedBy,
   onChange,
 }: {
   name: string;
   value: FolderRef;
-  accounts: readonly Account[];
   onChange: (value: FolderRef) => void;
-}) {
-  const accountChoices: Choice[] = [
-    { value: "", label: "rules-folder-account-own" },
-    ...accounts
-      .filter((a) => a.kind !== "virtual")
-      .map((a) => ({ value: a.id, label: a.name || a.email, literal: true })),
-  ];
+} & Marked) {
   const account_id = value.account_id;
   return (
     <>
@@ -123,6 +164,7 @@ export function FolderRefFields({
         labelId="rules-folder-mode"
         name={`${name}-mode`}
         value={value.type}
+        width="content"
         choices={[
           { value: "path", label: "rules-folder-by-path" },
           { value: "role", label: "rules-folder-by-role" },
@@ -136,10 +178,14 @@ export function FolderRefFields({
         }}
       />
       {value.type === "path" ? (
-        <TextField
+        <PickerField
+          kind="folder"
           labelId="rules-folder-path"
           name={`${name}-path`}
           value={value.path}
+          accountId={account_id}
+          invalid={invalid}
+          describedBy={describedBy}
           onChange={(path) => {
             onChange({ ...value, path });
           }}
@@ -149,17 +195,19 @@ export function FolderRefFields({
           labelId="rules-folder-role"
           name={`${name}-role`}
           value={value.role}
+          width="content"
           choices={choices(FOLDER_ROLES, "rules-role-")}
           onChange={(role) => {
             onChange({ ...value, role: role as FolderRole });
           }}
         />
       )}
-      <SelectField
+      <PickerField
+        kind="account"
         labelId="rules-folder-account"
         name={`${name}-account`}
         value={account_id ?? ""}
-        choices={accountChoices}
+        placeholderId="rules-folder-account-own"
         onChange={(id) => {
           onChange({ ...value, account_id: id === "" ? null : id });
         }}
@@ -172,14 +220,13 @@ export function FolderRefFields({
 function LeafFields({
   name,
   condition,
-  accounts,
   onChange,
+  ...marked
 }: {
   name: string;
   condition: Condition;
-  accounts: readonly Account[];
   onChange: (c: Condition) => void;
-}) {
+} & Marked) {
   const c = condition;
   switch (c.type) {
     case "address":
@@ -189,6 +236,7 @@ function LeafFields({
             labelId="rules-field"
             name={`${name}-field`}
             value={c.field}
+            width="content"
             choices={choices(ADDRESS_FIELD_VALUES, "rules-field-")}
             onChange={(field) => {
               onChange({ ...c, field: field as AddressField });
@@ -197,6 +245,8 @@ function LeafFields({
           <TextMatchFields
             name={name}
             value={c.matches}
+            picker="address"
+            {...marked}
             onChange={(m) => {
               onChange({ ...c, matches: m ?? textMatch() });
             }}
@@ -209,6 +259,7 @@ function LeafFields({
         <TextMatchFields
           name={name}
           value={c.matches}
+          {...marked}
           onChange={(m) => {
             onChange({ ...c, matches: m ?? textMatch() });
           }}
@@ -217,10 +268,12 @@ function LeafFields({
     case "header":
       return (
         <>
-          <TextField
+          <PickerField
+            kind="header-name"
             labelId="rules-header-name"
             name={`${name}-header`}
             value={c.name}
+            {...marked}
             onChange={(header) => {
               onChange({ ...c, name: header.trim() });
             }}
@@ -241,6 +294,7 @@ function LeafFields({
           name={name}
           value={c.matches}
           optional="rules-op-exists"
+          picker="mailing-list"
           onChange={(matches) => {
             onChange({ ...c, matches });
           }}
@@ -252,6 +306,7 @@ function LeafFields({
           labelId="rules-query"
           name={`${name}-query`}
           value={c.query}
+          invalid={marked.invalid === true}
           onChange={(query) => {
             onChange({ ...c, query });
           }}
@@ -285,6 +340,7 @@ function LeafFields({
             labelId="rules-compare"
             name={`${name}-cmp`}
             value={c.cmp}
+            width="content"
             choices={choices(["greater", "less"], "rules-size-")}
             onChange={(cmp) => {
               onChange({ ...c, cmp: cmp as "greater" | "less" });
@@ -307,6 +363,7 @@ function LeafFields({
             labelId="rules-compare"
             name={`${name}-cmp`}
             value={c.cmp}
+            width="content"
             choices={choices(["before", "after"], "rules-date-")}
             onChange={(cmp) => {
               onChange({ ...c, cmp: cmp as "before" | "after" });
@@ -315,6 +372,7 @@ function LeafFields({
           <DateField
             name={`${name}-date`}
             value={c.date}
+            {...marked}
             onChange={(date) => {
               onChange({ ...c, date });
             }}
@@ -328,6 +386,7 @@ function LeafFields({
             labelId="rules-compare"
             name={`${name}-cmp`}
             value={c.cmp}
+            width="content"
             choices={choices(["greater", "less"], "rules-age-")}
             onChange={(cmp) => {
               onChange({ ...c, cmp: cmp as "greater" | "less" });
@@ -350,6 +409,7 @@ function LeafFields({
             labelId="rules-flag"
             name={`${name}-flag`}
             value={c.flag}
+            width="content"
             choices={choices(MESSAGE_FLAG_VALUES, "rules-flag-")}
             onChange={(flag) => {
               onChange({ ...c, flag: flag as MessageFlag });
@@ -359,6 +419,7 @@ function LeafFields({
             labelId="rules-flag-state"
             name={`${name}-set`}
             value={c.set ? "set" : "unset"}
+            width="content"
             choices={choices(["set", "unset"], "rules-flag-state-")}
             onChange={(v) => {
               onChange({ ...c, set: v === "set" });
@@ -368,10 +429,12 @@ function LeafFields({
       );
     case "tag":
       return (
-        <TextField
+        <PickerField
+          kind="tag"
           labelId="rules-tag"
           name={`${name}-tag`}
           value={c.tag}
+          {...marked}
           onChange={(tag) => {
             onChange({ ...c, tag: tag.trim() });
           }}
@@ -379,14 +442,13 @@ function LeafFields({
       );
     case "account":
       return (
-        <SelectField
+        <PickerField
+          kind="account"
           labelId="rules-account"
           name={`${name}-account`}
           value={c.account_id}
-          choices={[
-            { value: "", label: "rules-choose" },
-            ...accounts.map((a) => ({ value: a.id, label: a.name || a.email, literal: true })),
-          ]}
+          placeholderId="rules-choose"
+          {...marked}
           onChange={(account_id) => {
             onChange({ ...c, account_id });
           }}
@@ -397,7 +459,7 @@ function LeafFields({
         <FolderRefFields
           name={name}
           value={c.folder}
-          accounts={accounts}
+          {...marked}
           onChange={(folder) => {
             onChange({ ...c, folder });
           }}
@@ -410,6 +472,7 @@ function LeafFields({
             labelId="rules-auth-method"
             name={`${name}-method`}
             value={c.method}
+            width="content"
             choices={choices(AUTH_METHOD_VALUES, "rules-auth-")}
             onChange={(method) => {
               onChange({ ...c, method: method as AuthMethod });
@@ -419,6 +482,7 @@ function LeafFields({
             labelId="rules-auth-result"
             name={`${name}-result`}
             value={c.result}
+            width="content"
             choices={choices(AUTH_RESULT_VALUES, "rules-auth-result-")}
             onChange={(result) => {
               onChange({ ...c, result: result as AuthResult });
@@ -434,12 +498,14 @@ function LeafFields({
 function DateField({
   name,
   value,
+  invalid,
+  describedBy,
   onChange,
 }: {
   name: string;
   value: string;
   onChange: (value: string) => void;
-}) {
+} & Marked) {
   const t = useT();
   const id = useId();
   return (
@@ -453,6 +519,8 @@ function DateField({
         type="date"
         name={name}
         value={value}
+        aria-invalid={invalid === true || undefined}
+        aria-describedby={invalid === true ? describedBy : undefined}
         onChange={(event) => {
           onChange(event.target.value);
         }}
@@ -461,51 +529,85 @@ function DateField({
   );
 }
 
-/** Adds a condition or a group to a group. */
+/** "+ Add condition": a condition or a group added to the group at `path`. */
 function AddCondition({ path, onAdd }: { path: ConditionPath; onAdd: (c: Condition) => void }) {
   const t = useT();
-  const [kind, setKind] = useState<ConditionKind>("address");
   return (
-    <div data-part="rules.add">
-      <SelectField
-        labelId="rules-condition-kind"
-        name={`add-${path.join("-")}`}
-        value={kind}
-        choices={choices(CONDITION_KINDS, "rules-cond-")}
-        onChange={(k) => {
-          setKind(k as ConditionKind);
-        }}
-      />
-      <button
-        type="button"
-        data-part="form.button"
-        data-action="add-condition"
-        onClick={() => {
-          onAdd(newCondition(kind));
-        }}
-      >
-        {t("rules-add-condition")}
-      </button>
-    </div>
+    <AddMenu
+      labelId="rules-add-condition"
+      field={["add", "c", ...path].join("-")}
+      kinds={CONDITION_KINDS}
+      groups={GROUP_KINDS}
+      labelOf={(kind) => t(`rules-cond-${kind}`)}
+      onAdd={(kind) => {
+        onAdd(newCondition(kind));
+      }}
+    />
   );
 }
 
-/** One condition (a row) or group (a nested box), at `path` of the root. */
-function ConditionNode({
+interface NodeProps {
+  root: Condition;
+  path: ConditionPath;
+  issues: readonly RuleIssue[];
+  /** The id of the footer's problem details. */
+  describedBy: string | undefined;
+  onChange: (root: Condition) => void;
+}
+
+/** The "Match all / any" choice of the group at `path`. */
+function GroupMode({
   root,
   path,
-  accounts,
+  name,
+  condition,
   onChange,
 }: {
   root: Condition;
   path: ConditionPath;
-  accounts: readonly Account[];
+  name: string;
+  condition: Extract<Condition, { type: "all" | "any" }>;
   onChange: (root: Condition) => void;
 }) {
+  return (
+    <SelectField
+      labelId="rules-group-mode"
+      name={`${name}-mode`}
+      value={condition.type}
+      width="content"
+      choices={choices(["all", "any"], "rules-group-")}
+      onChange={(mode) => {
+        onChange(
+          replaceAt(root, path, {
+            type: mode as "all" | "any",
+            conditions: condition.conditions,
+          }),
+        );
+      }}
+    />
+  );
+}
+
+/** The children of the group at `path`, each a row (or a nested box). */
+function GroupItems({ kids, ...node }: NodeProps & { kids: readonly Condition[] }) {
+  return (
+    <ul data-part="rules.group.items">
+      {kids.map((_, i) => (
+        <li key={i} data-part="rules.group.item">
+          <ConditionNode {...node} path={[...node.path, i]} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** One condition (a row) or nested group (a box), at `path` of the root. */
+function ConditionNode(node: NodeProps) {
+  const { root, path, issues, describedBy, onChange } = node;
   const t = useT();
   const condition = conditionAt(root, path);
   if (!condition) return null;
-  const name = `c${path.length === 0 ? "" : `-${path.join("-")}`}`;
+  const name = ["c", ...path].join("-");
   const remove =
     path.length > 0 ? (
       <button
@@ -525,33 +627,15 @@ function ConditionNode({
       <fieldset data-part="rules.group" data-mode={condition.type} data-depth={path.length}>
         <legend data-part="rules.group.title">{t(`rules-group-${condition.type}`)}</legend>
         {condition.type !== "not" && (
-          <SelectField
-            labelId="rules-group-mode"
-            name={`${name}-mode`}
-            value={condition.type}
-            choices={choices(["all", "any"], "rules-group-")}
-            onChange={(mode) => {
-              onChange(
-                replaceAt(root, path, {
-                  type: mode as "all" | "any",
-                  conditions: kids,
-                }),
-              );
-            }}
+          <GroupMode
+            root={root}
+            path={path}
+            name={name}
+            condition={condition}
+            onChange={onChange}
           />
         )}
-        <ul data-part="rules.group.items">
-          {kids.map((_, i) => (
-            <li key={i} data-part="rules.group.item">
-              <ConditionNode
-                root={root}
-                path={[...path, i]}
-                accounts={accounts}
-                onChange={onChange}
-              />
-            </li>
-          ))}
-        </ul>
+        <GroupItems {...node} kids={kids} />
         {(condition.type !== "not" || kids.length === 0) && (
           <AddCondition
             path={path}
@@ -564,12 +648,14 @@ function ConditionNode({
       </fieldset>
     );
   }
+  const invalid = conditionInvalid(issues, path);
   return (
     <div data-part="rules.condition" data-kind={condition.type}>
       <SelectField
         labelId="rules-condition-kind"
         name={`${name}-kind`}
         value={condition.type}
+        width="content"
         choices={choices(CONDITION_KINDS, "rules-cond-")}
         onChange={(kind) => {
           onChange(replaceAt(root, path, newCondition(kind as ConditionKind)));
@@ -578,9 +664,16 @@ function ConditionNode({
       <LeafFields
         name={name}
         condition={condition}
-        accounts={accounts}
+        invalid={invalid}
+        describedBy={describedBy}
         onChange={(c) => {
           onChange(replaceAt(root, path, c));
+        }}
+      />
+      <ValuesFromMessage
+        condition={condition}
+        onPick={(value) => {
+          onChange(replaceAt(root, path, withPickedValue(condition, value)));
         }}
       />
       {remove}
@@ -588,18 +681,41 @@ function ConditionNode({
   );
 }
 
-/** The conditions of a rule: the root group and everything in it. */
+/**
+ * The conditions of a rule (the IF row): "Match all / any of:" for the
+ * root group, its conditions and nested groups, "+ Add condition". A root
+ * that is not an all / any group (a `not`, or a single condition from the
+ * text view) is shown as it is.
+ */
 export function ConditionEditor({
   value,
+  issues = [],
+  describedBy,
   onChange,
 }: {
   value: Condition;
+  issues?: readonly RuleIssue[];
+  describedBy?: string | undefined;
   onChange: (value: Condition) => void;
 }) {
-  const accounts = useAccounts();
+  const node: NodeProps = { root: value, path: [], issues, describedBy, onChange };
+  if (value.type !== "all" && value.type !== "any") {
+    return (
+      <div data-part="rules.conditions">
+        <ConditionNode {...node} />
+      </div>
+    );
+  }
   return (
     <div data-part="rules.conditions">
-      <ConditionNode root={value} path={[]} accounts={accounts.data ?? []} onChange={onChange} />
+      <GroupMode root={value} path={[]} name="c" condition={value} onChange={onChange} />
+      <GroupItems {...node} kids={value.conditions} />
+      <AddCondition
+        path={[]}
+        onAdd={(c) => {
+          onChange(addChild(value, [], c));
+        }}
+      />
     </div>
   );
 }

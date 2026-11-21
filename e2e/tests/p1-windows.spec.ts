@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { buildOutputDir, nailPerTest, type NailServer } from "../support/nail";
 import { createUser, rpcOk } from "../support/remote";
+import { addFromMenu } from "../support/rules";
 import {
   STANDARD_SIZES,
   formatIssues,
@@ -430,67 +431,42 @@ const GROUPS: Record<string, Group> = {
       await sweep.window("rules").getByRole("button", { name: "New rule" }).click();
       await expect(sweep.window("rules").getByRole("form", { name: "Rule" })).toBeVisible();
       await sweep.visit("rules", "rules-editor");
-      // ADR 0160: a rule with conditions and actions — every control of a row fills its row.
+      // ADR 0160 / R2: a rule with conditions and actions — the compact
+      // WHEN / WHERE / IF / THEN form stays inside the editor at every width,
+      // and the footer (Run, Test, Save) stays in view.
       const rulesWindow = sweep.window("rules");
-      const addCondition = rulesWindow.getByRole("button", { name: "Add condition" });
-      await addCondition.click();
-      // The "add" row's choosers (each added row has its own selects).
-      const adders = rulesWindow.locator('[data-part="rules.add"]');
-      await adders
-        .first()
-        .getByRole("combobox", { name: "Condition" })
-        .selectOption({ label: "Subject" });
-      await addCondition.click();
-      await rulesWindow.getByRole("button", { name: "Add action" }).click();
-      await adders.last().getByRole("combobox", { name: "Action" }).selectOption({ index: 2 });
-      await rulesWindow.getByRole("button", { name: "Add action" }).click();
+      await addFromMenu(rulesWindow, "Add condition", "Subject");
+      await addFromMenu(rulesWindow, "Add condition", "Any of a group");
+      await addFromMenu(rulesWindow, "Add action", "Archive");
+      await addFromMenu(rulesWindow, "Add action", "Add tag");
       await sweep.visit("rules", "rules-editor-filled");
-      // The condition group's rows span its Match select: the first condition's
-      // controls together, and the "add" row's chooser with its button.
       for (const width of [1600, 1024, 800]) {
         await page.setViewportSize({ width, height: 1000 });
         await nextFrames(page);
-        const edges = await rulesWindow
-          .locator('[data-part="rules.group"]')
-          .first()
-          .evaluate((group) => {
-            const span = (els: Element[]) => {
-              const rects = els.map((el) => el.getBoundingClientRect());
-              return {
-                left: Math.round(Math.min(...rects.map((r) => r.left))),
-                right: Math.round(Math.max(...rects.map((r) => r.right))),
-              };
-            };
-            const controls = (row: Element | null) =>
-              row === null
-                ? []
-                : Array.from(row.querySelectorAll("select, input:not([type=checkbox]), button"));
-            const match = group.querySelector("select");
-            return {
-              match: match === null ? null : span([match]),
-              condition: span(controls(group.querySelector('[data-part="rules.condition"]'))),
-              add: span(controls(group.querySelector('[data-part="rules.add"]'))),
-            };
-          });
-        const near = (
-          a: { left: number; right: number } | null,
-          b: { left: number; right: number } | null,
-        ) =>
-          a !== null &&
-          b !== null &&
-          Math.abs(a.left - b.left) <= 2 &&
-          Math.abs(a.right - b.right) <= 2;
-        expect(
-          near(edges.condition, edges.match),
-          `rule condition at ${String(width)} px: ${JSON.stringify(edges)}`,
-        ).toBe(true);
-        expect(
-          near(edges.add, edges.match),
-          `rule "add" row at ${String(width)} px: ${JSON.stringify(edges)}`,
-        ).toBe(true);
+        const editor = rulesWindow.getByRole("form", { name: "Rule" });
+        await expect(
+          rulesWindow
+            .locator('[data-part="rules.footer"]')
+            .getByRole("button", { name: "Save rule" }),
+        ).toBeInViewport();
+        const overflow = await editor.evaluate((form) => {
+          const right = form.getBoundingClientRect().right;
+          return Array.from(
+            form.querySelectorAll('[data-part="rules.condition"], [data-part="rules.action"]'),
+          )
+            .map((row) => Math.round(row.getBoundingClientRect().right - right))
+            .filter((over) => over > 1);
+        });
+        expect(overflow, `rule rows past the editor at ${String(width)} px`).toEqual([]);
       }
       await page.setViewportSize(LARGE);
-      await sweep.close("rules");
+      // The filled rule is not saved: closing asks first (R2).
+      await rulesWindow.locator('[data-part="window.close"]').click();
+      await rulesWindow
+        .getByRole("alertdialog")
+        .getByRole("button", { name: "Discard changes" })
+        .click();
+      await expect(rulesWindow).toBeHidden();
 
       await runFromPalette(page, "add account", "Add account");
       await sweep.visit("account-setup");

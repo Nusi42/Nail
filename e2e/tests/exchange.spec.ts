@@ -17,6 +17,7 @@ import {
 import { defined } from "../support/defined";
 import { eventChip, syncCalendars } from "../support/calendar";
 import { expectSentThrough, newMessage } from "../support/compose";
+import { addFromMenu, saveRule } from "../support/rules";
 
 /**
  * Wave M3c (ADR 0077) against `nail serve --seed demo-multi`: Exchange
@@ -320,14 +321,17 @@ test("a Nail rule is placed as an Exchange inbox rule", async ({ page }) => {
   const editor = rules.getByRole("form", { name: "Rule" });
   await expect(editor.locator('[data-part="rules.condition"]').first()).toBeVisible();
   // Filed into Inbox/Receipts: something Exchange can run itself.
-  await editor.getByRole("button", { name: "Add action" }).click();
+  await addFromMenu(editor, "Add action", "Move to folder");
   await editor.getByRole("textbox", { name: "Folder path" }).fill("Inbox/Receipts");
-  await editor.getByRole("button", { name: "Save rule" }).click();
-  await expect(editor.getByText("The rule is saved.")).toBeVisible();
+  await saveRule(editor);
   // The rule list shows where it runs for the Exchange account.
-  await expect(rules.locator('[data-part="exchange.rule-badge"]').first()).toBeVisible({
-    timeout: 30_000,
-  });
+  const badge = rules.locator('[data-part="exchange.rule-badge"]').first();
+  await expect(badge).toBeVisible({ timeout: 30_000 });
+  // R2: a compact ⓘ; where the rule runs is its name and its hover text.
+  const info = badge.getByRole("button");
+  await expect(info).toHaveAccessibleName(/^Contoso: /);
+  await info.hover();
+  await expect(info).toHaveAttribute("title", /^Contoso: /);
   await expect.poll(async () => (await graphSettings()).rules.length, { timeout: 30_000 }).toBe(3);
 });
 

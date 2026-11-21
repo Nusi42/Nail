@@ -14,8 +14,8 @@ import type { NailClient } from "../../api/client";
 import type { FolderId, MessageTarget, RuleRun } from "../../api/generated";
 import { RULE_SCOPE_TARGET, undoRuleRun, type RuleRunTarget } from "./api";
 
-/** Where the rules window runs rules: each rule's own messages, a folder, the selected mail. */
-export const RUN_TARGET_KINDS = ["scope", "folder", "messages"] as const;
+/** Where the rules window runs rules, in the order "Run on" lists them: the selected mail, a folder, each rule's own messages. */
+export const RUN_TARGET_KINDS = ["messages", "folder", "scope"] as const;
 export type RunTargetKind = (typeof RUN_TARGET_KINDS)[number];
 
 /** What a run acts on, as the rules window and the menus name it. */

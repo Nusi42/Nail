@@ -164,8 +164,12 @@ describe("rules", () => {
     const badges = await screen.findByRole("list", {
       name: "Where this rule runs on Exchange accounts",
     });
-    await waitFor(() => expect(badges).toHaveTextContent("Contoso: in Nail"));
-    expect(badges).toHaveTextContent("Condition 2 uses a search query");
+    // R2: a compact ⓘ with the number of reasons; where it runs is its name,
+    // the reasons its description (hover / focus text).
+    const button = await within(badges).findByRole("button", { name: "Contoso: in Nail" });
+    expect(button).toHaveAccessibleDescription(/Condition 2 uses a search query/);
+    expect(button.getAttribute("title")).toMatch(/^Contoso: in Nail .*Condition 2/);
+    expect(button).toHaveTextContent("1");
     const badge = badges.querySelector('[data-part="exchange.rule-badge"]');
     expect(badge?.getAttribute("data-placement")).toBe("client");
   });

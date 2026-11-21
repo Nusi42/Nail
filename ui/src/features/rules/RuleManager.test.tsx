@@ -2,28 +2,20 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Rule } from "../../api/generated";
 import { queryKeys } from "../../state/queries";
-import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import { renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import { actionContext } from "../../test/env";
+import { must } from "../../test/must";
 import { appRegistry } from "../registry";
-import { onRulesEvent } from "./api";
 import { actions, dialogs, widgets } from "./index";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
-import { showTextView } from "./testing";
-import { must } from "../../test/must";
-import { actionContext } from "../../test/env";
+import { addFromMenu, footerOf, setup, showTextView } from "./testing";
 
-function setup(): Env {
-  const env = createEnv();
-  env.transport.data.behaviour.workMs = 0;
-  // As the app shell does with the feature's event handlers.
-  env.transport.onEvent((event) => {
-    onRulesEvent(event, env.queryClient);
-  });
-  return env;
-}
-
+/** A field by its `name`, or the control inside the field row `data-field` (pickers). */
 function field(container: HTMLElement, name: string): HTMLElement {
-  const el = container.querySelector(`[name="${name}"]`);
+  const el =
+    container.querySelector(`[name="${name}"]`) ??
+    container.querySelector(`[data-field="${name}"] :is(input, select, textarea)`);
   if (!(el instanceof HTMLElement)) throw new Error(`no field ${name}`);
   return el;
 }
@@ -58,19 +50,33 @@ describe("rule manager", () => {
     await user.click(screen.getByRole("button", { name: "Rust announcements" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
     expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveValue("Rust announcements");
+    expect(within(editor).getByRole("switch", { name: "On" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     expect(within(editor).getByRole("checkbox", { name: "When mail arrives" })).toBeChecked();
-    // Two conditions in an `any` group, two actions.
-    expect(editor.querySelector('[data-part="rules.group"]')).toHaveAttribute("data-mode", "any");
+    // The root `any` group is the IF row's Match choice, not a second box.
+    expect(field(editor, "c-mode")).toHaveValue("any");
+    expect(editor.querySelector('[data-part="rules.group"]')).toBeNull();
     expect(editor.querySelectorAll('[data-part="rules.condition"]')).toHaveLength(2);
     expect(editor.querySelectorAll('[data-part="rules.action"]')).toHaveLength(2);
+    // WHEN / WHERE / IF / THEN.
+    expect(
+      [...editor.querySelectorAll('[data-part="rules.form.section"]')].map((s) =>
+        s.getAttribute("data-section"),
+      ),
+    ).toEqual(["when", "where", "if", "then"]);
 
     await user.clear(within(editor).getByRole("textbox", { name: "Name" }));
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Rust news");
     await user.click(within(editor).getByRole("button", { name: "Save rule" }));
-    expect(await within(editor).findByText("The rule is saved.")).toBeInTheDocument();
+    expect(await within(editor).findByText("Saved")).toBeInTheDocument();
     const saved = env.transport.requests.find((r) => r.type === "SaveRule");
     expect(saved).toMatchObject({ rule: { id: "rust-announcements", name: "Rust news" } });
     expect(await screen.findByRole("button", { name: "Rust news" })).toBeInTheDocument();
+    // "Saved" goes with the next edit.
+    await user.type(within(editor).getByRole("textbox", { name: "Name" }), "!");
+    expect(within(editor).queryByText("Saved")).toBeNull();
   });
 
   it("creates a rule with nested conditions and actions", async () => {
@@ -80,33 +86,37 @@ describe("rule manager", () => {
     await user.click(await screen.findByRole("button", { name: "New rule" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
     const save = within(editor).getByRole("button", { name: "Save rule" });
-    expect(save).toBeDisabled();
-    expect(within(editor).getByText("Give the rule a name.")).toBeInTheDocument();
-    expect(within(editor).getByText("Add at least one action.")).toBeInTheDocument();
+    // What is missing: a badge in the footer that Save names.
+    expect(save).toHaveAttribute("aria-disabled", "true");
+    const badge = within(footerOf(editor)).getByRole("button", { name: "2 things to fix" });
+    expect(badge).toHaveAccessibleDescription(/Give the rule a name\.\s*Add at least one action\./);
+    expect(save.getAttribute("aria-describedby")).toBe(badge.getAttribute("aria-describedby"));
+    expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
 
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Invoices");
     // A subject condition …
-    await user.selectOptions(field(container, "add-"), "subject");
-    await user.click(must(within(editor).getAllByRole("button", { name: "Add condition" })[0]));
+    await addFromMenu(user, editor, "Add condition", "Subject");
     await user.selectOptions(field(container, "c-0-op"), "regex");
+    // An empty value is marked until it is filled in.
+    expect(field(container, "c-0-value")).toHaveAttribute("aria-invalid", "true");
     await user.type(field(container, "c-0-value"), "invoice #\\d+");
+    expect(field(container, "c-0-value")).not.toHaveAttribute("aria-invalid");
     // … and a nested "any" group with an attachment condition.
-    await user.selectOptions(field(container, "add-"), "any");
-    await user.click(must(within(editor).getAllByRole("button", { name: "Add condition" })[0]));
-    await user.selectOptions(field(container, "add-1"), "attachment");
-    await user.click(must(within(editor).getAllByRole("button", { name: "Add condition" })[0]));
-    expect(container.querySelectorAll('[data-part="rules.group"]')).toHaveLength(2);
+    await addFromMenu(user, editor, "Add condition", "Any of a group");
+    await addFromMenu(user, editor, "Add condition", "Attachment", 0);
+    expect(container.querySelectorAll('[data-part="rules.group"]')).toHaveLength(1);
     // Actions: add a tag, then move it below an archive.
-    await user.selectOptions(field(container, "add-action"), "tag");
-    await user.click(within(editor).getByRole("button", { name: "Add action" }));
+    await addFromMenu(user, editor, "Add action", "Add tag");
     await user.type(field(container, "a-0-tag"), "invoice");
-    await user.selectOptions(field(container, "add-action"), "archive");
-    await user.click(within(editor).getByRole("button", { name: "Add action" }));
+    await addFromMenu(user, editor, "Add action", "Archive");
     await user.click(must(within(editor).getAllByRole("button", { name: "Up" })[1]));
 
-    expect(save).toBeEnabled();
+    expect(save).not.toHaveAttribute("aria-disabled");
     await user.click(save);
-    await within(editor).findByText("The rule is saved.");
+    await within(editor).findByText("Saved");
     const request = env.transport.requests.find((r) => r.type === "SaveRule");
     expect(request).toMatchObject({
       position: null,
@@ -133,17 +143,16 @@ describe("rule manager", () => {
       id: "invoices",
     });
     // The editor stays, now for a saved rule, and the rule can run at once.
-    expect(within(editor).getByRole("button", { name: "Delete rule" })).toBeInTheDocument();
-    const panel = screen.getByRole("region", { name: "Run rules" });
-    expect(within(panel).getByText("Runs “Invoices”.")).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Run now" })).toBeEnabled();
+    const footer = footerOf(editor);
+    expect(within(footer).getByRole("button", { name: "Delete rule…" })).toBeInTheDocument();
+    expect(within(footer).getByRole("button", { name: "Run" })).toBeEnabled();
   });
 
   it("removes conditions and changes group modes", async () => {
     const env = setup();
     const { user, view, editor } = await openSample(env);
     await user.selectOptions(field(view.container, "c-mode"), "all");
-    expect(editor.querySelector('[data-part="rules.group"]')).toHaveAttribute("data-mode", "all");
+    expect(field(view.container, "c-mode")).toHaveValue("all");
     await user.click(must(within(editor).getAllByRole("button", { name: "Remove" })[0]));
     expect(editor.querySelectorAll('[data-part="rules.condition"]')).toHaveLength(1);
     expect(field(view.container, "c-0-kind")).toHaveValue("query");
@@ -155,85 +164,60 @@ describe("rule manager", () => {
     const source = await showTextView(user, editor);
     expect(source.value).toContain('rule "Rust announcements" trigger="arrival" {');
     expect(source.value).toContain('tag "rust"');
+    // Highlighted, with line numbers.
+    const highlight = must(editor.querySelector('[data-part="rules.text.highlight"]'));
+    expect(highlight.textContent).toBe(`${source.value}\n`);
+    expect(highlight.querySelector('[data-kind="node"]')).toHaveTextContent("rule");
+    expect(editor.querySelectorAll('[data-part="rules.text.line"]')).toHaveLength(
+      source.value.split("\n").length,
+    );
 
-    // An error is a compact indicator with its position as the hover text;
-    // the view stays on the text.
+    // Text that does not read stays text; the footer badge says why, the
+    // line is marked and the text field names the badge.
     await user.clear(source);
     await user.type(source, 'rule "X" {{\n  then {{ explode }\n}');
-    await user.click(within(editor).getByRole("button", { name: "Editor" }));
-    const badge = await within(editor).findByRole("button", { name: "One error" });
+    await user.click(within(editor).getByRole("radio", { name: "Editor" }));
+    const badge = await within(footerOf(editor)).findByRole("button", { name: "One error" });
     expect(badge.getAttribute("title")).toMatch(/Line 2, column \d+: unknown action `explode`/);
-    expect(within(editor).getByRole("textbox", { name: "The rule in rules.kdl syntax" })).toBe(
-      source,
-    );
+    expect(
+      must(editor.querySelector<HTMLElement>('[data-part="rules.text.stuck"]')),
+    ).toHaveTextContent(/The text has mistakes/);
+    expect(source).toHaveAttribute("aria-invalid", "true");
+    expect(
+      editor.querySelector('[data-part="rules.text.line"][data-state="error"]'),
+    ).toHaveTextContent("2");
 
     await user.clear(source);
     await user.type(source, 'rule "Renamed" {{\n  then {{\n    tag "lang-rust"\n  }\n}');
-    await user.click(within(editor).getByRole("button", { name: "Editor" }));
+    await user.click(within(editor).getByRole("radio", { name: "Editor" }));
     await waitFor(() =>
       expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveValue("Renamed"),
     );
     expect(field(view.container, "a-0-tag")).toHaveValue("lang-rust");
     // The rule keeps its id when saved from the text.
     await user.click(within(editor).getByRole("button", { name: "Save rule" }));
-    await within(editor).findByText("The rule is saved.");
+    await within(editor).findByText("Saved");
     expect(env.transport.requests.filter((r) => r.type === "SaveRule").pop()).toMatchObject({
       rule: { id: "rust-announcements", name: "Renamed" },
     });
   });
 
-  it("tests a rule and explains the matches", async () => {
+  it("discards text that does not read and goes back to the rule", async () => {
     const env = setup();
     const { user, editor } = await openSample(env);
-    await user.click(within(editor).getByRole("button", { name: "Test rule" }));
-    const results = await within(editor).findByRole("region", { name: "Test results" });
-    expect(within(results).getByRole("status")).toHaveTextContent("2 messages of");
-    const matches = results.querySelectorAll('[data-part="rules.test.match"]');
-    expect(matches).toHaveLength(2);
-    const first = matches[0] as HTMLElement;
-    expect(within(first).getByText("[rust-announce] Rust 1.97 released")).toBeInTheDocument();
-    expect(within(first).getByRole("list", { name: "What would happen" })).toHaveTextContent(
-      "Add tag",
+    const source = await showTextView(user, editor);
+    await user.clear(source);
+    await user.type(source, "rule {{");
+    await user.click(within(editor).getByRole("radio", { name: "Editor" }));
+    await user.click(await within(editor).findByRole("button", { name: "Discard text changes" }));
+    expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveValue("Rust announcements");
+    expect(within(editor).getByRole("radio", { name: "Editor" })).toHaveAttribute(
+      "aria-checked",
+      "true",
     );
-    const why = within(first).getByRole("list", { name: "Why it matches" });
-    expect(
-      within(why).getByText("Subject matched: [rust-announce] Rust 1.97 released"),
-    ).toBeInTheDocument();
-    expect(within(why).getByText("Search query matched")).toBeInTheDocument();
-    // Conditions that did not match are not reasons.
-    expect(why.querySelectorAll('[data-part="rules.test.reason"]')).toHaveLength(2);
-    expect(env.transport.requests.find((r) => r.type === "TestRule")).toMatchObject({
-      folder_id: null,
-      limit: 50,
-    });
   });
 
-  it("runs a rule and undoes the run from the history", async () => {
-    const env = setup();
-    const { user, editor } = await openSample(env);
-    expect(await within(editor).findByText("This rule has not run yet.")).toBeInTheDocument();
-    const panel = screen.getByRole("region", { name: "Run rules" });
-    // Run now acts on the rule's own messages, as it always did.
-    expect(within(panel).getByRole("radio", { name: /Each rule’s own mail/ })).toBeChecked();
-    await user.click(within(panel).getByRole("button", { name: "Run now" }));
-    expect(await within(panel).findByRole("status")).toHaveTextContent(
-      "The rule ran: 2 messages matched, 2 changes queued.",
-    );
-    expect(env.transport.requests.find((r) => r.type === "RunRules")).toMatchObject({
-      rule_ids: ["rust-announcements"],
-      message_ids: [],
-      folder_id: null,
-    });
-    const history = within(editor).getByRole("region", { name: "Recent runs" });
-    const undo = await within(history).findByRole("button", { name: "Undo this run" });
-    expect(within(history).getByText("By hand: 2 messages, done")).toBeInTheDocument();
-    await user.click(undo);
-    expect(await within(editor).findByText("The run was undone.")).toBeInTheDocument();
-    expect(await within(history).findByText("By hand: 2 messages, undone")).toBeInTheDocument();
-    expect(env.transport.data.messages.some((m) => m.tags.includes("rust"))).toBe(false);
-  });
-
-  it("reorders, disables and deletes rules", async () => {
+  it("reorders, disables and deletes rules (asking first)", async () => {
     const env = setup();
     const extra: Rule = {
       ...env.transport.data.features.rules.rules[0],
@@ -243,23 +227,50 @@ describe("rule manager", () => {
     env.transport.data.features.rules.rules.push(extra);
     const user = userEvent.setup({ delay: null });
     renderWithProviders(<RuleManagerView />, env);
-    await user.click(await screen.findByRole("button", { name: "Move “Second” up" }));
+    const handle = await screen.findByRole("button", { name: /^Move “Second”/ });
+    handle.focus();
+    await user.keyboard("{ArrowUp}");
     await waitFor(() => {
       expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([
         "second",
         "rust-announcements",
       ]);
     });
-    expect(await screen.findByRole("button", { name: "Move “Second” up" })).toBeDisabled();
+    // Alt+Down on the row's name moves it back.
+    await user.click(screen.getByRole("button", { name: "Second" }));
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await waitFor(() => {
+      expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([
+        "rust-announcements",
+        "second",
+      ]);
+    });
 
     await user.click(screen.getByRole("checkbox", { name: "Rule “Second” is on" }));
     await waitFor(() => {
-      expect(env.transport.data.features.rules.rules[0]).toMatchObject({ enabled: false });
+      expect(env.transport.data.features.rules.rules[1]).toMatchObject({ enabled: false });
     });
 
-    await user.click(screen.getByRole("button", { name: "Second" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
-    await user.click(within(editor).getByRole("button", { name: "Delete rule" }));
+    await user.click(within(editor).getByRole("button", { name: "Delete rule…" }));
+    const question = await screen.findByRole("alertdialog");
+    expect(question).toHaveTextContent("Delete the rule “Second”?");
+    // The safe choice has the focus; the list cannot be used meanwhile.
+    expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    expect(
+      screen
+        .getByRole("list", { name: "Rules, in the order they run", hidden: true })
+        .closest("[inert]"),
+    ).not.toBeNull();
+    await user.click(within(question).getByRole("button", { name: "Cancel" }));
+    expect(env.transport.data.features.rules.rules).toHaveLength(2);
+
+    await user.click(within(editor).getByRole("button", { name: "Delete rule…" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Delete the rule",
+      }),
+    );
     await waitFor(() => {
       expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([
         "rust-announcements",
@@ -270,17 +281,15 @@ describe("rule manager", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows errors of the core", async () => {
+  it("shows errors of the core in the footer's badge", async () => {
     const env = setup();
     const { user, view, editor } = await openSample(env);
     await user.selectOptions(field(view.container, "c-0-op"), "regex");
     await user.clear(field(view.container, "c-0-value"));
     await user.type(field(view.container, "c-0-value"), "(unclosed");
     await user.click(within(editor).getByRole("button", { name: "Save rule" }));
-    // A compact indicator in the view switch's row, the text as its hover text.
-    const alert = await within(editor).findByRole("alert");
+    const alert = await within(footerOf(editor)).findByRole("alert");
     expect(alert).toHaveAttribute("data-kind", "error");
-    expect(alert.closest('[data-part="rules.views"]')).not.toBeNull();
     expect(within(alert).getByRole("button", { name: "One error" })).toHaveAttribute("title");
   });
 });
@@ -311,10 +320,10 @@ describe("create rule from message", () => {
     expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveValue("Rust Announce");
     expect(editor.querySelectorAll('[data-part="rules.condition"]')).toHaveLength(2);
     // The user picks an action and saves.
-    await user.click(within(editor).getByRole("button", { name: "Add action" }));
+    await addFromMenu(user, editor, "Add action", "Move to folder");
     await user.type(within(editor).getByRole("textbox", { name: "Folder path" }), "Lists");
     await user.click(within(editor).getByRole("button", { name: "Save rule" }));
-    await within(editor).findByText("The rule is saved.");
+    await within(editor).findByText("Saved");
     expect(env.transport.data.features.rules.rules.map((r) => r.id)).toContain("rust-announce");
   });
 

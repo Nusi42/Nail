@@ -4,7 +4,8 @@
  *
  * - mount point `ExchangeRuleBadges`: in the rule list, where one Nail rule
  *   runs for each Exchange account (on the server / in Nail / Nail only),
- *   with the reasons it stays in Nail.
+ *   with the reasons it stays in Nail — a compact ⓘ per account with the
+ *   number of reasons; the text is its hover / focus text (R2).
  * - widget `exchange-rules` (settings): per Exchange account the rules
  *   state, "Sync now", the "run rules on the server" switch (the account's
  *   `server-rules` option), where each Nail rule runs, and every inbox rule
@@ -39,25 +40,40 @@ import {
   useExchangeRules,
 } from "./queries";
 import { PlacementTable } from "../rules/PlacementTable";
+import { Icon } from "../../widgets/Icon";
 
+/**
+ * One Exchange account's badge (R2 design review, item 3): a compact ⓘ with
+ * the number of reasons the rule stays in Nail there; where the rule runs
+ * and why are its hover text and, on focus, its description (shown beside
+ * it), so the rule list's row stays one line.
+ */
 function AccountBadge({ account, ruleId }: { account: Account; ruleId: RuleId }) {
   const t = useT();
   const reasonsId = useId();
   const rules = useExchangeRules(account.id);
   const status = rules.data?.rules.find((r) => r.rule_id === ruleId);
   if (!status || rules.data?.state === "disabled") return null;
+  const placement = t(`exchange-placement-${status.placement}`, { account: account.name });
   const reasons = status.reasons.map((r) => t(r.id, r.args)).join(" ");
+  const details = reasons === "" ? placement : `${placement} ${reasons}`;
   return (
-    <li
-      data-part="exchange.rule-badge"
-      data-placement={status.placement}
-      title={reasons || undefined}
-      aria-describedby={reasons ? reasonsId : undefined}
-    >
-      <span data-part="exchange.rule-badge.text">
-        {t(`exchange-placement-${status.placement}`, { account: account.name })}
-      </span>
-      {reasons && (
+    <li data-part="exchange.rule-badge" data-placement={status.placement}>
+      <button
+        type="button"
+        data-part="exchange.rule-badge.button"
+        aria-label={placement}
+        aria-describedby={reasons === "" ? undefined : reasonsId}
+        title={details}
+      >
+        <Icon name="info" part="exchange.rule-badge.icon" />
+        {status.reasons.length > 0 && (
+          <span data-part="exchange.rule-badge.count" aria-hidden="true">
+            {status.reasons.length}
+          </span>
+        )}
+      </button>
+      {reasons !== "" && (
         <span id={reasonsId} data-part="exchange.rule-badge.reasons">
           {reasons}
         </span>

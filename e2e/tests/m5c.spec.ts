@@ -111,6 +111,9 @@ test("a window moves by its title bar and resizes from every edge and corner", a
   // Non-modal: no scrim, the main window stays usable behind it.
   await expect(rules).not.toHaveAttribute("aria-modal", "true");
   await expect(page.locator('[data-part="window-scrim"]')).toHaveCount(0);
+  expect(await box(rules)).toMatchObject({ width: 1100, height: 760 });
+  // The steps below need room around the window on every side: 900 × 640 first.
+  await dragBy(page, rules.locator('[data-part="window.handle"][data-edge="se"]'), -200, -120);
   const start = await box(rules);
   expect(start).toMatchObject({ width: 900, height: 640 });
 
@@ -245,10 +248,10 @@ test("the keyboard moves and resizes a window (arrows, Alt+F7, Alt+F8)", async (
 test("window geometry is remembered across a reload", async ({ page }) => {
   await open(page);
   let rules = await openRules(page);
-  await dragBy(page, titleBar(rules), -100, -60, { at: { x: 60, y: 20 } });
+  await dragBy(page, titleBar(rules), 40, -60, { at: { x: 60, y: 20 } });
   await dragBy(page, rules.locator('[data-part="window.handle"][data-edge="se"]'), -120, -80);
   const placed = await box(rules);
-  expect(placed).toMatchObject({ width: 780, height: 560 });
+  expect(placed).toMatchObject({ width: 980, height: 680 });
 
   // Saved per kind in <config-dir>/window-state.json shortly after the change.
   const file = path.join(server.configDir, "window-state.json");
@@ -260,7 +263,7 @@ test("window geometry is remembered across a reload", async ({ page }) => {
       };
       return saved.windows.rules?.page?.rect ?? null;
     })
-    .toMatchObject({ width: 780, height: 560 });
+    .toMatchObject({ width: 980, height: 680 });
 
   await page.reload();
   await expect(messageRows(page).first()).toBeVisible();
@@ -269,7 +272,7 @@ test("window geometry is remembered across a reload", async ({ page }) => {
 
   // "Reset window positions" forgets it: back to the default, centred.
   await runFromPalette(page, "reset window positions", "Reset window positions");
-  await expect.poll(async () => (await box(rules)).width).toBe(900);
+  await expect.poll(async () => (await box(rules)).width).toBe(1100);
 });
 
 test("two composers side by side: each edits and sends on its own", async ({ page }) => {
@@ -380,8 +383,9 @@ test("Escape closes the focused window, not windows behind the main window", asy
   await expect(rules).toBeHidden();
 
   // Focus in the main window: Escape there leaves a non-modal window open.
+  // (The rules window covers the list; the list's filter chips stay above it.)
   await openRules(page);
-  await messageRows(page).first().click();
+  await page.locator('[data-part="list-header.chips"] button').first().click();
   await page.keyboard.press("Escape");
   await expect(win(page, "rules")).toBeVisible();
 

@@ -1,9 +1,15 @@
 /**
  * UI state of the rules feature: which rule is being edited, a rule
- * pre-filled by "create rule from message" waiting for the editor, and the
- * rules checked in the list to run together and the outcome of a run from
- * a menu (R1). One
- * store per client (so every app instance, and every test, has its own).
+ * pre-filled by "create rule from message" waiting for the editor, the
+ * message the window was opened from, and the outcome of a run from a menu
+ * (R1). One store per client (so every app instance, and every test, has
+ * its own).
+ *
+ * Unsaved changes (R2 design review, item 4): the editor reports whether
+ * its rule differs from the saved one (`setDirty`). While it does, opening
+ * another rule (`select`, `startNew`) or closing the window
+ * (`./closeGuard.ts`) does not happen at once: it waits in `pending` until
+ * the user discards the changes (`discard`) or keeps editing (`keepEditing`).
  */
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
@@ -40,23 +46,40 @@ export interface RulesOrigin {
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
+/**
+ * What waits for "Discard changes": opening another rule (or none), or
+ * closing the window (`close` closes it for good).
+ */
+export type Pending =
+  { kind: "edit"; editing: Editing | null } | { kind: "close"; close: () => void };
+
 export interface RulesUiState {
   editing: Editing | null;
-  /** Edits a saved rule. */
+  /** Edits a saved rule (`null`: none); asks first while there are unsaved changes. */
   select: (id: RuleId | null) => void;
   /** The rule being edited was saved as `id` (a new rule becomes a saved one). */
   saved: (id: RuleId) => void;
-  /** Starts a new rule from `rule` (a blank rule or one from a message). */
+  /** Starts a new rule from `rule` (a blank rule or one from a message); asks first like `select`. */
   startNew: (rule: Rule) => void;
+  /** Stops editing at once, without asking (the rule was deleted). */
+  forget: () => void;
   /** The message the window was opened from, `null` when opened otherwise. */
   origin: RulesOrigin | null;
   setOrigin: (origin: RulesOrigin | null) => void;
-  /** Rules checked in the list to run together (R1), in the order checked. */
-  picked: readonly RuleId[];
-  /** Checks or unchecks a rule for running. */
-  pick: (id: RuleId, on: boolean) => void;
-  /** Keeps only the checked rules that still exist (after a delete). */
-  prunePicked: (existing: readonly RuleId[]) => void;
+  /** The rule being edited has changes that are not saved. */
+  dirty: boolean;
+  setDirty: (dirty: boolean) => void;
+  /** What waits for the user's answer to "Discard changes?", else `null`. */
+  pending: Pending | null;
+  /** Asks before `pending` happens while there are unsaved changes; else does it now. */
+  guard: (pending: Pending) => void;
+  /** Drops the unsaved changes and does what was waiting. */
+  discard: () => void;
+  /** Keeps the unsaved changes; what was waiting does not happen. */
+  keepEditing: () => void;
+  /** The editor asks a question (the rule list is `inert` meanwhile). */
+  asking: boolean;
+  setAsking: (asking: boolean) => void;
   /** The outcome of the last run from a menu, `null` when dismissed. */
   toast: RunToast | null;
   showToast: (toast: DistributiveOmit<RunToast, "seq">) => void;
@@ -69,33 +92,61 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
   let store = stores.get(client);
   if (!store) {
     let seq = 0;
-    store = createStore<RulesUiState>((set) => ({
+    /** Does what waited (or was asked for while nothing is unsaved). */
+    const apply = (pending: Pending) => {
+      if (pending.kind === "close") {
+        store?.setState({ pending: null, dirty: false });
+        pending.close();
+      } else {
+        store?.setState({ pending: null, dirty: false, editing: pending.editing });
+      }
+    };
+    store = createStore<RulesUiState>((set, get) => ({
       editing: null,
       select: (id) => {
-        set({ editing: id === null ? null : { kind: "saved", id, key: `saved-${id}` } });
+        const editing = get().editing;
+        // The rule open already stays as it is (with its changes).
+        if (id !== null && editing?.kind === "saved" && editing.id === id) return;
+        get().guard({
+          kind: "edit",
+          editing: id === null ? null : { kind: "saved", id, key: `saved-${id}` },
+        });
       },
       saved: (id) => {
         set((s) => ({ editing: { kind: "saved", id, key: s.editing?.key ?? `saved-${id}` } }));
       },
       startNew: (rule) => {
-        set({ editing: { kind: "new", rule, key: `new-${String(++seq)}` } });
+        get().guard({
+          kind: "edit",
+          editing: { kind: "new", rule, key: `new-${String(++seq)}` },
+        });
+      },
+      forget: () => {
+        set({ editing: null, dirty: false, pending: null });
       },
       origin: null,
       setOrigin: (origin) => {
         set({ origin });
       },
-      picked: [],
-      pick: (id, on) => {
-        set((s) => {
-          const rest = s.picked.filter((p) => p !== id);
-          return { picked: on ? [...rest, id] : rest };
-        });
+      dirty: false,
+      setDirty: (dirty) => {
+        if (get().dirty !== dirty) set({ dirty });
       },
-      prunePicked: (existing) => {
-        set((s) => {
-          const kept = s.picked.filter((p) => existing.includes(p));
-          return kept.length === s.picked.length ? s : { picked: kept };
-        });
+      pending: null,
+      guard: (pending) => {
+        if (get().dirty) set({ pending });
+        else apply(pending);
+      },
+      discard: () => {
+        const pending = get().pending;
+        if (pending) apply(pending);
+      },
+      keepEditing: () => {
+        set({ pending: null });
+      },
+      asking: false,
+      setAsking: (asking) => {
+        if (get().asking !== asking) set({ asking });
       },
       toast: null,
       showToast: (toast) => {

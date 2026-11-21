@@ -1,9 +1,47 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { runFromPalette } from "./views";
+import { serverMessages, type NailServer } from "./nail";
+import { accountSectionNamed, messageRows, runFromPalette, sectionInbox } from "./views";
+
+/** Subjects of two `demo-multi` Work Inbox messages the rules scenarios act on. */
+export const WELCOME = "Welcome to Nail";
+export const RELEASE = "Release notes for M1";
+
+/** A manual rule that flags the release notes, as `rules.kdl` text. */
+export const FLAG_RELEASES = `rule "Flag releases" trigger="manual" {
+    when {
+        subject contains="Release notes"
+    }
+    then {
+        flag
+    }
+}
+`;
+
+/** Opens the `demo-multi` "Work" account's Inbox (15 messages), at `size` when given. */
+export async function openWorkInbox(
+  page: Page,
+  server: NailServer,
+  size?: { width: number; height: number },
+): Promise<void> {
+  if (size) await page.setViewportSize(size);
+  await page.goto(server.url);
+  await sectionInbox(accountSectionNamed(page, "Work")).click();
+  await expect(messageRows(page)).toHaveCount(15, { timeout: 30_000 });
+}
+
+/** Whether the Inbox message whose subject contains `subject` is flagged on the server (`null`: not there). */
+export async function flaggedOnServer(
+  server: NailServer,
+  subject: string,
+): Promise<boolean | null> {
+  const found = (await serverMessages(server, "INBOX")).find((m) => m.subject.includes(subject));
+  return found ? found.flags.includes("\\Flagged") : null;
+}
 
 /**
- * The rules window in the rules scenarios (ADR 0024, R1): opening it from
- * the command palette and entering a new rule in its text view.
+ * The rules window in the rules scenarios (ADR 0024, R1, R2): opening it
+ * from the command palette, entering a new rule in its text view, the
+ * editor's footer, and the "+ Add …" menus.
  */
 
 /** Opens "Filter rules" from the command palette. */
@@ -18,7 +56,25 @@ export async function openRulesWindow(page: Page): Promise<Locator> {
 export async function newRuleFromText(window: Locator, text: string): Promise<Locator> {
   await window.getByRole("button", { name: "New rule" }).click();
   const editor = window.getByRole("form", { name: "Rule" });
-  await editor.getByRole("button", { name: "Text" }).click();
+  await editor.getByRole("radio", { name: "Text" }).click();
   await editor.getByRole("textbox", { name: "The rule in rules.kdl syntax" }).fill(text);
   return editor;
+}
+
+/** The editor's footer (status, Delete…, Run on, Run, Test, Save; always in view). */
+export function rulesFooter(editor: Locator): Locator {
+  return editor.locator('[data-part="rules.footer"]');
+}
+
+/** Saves the editor's rule and waits for "Saved". */
+export async function saveRule(editor: Locator): Promise<void> {
+  const footer = rulesFooter(editor);
+  await footer.getByRole("button", { name: "Save rule" }).click();
+  await expect(footer.getByText("Saved")).toBeVisible();
+}
+
+/** Picks `item` in the menu of the first "+ Add …" button named `button` (conditions, actions). */
+export async function addFromMenu(scope: Locator, button: string, item: string): Promise<void> {
+  await scope.getByRole("button", { name: button }).first().click();
+  await scope.page().getByRole("menuitem", { name: item }).click();
 }

@@ -168,7 +168,10 @@ layout "default" {
     window "account-setup" size="720x640" min-size="520x480" {
         account-setup id="account-setup"
     }
-    window "rules" size="900x640" min-size="600x420" pop-out=#true {
+    // Filter rules: room for the form, Preview / Recent runs and the footer;
+    // a smaller screen shrinks it, and below about 760 px the rule list goes
+    // over the editor.
+    window "rules" size="1100x760" min-size="600x420" pop-out=#true {
         rule-manager id="rules"
     }
     // Snoozed messages, with "Wake up now".

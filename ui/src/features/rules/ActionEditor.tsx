@@ -1,20 +1,26 @@
 /**
- * The visual editor of a rule's actions: an ordered list, each action
- * kind with its fields, reordering and removal.
+ * The visual editor of a rule's actions (the THEN row): an ordered, numbered
+ * list, each action kind with its fields, reordering and removal, and
+ * "+ Add action" (a menu button, R2 design review item 9). Folders, tags
+ * and recipients are shared pickers (`./PickerField`); an action that still
+ * misses its value is marked and names the footer's problem badge.
  */
 import { useState } from "react";
-import type { Account, RuleAction } from "../../api/generated";
+import type { RuleAction } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { useAccounts } from "../../state/queries";
+import { CheckField, SelectField, TextAreaField, type Choice } from "../../widgets/forms";
+import { AddMenu } from "./AddMenu";
+import { FolderRefFields, type Marked } from "./ConditionEditor";
 import {
-  CheckField,
-  SelectField,
-  TextAreaField,
-  TextField,
-  type Choice,
-} from "../../widgets/forms";
-import { FolderRefFields } from "./ConditionEditor";
-import { ACTION_KINDS, moveItem, newAction, parseAddresses, type ActionKind } from "./model";
+  ACTION_KINDS,
+  actionInvalid,
+  moveItem,
+  newAction,
+  parseAddresses,
+  type ActionKind,
+  type RuleIssue,
+} from "./model";
+import { PickerField } from "./PickerField";
 
 const kindChoices: Choice[] = ACTION_KINDS.map((value) => ({ value, label: `rules-do-${value}` }));
 
@@ -22,18 +28,21 @@ function AddressesField({
   name,
   value,
   onChange,
+  ...marked
 }: {
   name: string;
   value: readonly string[];
   onChange: (to: string[]) => void;
-}) {
+} & Marked) {
   // Keep the typed text while editing; the list is derived from it.
   const [text, setText] = useState(value.join(", "));
   return (
-    <TextField
+    <PickerField
+      kind="address"
       labelId="rules-recipients"
       name={name}
       value={text}
+      {...marked}
       onChange={(next) => {
         setText(next);
         onChange(parseAddresses(next));
@@ -45,14 +54,13 @@ function AddressesField({
 function ActionFields({
   name,
   action,
-  accounts,
   onChange,
+  ...marked
 }: {
   name: string;
   action: RuleAction;
-  accounts: readonly Account[];
   onChange: (a: RuleAction) => void;
-}) {
+} & Marked) {
   const a = action;
   const onOff = (
     field: string,
@@ -80,7 +88,7 @@ function ActionFields({
         <FolderRefFields
           name={name}
           value={a.folder}
-          accounts={accounts}
+          {...marked}
           onChange={(folder) => {
             onChange({ ...a, folder });
           }}
@@ -100,10 +108,12 @@ function ActionFields({
     case "tag":
     case "untag":
       return (
-        <TextField
+        <PickerField
+          kind="tag"
           labelId="rules-tag"
           name={`${name}-tag`}
           value={a.tag}
+          {...marked}
           onChange={(tag) => {
             onChange({ ...a, tag: tag.trim() });
           }}
@@ -127,6 +137,7 @@ function ActionFields({
         <AddressesField
           name={`${name}-to`}
           value={a.to}
+          {...marked}
           onChange={(to) => {
             onChange({ ...a, to });
           }}
@@ -152,14 +163,16 @@ function ActionFields({
 /** The actions of a rule, in order. */
 export function ActionEditor({
   value,
+  issues = [],
+  describedBy,
   onChange,
 }: {
   value: readonly RuleAction[];
+  issues?: readonly RuleIssue[];
+  describedBy?: string | undefined;
   onChange: (value: RuleAction[]) => void;
 }) {
   const t = useT();
-  const accounts = useAccounts();
-  const [kind, setKind] = useState<ActionKind>("move");
   const set = (index: number, action: RuleAction) => {
     onChange(value.map((a, i) => (i === index ? action : a)));
   };
@@ -172,6 +185,7 @@ export function ActionEditor({
               labelId="rules-action-kind"
               name={`a-${String(index)}-kind`}
               value={action.type}
+              width="content"
               choices={kindChoices}
               onChange={(k) => {
                 set(index, newAction(k as ActionKind));
@@ -180,67 +194,58 @@ export function ActionEditor({
             <ActionFields
               name={`a-${String(index)}`}
               action={action}
-              accounts={accounts.data ?? []}
+              invalid={actionInvalid(issues, index)}
+              describedBy={describedBy}
               onChange={(a) => {
                 set(index, a);
               }}
             />
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="action-up"
-              disabled={index === 0}
-              onClick={() => {
-                onChange(moveItem(value, index, -1));
-              }}
-            >
-              {t("common-move-up")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="action-down"
-              disabled={index === value.length - 1}
-              onClick={() => {
-                onChange(moveItem(value, index, 1));
-              }}
-            >
-              {t("common-move-down")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="remove-action"
-              onClick={() => {
-                onChange(value.filter((_, i) => i !== index));
-              }}
-            >
-              {t("common-remove")}
-            </button>
+            <span data-part="rules.action.tools">
+              <button
+                type="button"
+                data-part="form.button"
+                data-action="action-up"
+                disabled={index === 0}
+                onClick={() => {
+                  onChange(moveItem(value, index, -1));
+                }}
+              >
+                {t("common-move-up")}
+              </button>
+              <button
+                type="button"
+                data-part="form.button"
+                data-action="action-down"
+                disabled={index === value.length - 1}
+                onClick={() => {
+                  onChange(moveItem(value, index, 1));
+                }}
+              >
+                {t("common-move-down")}
+              </button>
+              <button
+                type="button"
+                data-part="form.button"
+                data-action="remove-action"
+                onClick={() => {
+                  onChange(value.filter((_, i) => i !== index));
+                }}
+              >
+                {t("common-remove")}
+              </button>
+            </span>
           </li>
         ))}
       </ol>
-      <div data-part="rules.add">
-        <SelectField
-          labelId="rules-action-kind"
-          name="add-action"
-          value={kind}
-          choices={kindChoices}
-          onChange={(k) => {
-            setKind(k as ActionKind);
-          }}
-        />
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="add-action"
-          onClick={() => {
-            onChange([...value, newAction(kind)]);
-          }}
-        >
-          {t("common-add-action")}
-        </button>
-      </div>
+      <AddMenu
+        labelId="common-add-action"
+        field="add-action"
+        kinds={ACTION_KINDS}
+        labelOf={(kind) => t(`rules-do-${kind}`)}
+        onAdd={(kind) => {
+          onChange([...value, newAction(kind)]);
+        }}
+      />
     </div>
   );
 }

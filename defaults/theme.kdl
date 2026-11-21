@@ -958,97 +958,198 @@ theme "default" mode="system" {
 
     // ---- Filter rules (ADR 0024) ----
 
+    // The window (and the Settings card): the list beside the editor; below
+    // about 760 px wide the list goes over the editor (rules skin).
     part "rules" {
-        display "grid"
-        grid-template-columns "minmax(200px, 280px) minmax(0, 1fr)"
-        gap "$space.md"
+        display "flex"
+        flex-direction "column"
         height "100%"
         min-height 0
         padding "$space.md"
+    }
+    part "rules.panes" {
+        display "grid"
+        grid-template-columns "minmax(200px, 280px) minmax(0, 1fr)"
+        gap "$space.md"
+        flex-grow 1
+        min-height 0
+    }
+    part "rules.side" {
+        display "flex"
+        flex-direction "column"
+        min-height 0
+        overflow-y "auto"
     }
     part "rules.list" {
         display "flex"
         flex-direction "column"
         gap "$space.sm"
         min-height 0
-        overflow-y "auto"
     }
-    // A grid: each row (and the header row) shares its columns — run
-    // check box, the rule, on / off, Up, Down — so no control is squeezed.
+    part "rules.list.tools" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs"
+    }
+    part "rules.list.filter" {
+        flex-grow 1
+        min-width 0
+        padding "$space.xxs" "$space.xs"
+        border "$border.control"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "rules.list.filter:focus-visible" { outline "2px solid $color.focus-ring"; }
+    // A row: handle, the name over its triggers, the Exchange badges, On.
     part "rules.list.items" {
-        display "grid"
-        grid-template-columns "auto minmax(0, 1fr) auto auto auto"
-        row-gap "$space.xxs"
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
         margin 0
         padding 0
     }
     part "rules.list.item" {
         display "grid"
-        grid-column "1 / -1"
-        grid-template-columns "subgrid"
+        grid-template-columns "auto minmax(0, 1fr) auto auto"
         align-items "center"
         column-gap "$space.xs"
         padding "$space.xxs" "$space.xs"
         border-radius "$radius.sm"
-    }
-    part "rules.list.head" {
-        display "grid"
-        grid-column "1 / -1"
-        grid-template-columns "subgrid"
-        column-gap "$space.xs"
-        padding "0" "$space.xs"
-    }
-    part "rules.list.main" {
-        display "flex"
-        flex-wrap "wrap"
-        align-items "center"
-        gap "$space.xs"
-        min-width 0
     }
     part "rules.list.item[selected=\"true\"]" {
         color "$color.selection-fg"
         background-color "$color.selection"
     }
     part "rules.list.item[enabled=\"false\"]" { opacity "$opacity.muted"; }
-    part "rules.list.select" {
-        flex-grow 1
+    part "rules.list.item[drop=\"target\"]" { box-shadow "inset 0 2px 0 $color.accent"; }
+    part "rules.list.handle" {
+        display "flex"
+        padding "$space.xxs"
+        border "none"
+        border-radius "$radius.sm"
+        color "$color.fg-muted"
+        background-color "transparent"
+        cursor "grab"
+    }
+    part "rules.list.handle:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "rules.list.main" {
+        display "flex"
+        flex-direction "column"
         min-width 0
-        overflow-wrap "anywhere"
-        padding "$space.xs"
+    }
+    part "rules.list.select" {
+        min-width 0
+        overflow "hidden"
+        padding 0
         border "none"
         text-align "left"
+        text-overflow "ellipsis"
+        white-space "nowrap"
+        font-weight "$font-weight.medium"
         color "inherit"
         background-color "transparent"
     }
     part "rules.list.select:focus-visible" { outline "2px solid $color.focus-ring"; }
     part "rules.list.triggers" {
+        overflow "hidden"
+        text-overflow "ellipsis"
+        white-space "nowrap"
         font-size "$font-size.xs"
         color "$color.fg-muted"
     }
+    // The editor: header, body (form or text), lower panel, footer.
     part "rules.editor" {
         display "flex"
         flex-direction "column"
-        gap "$space.md"
+        min-width 0
         min-height 0
-        overflow-y "auto"
     }
-    part "rules.views" {
-        display "inline-flex"
-        gap "$space.xs"
-    }
-    part "rules.view" {
+    part "rules.editor.content" {
         display "flex"
         flex-direction "column"
         gap "$space.sm"
+        flex-grow 1
+        min-height 0
+    }
+    part "rules.editor.body" {
+        flex-grow 1
+        flex-shrink 1
+        min-height "8rem"
+        overflow-y "auto"
+    }
+    part "rules.header" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "rules.header.name" {
+        flex-grow 1
+        min-width "12ch"
+        padding "$space.xxs" "$space.xs"
+        border "1px solid transparent"
+        border-radius "$radius.sm"
+        font-size "$font-size.lg"
+        font-weight "$font-weight.bold"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "rules.header.name:hover" { border "$border.control"; }
+    part "rules.header.name:focus-visible" {
+        border "$border.control"
+        outline "2px solid $color.focus-ring"
+    }
+    part "rules.form" {
+        display "grid"
+        grid-template-columns "max-content minmax(0, 1fr)"
+        align-items "start"
+        gap "$space.sm" "$space.md"
+    }
+    part "rules.form.section" {
+        display "grid"
+        grid-column "1 / -1"
+        grid-template-columns "subgrid"
+        padding-top "$space.sm"
+        border-top "$border.thin"
+    }
+    part "rules.form.label" {
+        padding-top "$space.xs"
+        font-size "$font-size.xs"
+        font-weight "$font-weight.bold"
+        letter-spacing "0.06em"
+        text-transform "uppercase"
+        color "$color.fg-muted"
+    }
+    part "rules.form.body" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        min-width 0
+    }
+    part "rules.triggers" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs" "$space.md"
+    }
+    part "rules.trigger" {
+        display "inline-flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs"
     }
     part "rules.conditions" {
         display "flex"
         flex-direction "column"
-        gap "$space.sm"
+        align-items "flex-start"
+        gap "$space.xs"
     }
     part "rules.group" {
         display "flex"
         flex-direction "column"
+        align-items "flex-start"
         gap "$space.xs"
         margin 0
         padding "$space.sm"
@@ -1057,15 +1158,13 @@ theme "default" mode="system" {
     }
     part "rules.group[mode=\"not\"]" { border-left "3px solid $color.warning"; }
     part "rules.group.title" {
-        display "flex"
-        align-items "center"
-        gap "$space.sm"
         font-size "$font-size.sm"
         color "$color.fg-muted"
     }
     part "rules.group.items" {
         display "flex"
         flex-direction "column"
+        align-self "stretch"
         gap "$space.xs"
         margin 0
         padding 0
@@ -1078,203 +1177,122 @@ theme "default" mode="system" {
     part "rules.condition" {
         display "flex"
         flex-wrap "wrap"
-        align-items "center"
+        align-items "flex-end"
         gap "$space.xs"
         flex-grow 1
     }
-    part "rules.add" {
-        display "flex"
-        flex-wrap "wrap"
-        gap "$space.xs"
+    part "rules.add" { display "inline-flex"; }
+    part "rules.add.button" {
+        display "inline-flex"
+        align-items "center"
+        padding "$space.xxs" "$space.xs"
+        border "1px dashed $color.border"
+        border-radius "$radius.sm"
+        color "$color.accent"
+        background-color "transparent"
     }
+    part "rules.add.button:focus-visible" { outline "2px solid $color.focus-ring"; }
     part "rules.actions" {
         display "flex"
         flex-direction "column"
+        align-items "flex-start"
         gap "$space.xs"
     }
     part "rules.actions.items" {
         display "flex"
         flex-direction "column"
+        align-self "stretch"
         gap "$space.xs"
         margin 0
-        padding 0
+        padding-left "$space.lg"
     }
     part "rules.action" {
         display "flex"
         flex-wrap "wrap"
-        align-items "center"
+        align-items "flex-end"
         gap "$space.xs"
+    }
+    part "rules.action.tools" {
+        display "inline-flex"
+        gap "$space.xxs"
+        margin-left "auto"
     }
     part "rules.text" {
         display "flex"
         flex-direction "column"
         gap "$space.xs"
+        height "100%"
     }
-    // Low enough that the run panel's button stays in view under it.
+    part "rules.text.editor" {
+        display "grid"
+        grid-template-columns "auto minmax(0, 1fr)"
+        gap "$space.xxs"
+        flex-grow 1
+        min-height "8rem"
+    }
+    part "rules.text.gutter" {
+        margin 0
+        padding "$space.sm" "$space.xs"
+        overflow "hidden"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        text-align "right"
+        font-family "$font.mono"
+        color "$color.fg-muted"
+        background-color "$color.bg-subtle"
+    }
+    part "rules.text.line:error" {
+        color "$color.danger"
+        font-weight "$font-weight.bold"
+    }
     part "rules.text.source" {
-        min-height 120
         padding "$space.sm"
         border "$border.control"
         border-radius "$radius.sm"
         font-family "$font.mono"
         white-space "pre"
-        color "$color.fg"
-        background-color "$color.bg"
-    }
-    part "rules.text.errors" {
-        margin 0
-        padding-left "$space.lg"
-        color "$color.danger"
-    }
-    part "rules.problems" {
-        padding "$space.sm"
-        border-radius "$radius.sm"
-        background-color "$color.bg-raised"
-    }
-    part "rules.problems.title" { font-weight "$font-weight.bold"; }
-    part "rules.problems.items" {
-        margin 0
-        padding-left "$space.lg"
-    }
-    part "rules.problem" { color "$color.danger"; }
-    part "rules.notice" {
-        padding "$space.xs" "$space.sm"
-        border-radius "$radius.sm"
-        background-color "$color.bg-subtle"
-    }
-    part "rules.notice[kind=\"error\"]" { color "$color.danger"; }
-    part "rules.notice[kind=\"ok\"]" { color "$color.success"; }
-    part "rules.buttons" {
-        display "flex"
-        flex-wrap "wrap"
-        gap "$space.sm"
-    }
-    part "rules.hint" {
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "rules.test" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xs"
-    }
-    part "rules.test.summary" { font-weight "$font-weight.bold"; }
-    part "rules.test.matches" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xs"
-        margin 0
-        padding 0
-    }
-    part "rules.test.match" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xxs"
-        padding "$space.xs" "$space.sm"
-        border "$border.thin"
-        border-radius "$radius.sm"
-    }
-    part "rules.test.subject" { font-weight "$font-weight.medium"; }
-    part "rules.test.from" {
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "rules.test.actions" {
-        display "flex"
-        flex-wrap "wrap"
-        gap "$space.xs"
-        margin 0
-        padding 0
-        font-size "$font-size.sm"
-    }
-    part "rules.test.why" {
-        margin 0
-        padding-left "$space.lg"
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "rules.runs" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xs"
-    }
-    part "rules.runs.title" { font-weight "$font-weight.bold"; }
-    part "rules.runs.items" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xs"
-        margin 0
-        padding 0
-    }
-    part "rules.run" {
-        display "flex"
-        flex-wrap "wrap"
-        align-items "center"
-        gap "$space.sm"
-        font-size "$font-size.sm"
-    }
-    part "rules.run:failed" { color "$color.danger"; }
-    part "rules.run:undone" { color "$color.fg-muted"; }
-    // R2 (ADR 0222): the regions of the redesigned rules window. The editor
-    // column is a header (name, On / Off, Editor | Text), the form, the lower
-    // panel (Preview / Recent runs) and a footer that stays in view.
-    part "rules.header" {
-        display "flex"
-        flex-wrap "wrap"
-        align-items "center"
-        gap "$space.sm"
-    }
-    part "rules.header.name" {
-        flex-grow 1
-        min-width 0
-        font-size "$font-size.lg"
-        font-weight "$font-weight.bold"
-    }
-    part "rules.segmented" {
-        display "inline-flex"
-        border "$border.control"
-        border-radius "$radius.sm"
-    }
-    part "rules.segmented.option" {
-        padding "$space.xxs" "$space.sm"
-        border "none"
-        color "$color.fg"
+        caret-color "$color.fg"
         background-color "transparent"
     }
-    part "rules.segmented.option[selected=\"true\"]" {
-        color "$color.selection-fg"
-        background-color "$color.selection"
+    part "rules.text.source:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "rules.text.highlight" {
+        padding "$space.sm"
+        border-radius "$radius.sm"
+        background-color "$color.bg"
+        font-family "$font.mono"
+        white-space "pre"
+        color "$color.fg"
     }
-    part "rules.form" {
-        display "grid"
-        grid-template-columns "max-content minmax(0, 1fr)"
-        align-items "start"
-        gap "$space.sm" "$space.md"
+    part "rules.text.token[kind=\"comment\"]" { color "$color.fg-muted"; font-style "italic"; }
+    part "rules.text.token[kind=\"string\"]" { color "$color.success"; }
+    part "rules.text.token[kind=\"number\"]" { color "$color.warning"; }
+    part "rules.text.token[kind=\"keyword\"]" { color "$color.warning"; }
+    part "rules.text.token[kind=\"node\"]" { color "$color.accent"; font-weight "$font-weight.bold"; }
+    part "rules.text.token[kind=\"property\"]" { color "$color.accent"; }
+    part "rules.text.token[kind=\"punctuation\"]" { color "$color.fg-muted"; }
+    part "rules.text.stuck" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        margin 0
+        color "$color.danger"
     }
-    part "rules.form.section" {
-        display "grid"
-        grid-column "1 / -1"
-        grid-template-columns "subgrid"
-    }
-    part "rules.form.label" {
-        padding-top "$space.xs"
+    part "rules.hint" {
+        margin 0
         font-size "$font-size.sm"
-        font-weight "$font-weight.bold"
         color "$color.fg-muted"
     }
-    part "rules.form.body" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xs"
-        min-width 0
-    }
+    // The lower panel: Preview and Recent runs.
     part "rules.lower" {
         display "flex"
         flex-direction "column"
         gap "$space.xs"
-        min-height 0
+        flex-shrink 1
+        min-height "6rem"
+        max-height "40%"
         border-top "$border.thin"
-        padding-top "$space.sm"
+        padding-top "$space.xs"
     }
     part "rules.lower.tabs" {
         display "flex"
@@ -1283,15 +1301,118 @@ theme "default" mode="system" {
     part "rules.lower.tab" {
         padding "$space.xxs" "$space.sm"
         border "none"
-        border-radius "$radius.sm"
-        color "$color.fg"
+        border-bottom "2px solid transparent"
+        color "$color.fg-muted"
         background-color "transparent"
     }
-    part "rules.lower.tab[selected=\"true\"]" { background-color "$color.bg-raised"; }
+    part "rules.lower.tab[selected=\"true\"]" {
+        border-bottom "2px solid $color.accent"
+        color "$color.fg"
+        font-weight "$font-weight.medium"
+    }
+    part "rules.lower.tab:focus-visible" { outline "2px solid $color.focus-ring"; }
     part "rules.lower.panel" {
         min-height 0
         overflow-y "auto"
     }
+    part "rules.test" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "rules.test.head" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        justify-content "space-between"
+        gap "$space.sm"
+    }
+    part "rules.test.summary" { margin 0; font-weight "$font-weight.bold"; }
+    part "rules.test.summary:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "rules.test.matches" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "rules.test.match" {
+        display "grid"
+        grid-template-columns "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)"
+        align-items "baseline"
+        gap "$space.xxs" "$space.sm"
+        padding "$space.xs" "$space.sm"
+        border-bottom "$border.thin"
+    }
+    part "rules.test.subject" {
+        overflow "hidden"
+        padding 0
+        border "none"
+        text-align "left"
+        text-overflow "ellipsis"
+        white-space "nowrap"
+        font-weight "$font-weight.medium"
+        color "$color.accent"
+        background-color "transparent"
+        cursor "pointer"
+    }
+    part "rules.test.subject:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "rules.test.from" {
+        overflow "hidden"
+        text-overflow "ellipsis"
+        white-space "nowrap"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "rules.test.folder" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "rules.test.actions" {
+        display "flex"
+        flex-wrap "wrap"
+        grid-column "1 / -1"
+        gap "$space.xs"
+        margin 0
+        padding 0
+        font-size "$font-size.sm"
+    }
+    part "rules.test.action" {
+        padding 0 "$space.xs"
+        border-radius "$radius.sm"
+        background-color "$color.bg-subtle"
+    }
+    part "rules.test.details" {
+        grid-column "1 / -1"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "rules.test.why" {
+        margin 0
+        padding-left "$space.lg"
+    }
+    part "rules.runs.items" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "rules.run" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs" "$space.sm"
+        padding "$space.xxs" 0
+        border-bottom "$border.thin"
+        font-size "$font-size.sm"
+    }
+    part "rules.run.time" { font-variant-numeric "tabular-nums"; color "$color.fg-muted"; }
+    part "rules.run.target" { color "$color.fg-muted"; }
+    part "rules.run:failed" { color "$color.danger"; }
+    part "rules.run:undone" { color "$color.fg-muted"; }
+    // The footer: status, then Delete… on the left and Run on / Run / Test /
+    // Save on the right.
     part "rules.footer" {
         display "flex"
         flex-wrap "wrap"
@@ -1299,30 +1420,90 @@ theme "default" mode="system" {
         gap "$space.sm"
         padding-top "$space.sm"
         border-top "$border.thin"
+        background-color "$color.bg"
     }
     part "rules.footer.status" {
         display "flex"
         align-items "center"
         gap "$space.sm"
-        flex-grow 1
+        flex-basis "100%"
         min-width 0
+        min-height "1.75rem"
+        font-size "$font-size.sm"
     }
+    part "rules.footer.state" {
+        min-width 0
+        overflow-wrap "anywhere"
+        color "$color.fg-muted"
+    }
+    part "rules.footer.state:saved" { color "$color.success"; }
     part "rules.footer.start" {
         display "flex"
         gap "$space.sm"
+        margin-right "auto"
     }
     part "rules.footer.end" {
         display "flex"
         flex-wrap "wrap"
         align-items "center"
+        justify-content "flex-end"
         gap "$space.sm"
     }
+    part "rules.footer.target" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xs"
+    }
+    // Questions asked over the window (delete, discard, run).
+    part "rules.confirm" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.lg"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg-raised"
+        box-shadow "$shadow.overlay"
+    }
+    part "rules.confirm.question" { margin 0; overflow-wrap "anywhere"; }
+    part "rules.confirm.actions" {
+        display "flex"
+        flex-wrap "wrap"
+        justify-content "flex-end"
+        gap "$space.sm"
+    }
+    // No rule open: create one from a message, or from a template.
     part "rules.empty" {
         display "flex"
         flex-direction "column"
         align-items "flex-start"
-        gap "$space.sm"
+        gap "$space.md"
+        padding "$space.md"
         color "$color.fg-muted"
+    }
+    part "rules.empty.starters" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "rules.empty.title" {
+        margin 0
+        font-size "$font-size.sm"
+        font-weight "$font-weight.bold"
+        color "$color.fg"
+    }
+    part "rules.empty.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        margin 0
+        padding 0
+    }
+    part "rules.empty.starter" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "baseline"
+        gap "$space.sm"
     }
 
     // ---- MCP clients and the agent indicator (ADR 0025) ----
@@ -3375,9 +3556,12 @@ theme "default" mode="system" {
     part "exchange.color:selected" { border "1px solid $color.accent"; }
     part "exchange.color.name" { font-size "$font-size.sm"; }
     part "exchange.mailbox-badge" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; background-color "$color.bg-raised"; }
-    part "exchange.rule-badges" { gap "$space.xxs"; }
-    part "exchange.rule-badge" { padding 0 "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "exchange.rule-badge.reasons" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.rule-badges" { gap "$space.xxs"; margin 0; padding 0; }
+    part "exchange.rule-badge" { position "relative"; color "$color.fg-muted"; }
+    part "exchange.rule-badge.button" { display "inline-flex"; align-items "center"; gap "$space.xxs"; padding 0 "$space.xxs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "inherit"; background-color "transparent"; }
+    part "exchange.rule-badge.button:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "exchange.rule-badge[placement=\"client\"]" { color "$color.warning"; }
+    part "exchange.rule-badge.reasons" { padding "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg"; background-color "$color.bg-raised"; box-shadow "$shadow.overlay"; }
     part "exchange.task-list-badge" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; background-color "$color.bg-raised"; }
     part "exchange.focus-move" { border "$border.thin"; border-radius "$radius.sm"; padding "$space.xxs" "$space.sm"; color "$color.fg"; background-color "transparent"; cursor "pointer"; }
     part "exchange.rooms" { display "flex"; flex-direction "column"; gap "$space.xs"; }

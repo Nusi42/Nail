@@ -13,55 +13,113 @@ condition `folder "Reading"` matches it.
 
 Your rules are in **Settings → Mail & junk** (the gear at the bottom of the
 navigation rail, or **Ctrl+,**); **Filter rules** in the command palette
-(**Ctrl+K**, or **Command palette** on the navigation rail) opens them in a window of
-their own, and so does **Create rule from message** in a message's **More**
-menu. They are listed in the order they run.
+(**Ctrl+K**, or **Command palette** on the navigation rail) opens them in a
+window of their own, and so does **Create rule from message** in a
+message's **More** menu. Both look the same. The window takes most of the
+screen; on a narrow screen (or a narrow window) the list of rules goes above
+the editor.
 
-- **New rule** starts an empty rule. **Create rule from message** (on a
-  selected message) starts one that already matches mail from the same
-  sender or the same mailing list; you only add the actions.
-- **Up** and **Down** change the order. The checkbox next to a rule
-  turns it on or off; a rule that is off never runs by itself, but you can
-  still run it by hand.
-- **Test rule** checks the rule against the mail you already have, without
-  changing anything. It lists the messages that match, what would happen
-  to each, and why it matched ("Subject matched: [rust-announce] …").
-- **Recent runs** (under the rule) lists what each run of the rule did;
-  **Undo this run** takes back everything that run changed in one step
-  (moves, tags, flags, read state, deletes to Trash). Forwards, redirects,
-  replies, copies and permanent deletes cannot be undone. If you changed
-  some of the messages yourself in the meantime (moved one back, deleted
-  one), undo restores the others and leaves those alone.
-- Problems never push the window around: what is still missing before a
-  rule can be saved ("One thing to fix") and errors ("One error") show as a
-  small indicator next to **Editor** / **Text**. Point at it to read the
-  details, or press it (Enter or Space) to open them; Escape closes them.
+The list on the left shows your rules in the order they run:
+
+- **New rule** starts an empty rule. **Find a rule** filters the list by
+  name.
+- Each row shows the rule's name and when it runs ("when mail arrives",
+  "by hand"). The checkbox on the right turns the rule on or off; a rule
+  that is off never runs by itself, but you can still run it by hand.
+- To change the order, drag a rule by its handle (the dots on the left), or
+  press **Alt+Up** / **Alt+Down** on it (the arrow keys alone on the handle
+  do the same).
+- With an Exchange account, a small **ⓘ** says where the rule runs for that
+  account (on the server, or in Nail); its number counts the reasons it
+  stays in Nail. Point at it, or move the keyboard focus onto it, to read
+  them.
+
+With no rule open, the window offers **Create rule from message** (for the
+message selected in the list) and a few templates to start from:
+**Newsletters to a folder**, **Flag mail from someone** and **Archive old
+read mail**. A template only fills in a new rule; nothing is saved until you
+press **Save rule**.
+
+## Editing a rule
+
+At the top of the editor are the rule's name, an **On** switch and the
+choice between **Editor** and **Text** (the arrow keys switch between them
+too). Below, the editor reads like a sentence:
+
+- **When** — when the rule runs: when mail arrives, when you send mail, by
+  hand, on a schedule (every so many minutes) or when mail gets old (older
+  than so many days).
+- **Where** — the account it applies to (empty: every account).
+- **If** — **Match all / any of:** the conditions. **+ Add condition** (a
+  menu) adds a condition, or a group ("All of a group", "Any of a group",
+  "None of a group") for conditions inside conditions.
+- **Then** — the actions, in order. **+ Add action** adds one; **Up**,
+  **Down** and **Remove** change them.
+
+Every field that names a folder, an account, a tag, an address, a mailing
+list or a header has a list to browse, search and pick from; you can always
+type the value yourself instead. When you opened the window from a message
+(**Create rule from message**), the conditions also offer that message's
+values: its sender, recipients, subject, mailing list and so on.
+
+### The footer
+
+The bar at the bottom of the window is always in view:
+
+- On the left, what still keeps the rule from being saved shows as a small
+  indicator ("2 things to fix", or "One error" when the text has a
+  mistake). Point at it to read the details, or press it (Enter or Space) to
+  open them; Escape closes them. The fields it means are marked. After
+  saving, **Saved** shows for a moment; after a run, what the run did, with
+  **Undo** for all of it.
+- **Delete rule…** deletes the rule after asking; its recent runs go with
+  it.
+- **Run on** chooses the messages **Run** and **Test rule** act on:
+  **Selected messages** (the messages selected in the list, with their
+  number; only while some are selected), **Current folder** (the folder the
+  list shows; the choice to start with when you opened the window from a
+  message) or **Where the rule applies** (the rule's own folders, else the
+  Inboxes).
+- **Run** runs the rule on those messages now. A new rule, or one with
+  changes you have not saved yet, shows **Save and run**: it saves the rule
+  as you see it first, so the run never uses an older version. A rule that
+  moves, archives or deletes mail asks first and says how many messages it
+  matches.
+- **Test rule** and **Save rule**.
+
+Leaving a rule with unsaved changes — opening another rule, closing the
+window, or pressing Escape — asks whether to **Discard changes** or **Keep
+editing**.
+
+### Preview and recent runs
+
+Under the editor are two tabs:
+
+- **Preview** shows what **Test rule** found, without changing anything:
+  how many messages match, and for each its subject (click it to open the
+  message), sender, folder, what would happen ("Add tag: project", "Move to
+  folder: Lists") and, folded, why it matched ("Subject matched: [rust-announce]
+  …"). **Apply to these N** runs the rule on exactly these messages. Any
+  change to the rule clears the preview, because it would describe an older
+  version. After **Test rule** the keyboard focus is on the preview's
+  summary.
+- **Recent runs (N)** lists the rule's runs: when each started, what
+  started it (new mail, sent mail, a schedule, by hand), what it ran on, how
+  many messages it matched and whether it is done. **Undo this run** takes
+  back everything that run changed in one step (moves, tags, flags, read
+  state, deletes to Trash). Where a run cannot be undone, point at its
+  **Undo this run** (or move the focus onto it) to read why: it was undone
+  already, it changed nothing, or it sent, copied or permanently deleted
+  mail. If you changed some of the messages yourself in the meantime (moved
+  one back, deleted one), undo restores the others and leaves those alone.
 
 ## Running rules by hand
 
-A rule does not have to wait for new mail: you can run it, or several
-rules, on mail you already have — for example right after writing it.
+A rule does not have to wait for new mail: you can run it on mail you
+already have — for example right after writing it.
 
-**In the rules window**, the **Run rules** part under the editor's
-**Save rule** and **Test** buttons runs the rule you are editing, or the
-rules whose **Run** checkbox you ticked in the list (they run in list
-order, each once; the **On** checkbox beside it turns a rule on or off).
-With no rule open, the part stands on its own for the ticked rules. Choose
-what they run on:
-
-- **Each rule's own mail** — the folders the rule applies to, else the
-  Inboxes (this is what **Run now** always did);
-- **The open folder** — the folder the message list shows (unavailable
-  while the list shows search results, a smart folder or a favorite);
-- **The selected messages** — the messages selected in the list (it shows
-  how many). A selected conversation counts with all its messages in that
-  folder. Without a selection this choice is unavailable and says why.
-
-Then press **Run now**. A new rule, or one with changes you have not saved
-yet, shows **Save and run** instead: it saves the rule as you see it, then
-runs it, so the run never uses an older version. The line below says what happened ("2 rules ran: 5
-messages matched, 5 changes queued.") and **Undo** takes back everything
-that click did. Each rule's run also appears in its **Recent runs**.
+**In the rules window**, choose the messages in **Run on** and press
+**Run** (see [The footer](#the-footer)).
 
 **From the message list**: right-click a message (or press Shift+F10 or
 the menu key) and choose **Run rule**. The menu that opens lists **All
@@ -74,19 +132,20 @@ and choose **Run rule** to run a rule on every message in that folder.
 A small message then says what the run did, with **Undo** for all of it;
 it disappears after a few seconds unless you point at it.
 
-Running rules by hand is like **Run now** on each of them: a rule that
-stops processing ("Stop processing more rules") only ends its own run, the
-next rule still runs.
+Running rules by hand is like **Run** on each of them: a rule that stops
+processing ("Stop processing more rules") only ends its own run, the next
+rule still runs.
 
 ## The editor and the text view
 
-The **Editor** view builds a rule from menus: add conditions, put them in
-groups ("All of these", "Any of these", "None of these") and add actions.
 The **Text** view shows the same rule in the `rules.kdl` syntax described
-below; edit it there and switch back, or press **Check text** to see
-mistakes with their line and column (in the indicator next to **Text**).
-Switching to **Text** and back without editing changes nothing, even for
-a rule that is not finished yet.
+below, with line numbers and colours. Edit it there and switch back to
+**Editor**. Switching to **Text** and back without editing changes nothing;
+a rule that is not finished yet (no name, an empty value) switches back
+too, and what it still misses shows in the footer. Text with a mistake
+stays in the text view: the footer's indicator says what is wrong, with
+the line and column, and the line number is marked. **Discard text
+changes** goes back to the rule as it was.
 
 All rules are stored in `rules.kdl` in your configuration folder. You can
 edit that file by hand too; Nail keeps your comments and layout when it

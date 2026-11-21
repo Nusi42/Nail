@@ -15,6 +15,7 @@ import {
   DEMO_MULTI_CONVERSATIONS,
   closeWindow,
 } from "../support/views";
+import { saveRule } from "../support/rules";
 
 /**
  * Wave M2c (ADR 0048) against the `demo-multi` mock servers: server-side
@@ -51,15 +52,14 @@ test("a rule runs on the server and the vacation reply is uploaded", async ({ pa
   const rules = page.getByRole("dialog", { name: "Filter rules" });
   await rules.getByRole("button", { name: "New rule" }).click();
   const editor = rules.getByRole("form", { name: "Rule" });
-  await editor.getByRole("button", { name: "Text" }).click();
+  await editor.getByRole("radio", { name: "Text" }).click();
   await editor
     .getByRole("textbox", { name: "The rule in rules.kdl syntax" })
     .fill(
       'rule "Receipts" trigger="arrival" {\n    when {\n        subject contains="receipt"\n    }\n    then {\n        archive\n    }\n}\n',
     );
-  await editor.getByRole("button", { name: "Editor" }).click();
-  await editor.getByRole("button", { name: "Save rule" }).click();
-  await expect(editor.getByText("The rule is saved.")).toBeVisible();
+  await editor.getByRole("radio", { name: "Editor" }).click();
+  await saveRule(editor);
   await closeWindow(page.getByRole("dialog", { name: "Filter rules" }));
 
   // Settings → Server rules: turn ManageSieve on for the account.
