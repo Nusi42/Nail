@@ -9,10 +9,11 @@ metadata:
 
 **0.8.7 prepared 2026-11-21** (R1 + R2; commit `chore(release): release 0.8.7`, copied to the releases folder;
 first prepare run failed on e2e load flakes in m5c / m5d / a11y-windows that passed alone, re-run with
-`--skip-checks`). Waiting for the maintainer to try the installer, then `npm run release:publish`. Open R2 decisions
-asked: combined Exchange badge per rule row, the values-from-mail button next to the text field, Run selected rules
-from the list, remaining plain dropdowns (junk, search index, Sieve, vacation, MCP grants, import/export) to pickers,
-address picker listing most-used addresses when empty.
+`--skip-checks`). Waiting for the maintainer to try the installer, then `npm run release:publish`. Maintainer decided 2026-11-21 (next wave R3): one combined Exchange badge per rule row (hover lists every
+account); the values-from-mail button right after the text field; multi-select in the rule list with Run running the
+selected rules in order on the Run on target; switch every remaining plain dropdown (junk, search index, Sieve,
+vacation, MCP grants, import/export, Also my addresses) to the shared picker; the address picker lists the most-used
+addresses when empty (core change).
 
 **Wave R1 done 2026-11-20** (rules on demand, live search, shared problem indicator; ADRs 0219-0221;
 [[r1-status]]): `main` = 560645e8, published to GitHub. A design review of the rules dialog was published to the
