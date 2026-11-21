@@ -1,4 +1,4 @@
-# 0223 — R1 leftovers: dynamic submenus, literal labels, search hints popup, folder change
+# 0226 — R1 leftovers: dynamic submenus, literal labels, search hints popup, folder change
 
 Status: accepted (2026-11-21)
 
@@ -124,3 +124,11 @@ answers finished ones.
 - The folder pane marks a folder as current only without an active search
   (`FolderTree`): while the typed text searches a picked folder, no folder
   row is marked. A follow-up can mark the search's folder.
+
+## Integration
+
+- "Add to rule…" (ADR 0225) is a second menu source of the rules feature.
+- The search hints popup also holds the search field's values (ADR 0224).
+- The e2e helpers for the Work inbox moved into `e2e/support/rules.ts`
+  (`WORK_INBOX_ROWS`, `rulesToast`), which the rules window redesign had
+  created at the same time.

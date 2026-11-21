@@ -1,4 +1,4 @@
-# 0223 — Values from the selected mail in the rules window
+# 0225 — Values from the selected mail in the rules window
 
 Status: accepted (2026-11-21)
 
@@ -78,3 +78,16 @@ the message menus.
   message logic.
 - Identical labels in different groups (the domain under From and To) are
   told apart by the group header; screen readers hear the label only.
+
+## Integration
+
+- The controls sit in every condition row and beside the folder of move /
+  copy and the tag of tag / untag; the rows take the second `onPick`
+  argument (the whole changed condition or action).
+- "Add to rule…" is in the message-list row menu, the reader's menu and the
+  reader toolbar's "turn into" group, and its submenu comes from the menu
+  sources of ADR 0226. The reader card menu (`context:thread-view.message`)
+  stays without the rules entries: its actions name the card, while these
+  entries use the selected message.
+- The button is the shared menu button (`pim.menu-button`) inside
+  `rules.from-message`; there is no own button part.

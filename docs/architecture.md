@@ -643,7 +643,10 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        (theme icon → Lucide → nothing), widgets/primitives.tsx (Switch, Segmented, Tag, Avatar),
                        widgets/ProblemIndicator.tsx (the compact problem indicator of the search field and the rules
                        window, parts `problem*`, skin `PROBLEM`; ADR 0221), widgets/pickers/ (the shared `Picker` for
-                       folders, accounts, tags, addresses, mailing lists and header names; ADR 0222),
+                       folders, accounts, tags, addresses, mailing lists and header names, ADRs 0222, 0224:
+                       Picker.tsx, tree.ts keyboard / tree model, sources.ts, PickerField.tsx labelled form picker,
+                       searchValues.tsx the search field's values with `useSearchValues`), state/queryText.ts
+                       (`searchValueText`, the query language's one quoting rule),
                        widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download; name /
                        badge / Open button → OpenAttachment, else download; ADR 0211) + OpenAttachment.tsx (the
                        `mail-open-attachment` confirmation for flagged files) + MailConfirm.tsx (shared body of the
@@ -1464,7 +1467,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   action kind. UI: `features/rules/api.ts` `runRules` / `runRule` with `RuleRunTarget`; mock `features/rules/mock.ts`.
 - Live search (ADR 0219): `LIVE_SEARCH_PAUSE_MS` and `useDebouncedAction` in `ui/src/state/debounce.ts`; UI slot
   `ui/src/features/search/`, texts `search.ftl`.
-- Running rules from the UI (ADR 0221): `features/rules/RunPanel.tsx` (the run panel under the rule list: the edited
+- Running rules from the UI (ADR 0221; the run panel was replaced by the footer in R2, ADR 0223): `features/rules/RunPanel.tsx` (the run panel under the rule list: the edited
   rule or the rules checked in the list, `picked` in `store.ts`, on their own mail / the open folder / the selected
   messages), `runTargets.ts` (targets, outcome, undo of every run of one click), `runMenu.ts` (actions
   `rules.run-menu` / `rules.run`: replaces the open context menu in place through `menuStoreFor().show` with the
@@ -1493,10 +1496,34 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   store's `origin`; texts `rules-from-message.ftl`), dynamic menu sources `ui/src/features/menus/sources.ts`
   (`Feature.menuSources`, `AppRegistry.menuSources`), mock `ui/src/api/mockValues.ts`; theme regions `rules.header*`,
   `rules.segmented*`, `rules.form*`, `rules.lower*`, `rules.footer*`, `rules.empty`, `picker*`.
-- WR6 R1 leftovers (ADR 0223-wr6): `features/menus/ContextMenu.tsx` shows a menu source as a hover / arrow-key
+- WR6 R1 leftovers (ADR 0226): `features/menus/ContextMenu.tsx` shows a menu source as a hover / arrow-key
   submenu (`MenuSourceLoader`, sources loaded when the list appears, `submenuPlace` keeps popups inside the window);
   the app shell provides `AppRegistry.menuSources` as `MenuSourcesContext` (`App.tsx` `FeatureEffects`);
   `literalMenuLabel` / `menuLabelText` (backslash mark); "Run rule" = `runMenuSource` in `features/rules/runMenu.ts`.
   The search field is a combobox with a floating hints listbox (`widgets/SearchBar.tsx`: `hintsWhileTyping`,
   `nextHint`; skin `search-bar.hints`); a folder change searches the typed text in the picked folder
   (`features/search/liveSearch.ts` `commitScope`). The mock's `RunRules` answers finished runs.
+- Rules window redesign (ADR 0223): `features/rules/` `RuleEditor.tsx` (header with name, On and the shared
+  `Segmented` Editor / Text; questions; unsaved-changes guard), `RuleForm.tsx` (WHEN / WHERE / IF / THEN rows),
+  `ConditionEditor.tsx` / `ActionEditor.tsx` (rows with `PickerField.tsx`, a thin adapter over
+  `widgets/pickers` `PickerField`, and `AddMenu.tsx`, the shared `features/pim/PimMenu` with `showLabel`),
+  `TextView.tsx` + `kdlTokens.ts` (highlighted copy under a transparent textarea, line numbers), `LowerPanel.tsx`
+  (Preview / Recent runs), `Footer.tsx` (problem badge `Issues.tsx`, status, Delete…, Run on, Run / Test / Save),
+  `Confirm.tsx` (alertdialog over inert content), `runOn.ts` (Run on choices and default), `describe.ts` (actions,
+  run targets, why a run cannot be undone), `starters.ts` (empty-state templates), `closeGuard.ts` (a closing window
+  with unsaved changes is put back and asks; registered in `effects`), `skin.ts` (container query, stacked below
+  `RULES_STACKED` = 760 px). `RunPanel.tsx` is gone; the store has `dirty` / `pending` / `guard` and no `picked`.
+  Window `rules` is 1100x760 in `defaults/layout.kdl`.
+- Shared pickers (ADR 0224): one `Picker` (combobox with a listbox, or a tree for folders) in the virtual account
+  editor, synchronization policies, notification overrides, an identity's reply-to, the vacation sender and every
+  rules editor field; `foldersQueryOptions` (`state/queries.ts`) is the one `ListFolders` query of `useFolders` and the
+  pickers; `picker.input` shares the form inputs' look (`theme/skin.ts` `INPUTS`). The search field's values
+  (`useSearchValues` / `SearchValues`) open in the hints popup after `from:`, `to:`, `cc:`, `tag:`, `account:`,
+  `folder:`.
+- Values from the mail (ADR 0225): `features/rules/fromMessage/` `facts.ts` (`valuesForCondition`,
+  `valuesForAction`, `applyToCondition`, `applyToAction`: the picked value with its comparison and address field),
+  `ValuesFromMessage.tsx` (`ValuesFromMessage` beside each condition, `ActionValuesFromMessage` beside move / copy
+  folders and tag / untag), `entryPoints.ts` ("Add to rule…" = `rules.add-to-rule` with a menu source of the saved
+  rules; `selectedOrigin`, also used by `rules.create-from-message`). Registered in `features/rules/index.ts`.
+- Shared helpers from the integration: `state/mailOps.ts` `cachedFolder` (rules lower panel, `mail-actions`
+  `folderRole`), `e2e/support/rules.ts` (Work inbox, rules window, footer, toast helpers).

@@ -1093,6 +1093,25 @@ pickers in the rules editor and the virtual folder editor, Run rule as a submenu
 `GetMessageFacts`, `SuggestValues`; TS regenerated; mock core; stubs for `Picker`, `ValuesFromMessage` /
 `valuesForCondition`, menu sources; theme regions. Next: WR3–WR6 in parallel.
 
+*Status (integration):* done (ADRs 0223–0226). Rules window (0223): header with name, On and the shared
+`Segmented`; WHEN / WHERE / IF / THEN form with "+ Add" menu buttons; Preview / Recent runs; a footer always in view
+with the one problem badge, Run on, Run / Test / Save and the status; questions inside the window (delete,
+destructive runs with the count, unsaved changes on switch / close / Escape); highlighted Text view with line
+numbers; list filter, drag handle and Alt+Up / Down; empty state with templates; Exchange ⓘ badges; 1100×760,
+stacked below 760 px. Pickers (0224): one `Picker` (folder tree, accounts, tags, addresses, mailing lists, header
+names) in the rules editor, the virtual account editor, sync policies, notification overrides, reply-to and the
+vacation sender, and the search field's values after `from:` / `folder:` / …. Values from the mail (0225) beside
+every condition and the move / copy / tag / untag actions, "Add to rule…" in the message menus. Menus and search
+(0226): "Run rule" and "Add to rule…" as hover submenus from menu sources, `@` names shown as written, the hints
+as a floating combobox popup, a folder change searches the typed text there, the mock's finished runs. Shared in the
+integration: `PickerField` (one labelled picker), `PimMenu` `showLabel`, `cachedFolder`, `foldersQueryOptions`,
+`searchValueText`, `e2e/support/rules.ts`. Deferred: `TestRule.message_ids` (testing "Selected messages" is exact
+only up to the listed folder's first 1000), `MessageFacts` headers and tags (values of other headers, tags without
+the list cache), browsing addresses with an empty prefix, the reader card menu (`context:thread-view.message`)
+without the rules entries (its actions name the card, the rules entries the selection), a Playwright drag
+scenario for the rule list, "Run selected rules" in the list menu, marking the searched folder in the folder tree,
+converting the remaining account / folder dropdowns in Settings to pickers. Next: the maintainer's human gate.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

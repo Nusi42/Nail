@@ -1,4 +1,4 @@
-# 0223 — WR4: the shared pickers
+# 0224 — The shared pickers
 
 Status: accepted (2026-11-21)
 
@@ -83,3 +83,16 @@ folders as a searchable tree, free text still allowed.
   show an id value or are opened.
 - The skin (`theme/skin.ts`) styles `form.input` but not yet `picker.input`;
   the theme's `picker.input` rule matches its looks.
+
+## Integration
+
+- `picker.input` is now in the skin's `INPUTS` (looks, hover, focus,
+  disabled); the theme rule keeps only its flex sizing.
+- The search field shows the values in its hints popup through
+  `useSearchValues(text)`: the popup opens for them only when there are
+  values; Escape and Enter hide them for that text.
+- `foldersQueryOptions` (`state/queries.ts`) is the one `ListFolders` query
+  of `useFolders` and the folder sources; `searchValueText` moved to
+  `state/queryText.ts` and also quotes the label views' `tag:` searches.
+- `PickerField` takes `describedBy` beside its hint; the rules editor uses
+  it through its adapter.

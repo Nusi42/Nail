@@ -1,6 +1,6 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (wave R1 integrated 2026-11-20: rules on demand, live search; 0.8.6 released 2026-11-19)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (wave R2 integrated 2026-11-21: rules window redesign, shared pickers, values from the mail; 0.8.6 released 2026-11-19)"
 metadata:
   type: project
 ---
@@ -15,16 +15,15 @@ maintainer as an artifact; the maintainer asked for all of it.
 (schema v21), runs deleted with their rule, `GetMessageFacts`, `SuggestValues`; stubs `widgets/pickers/`,
 `features/rules/fromMessage/`, `features/menus/sources.ts`; theme regions. Packages WR3-WR6 start from `main`.
 
-**Wave R2** (maintainer request 2026-11-20), four packages: (1) rules dialog redesign per the design review
-(fixed footer with a problem badge, Run on target select, Test/Run/Save; Preview + Recent runs panel; compact
-WHEN/WHERE/IF/THEN form; delete/close confirmations; responsive window; segmented Editor/Text; empty state and
-starter rules; core fix: `nail-config` rules `write.rs` must not write `id=""`; Recent runs with time and target,
-removed with their rule); (2) shared searchable pickers (folder tree, account, tag, address/contact, mailing list,
-header name; free text stays) used in rules, virtual folders, search and settings; (3) when the rules dialog is
-opened from a mail, conditions offer that mail's values (sender, recipients, subject, list, reply-to, account,
-folder); (4) R1 leftovers: Run rule as a real hover submenu (dynamic menu source), `@`-prefixed rule names in that
-menu, search hints as an overlay, re-run live search after a folder change, align the mock RunRules. Known load
-flakes (WebView2 e2e crashes, nail-vault migration, nail-plugins cpu quota) stay out of R2 unless asked.
+**Wave R2 integrated 2026-11-21** (ADRs 0223-0226, [[r2-status]], `docs/plan.md` "Wave R2" status): redesigned
+rules window (footer, Preview / Recent runs, questions, Text view highlighting, 1100x760, stacked below 760 px),
+one shared `Picker` (rules editor, virtual accounts, sync, notifications, reply-to, vacation, search values),
+values from the mail beside conditions and actions plus "Add to rule…", "Run rule" / "Add to rule…" as hover
+submenus, search hints as a floating combobox. Waiting for the maintainer: the human gate on the real app (a new
+rule from a mail with values from it, the pickers in the rules editor and the virtual account editor, Run rule as a
+submenu, the search hints and values). Deferred items are listed in the plan's status line (TestRule.message_ids,
+MessageFacts headers / tags, empty-prefix address browsing, the reader card menu, a drag scenario). Package
+folders 2-5 were cleaned after the wave.
 
 **State:** M0-M5, the polish waves P1-P3 and the quality waves Q1-Q2 are done and verified
 (status lines in `docs/plan.md`, notes by milestone in `docs/architecture.md`); later changes have their own ADRs

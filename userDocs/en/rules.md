@@ -58,9 +58,23 @@ too). Below, the editor reads like a sentence:
 
 Every field that names a folder, an account, a tag, an address, a mailing
 list or a header has a list to browse, search and pick from; you can always
-type the value yourself instead. When you opened the window from a message
-(**Create rule from message**), the conditions also offer that message's
-values: its sender, recipients, subject, mailing list and so on.
+type the value yourself instead.
+
+### Values from this mail
+
+When you open the rules window from a message (**Create rule from message**
+or **Add to rule…** in the message's menu), or a message is selected in the
+list, a small button beside a condition's value (and beside the folder of
+**Move to folder** / **Copy to folder** and the tag of **Add tag** /
+**Remove tag**) lists that message's values: the sender's address, name and
+domain, the recipients, Reply-To, the subject or one of its words, the
+mailing list, header names, the account, the folder and the tags. Picking
+one fills in the field. A domain is matched as "ends with @domain", and an
+address switches the condition to the field it came from (for example from
+**From** to **Cc**).
+
+**Add to rule…** in a message's menu opens a list of your rules: pick one
+to open it in the rules window with that message's values at hand.
 
 ### The footer
 
@@ -122,8 +136,10 @@ already have — for example right after writing it.
 **Run** (see [The footer](#the-footer)).
 
 **From the message list**: right-click a message (or press Shift+F10 or
-the menu key) and choose **Run rule**. The menu that opens lists **All
-rules that are on** (when you have several), your rules that are on, and
+the menu key) and choose **Run rule**. A list opens beside **Run rule** when you point at
+it, or with the Right arrow key (Left closes it again). It shows **All
+rules that are on** (when you have several), your rules that are on (each
+name exactly as you wrote it), and
 under **Off** the rules that are off — running a rule by hand works for
 those too. The rule runs on the message, or on all selected messages when
 you right-click one of them. **From the folder pane**: right-click a folder

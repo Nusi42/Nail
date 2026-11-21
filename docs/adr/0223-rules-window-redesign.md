@@ -1,4 +1,4 @@
-# 0223 — WR3: the redesigned rules window
+# 0223 — The redesigned rules window
 
 Status: accepted (2026-11-21)
 
@@ -78,3 +78,18 @@ the `ValuesFromMessage` slot.
   of sticking (the page's bottom padding would show the form under it).
 - The `defaults/` snapshots (nail-config fixtures) change with the theme and
   layout; the integrator regenerates them once for the wave.
+
+## Integration
+
+- The editor's `PickerField.tsx` became a thin adapter over the shared
+  `widgets/pickers` `PickerField` (folder paths, a placeholder id, the
+  problem badge named only while the field is invalid), so there is one
+  labelled picker.
+- "+ Add condition" / "+ Add action" show their name through the shared
+  menu button's `showLabel` (`features/pim/PimMenu`) instead of a CSS
+  `::after` with the aria-label.
+- Picked values from the mail use `applyToCondition` / `applyToAction` of
+  ADR 0225; the editor's own `withPickedValue` was dropped.
+- The responsive skin's old rules entries (`rules.views`, the two-pane
+  grid, `rules.add` as a field row) were removed: the window stacks through
+  `features/rules/skin.ts`.

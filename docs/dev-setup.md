@@ -287,6 +287,14 @@ Where shared things live (Q2, ADRs 0172–0177):
   (`id = { common-… }`; generic labels in `locales/en/common.ftl`).
 - Vitest `must` / `mailEnv` live in `ui/src/test`; e2e `windowById` /
   `closeWindow` / `screenshotFile` in `e2e/support`.
+- UI state helpers shared by features: cached-data lookups in
+  `ui/src/state/mailOps.ts` (`findSummary`, `cachedFolder`), query options in
+  `ui/src/state/queries.ts` (`foldersQueryOptions`), the query language's
+  value quoting in `ui/src/state/queryText.ts` (`searchValueText`). A field
+  that names a folder, account, tag, address, mailing list or header name
+  uses `ui/src/widgets/pickers` (`Picker` / `PickerField`), a menu button the
+  shared `features/pim/PimMenu` (`showLabel` for visible text). The rules
+  scenarios share `e2e/support/rules.ts`.
 
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`
