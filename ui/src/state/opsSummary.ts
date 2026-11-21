@@ -18,7 +18,7 @@ export const OPS_RECHECK_MS = 2500;
 
 /**
  * Writes waiting to be saved: pending plus in flight. The same rule as the
- * core's `OpsSummary::waiting` (`crates/nail-api`).
+ * core's `OpsSummary::waiting` (`crates/nail-api`), pinned by the `ops` test vectors.
  */
 export function opsWaiting(summary: OpsSummary | null): number {
   return summary === null ? 0 : summary.pending + summary.in_flight;

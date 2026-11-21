@@ -145,7 +145,7 @@ export function emptyUiContext(): UiContext {
 
 /** Knobs tests use to make the mock core fail or slow down. */
 export interface MockBehaviour {
-  /** Error of every queued write (`OpStatus` `failed`); `null` = succeed. */
+  /** Error of every queued write (its `OpsChanged` failure); `null` = succeed. */
   opError: ErrorCode | null;
   /** Error of every submission (`SendStatus` `failed`); `null` = succeed. */
   sendError: ErrorCode | null;

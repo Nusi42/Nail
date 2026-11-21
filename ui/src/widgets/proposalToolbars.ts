@@ -16,8 +16,10 @@ export const PROPOSAL_READER = [
   { type: "action", action: "mail.move", rank: 6, display: "icon" },
   { type: "action", action: "mail.toggle-flag", rank: 7, display: "icon" },
   { type: "action", action: "snooze.open", rank: 8, display: "icon" },
-  // Only for drafts (hidden for other messages, `hide-disabled`).
+  // Only for drafts, and for non-drafts in a Drafts folder (hidden for
+  // other messages, `hide-disabled`).
   { type: "action", action: "mail.continue-draft", rank: 1 },
+  { type: "action", action: "mail.move-out-of-drafts", rank: 1 },
   { type: "spacer" },
   {
     type: "more",
@@ -54,6 +56,7 @@ const ANSWER_AND_FILE_GROUP = [
   item("mail.toggle-flag"),
   item("snooze.open"),
   item("mail.continue-draft"),
+  item("mail.move-out-of-drafts"),
   { type: "separator" },
 ];
 const MESSAGE_GROUP = [

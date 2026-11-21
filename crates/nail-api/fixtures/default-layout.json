@@ -821,6 +821,12 @@
       "alias_of": null,
       "args": []
     },
+    "mail.move-out-of-drafts": {
+      "label": "@mail-actions.action-move-out-of-drafts",
+      "icon": "folder-input",
+      "alias_of": null,
+      "args": []
+    },
     "mail.archive": {
       "label": "@mail.action.archive",
       "icon": "archive",
@@ -2272,6 +2278,14 @@
         "rank": 1
       },
       {
+        "type": "action",
+        "action": "mail.move-out-of-drafts",
+        "args": [],
+        "label": null,
+        "icon": null,
+        "rank": 1
+      },
+      {
         "type": "spacer"
       },
       {
@@ -2554,6 +2568,13 @@
         "icon": null
       },
       {
+        "type": "action",
+        "action": "mail.move-out-of-drafts",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
         "type": "separator"
       },
       {
@@ -2824,6 +2845,13 @@
       {
         "type": "action",
         "action": "mail.continue-draft",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.move-out-of-drafts",
         "args": [],
         "label": null,
         "icon": null

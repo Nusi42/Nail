@@ -16,11 +16,21 @@ mean.
   deleting many messages in a few steps, the status bar could keep saying
   "Saving 14 changes" until Nail was restarted, although everything had
   reached the server. It now shows the real number of changes still
-  waiting, for all accounts together.
+  waiting, for all accounts together, including waiting folder changes,
+  Gmail labels and Exchange changes, and it returns to idle once they are
+  saved, even after very large bulk actions.
+- **Failed changes say why** — when changes could not be saved, the status
+  bar names the real reason (for example no connection, or the server
+  refused), also after a restart, and with several failures how many there
+  are. **Retry** and **Dismiss** act on all of them at once.
 - **Lists stay right after large moves** — messages you moved could still
   show in their old folder, or in another folder, until a restart. Nail now
   refreshes the open lists and the selection when it notices it fell
-  behind.
+  behind, and moved messages no longer linger as selected rows.
+- **No moved messages back in their old folder** — when the server rebuilt
+  a folder (a UIDVALIDITY change) while moves out of it were still being
+  saved, the moved messages could show again in the old folder. They no
+  longer do.
 - **The Move window moves only where you choose** — `Enter` used to move to
   the first folder whose name merely contained what you typed. Now the
   arrow keys highlight a folder and `Enter` takes the highlighted one (or a
@@ -29,8 +39,10 @@ mean.
   Junk asks first, with the number of messages.
 - **Received mail in Drafts opens in the reader** — any message in a Drafts
   folder used to open in the composer as a draft. Now only real drafts do;
-  other messages there open in the reader, and **Move out of Drafts** takes
-  them back to the Inbox.
+  other messages there open in the reader, and **Move out of Drafts** (in
+  the reader's toolbar, the message menu and the command palette) takes
+  them back to the Inbox. Continuing such a message from another client or an agent now
+  makes a new draft and never replaces or deletes the original.
 
 ## Nail 0.8.8 (`0.8.8`)
 

@@ -130,8 +130,8 @@ Only real drafts open in the composer: messages the mail server marks as a
 draft. Any other message in a Drafts folder — mail you received and moved
 there by mistake, for example — opens in the reader like everywhere else, so
 continuing it can never replace or delete it. For such a message choose
-**Move out of Drafts** (in the command palette, **Ctrl+K**): it goes back to
-the account's Inbox.
+**Move out of Drafts** (in the reader's toolbar, the message's context menu
+or the command palette, **Ctrl+K**): it goes back to the account's Inbox.
 
 ## Sending, undo send and send later
 

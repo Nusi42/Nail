@@ -62,7 +62,8 @@ What the code does (verified for this ADR):
   already given up and the next sync shows the server's state). Organize
   scope; without `account_id` a remote session needs every account.
   `RetryOp` stays for one operation.
-- Store: `Store::op_queue_counts`, `newest_failed_op`, `retry_failed_ops`,
+- Store: `Store::write_queue_counts` (contract name `op_queue_counts`,
+  renamed by WS1, ADR 0231), `newest_failed_op`, `retry_failed_ops`,
   `dismiss_failed_ops` (`crates/nail-store/src/queue.rs`). The contract's
   summary counts the message write queue (`op_queue`); `done` rows are not
   counted.

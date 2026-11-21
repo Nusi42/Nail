@@ -3,7 +3,7 @@
  * `MockData`, like a core with two IMAP accounts would. Used by unit tests
  * and by `?mock=1` in the dev server.
  *
- * Writes are applied at once and "replayed" asynchronously with `OpStatus`
+ * Writes are applied at once and "replayed" asynchronously with `OpsChanged`
  * events; sending honours the undo-send delay with real timers (tests use
  * fake timers). `data.behaviour` makes the mock fail on purpose.
  */

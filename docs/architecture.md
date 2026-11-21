@@ -740,6 +740,10 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        (LocalMailFrame / RemoteMailFrame sized by a geometry rule; FrameHeightGuard in theme/frameHeight.ts,
                        frameHeightOf accepts origin "null" from the opaque sandbox origin; ADR 0168); ADR 0206:
                        widgets/mailLinks.ts (frameLinkOf: links never navigate a mail frame),
+                       R4 (ADRs 0230, 0232): state/opsSummary.ts (the status bar's queue tracker: GetOpsSummary /
+                       OpsChanged / Resync, OPS_RECHECK_MS re-check), queryKeys.allMessageBodies (Resync refetches
+                       the open message), widgets/FolderPicker.tsx (Move window combobox; matchRank, ASKS_BEFORE_MOVE
+                       in features/mail-actions/move.ts),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
@@ -1560,9 +1564,31 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 
 - Contract (ADR 0230): the queue summary of message writes. `nail_api::ops` `OpsSummary` / `OpsAccountSummary` /
   `OpFailure` (`from_accounts`, `retain_accounts`, `waiting`); requests `GetOpsSummary`, `RetryFailedOps`,
-  `DismissFailedOps`; events `OpsChanged` and `Resync`. Store `queue.rs` `op_queue_counts`, `newest_failed_op`,
+  `DismissFailedOps`; events `OpsChanged` and `Resync`. Store `queue.rs` `write_queue_counts` (contract name
+  `op_queue_counts`), `newest_failed_op`,
   `retry_failed_ops`, `dismiss_failed_ops` and the `Replayer::group_recorded` hook. Core `ops_summary.rs`
   (`Service::ops_summary`, `broadcast_ops_changed` / `ops_changed_throttled` under `Inner::ops_events`,
   `OPS_CHANGED_INTERVAL`), sent from `mail.rs` `announce_enqueued` / `retry_op`, `replay.rs` (per group and at the end
   of `replay_account`); `Service::resync_events` ends with `OpsChanged` and `Resync`. Mock queue:
   `ui/src/api/mockOps.ts` (`MockData.opQueue`). Status bar texts of the summary: `locales/*/status.ftl`.
+- WS1 (ADR 0231): message writes send no `OpStatus` (queued, retried or replayed; folder changes keep it). Schema
+  v22 adds `op_queue.error_code` / `error_localized`; `ReplayOutcome::Retry` / `Fail` carry `nail_store::OpError
+  { code, localized, message }` (`From<String>` = class `internal`), so `OpFailure` names the real reason after a
+  restart. `Store::write_queue_counts` also counts pending `folder_ops`, `gmail_label_ops` and `exchange_ops`
+  (failures only of `op_queue`, which Retry / Dismiss act on). A deferred pass logs one INFO line ("writes
+  deferred; retrying later"; the text at DEBUG). `ingest::resolve_id` skips a server message while a move or delete
+  of the same Message-ID out of that folder waits (`Store::has_waiting_move_out`): no duplicate rows after a
+  UIDVALIDITY reset. Test helpers `nail_core::testing::store_op_id` / `wire_op_id`. The lag tests: `app/src-tauri`
+  `a_lagging_forwarder_resyncs_the_webview`, `nail-server` `a_lagging_client_is_resynced`.
+- WS2 (ADR 0232): `ui/src/state/opsSummary.ts` tracks the summary (`opsWaiting` pinned by the `ops` ts-vectors);
+  `uiStore` `opsSummary` / `setOpsSummary` / `resyncAt` / `resynced` (no `failedOp` / `opFinished`; `pendingOps` =
+  ids queued since the last summary). `App.tsx` on `Resync` refetches folders, lists, conversations, searches and
+  `queryKeys.allMessageBodies`; `MessageList` prunes a stale selection (`refetchedSince` in
+  `actions/mailTargets.ts`). E2e `r4-status-bulk.spec.ts` (300-message move; dropped events via
+  `page.routeWebSocket`).
+- WS3 (ADR 0232): `widgets/FolderPicker.tsx` is a combobox / listbox (`matchRank`, `filterFolders` uses it;
+  `sourceFolderOf` and `ASKS_BEFORE_MOVE` in `features/mail-actions/move.ts`; part `folder-picker.notice`); the
+  confirmation is a `mail-confirm` group in the window. `isDraftMessage` = the `\Draft` flag; `isMisplacedInDrafts`
+  and action `mail.move-out-of-drafts` (`{role: "inbox"}`, in `layout.kdl`'s reader toolbar and menus). Core
+  `draft_edit.rs`: `EditDraftMessage` on a non-`\Draft` message makes a draft without a server copy (the mock
+  `mockDrafts.ts` likewise). E2e `r4-move-picker.spec.ts`.

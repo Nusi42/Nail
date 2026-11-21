@@ -1284,3 +1284,24 @@ fn plugin_extensions_vectors() {
     }
     v.check("plugin-extensions");
 }
+
+/// `OpsSummary::waiting` (the status bar's "Saving N changes"), ported by
+/// `opsWaiting` in `ui/src/state/opsSummary.ts` (ADR 0230).
+#[test]
+fn ops_vectors() {
+    let mut v = Vectors::default();
+    for (pending, in_flight, failed) in [(0, 0, 0), (3, 0, 0), (0, 2, 0), (3, 2, 4), (0, 0, 7)] {
+        let summary = nail_api::OpsSummary::from_accounts(
+            [nail_api::OpsAccountSummary {
+                account_id: AccountId::from("a1".to_owned()),
+                pending,
+                in_flight,
+                failed,
+            }],
+            None,
+        );
+        let waiting = summary.waiting();
+        v.case("opsWaiting", json!([summary]), waiting);
+    }
+    v.check("ops");
+}

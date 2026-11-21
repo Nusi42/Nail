@@ -934,6 +934,11 @@ theme "default" mode="system" {
         height "$size.icon"
         color "$color.fg-muted"
     }
+    // Why Enter moved nothing, or what the window waits for (R4).
+    part "folder-picker.notice" {
+        font-size "$font-size.small"
+        color "$color.fg-muted"
+    }
 
     // ---- Shared pickers (R2, ADR 0222): folder, account, tag, address,
     // mailing list and header-name fields with a list to choose from ----

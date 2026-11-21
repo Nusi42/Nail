@@ -565,9 +565,16 @@ async fn stored_draft(service: &Service, draft_id: &DraftId) -> Draft {
 /// folder on the server and waits until it is synced; returns the local
 /// message and its UID on the server.
 async fn foreign_draft(f: &Fixture, subject: &str, raw: String) -> (MessageId, u64) {
+    in_drafts(f, subject, raw, &["\\Draft"]).await
+}
+
+/// Puts a message with `flags` into the work account's Drafts folder on the
+/// server and waits until it is synced; returns the local message and its
+/// UID on the server.
+async fn in_drafts(f: &Fixture, subject: &str, raw: String, flags: &[&str]) -> (MessageId, u64) {
     let delivered = f.control(
         "imap-deliver",
-        &json!({"mailbox": "Drafts", "flags": ["\\Draft"], "raw": raw}),
+        &json!({"mailbox": "Drafts", "flags": flags, "raw": raw}),
     );
     request(
         &f.service,
@@ -748,6 +755,40 @@ async fn a_draft_without_message_id_is_replaced_by_nails_copy_at_once() {
     })
     .await;
     assert_eq!(edit_draft_message(&f.service, &copy).await, id);
+    f.service.shutdown().await;
+}
+
+/// Drafts safety (ADR 0230): a received message in Drafts (no `\Draft`)
+/// continues as a new draft that never replaces or deletes it.
+#[tokio::test]
+async fn a_non_draft_in_drafts_is_copied_and_never_replaced() {
+    let f = setup().await;
+    synced(&f).await;
+    let raw = format!(
+        "From: Grace <grace@example.net>\r\nTo: {MULTI_WORK_EMAIL}\r\nSubject: Received mail\r\nMessage-ID: <received-1@example.net>\r\n\r\nNot a draft\r\n"
+    );
+    let (message, uid) = in_drafts(&f, "Received mail", raw, &[]).await;
+    let id = edit_draft_message(&f.service, &message).await;
+    let mut draft = stored_draft(&f.service, &id).await;
+    assert!(draft.text.contains("Not a draft"), "{:?}", draft.text);
+    // Saving adds Nail's own copy next to the message.
+    draft.subject = "Received mail, edited".into();
+    save(&f.service, draft).await;
+    eventually("Nail's copy next to the message", || async {
+        let mut subjects = f.server_subjects(MULTI_WORK_ID, "Drafts");
+        subjects.sort();
+        subjects == ["Received mail", "Received mail, edited"]
+    })
+    .await;
+    // Discarding the draft deletes only Nail's copy.
+    assert!(matches!(
+        request(&f.service, Request::DeleteDraft { draft_id: id }).await,
+        Response::Done
+    ));
+    eventually("only the message left on the server", || async {
+        server_draft_uids(&f) == [uid]
+    })
+    .await;
     f.service.shutdown().await;
 }
 

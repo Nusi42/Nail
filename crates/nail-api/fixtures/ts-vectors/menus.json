@@ -253,6 +253,14 @@
             "type": "action"
           },
           {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -471,6 +479,14 @@
             "args": [],
             "icon": "square-pen",
             "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
             "shortcut": null,
             "type": "action"
           },
@@ -697,6 +713,14 @@
             "type": "action"
           },
           {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -919,6 +943,14 @@
             "type": "action"
           },
           {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -1137,6 +1169,14 @@
             "args": [],
             "icon": "square-pen",
             "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
             "shortcut": null,
             "type": "action"
           },
@@ -1913,6 +1953,14 @@
             "type": "action"
           },
           {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -2131,6 +2179,14 @@
             "args": [],
             "icon": "square-pen",
             "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
             "shortcut": null,
             "type": "action"
           },
@@ -2357,6 +2413,14 @@
             "type": "action"
           },
           {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -2579,6 +2643,14 @@
             "type": "action"
           },
           {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "type": "separator"
           },
           {
@@ -2797,6 +2869,14 @@
             "args": [],
             "icon": "square-pen",
             "label": "@mail.action.continue-draft",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": "folder-input",
+            "label": "@mail-actions.action-move-out-of-drafts",
             "shortcut": null,
             "type": "action"
           },

@@ -170,10 +170,11 @@ describe("writes in the mock core", () => {
     expect(m?.tags).toContain("x");
     expect(events[0]).toMatchObject({ type: "MailChanged" });
     await vi.waitFor(() => {
-      expect(events.filter((e) => e.type === "OpStatus" && e.status.state === "done")).toHaveLength(
-        2,
-      );
+      expect(events.at(-1)).toMatchObject({ type: "OpsChanged", summary: { pending: 0 } });
+      expect(transport.data.opQueue.size).toBe(0);
     });
+    // Message writes send no per-operation status (ADR 0230).
+    expect(events.some((e) => e.type === "OpStatus")).toBe(false);
   });
 
   it("reports failed replays when told to", async () => {
@@ -185,9 +186,9 @@ describe("writes in the mock core", () => {
     );
     await vi.waitFor(() => {
       expect(
-        events.find((e) => e.type === "OpStatus" && e.status.state === "failed"),
+        events.findLast((e) => e.type === "OpsChanged" && e.summary.failed === 1),
       ).toMatchObject({
-        status: { error: "network" },
+        summary: { newest_failure: { code: "network" } },
       });
     });
   });
@@ -659,10 +660,9 @@ describe("M1b requests in the mock core", () => {
       op_ids: [opId],
     });
     await vi.waitFor(() => {
-      expect(
-        events.filter((e) => e.type === "OpStatus" && e.status.op_id === opId).at(-1),
-      ).toMatchObject({ status: { state: "done" } });
+      expect(transport.data.opQueue.has(opId)).toBe(false);
     });
+    expect(events.some((e) => e.type === "OpStatus")).toBe(false);
     expect(await client.call({ type: "RetryOp", op_id: opId })).toMatchObject({
       code: "conflict",
     });

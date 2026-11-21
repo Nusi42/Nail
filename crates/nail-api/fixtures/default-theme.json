@@ -2225,6 +2225,17 @@
       "source": null
     },
     {
+      "selector": "folder-picker.notice",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-small)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
       "selector": "picker",
       "states": [],
       "conditions": [],

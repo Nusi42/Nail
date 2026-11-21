@@ -454,7 +454,8 @@ async fn serves_blobs_by_hash() {
 
 /// Regression: a client that fell behind the event channel only got a log
 /// line, and its lists and config stayed stale. Now it gets the current
-/// state (config first, then a change notice for every folder).
+/// state (config first, then a change notice for every folder) and ends
+/// with the queue's summary and `Resync` (ADR 0230).
 #[tokio::test]
 async fn a_lagging_client_is_resynced() {
     let f = service();
@@ -480,6 +481,21 @@ async fn a_lagging_client_is_resynced() {
             _ => {}
         }
     }
+    // The resync ends with the current summary, then the signal to refetch.
+    let mut previous = None;
+    loop {
+        match receive(&mut socket).await {
+            ServerMessage::Event {
+                event: Event::Resync,
+            } => break,
+            ServerMessage::Event { event } => previous = Some(event),
+            ServerMessage::Response { .. } => {}
+        }
+    }
+    assert!(
+        matches!(&previous, Some(Event::OpsChanged { summary }) if summary.waiting() == 0),
+        "{previous:?}"
+    );
 }
 
 struct Echo;

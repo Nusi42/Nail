@@ -55,10 +55,14 @@ describe("mock drafts", () => {
     });
   });
 
-  it("continues a message as a draft of its account, once", () => {
+  it("continues a draft as a draft of its account, once", () => {
     const c = core();
     const message = c.data.messages.find((m) => m.account_id === "acc-work");
     if (!message) throw new Error("no work message");
+    // Not flagged `\Draft`: a new draft every time, never linked (ADR 0232).
+    const unlinked = editDraftMessage(c, message.id);
+    expect(editDraftMessage(c, message.id)).not.toEqual(unlinked);
+    message.flags.draft = true;
     const first = editDraftMessage(c, message.id);
     expect(first).toMatchObject({ type: "DraftSaved" });
     const saved = first.type === "DraftSaved" ? c.data.drafts.get(first.draft_id) : undefined;

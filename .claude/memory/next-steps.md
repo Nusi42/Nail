@@ -1,11 +1,18 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.8 released 2026-11-21; wave R4 running: bulk-action status, stale lists, move picker, drafts safety)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.8 released 2026-11-21; wave R4 integrated: bulk-action status, stale lists, move picker, drafts safety; next: review, 0.8.9 installer)"
 metadata:
   type: project
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
+
+**Wave R4 integrated 2026-11-21** (ADRs 0230-0232, [[r4-status]], `docs/plan.md` "Wave R4" status): WS1-WS3
+rebased onto the lead branch; the core also no longer links a non-`\Draft` message as a draft's server copy; the
+`nail-server` lag test checks `OpsChanged` then `Resync`; the `ops` ts-vectors pin `opsWaiting`; Move out of
+Drafts sits in the reader toolbar and menus. Release notes "Nail 0.8.9" and `CHANGELOG.md` `[Unreleased]` hold every
+R4 item. Package folders 2-4 cleaned. Next: the wave's reviews, then the 0.8.9 installer for the maintainer's human
+gate (bulk move / delete of several hundred messages on a real IMAP account), then `release:prepare --version 0.8.9`.
 
 **Wave R4 started 2026-11-21** (nail-wave, packages in folders 2-4, memory r4-status): maintainer report on
 0.8.8 after bulk moves/deletes over IMAP: "Saving 14 changes" stuck until restart and stale rows of moved messages

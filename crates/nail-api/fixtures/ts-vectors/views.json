@@ -710,6 +710,14 @@
             "type": "action"
           },
           {
+            "action": "mail.move-out-of-drafts",
+            "args": [],
+            "icon": null,
+            "label": null,
+            "rank": 1,
+            "type": "action"
+          },
+          {
             "type": "spacer"
           },
           {
@@ -825,6 +833,7 @@
         4,
         2,
         1,
+        10,
         9,
         0
       ]

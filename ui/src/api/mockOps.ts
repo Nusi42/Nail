@@ -2,8 +2,9 @@
  * The mock core's queue of message writes (ADR 0230): every queued write
  * with its state, the summary `GetOpsSummary` answers and `OpsChanged`
  * carries (one per queued batch and one per replayed write here; the core
- * coalesces further), Retry / Dismiss of failed writes. Each write still
- * reports `OpStatus` too until the UI no longer needs it (ADR 0230).
+ * coalesces further), Retry / Dismiss of failed writes. Like the core,
+ * message writes send no `OpStatus` (ADR 0230); folder changes still do
+ * (`opStatus`, ADR 0196: the folder dialogs wait for their one operation).
  */
 import type {
   AccountId,
@@ -24,6 +25,8 @@ export interface MockQueuedOp {
   error: ErrorCode | null;
   /** When it failed (ISO 8601), for the newest failure. */
   failedAt: string | null;
+  /** Reports its replay with `OpStatus` too (folder changes only). */
+  opStatus?: true;
 }
 
 /** The queue (op id → write), in enqueue order; `done` writes are removed. */
@@ -78,38 +81,62 @@ function setState(core: MockCore, opId: string, op: MockQueuedOp, state: OpState
   else core.data.opQueue.set(opId, op);
 }
 
-/** Queues writes (one per entry) and replays them asynchronously. */
-export function enqueueOps(core: MockCore, ops: readonly { opId: string; accountId: AccountId }[]) {
+/**
+ * Queues writes (one per entry) and replays them asynchronously; with
+ * `opStatus` (folder changes) each also reports `OpStatus`.
+ */
+export function enqueueOps(
+  core: MockCore,
+  ops: readonly { opId: string; accountId: AccountId }[],
+  options: { opStatus?: true } = {},
+) {
   for (const { opId, accountId } of ops) {
-    core.data.opQueue.set(opId, { accountId, state: "pending", error: null, failedAt: null });
+    core.data.opQueue.set(opId, {
+      accountId,
+      state: "pending",
+      error: null,
+      failedAt: null,
+      ...options,
+    });
   }
   emitOpsChanged(core);
   for (const { opId } of ops) replayOp(core, opId);
 }
 
-/** Replays one queued write asynchronously with `OpStatus` and `OpsChanged`. */
+/** `OpStatus` of a folder change's replay (message writes send none). */
+function emitOpStatus(
+  core: MockCore,
+  opId: string,
+  op: MockQueuedOp,
+  state: OpState,
+  message: string | null = null,
+): void {
+  if (op.opStatus !== true) return;
+  const error = state === "failed" ? op.error : null;
+  core.emit({
+    type: "OpStatus",
+    status: { op_id: opId, account_id: op.accountId, state, error, message },
+  });
+}
+
+/** Replays one queued write asynchronously, reporting it with `OpsChanged`. */
 export function replayOp(core: MockCore, opId: string): void {
   const op = core.data.opQueue.get(opId);
   if (op === undefined) return;
-  const base = { op_id: opId, account_id: op.accountId, error: null, message: null };
   core.later(() => {
     setState(core, opId, op, "in-flight");
-    core.emit({ type: "OpStatus", status: { ...base, state: "in-flight" } });
+    emitOpStatus(core, opId, op, "in-flight");
     core.later(() => {
       const error = core.data.behaviour.opError;
       if (error) {
         op.error = error;
         op.failedAt = new Date().toISOString();
         setState(core, opId, op, "failed");
+        emitOpStatus(core, opId, op, "failed", "mock replay failed");
       } else {
         setState(core, opId, op, "done");
+        emitOpStatus(core, opId, op, "done");
       }
-      core.emit({
-        type: "OpStatus",
-        status: error
-          ? { ...base, state: "failed", error, message: "mock replay failed" }
-          : { ...base, state: "done" },
-      });
       emitOpsChanged(core);
     });
   });
@@ -129,16 +156,7 @@ export function retryOp(core: MockCore, opId: string): Response {
   }
   requeue(core, opId, op);
   queueMicrotask(() => {
-    core.emit({
-      type: "OpStatus",
-      status: {
-        op_id: opId,
-        account_id: op.accountId,
-        error: null,
-        message: null,
-        state: "pending",
-      },
-    });
+    emitOpStatus(core, opId, op, "pending");
     emitOpsChanged(core);
   });
   replayOp(core, opId);

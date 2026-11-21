@@ -10,6 +10,7 @@ layout "custom" extends="default" {
         item "mail.toggle-flag" rank=7 display="icon"
         item "snooze.open" rank=8 display="icon"
         item "mail.continue-draft" rank=1
+        item "mail.move-out-of-drafts" rank=1
         spacer
         more {
             header "@toolbar.group.message"

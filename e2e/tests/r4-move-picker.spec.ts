@@ -6,8 +6,8 @@ import {
   messageList,
   messageRow,
   openMail,
+  readerAction,
   refreshList,
-  runFromPalette,
   WIDE_WINDOW,
 } from "../support/views";
 import { LAB, LAB_INBOX } from "../support/demo";
@@ -144,7 +144,7 @@ test("a received message in Drafts opens in the reader and moves out of Drafts",
   await expect(composerWindow(page)).toHaveCount(0);
   expect(await subjectsIn("Drafts")).toContain("Moved here by mistake");
 
-  await runFromPalette(page, "Move out of Drafts", "Move out of Drafts");
+  await readerAction(page, "Move out of Drafts");
   await expect
     .poll(() => subjectsIn("INBOX"), { timeout: 20_000 })
     .toContain("Moved here by mistake");

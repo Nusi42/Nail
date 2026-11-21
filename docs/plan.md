@@ -1240,7 +1240,8 @@ Contract ADR 0230.
 #### Packages of R4
 
 - **Contract (done):** ADR 0230; `nail-api` `OpsSummary` / `OpsAccountSummary` / `OpFailure`, `GetOpsSummary`,
-  `RetryFailedOps`, `DismissFailedOps`, `OpsChanged`, `Resync` (TS regenerated); store `op_queue_counts`,
+  `RetryFailedOps`, `DismissFailedOps`, `OpsChanged`, `Resync` (TS regenerated); store `op_queue_counts` (renamed
+  `write_queue_counts` by WS1),
   `newest_failed_op`, `retry_failed_ops`, `dismiss_failed_ops`, `Replayer::group_recorded`; core
   `nail-core/src/ops_summary.rs` (summary, throttled and serialized `OpsChanged`, bulk retry / dismiss), events at
   enqueue, retry, per group and pass end, `resync_events` ending with `OpsChanged` + `Resync`; remote narrowing and
@@ -1274,6 +1275,16 @@ move / delete of several hundred messages on a real IMAP account), then release.
 *Status (contract):* done (ADR 0230). Queue summary request and event, bulk retry / dismiss, `Resync` after a lag,
 serialized and throttled `OpsChanged` in the core (per-operation `OpStatus` still sent until WS1 removes it), mock
 queue in `mockOps.ts`, `status.ftl` slot, 0.8.9 notes prepared. Next: WS1–WS3 in parallel.
+
+*Status (integrated):* WS1 (ADR 0231: no `OpStatus` for message writes, failure classes in schema v22, other write
+queues counted, INFO per deferred pass, no duplicates after a UIDVALIDITY reset), WS2 and WS3 (ADR 0232: summary
+tracker with re-check, `Resync` refetch and selection pruning, combobox Move window with confirmation, drafts by
+`\Draft` only, Move out of Drafts) integrated; the core no longer links a non-draft as a draft's server copy. 0.8.9
+notes and changelog complete. Next: review, then the maintainer's human gate on the 0.8.9 installer. Follow-ups:
+failures of folder / Gmail label / Exchange writes are not in `OpsSummary.failed` (bulk Retry / Dismiss act on
+message writes only); a mass permanent failure still logs one WARN per operation; a second copy with the same
+Message-ID in a folder with a waiting move-out is fetched only on the next full fetch; Retry / Dismiss errors show
+in place of the failure reason.
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

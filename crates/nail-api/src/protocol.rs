@@ -450,7 +450,9 @@ pub enum Request {
     /// a new saved draft — identity (from `From`), recipients, subject,
     /// body, attachments and the replied message (from `In-Reply-To`) —
     /// whose server copy is that message, so its next save replaces the
-    /// message instead of adding a second one. Answered with
+    /// message instead of adding a second one. A message without `\Draft`
+    /// (received mail in a Drafts folder) is copied into a new draft that
+    /// never replaces or deletes it (ADR 0230). Answered with
     /// [`Response::DraftSaved`]; open the draft with [`Request::GetDraft`].
     EditDraftMessage {
         /// The message.

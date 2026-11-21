@@ -405,6 +405,9 @@ settings too.
 
 Every change takes effect in Nail at once and is then sent to the server in
 the background. The status bar shows "Saving 2 changes…" while that is
-happening. When you are offline, changes wait and are sent when the
-connection is back. If the server refuses a change, the status bar says so
-and Nail shows the server's state again.
+happening: the number of changes still waiting for all accounts, folder
+changes, Gmail labels and Exchange changes included. When you are offline,
+changes wait and are sent when the connection is back. If changes cannot be
+saved, the status bar names the reason (also after a restart) and, when
+several failed, how many; **Retry** sends all of them again and **Dismiss**
+gives them up, and Nail shows the server's state again.

@@ -30,6 +30,8 @@ export function draftSaveRefusal(core: MockCore, draft: Draft): Response | null 
  * `EditDraftMessage`: the draft a message of a Drafts folder continues. The
  * mock keeps no server copies, so a message becomes a new draft (sender
  * identity, recipients, subject, body) the first time and names it after.
+ * Like the core, only a `\Draft` message is linked to its draft; any other
+ * message becomes a new draft every time (ADR 0232).
  */
 export function editDraftMessage(core: MockCore, messageId: string): Response {
   const d = core.data;
@@ -60,6 +62,6 @@ export function editDraftMessage(core: MockCore, messageId: string): Response {
     signature: "none",
     markdown_part: false,
   });
-  d.draftMessages.set(messageId, id);
+  if (summary.flags.draft) d.draftMessages.set(messageId, id);
   return { type: "DraftSaved", draft_id: id };
 }

@@ -6,6 +6,11 @@
 //! draft whose server copy is that message, so the next autosave replaces
 //! it (and sending or discarding the draft deletes it) instead of leaving
 //! a second copy behind.
+//!
+//! Only a message flagged `\Draft` is linked that way (ADR 0230, drafts
+//! safety): any other message (received mail that landed in Drafts) is
+//! copied into a new draft without a server copy, so nothing ever replaces
+//! or deletes the original.
 
 use nail_api::accounts::ComposerMode;
 use nail_api::{
@@ -26,6 +31,8 @@ struct Located {
     header_id: Option<String>,
     /// `In-Reply-To` ids.
     in_reply_to: Vec<String>,
+    /// Flagged `\Draft`: a real draft, which the new draft may replace.
+    is_draft: bool,
 }
 
 impl Service {
@@ -39,6 +46,7 @@ impl Service {
                     let stored = s.get_message(&id)?;
                     let meta = s.message_meta(&id)?;
                     Ok(Located {
+                        is_draft: stored.summary.flags.draft,
                         folder_id: stored.summary.folder_id,
                         account_id: stored.summary.account_id,
                         header_id: meta.message_id,
@@ -64,10 +72,13 @@ impl Service {
         let (account, _) = self.identity(&draft.identity_id)?;
         // Without a Message-ID nothing finds the message again: on an IMAP
         // account (where Nail keeps the server copy) it is replaced by
-        // Nail's own copy right away.
-        let replace_now =
-            located.header_id.is_none() && matches!(account.incoming, IncomingServer::Imap { .. });
-        let copy = located.header_id.clone().map(|message_id| DraftServerCopy {
+        // Nail's own copy right away. A message that is not a draft is
+        // never replaced, deleted or linked as the draft's server copy.
+        let replace_now = located.is_draft
+            && located.header_id.is_none()
+            && matches!(account.incoming, IncomingServer::Imap { .. });
+        let linked = located.header_id.clone().filter(|_| located.is_draft);
+        let copy = linked.map(|message_id| DraftServerCopy {
             folder_id: located.folder_id.clone(),
             uid: None,
             message_id,

@@ -85,6 +85,6 @@ from showing twice after a UIDVALIDITY reset.
 - Protocol clients that still followed `OpStatus` for message writes must
   use `OpsChanged` (WS2 switches the desktop and web UI).
 - Schema v22; no new crates or dependencies.
-- `nail-server`'s web socket already sends `resync_events`; a test that a
-  lagging socket receives `OpsChanged` and `Resync` belongs to that crate
-  (handed to the integrator).
+- `nail-server`'s web socket already sends `resync_events`; its test
+  `a_lagging_client_is_resynced` (`tests/integration/server.rs`) checks that
+  a lagging socket receives `OpsChanged` and then `Resync`.

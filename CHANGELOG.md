@@ -18,7 +18,24 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   queue summary and a new `Resync` event and refetches its open message
   lists and selection, so moved messages no longer linger in other lists.
 - Failed writes can be retried or dismissed all at once
-  (`RetryFailedOps`, `DismissFailedOps`).
+  (`RetryFailedOps`, `DismissFailedOps`). The status bar names the newest
+  failure's real reason (its error class and text are stored with the
+  write, schema v22, so they survive a restart) and how many failed.
+- Message writes no longer send one `OpStatus` event per operation;
+  `OpsChanged` replaces them (folder changes keep `OpStatus`). Waiting
+  folder changes, Gmail label writes and Exchange writes are counted in the
+  summary. A pass that has to wait logs one INFO line.
+- The status bar asks the core again when changes wait and no summary
+  arrived for a while, so it returns to idle even when events are lost.
+- Moved messages no longer show again in their old folder when the server
+  rebuilt it (UIDVALIDITY change) while the move was still waiting.
+- The Move window moves only to the highlighted folder or an exact name
+  match; better matches come first, the current folder is left out, and
+  moving into Drafts, Trash or Junk asks first with the count.
+- Only `\Draft` messages continue in the composer; other messages in a
+  Drafts folder open in the reader, with the new action Move out of
+  Drafts. `EditDraftMessage` on a message without `\Draft` makes a new
+  draft that never replaces or deletes it.
 
 ## [0.8.8] — 2026-11-21
 

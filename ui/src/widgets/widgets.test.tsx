@@ -333,6 +333,7 @@ describe("toolbar", () => {
       "Flag",
       "Snooze…",
       "Continue writing",
+      "Move out of Drafts",
       "More",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");

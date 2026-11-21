@@ -47,7 +47,7 @@ function place(folders: Folder[], folder: Folder, parent: Folder | null, name: s
 function queued(core: MockCore, accountId: string): Response {
   const opId = core.nextId("folder-");
   core.emit({ type: "MailChanged", folder_ids: [] });
-  enqueueOps(core, [{ opId, accountId }]);
+  enqueueOps(core, [{ opId, accountId }], { opStatus: true });
   return { type: "Queued", op_ids: [opId] };
 }
 
