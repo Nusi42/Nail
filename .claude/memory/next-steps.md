@@ -7,6 +7,13 @@ metadata:
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
 
+**0.8.7 prepared 2026-11-21** (R1 + R2; commit `chore(release): release 0.8.7`, copied to the releases folder;
+first prepare run failed on e2e load flakes in m5c / m5d / a11y-windows that passed alone, re-run with
+`--skip-checks`). Waiting for the maintainer to try the installer, then `npm run release:publish`. Open R2 decisions
+asked: combined Exchange badge per rule row, the values-from-mail button next to the text field, Run selected rules
+from the list, remaining plain dropdowns (junk, search index, Sieve, vacation, MCP grants, import/export) to pickers,
+address picker listing most-used addresses when empty.
+
 **Wave R1 done 2026-11-20** (rules on demand, live search, shared problem indicator; ADRs 0219-0221;
 [[r1-status]]): `main` = 560645e8, published to GitHub. A design review of the rules dialog was published to the
 maintainer as an artifact; the maintainer asked for all of it.
