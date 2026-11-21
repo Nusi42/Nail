@@ -21,6 +21,16 @@ mean.
   show in their old folder, or in another folder, until a restart. Nail now
   refreshes the open lists and the selection when it notices it fell
   behind.
+- **The Move window moves only where you choose** — `Enter` used to move to
+  the first folder whose name merely contained what you typed. Now the
+  arrow keys highlight a folder and `Enter` takes the highlighted one (or a
+  folder whose name you typed in full); better matches come first, and the
+  folder the mail is in is no longer offered. Moving into Drafts, Trash or
+  Junk asks first, with the number of messages.
+- **Received mail in Drafts opens in the reader** — any message in a Drafts
+  folder used to open in the composer as a draft. Now only real drafts do;
+  other messages there open in the reader, and **Move out of Drafts** takes
+  them back to the Inbox.
 
 ## Nail 0.8.8 (`0.8.8`)
 

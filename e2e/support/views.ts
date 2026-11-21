@@ -37,7 +37,7 @@ export async function moveSelectionTo(page: Page, folder: string): Promise<void>
   await messageList(page).focus();
   await page.keyboard.press("v");
   const move = page.getByRole("dialog", { name: "Move to folder" });
-  await move.getByRole("button", { name: folder, exact: true }).click();
+  await move.getByRole("option", { name: folder, exact: true }).click();
 }
 
 /**

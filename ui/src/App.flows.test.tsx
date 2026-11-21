@@ -200,8 +200,9 @@ describe("M1a flows", () => {
     );
     await user.click(
       await settleUntil(
-        () => within(picker).queryByRole("button", { name: "Trash" }),
-        "'button', { name: 'Trash' }",
+        // An option of the move window's list (R4); Trash would ask first.
+        () => within(picker).queryByRole("option", { name: "Archive" }),
+        "'option', { name: 'Archive' }",
       ),
     );
     await eventually(() => {
@@ -216,7 +217,7 @@ describe("M1a flows", () => {
           folder_id: env.store.getState().activeFolderId,
         },
       ],
-      action: { type: "move", target: { folder_id: "all/trash" } },
+      action: { type: "move", target: { folder_id: "all/archive" } },
     });
     // The mock core replays the writes with OpStatus events; the status bar
     // follows them until the queue is empty.

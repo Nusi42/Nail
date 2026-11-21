@@ -12,16 +12,37 @@
  * `mail.toggle-flag`, `mail.move(-to)` and `mail.undo` are built-ins
  * (`../../actions/registry.ts`) running `./run.ts`; this slot registers the
  * toast and the palette descriptions of the new actions.
+ * R4 (ADR 0230): `mail.move-out-of-drafts` moves a message that sits in a
+ * Drafts folder without being a draft (no `\Draft` flag) to the Inbox; the
+ * reader offers it for such messages, which open in the reader rather than
+ * the composer. The move window asks before Drafts, Trash and Junk
+ * (`./move.ts`, `../../widgets/FolderPicker.tsx`).
  * Texts: `locales/{en,de}/mail-actions.ftl` (labels of what was done:
  * `mail-action-kind-*` in `core-mail-actions.ftl`). The mock core answers
  * the requests (`../../api/mockMailActions.ts`).
  */
+import { currentTargets } from "../../actions/mailTargets";
 import { MAIL_AVAILABILITY as MAIL, type ActionInfo } from "../../actions/palette";
 import type { Feature } from "../types";
+import { isMisplacedInDrafts, runMailAction } from "./run";
 import { MailActionToast } from "./Toast";
 
+/** Moves a non-draft out of a Drafts folder into its account's Inbox. */
+export const MOVE_OUT_OF_DRAFTS_ACTION = "mail.move-out-of-drafts";
+
 export const widgets: Feature["widgets"] = {};
-export const actions: Feature["actions"] = {};
+export const actions: Feature["actions"] = {
+  [MOVE_OUT_OF_DRAFTS_ACTION]: {
+    run: async (ctx) => {
+      if (!isMisplacedInDrafts(ctx, ctx.store.getState().selectedMessageId)) return;
+      await runMailAction(ctx, currentTargets(ctx.store), {
+        type: "move",
+        target: { role: "inbox" },
+      });
+    },
+    enabled: (ctx) => isMisplacedInDrafts(ctx, ctx.store.getState().selectedMessageId),
+  },
+};
 
 /** Command-palette descriptions of the actions P3 added. */
 export const actionInfo: Readonly<Record<string, ActionInfo>> = {
@@ -36,6 +57,12 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
     keywords: "mail-actions-action-mark-unread-keywords",
     availability: MAIL,
     icon: "mail",
+  },
+  [MOVE_OUT_OF_DRAFTS_ACTION]: {
+    title: "mail-actions-action-move-out-of-drafts",
+    keywords: "mail-actions-action-move-out-of-drafts-keywords",
+    availability: MAIL,
+    icon: "folder-input",
   },
   "mail.undo": {
     title: "mail-actions-action-undo",

@@ -108,17 +108,17 @@ describe("continuing a draft", () => {
     expect(isEnabled("mail.continue-draft")).toBe(true);
   });
 
-  it("counts a message of a Drafts folder as a draft without the flag", () => {
+  it("does not count a message of a Drafts folder without the flag as a draft (R4)", () => {
     const env = draftsEnv();
     const unflagged = addDraftMessage(env, false);
     const ctx = actionContext(env);
     cacheList(env, [unflagged]);
-    expect(isDraftMessage(ctx, unflagged.id)).toBe(false);
     env.queryClient.setQueryData(
       queryKeys.folders("acc-personal"),
       listFolders(env.transport.data, "acc-personal"),
     );
-    expect(isDraftMessage(ctx, unflagged.id)).toBe(true);
+    // Received mail moved into Drafts opens in the reader, never the composer.
+    expect(isDraftMessage(ctx, unflagged.id)).toBe(false);
     expect(isDraftMessage(ctx, null)).toBe(false);
   });
 });

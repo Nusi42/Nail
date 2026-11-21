@@ -47,13 +47,25 @@ export function folderRole(ctx: WriteContext, folderId: FolderId | null): Folder
 
 /**
  * Whether a message is a draft to continue writing rather than to read:
- * flagged `\Draft`, or in a Drafts folder (`false` when unknown).
+ * flagged `\Draft` (`false` when unknown). Being in a Drafts folder is not
+ * enough (R4, ADR 0230): received mail moved there opens in the reader, so
+ * continuing it can never replace or delete it unasked.
  */
 export function isDraftMessage(ctx: WriteContext, id: MessageId | null): boolean {
   if (id === null) return false;
+  return findSummary(ctx.queryClient, id)?.flags.draft === true;
+}
+
+/**
+ * Whether a message sits in a Drafts folder without being a draft (no
+ * `\Draft` flag), e.g. received mail moved there by mistake: the reader
+ * offers to move it out (`mail.move-out-of-drafts`).
+ */
+export function isMisplacedInDrafts(ctx: WriteContext, id: MessageId | null): boolean {
+  if (id === null) return false;
   const summary = findSummary(ctx.queryClient, id);
-  if (summary === undefined) return false;
-  return summary.flags.draft || folderRole(ctx, summary.folder_id) === "drafts";
+  if (summary === undefined || summary.flags.draft) return false;
+  return folderRole(ctx, summary.folder_id) === "drafts";
 }
 
 /**

@@ -284,6 +284,26 @@ back to Sent.
 
 After you archive, move or delete a conversation, the next one is selected.
 
+### Moving to a folder
+
+**Move** (`v`) opens the **Move to folder** window. Type part of a folder's
+name: folders whose name starts with what you typed come first, then those
+whose name contains it, then those whose path does. The folder the mail is
+already in is not listed.
+
+The window never guesses where to move:
+
+- Use **↑** / **↓** to highlight a folder, then press `Enter`. Pointing at
+  a folder with the mouse highlights it too; a click moves there.
+- When what you typed is exactly a folder's name, that folder is highlighted
+  at once, so `Enter` moves there.
+- Otherwise `Enter` does nothing and the window says how to choose.
+
+Moving into **Drafts**, **Trash** or **Junk** asks first, in the same window,
+how many messages will go there (for example "Move 9 messages to Drafts?").
+**Cancel** (which has the focus) goes back to the list; **Move** moves exactly
+the messages that were counted.
+
 ### Keyboard shortcuts
 
 | Key | Action |
@@ -292,7 +312,7 @@ After you archive, move or delete a conversation, the next one is selected.
 | `Shift+I`, `Shift+U` | Mark as read, mark as unread |
 | `s` | Flag / unflag |
 | `e` | Archive (to the account's Archive folder) |
-| `v` | Move to a folder: type part of its name, then click it or press Enter |
+| `v` | Move to a folder: type part of its name, highlight it with ↑ / ↓ (or type its whole name), then press Enter — or click it |
 | `Delete`, `#` | Move to Trash (in Trash: delete for good, after a question) |
 | `Shift+Delete` | Delete for good (only in Trash or Junk; asks first: **Delete permanently?**) |
 | `z` | Undo the last action |

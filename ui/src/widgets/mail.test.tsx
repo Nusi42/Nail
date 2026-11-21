@@ -1,7 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createEnv, renderNode, widget, stubElementSizesEachTest } from "../test/harness";
-import { filterFolders } from "./FolderPicker";
 import { initiallyExpanded, splitQuotes, visibleMessages } from "./ThreadView";
 import { applyHint, hintMessageId, hintsFor, hintsWhileTyping, nextHint } from "./SearchBar";
 import { threadModeOf, threadStates, threadTemplateData } from "./MessageList";
@@ -466,58 +465,6 @@ describe("thread-view", () => {
     expect(initiallyExpanded("latest", m, "z")).toBe(false);
     expect(initiallyExpanded("all", m, "z")).toBe(true);
     expect(initiallyExpanded("none", m, "a")).toBe(false);
-  });
-});
-
-describe("folder-picker", () => {
-  it("filters folders and moves the selected message", async () => {
-    const user = userEvent.setup();
-    const env = createEnv({
-      state: {
-        activeAccountId: "acc-personal",
-        selectedMessageId: `${INBOX}#2`,
-        windows: ["move"],
-      },
-    });
-    renderNode(widget("folder-picker"), env);
-    await screen.findByRole("button", { name: "Archive" });
-    await user.type(screen.getByRole("textbox", { name: "Find a folder" }), "rec");
-    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Receipts" }));
-    await waitFor(() => {
-      expect(env.store.getState().windows).toEqual([]);
-    });
-    expect(env.transport.requests).toContainEqual({
-      type: "ApplyMailAction",
-      targets: [{ kind: "message", message_id: `${INBOX}#2` }],
-      action: { type: "move", target: { folder_id: "acc-personal/Inbox/Receipts" } },
-    });
-  });
-
-  it("moves to the first match on Enter and needs a selection", async () => {
-    const user = userEvent.setup();
-    const env = createEnv({ state: { activeAccountId: "acc-personal" } });
-    renderNode(widget("folder-picker"), env);
-    expect(await screen.findByText("Select a message first.")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Archive" })).toBeDisabled();
-    act(() => {
-      env.store.getState().selectMessage(`${INBOX}#3`);
-    });
-    await user.type(screen.getByRole("textbox"), "arch{Enter}");
-    await waitFor(() => {
-      expect(env.transport.requests).toContainEqual({
-        type: "ApplyMailAction",
-        targets: [{ kind: "message", message_id: `${INBOX}#3` }],
-        action: { type: "move", target: { folder_id: "acc-personal/Archive" } },
-      });
-    });
-  });
-
-  it("filters by name and path", () => {
-    const f = (name: string, path: string) =>
-      ({ id: path, name, path }) as Parameters<typeof filterFolders>[0][number];
-    expect(filterFolders([f("Bills", "Inbox/Bills"), f("Sent", "Sent")], "inbox")).toHaveLength(1);
-    expect(filterFolders([f("Bills", "Inbox/Bills")], "  ")).toHaveLength(1);
   });
 });
 

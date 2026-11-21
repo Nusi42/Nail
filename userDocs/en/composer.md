@@ -126,6 +126,13 @@ program too: Nail takes over the sender, recipients, subject, text and
 attachments, and the next save replaces that message in the Drafts folder
 instead of adding a second one.
 
+Only real drafts open in the composer: messages the mail server marks as a
+draft. Any other message in a Drafts folder — mail you received and moved
+there by mistake, for example — opens in the reader like everywhere else, so
+continuing it can never replace or delete it. For such a message choose
+**Move out of Drafts** (in the command palette, **Ctrl+K**): it goes back to
+the account's Inbox.
+
 ## Sending, undo send and send later
 
 **Send** (`Ctrl+Enter`) puts the message in the outbox. It waits a few

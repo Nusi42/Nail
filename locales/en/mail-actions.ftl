@@ -174,3 +174,21 @@ mail-actions-card-mark-unread = Mark this message unread
 mail-actions-card-toggle-read = Mark this message read / unread
 mail-actions-card-toggle-flag = Flag this message
 mail-actions-card-junk = Mark this message as junk
+
+## The move window (R4): Enter takes the highlighted folder only; moving
+## into Drafts, Trash or Junk asks first.
+
+mail-actions-move-choose = Choose a folder with the arrow keys, then press Enter.
+mail-actions-move-confirm = { $count ->
+    [one] Move 1 message to { $folder }?
+   *[other] Move { $count } messages to { $folder }?
+}
+mail-actions-move-confirm-yes = { mail-action-move-to }
+mail-actions-move-note-drafts = Drafts holds messages you are still writing. Mail moved there opens in the reader, not in the composer.
+mail-actions-move-note-trash = Messages in Trash may be deleted for good later.
+mail-actions-move-note-junk = Messages in Junk are treated as spam.
+
+## A message in Drafts that is not a draft (received mail moved there)
+
+mail-actions-action-move-out-of-drafts = Move out of Drafts
+mail-actions-action-move-out-of-drafts-keywords = inbox restore not a draft received drafts

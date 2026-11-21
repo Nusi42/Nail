@@ -8,6 +8,10 @@
  * Parts: `mail-actions.toast` (`data-kind` = `done` / `undone` / `error`,
  * `data-action` = the `MailActionKind`), `mail-actions.toast.text`,
  * `mail-actions.toast.undo`, `mail-actions.toast.dismiss` (+ `.icon`).
+ *
+ * The move window (R4, ADR 0230): its active option
+ * (`folder-picker.item[aria-selected="true"]`, moved with the arrow keys or
+ * the mouse; Enter takes it) is highlighted like the palette's.
  */
 import { p } from "../../theme/selectors";
 import { CAPS_TIGHT, floatingWidth } from "../../theme/declarations";
@@ -31,4 +35,7 @@ ${p("mail-actions.toast.undo")} { font-weight: ${T.semibold}; ${CAPS_TIGHT} }
 ${p("mail-actions.toast.dismiss")} { min-width: ${T.control}; padding: 0; }
 ${p("mail-actions.toast.undo")}:hover, ${p("mail-actions.toast.dismiss")}:hover { background-color: color-mix(in srgb, currentColor 16%, transparent); }
 ${p("mail-actions.toast.undo")}:focus-visible, ${p("mail-actions.toast.dismiss")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 1px; }
+${p("folder-picker.item")} { cursor: pointer; }
+${p("folder-picker.item")}[aria-disabled="true"] { cursor: default; }
+${p("folder-picker.item")}[aria-selected="true"] ${p("folder-picker.button")} { color: ${T.selectionFg}; background-color: ${T.selection}; }
 `;
