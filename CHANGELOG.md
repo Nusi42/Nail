@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.8] — 2026-11-21
+
 ### Added — rules on demand (ADRs 0219, 0221)
 
 - Run one rule, or all rules that are on, on the selected messages or a
@@ -379,6 +381,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.8]: https://github.com/Nusi42/Nail/releases/tag/v0.8.8
 [0.8.6]: https://github.com/Nusi42/Nail/releases/tag/v0.8.6
 [0.8.5]: https://github.com/Nusi42/Nail/releases/tag/v0.8.5
 [0.8.4]: https://github.com/Nusi42/Nail/releases/tag/v0.8.4
