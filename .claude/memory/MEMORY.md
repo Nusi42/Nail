@@ -13,3 +13,4 @@
 - [Maintainer UI decisions](owner-ui-decisions.md) — no fit-to-width for wide HTML mail (scrollbar is fine); accent override ignored in High contrast (ADR 0161)
 - [R1 status](r1-status.md) — rules on demand + live search integrated (ADRs 0219-0221); shared ProblemIndicator; layout snapshot pitfalls
 - [R2 status](r2-status.md) — rules window redesign, shared pickers, values from the mail, menu sources integrated (ADRs 0222-0226); one picker / menu button; fixture and golden regeneration pitfalls
+- [R3 status](r3-status.md) — rule list multi-select, combined Exchange badge, pickers everywhere (multi-value, strict), Paper theme (ADRs 0227-0229); theme CSS subset, stale Vitest glob cache

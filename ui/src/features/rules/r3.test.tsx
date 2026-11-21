@@ -336,7 +336,7 @@ describe("several rules in the rules window", () => {
     renderWithProviders(<RuleManagerView />, env);
     const option = await screen.findByRole("option", { name: ruleOption("Rust announcements") });
     await waitFor(() => {
-      expect(option).toHaveAccessibleDescription(/^Contoso: in Nail .*Condition 2/);
+      expect(option).toHaveAccessibleDescription(/^Contoso: in Nail — .*Condition 2/);
     });
     // One badge per row, inside the option and not a control of its own.
     expect(option.querySelectorAll('[data-part="exchange.rule-badge"]')).toHaveLength(1);

@@ -168,7 +168,7 @@ describe("rules", () => {
     // R3: one ⓘ per rule with the summed reasons; each account's line in its popover.
     const items = await screen.findAllByRole("listitem");
     expect(items).toHaveLength(1);
-    expect(items[0]).toHaveTextContent(/^Contoso: in Nail .*Condition 2 uses a search query/);
+    expect(items[0]).toHaveTextContent(/^Contoso: in Nail — .*Condition 2 uses a search query/);
     expect(items[0]).toHaveAttribute("data-placement", "client");
     const badges = container.querySelectorAll('[data-part="exchange.rule-badge"]');
     expect(badges).toHaveLength(1);

@@ -6,7 +6,7 @@ import { openSettingsTab, showView, viewRegion, messageRows, openMail } from "..
 
 /**
  * Wave M5a (ADRs 0102–0107) against `nail serve --seed demo-multi`: the
- * five built-in themes picked in Settings → Appearance and written to
+ * built-in themes picked in Settings → Appearance and written to
  * `theme.kdl`, Follow Windows driven by the `system-appearance` test
  * control (light → Graphite, contrast theme → High contrast), the Compact
  * density (tag line hidden), the accent override, a user theme from
@@ -213,7 +213,7 @@ test("a theme file added to themes/ is listed at once and can be used", async ({
   await open(page);
   const appearance = await openAppearance(page);
   const gallery = appearance.getByRole("radiogroup", { name: "Themes" });
-  await expect(gallery.getByRole("radio")).toHaveCount(5);
+  await expect(gallery.getByRole("radio")).toHaveCount(Object.keys(ACCENT).length);
   mkdirSync(path.join(server.configDir, "themes"), { recursive: true });
   writeFileSync(
     path.join(server.configDir, "themes", "ocean.kdl"),

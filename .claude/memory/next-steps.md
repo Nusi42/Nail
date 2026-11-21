@@ -1,11 +1,20 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (wave R3 contract done 2026-11-21; 0.8.7 not published, next release 0.8.8; 0.8.6 released 2026-11-19)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (wave R3 integrated 2026-11-21; next: installer 0.8.8 for the maintainer, then release; 0.8.6 released 2026-11-19)"
 metadata:
   type: project
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
+
+**Wave R3 integrated 2026-11-21** (ADRs 0228 pickers multi-value / strict, 0229 rule list multi-select;
+[[r3-status]], `docs/plan.md` "Wave R3" status): multi-select rule list with Run / Test on all selected rules, one
+Exchange badge per rule, the values button after the value, pickers in every remaining settings field (chips for
+several values), the empty address picker lists the most-used addresses, built-in theme Paper. Release notes
+"Nail 0.8.8" and `CHANGELOG.md` `[Unreleased]` hold the R3 items. Next: build the 0.8.8 installer for the
+maintainer (clean work folder, payload smoke test, releases folder), the maintainer's human gate, then
+`release:prepare --version 0.8.8` and publish. Package folders 2-4 were cleaned. Open: README media
+(`npm run readme:media`) if not refreshed in the integration (see the plan's status line).
 
 **Wave R3 contract done 2026-11-21** (ADR 0227, `docs/plan.md` "Wave R3"): `SuggestAddresses` with an empty
 prefix lists the most-used correspondents (`Store::most_used_recipients`, own addresses left out; mock too); the

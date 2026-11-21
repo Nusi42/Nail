@@ -1181,6 +1181,20 @@ Run, the combined badge, the values button's place, the new pickers with the mos
 correspondents (`Store::most_used_recipients`); API doc and TS regenerated; mock. Release notes renamed to 0.8.8,
 changelog entries back under `[Unreleased]`. Next: WR7–WR9 in parallel.
 
+*Status (integration):* done (ADRs 0228 pickers, 0229 rule list). WR7: the rule list is a multi-select listbox
+(`widgets/listSelection.ts`, shared with the contact list); Run runs the selected rules in file order with one Undo,
+Test previews each rule grouped by rule; Run on stays in the rules store; one Exchange badge per rule (summed
+reasons, each account's line on hover / focus and as the row's description); "Values from this mail" right after
+the value. Row controls are pointer-only (an option may hold no focusable control): Alt+Up / Down reorders, the
+editor's On switch switches. WR8: the shared picker's multi-value mode (chips), `strict` and `accounts`; junk,
+server rules, vacation, Also my addresses, search index, MCP grants, export / import target, key lookup and
+automatic replies use it; an empty address picker lists the most-used addresses. WR9: built-in light theme Paper
+from the sister project. Deferred: plug-in folder-picker nodes, Gmail's parent label, the Exchange shared-mailbox
+address and room lists, the composer's From and the scheduling attendee field stay as they are; a hidden folder of
+an MCP account that is no longer granted shows its id as the chip; the README media still show five themes and
+the old rule list (`npm run readme:media` with review). Next: the maintainer's human gate on the 0.8.8 installer,
+then release.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

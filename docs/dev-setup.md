@@ -432,6 +432,10 @@ reported line, which shows the state update behind an act(...) warning.
   idle (`ui/src/test/liveEnvs.ts`), so late answers do not cause act(...)
   warnings.
 - The axe helper (`ui/src/test/axe.ts`) reports violations only.
+- Vitest caches transformed modules in `node_modules/.vitest-cache`, keyed on
+  the module's own text: an `import.meta.glob` does not see a file added
+  later (for example a new `defaults/themes/*.kdl`) until that cache is
+  deleted. Delete it when a glob-based list looks stale.
 - Prefer `userEvent.setup({ delay: null })` in widget tests.
 - Do not raise a test's timeout to hide load flakiness; find the cost (a CPU
   profile of the slow test) instead. Avoid `:has()` with a descendant search

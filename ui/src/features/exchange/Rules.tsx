@@ -101,7 +101,8 @@ function AccountProbe({
     ? t(`exchange-placement-${shown.placement}`, { account: account.name })
     : "";
   const reasons = shown ? shown.reasons.map((r) => t(r.id, r.args)).join(" ") : "";
-  const text = reasons === "" ? placement : `${placement} ${reasons}`;
+  const text =
+    reasons === "" ? placement : t("exchange-placement-with-reasons", { placement, reasons });
   useEffect(() => {
     report(
       account.id,

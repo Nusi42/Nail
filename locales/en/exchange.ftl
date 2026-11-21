@@ -144,6 +144,8 @@ exchange-oof-edit = Edit…
 exchange-placement-server = { $account }: on the server
 exchange-placement-client = { $account }: in Nail
 exchange-placement-not-expressible = { $account }: in Nail only
+# One account's line of the rule badge: the placement, then why the rule stays in Nail.
+exchange-placement-with-reasons = { $placement } — { $reasons }
 exchange-placement-short-server = On the server
 exchange-placement-short-client = In Nail
 exchange-placement-short-not-expressible = In Nail only
