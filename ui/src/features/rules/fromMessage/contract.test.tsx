@@ -21,7 +21,9 @@ describe("rules R2 contract (mock core)", () => {
     expect(facts.subject).toBe(message.subject);
     expect(facts.header_names).toContain("Subject");
     const subject = { op: "contains", value: "", case_sensitive: false } as const;
-    expect(valuesForCondition(facts, { type: "subject", matches: subject })).toEqual([]);
+    expect(valuesForCondition(facts, { type: "subject", matches: subject })[0]?.value).toBe(
+      message.subject,
+    );
     await expect(getMessageFacts(env.client, "missing")).rejects.toThrow();
   });
 
