@@ -13,11 +13,9 @@
  * `selection`) around the shared menu button (`pim.menu-button`); the menu uses the shared
  * `context-menu.*` parts.
  */
-import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { Condition, MessageFacts, MessageId, RuleAction } from "../../../api/generated";
 import { useT } from "../../../i18n/I18nProvider";
-import { findSummary } from "../../../state/mailOps";
 import { useAccounts, useFolders } from "../../../state/queries";
 import { useUi } from "../../../state/uiStore";
 import { PimMenu, type PimMenuEntry } from "../../pim/PimMenu";
@@ -133,9 +131,7 @@ function useValuesSource(): {
   const facts = useMessageFacts(message?.messageId ?? null).data;
   const accounts = useAccounts().data;
   const folders = useFolders(facts?.account_id ?? null).data;
-  const queryClient = useQueryClient();
-  const tags = facts ? findSummary(queryClient, facts.message_id)?.tags : undefined;
-  return { message, facts, context: { accounts, folders, tags } };
+  return { message, facts, context: { accounts, folders } };
 }
 
 /** The menu button over `values`, or nothing without values. */

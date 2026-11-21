@@ -1105,12 +1105,22 @@ every condition and the move / copy / tag / untag actions, "Add to rule…" in t
 (0226): "Run rule" and "Add to rule…" as hover submenus from menu sources, `@` names shown as written, the hints
 as a floating combobox popup, a folder change searches the typed text there, the mock's finished runs. Shared in the
 integration: `PickerField` (one labelled picker), `PimMenu` `showLabel`, `cachedFolder`, `foldersQueryOptions`,
-`searchValueText`, `e2e/support/rules.ts`. Deferred: `TestRule.message_ids` (testing "Selected messages" is exact
-only up to the listed folder's first 1000), `MessageFacts` headers and tags (values of other headers, tags without
-the list cache), browsing addresses with an empty prefix, the reader card menu (`context:thread-view.message`)
+`searchValueText`, `e2e/support/rules.ts`. Deferred: `MessageFacts` headers (values of other headers), browsing
+addresses with an empty prefix, the reader card menu (`context:thread-view.message`)
 without the rules entries (its actions name the card, the rules entries the selection), a Playwright drag
 scenario for the rule list, "Run selected rules" in the list menu, marking the searched folder in the folder tree,
 converting the remaining account / folder dropdowns in Settings to pickers. Next: the maintainer's human gate.
+
+*Status (review fixes):* done. A popped-out rules window gets the mail and rule from the main page's menus (a
+refreshing pop-out preparer; `PopOutWindow` on an open pop-out replaces its context); `TestRule.message_ids`, so
+the preview and the count before a destructive run test exactly what the run acts on; the mail's folder picked in
+its own account; `MessageFacts.tags`; one mock source for header names and `List-Id`; Exchange's tag views quote
+through `searchValueText`; questions give the focus back and keep Tab inside; the highlighted picker option and
+search hint visible in forced colours; the picker popup fixed at its field (never clipped by a scrolling form; its
+room from the theme's `max-height`); the search values as options of the search combobox's listbox; the rules
+footer sticky in Settings; a row hides its labels only under a row of the same kind; one `folderIcon`; finished
+runs only deleted with their rule. Deferred (low): draft `RuleFromText` reporting an empty tag / recipient /
+folder twice; "Values from this mail" placed directly after the value field.
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

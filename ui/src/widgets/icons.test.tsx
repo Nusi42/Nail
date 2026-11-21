@@ -1,9 +1,9 @@
 import { render } from "@testing-library/react";
 import iconsJson from "../../../crates/nail-api/fixtures/icons.json";
-import type { ResolvedTheme } from "../api/generated";
+import { FOLDER_ROLE_VALUES, type ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { ThemeProvider } from "../theme/ThemeProvider";
-import { Icon, lucideName } from "./Icon";
+import { folderIcon, Icon, lucideName } from "./Icon";
 import { LEGACY_ICON_NAMES, LUCIDE_ICONS } from "./lucideIcons";
 
 function renderIcon(name: string | null, theme: ResolvedTheme = { ...defaultTheme(), icons: {} }) {
@@ -33,6 +33,12 @@ describe("Lucide registry (M5a, ADR 0102)", () => {
     expect(lucideName("not-an-icon")).toBeNull();
     // Inherited object keys are not icons.
     expect(lucideName("toString")).toBeNull();
+  });
+
+  it("names one bundled icon for each folder role, `folder` for the others", () => {
+    expect(folderIcon("inbox")).toBe("inbox");
+    expect(folderIcon("other")).toBe("folder");
+    for (const role of FOLDER_ROLE_VALUES) expect(lucideName(folderIcon(role))).not.toBeNull();
   });
 });
 

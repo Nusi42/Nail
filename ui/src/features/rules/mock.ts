@@ -429,7 +429,7 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
       if (bad !== null) {
         return errorResponse("invalid_request", `condition: invalid regular expression ${bad}`);
       }
-      const messages = pool(core, request.folder_id, []);
+      const messages = pool(core, request.folder_id, request.message_ids);
       if (!messages)
         return errorResponse("not_found", `folder ${String(request.folder_id)} not found`);
       const matches: ExplainedMatch[] = [];

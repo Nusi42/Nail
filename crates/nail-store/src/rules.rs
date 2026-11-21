@@ -456,12 +456,17 @@ impl Store {
         })
     }
 
-    /// Deletes every run of a rule with its actions (R2, ADR 0222: a
-    /// deleted rule takes its history along, so a new rule that gets the
-    /// same id never shows it). Returns how many runs were deleted.
+    /// Deletes every finished run of a rule with its actions (R2, ADR 0222:
+    /// a deleted rule takes its history along, so a new rule that gets the
+    /// same id never shows it). A run still in progress stays: it records
+    /// its actions and its end (and their undo) like any run, and ages out
+    /// with `purge_rule_runs`. Returns how many runs were deleted.
     pub fn delete_rule_runs(&self, rule: &RuleId) -> Result<usize> {
         self.with_conn(|conn| {
-            Ok(conn.execute("DELETE FROM rule_runs WHERE rule_id = ?1", [rule.as_str()])?)
+            Ok(conn.execute(
+                "DELETE FROM rule_runs WHERE rule_id = ?1 AND state <> 'running'",
+                [rule.as_str()],
+            )?)
         })
     }
 
@@ -817,10 +822,10 @@ mod tests {
             folder_id: "inbox".into(),
         };
         let messages = RuleRunTarget::Messages { count: 3 };
-        store
+        let first = store
             .start_rule_run(&a, "A", RuleRunCause::Manual, &folder, 1)
             .unwrap();
-        store
+        let second = store
             .start_rule_run(&a, "A", RuleRunCause::Manual, &messages, 2)
             .unwrap();
         let other = store
@@ -835,7 +840,16 @@ mod tests {
             store.get_rule_run(&other).unwrap().target,
             RuleRunTarget::Scope
         );
-        assert_eq!(store.delete_rule_runs(&a).unwrap(), 2);
+        // A run still in progress is not deleted under its feet: it can
+        // still record its end.
+        store
+            .finish_rule_run(&first, RuleRunState::Done, 0, None, 4)
+            .unwrap();
+        assert_eq!(store.delete_rule_runs(&a).unwrap(), 1);
+        store
+            .finish_rule_run(&second, RuleRunState::Done, 0, None, 5)
+            .unwrap();
+        assert_eq!(store.delete_rule_runs(&a).unwrap(), 1);
         assert_eq!(store.list_rule_runs(Some(&a), 10).unwrap(), Vec::new());
         assert_eq!(store.list_rule_runs(None, 10).unwrap().len(), 1);
     }

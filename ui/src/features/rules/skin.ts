@@ -12,12 +12,15 @@
  * - **Footer always in view** (item 4): in the window the editor's body and
  *   lower panel scroll and the footer stays (it also sticks to the bottom
  *   of a scrolling editor); in the Settings card the page scrolls and the
- *   footer ends the editor.
+ *   footer sticks to the page's bottom edge, over the page's bottom padding
+ *   (`SETTINGS_BODY_END`), so Save / Test / Run stay in view.
  * - **Text view** (item 14): the highlighted copy and the textarea share
  *   one grid cell, the same font and padding, so the colours sit under the
  *   typed text; the textarea's own text is transparent.
- * - **Compact rows** (item 9): the labels of condition and action rows are
- *   visually hidden after the first row (each field keeps its name).
+ * - **Compact rows** (item 9): the labels of a condition or action row are
+ *   visually hidden under a row of the same kind (same fields, same
+ *   places; each field keeps its name); a row of another kind shows its
+ *   own labels, so no label stands over another field.
  * - **Questions** (items 4, 5): over the whole window, centred.
  * - **"Saved"** fades after a moment (item 2); the problem list inside the
  *   shared problem indicator's details.
@@ -27,6 +30,8 @@
 import { p, ps } from "../../theme/selectors";
 import { VISUALLY_HIDDEN } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
+import { SETTINGS_BODY_END } from "../settings/skin";
+import { ACTION_KINDS, CONDITION_KINDS, GROUP_KINDS } from "./model";
 
 /** The container the responsive rules measure. */
 export const RULES_CONTAINER = "nail-rules";
@@ -55,9 +60,26 @@ ${inRules("rules.footer.state")}[data-state="saved"] { animation: nail-rules-fad
 ${inRules("rules.run.why")} { ${VISUALLY_HIDDEN} }
 ${inRules("form.button")}[aria-disabled="true"] { opacity: ${T.disabled}; }`;
 
+/**
+ * The labels of a row that the row above shows already: only under a row
+ * of the same kind (the same fields in the same places); a row of another
+ * kind shows its own labels.
+ */
+export function repeatedRowLabels(): string[] {
+  const condition = (kind: string) => `${p("rules.condition")}[data-kind="${kind}"]`;
+  const action = (kind: string) => `${p("rules.action")}[data-kind="${kind}"]`;
+  const groups: readonly string[] = GROUP_KINDS;
+  return [
+    ...CONDITION_KINDS.filter((kind) => !groups.includes(kind)).map(
+      (kind) =>
+        `${p("rules.group.item")}:has(> ${condition(kind)}) + ${p("rules.group.item")} > ${condition(kind)} ${p("form.label")}`,
+    ),
+    ...ACTION_KINDS.map((kind) => `${action(kind)} + ${action(kind)} ${p("form.label")}`),
+  ];
+}
+
 const ROWS = `:is(${ps("rules.condition", "rules.action")}) ${p("form.label")} { font-size: ${T.small}; color: ${T.muted}; }
-${p("rules.group.item")} + ${p("rules.group.item")} > ${p("rules.condition")} ${p("form.label")},
-${p("rules.action")} + ${p("rules.action")} ${p("form.label")} { ${VISUALLY_HIDDEN} }
+${repeatedRowLabels().join(",\n")} { ${VISUALLY_HIDDEN} }
 ${p("rules.action")}::marker { color: ${T.muted}; }`;
 
 const TEXT = `${inRules("rules.text.area")} { display: grid; min-width: 0; min-height: 0; position: relative; overflow: hidden; }
@@ -90,10 +112,13 @@ ${inCardRules("form.field")} > ${p("form.label")} { font-size: ${T.small}; font-
 ${inCardRules("form.field")} > ${p("form.label")} { grid-row: 1; }
 ${inCardRules("form.field")} > :is(${ps("form.input", "form.select")}) { grid-row: 2; width: 100%; }
 :is(${inCardRules("form.check")}, ${inCardRules("switch-field")}) { padding-block: 0; border-top: none; }
-/* The page scrolls, not the widget: everything flows, the footer ends the editor (a footer
-   sticking to the page would leave the page's bottom padding showing the form under it). */
+/* The page scrolls, not the widget: everything flows, and the footer sticks to the page's
+   bottom edge. It reaches over the page's bottom padding and takes that padding inside, so
+   no form shows under it and the buttons sit where the page's content ends. */
 ${p("settings-page.card")} ${p("rules")} { height: auto; }
-${inCardRules("rules.footer")} { position: static; }
+${inCardRules("rules.footer")} {
+  bottom: calc(-1 * var(${SETTINGS_BODY_END}, 0px)); padding-bottom: var(${SETTINGS_BODY_END}, 0px);
+}
 :is(${inCardRules("rules.editor.body")}, ${inCardRules("rules.side")}, ${inCardRules("rules.lower.panel")}) { overflow: visible; }
 ${inCardRules("rules.lower")} { max-height: none; }`;
 

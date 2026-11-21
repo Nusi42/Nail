@@ -858,6 +858,7 @@ async fn arrival_rules_move_new_mail_and_runs_can_be_undone() {
         &f.service,
         Request::TestRule {
             rule: Box::new(invoice_rule()),
+            message_ids: vec![],
             folder_id: None,
             limit: 10,
         },
@@ -891,6 +892,34 @@ async fn arrival_rules_move_new_mail_and_runs_can_be_undone() {
             .contains(&"Old invoice 1".to_owned())
     })
     .await;
+
+    // A dry run on named messages tests exactly those (as a run on them
+    // acts on them), not the rule's Inboxes.
+    let archived = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Archive,
+        "Old invoice 1",
+    )
+    .await;
+    let test_on = |message_ids: Vec<MessageId>| Request::TestRule {
+        rule: Box::new(invoice_rule()),
+        message_ids,
+        folder_id: None,
+        limit: 1,
+    };
+    let Response::RuleTested { matches, .. } = request(&f.service, test_on(vec![])).await else {
+        panic!()
+    };
+    assert!(matches.is_empty(), "{matches:#?}");
+    let Response::RuleTested { scanned, matches } =
+        request(&f.service, test_on(vec![archived.id.clone()])).await
+    else {
+        panic!()
+    };
+    assert_eq!(scanned, 1);
+    assert_eq!(matches.len(), 1, "{matches:#?}");
+    assert_eq!(matches[0].message.id, archived.id);
 
     // Text form round trip, and positioned errors.
     let Response::RuleText { text } = request(
@@ -1130,6 +1159,7 @@ Read me.
     assert_eq!(facts.reply_to[0].email, "replies@example.org");
     assert_eq!(facts.folder_id, message.folder_id);
     assert!(facts.header_names.iter().any(|n| n == "X-Mailer"));
+    assert_eq!(facts.tags, message.tags);
     assert!(matches!(
         request(
             &f.service,

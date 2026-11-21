@@ -5,8 +5,8 @@ import type { FolderId } from "./FolderId";
 import type { MessageId } from "./MessageId";
 
 /**
- * The values of one stored message a rule condition can test (R2, ADR
- * 0222): what the rules window offers as "values from this mail". The
+ * The values of one stored message a rule condition or action can use
+ * (R2, ADR 0222): what the rules window offers as "values from this mail". The
  * addresses come from the message's headers (the summary's when its raw
  * form is not stored).
  */
@@ -54,4 +54,8 @@ list_id: string | null,
 /**
  * Every header name, once each (first spelling), in message order.
  */
-header_names: Array<string>, };
+header_names: Array<string>, 
+/**
+ * Its tags (IMAP keywords), as rules see them.
+ */
+tags: Array<string>, };

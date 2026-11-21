@@ -91,7 +91,10 @@ describe("rules mock", () => {
       client.request({ type: "SaveRule", rule: broken, position: null }, "RuleSaved"),
     ).rejects.toMatchObject({ code: "invalid_request" });
     await expect(
-      client.request({ type: "TestRule", rule: broken, folder_id: null, limit: 5 }, "RuleTested"),
+      client.request(
+        { type: "TestRule", rule: broken, message_ids: [], folder_id: null, limit: 5 },
+        "RuleTested",
+      ),
     ).rejects.toMatchObject({ code: "invalid_request" });
   });
 
@@ -99,7 +102,7 @@ describe("rules mock", () => {
     const { client, data } = setup();
     const before = JSON.stringify(data.messages);
     const r = await client.request(
-      { type: "TestRule", rule: rustRule(), folder_id: null, limit: 10 },
+      { type: "TestRule", rule: rustRule(), message_ids: [], folder_id: null, limit: 10 },
       "RuleTested",
     );
     expect(r.scanned).toBe(data.messages.length);
@@ -116,15 +119,35 @@ describe("rules mock", () => {
     expect(JSON.stringify(data.messages)).toBe(before);
 
     const limited = await client.request(
-      { type: "TestRule", rule: rustRule(), folder_id: null, limit: 1 },
+      { type: "TestRule", rule: rustRule(), message_ids: [], folder_id: null, limit: 1 },
       "RuleTested",
     );
     expect(limited.matches).toHaveLength(1);
     const inFolder = await client.request(
-      { type: "TestRule", rule: rustRule(), folder_id: data.folders[0]?.id ?? "", limit: 10 },
+      {
+        type: "TestRule",
+        rule: rustRule(),
+        message_ids: [],
+        folder_id: data.folders[0]?.id ?? "",
+        limit: 10,
+      },
       "RuleTested",
     );
     expect(inFolder.matches).toEqual([]);
+    // Named messages: exactly those, wherever they are (as a run on them).
+    const named = must(r.matches[1]).message.id;
+    const onNamed = await client.request(
+      {
+        type: "TestRule",
+        rule: rustRule(),
+        message_ids: [named],
+        folder_id: data.folders[0]?.id ?? "",
+        limit: 10,
+      },
+      "RuleTested",
+    );
+    expect(onNamed.scanned).toBe(1);
+    expect(onNamed.matches.map((m) => m.message.id)).toEqual([named]);
   });
 
   it("runs a rule through the queue and undoes the run as one unit", async () => {

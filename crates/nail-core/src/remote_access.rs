@@ -561,7 +561,12 @@ impl Service {
             | Request::ReorderRules { .. }
             | Request::ListRuleRuns { .. }
             | Request::UndoRuleRun { .. } => check_full(access),
-            Request::TestRule { folder_id, .. } => match folder_id {
+            Request::TestRule {
+                message_ids,
+                folder_id,
+                ..
+            } => match folder_id {
+                _ if !message_ids.is_empty() => self.check_messages(access, message_ids).await,
                 Some(folder) => self.check_folder(access, folder).await,
                 None => check_full(access),
             },

@@ -7,6 +7,7 @@
  * Lucide icons draw with `currentColor`; their size comes from the theme
  * (`size.icon` through the part's width / height), never from the component.
  */
+import type { FolderRole } from "../api/generated";
 import { useTheme } from "../theme/ThemeProvider";
 import { LEGACY_ICON_NAMES, LUCIDE_ICONS } from "./lucideIcons";
 
@@ -15,6 +16,11 @@ export interface IconProps {
   name: string | null | undefined;
   /** Part name of the `<svg>`. */
   part: string;
+}
+
+/** The icon of a folder: its role's (`inbox`, `sent`, …), `folder` for any other. */
+export function folderIcon(role: FolderRole): string {
+  return role === "other" ? "folder" : role;
 }
 
 /** The Lucide name a layout / plug-in icon name stands for, if bundled. */

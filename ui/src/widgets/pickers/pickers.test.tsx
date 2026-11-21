@@ -7,6 +7,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import type { Account, Folder } from "../../api/generated";
+import { defaultTheme } from "../../api/mockData";
 import { rankValues } from "../../api/mockValues";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
 import { must } from "../../test/must";
@@ -22,8 +23,9 @@ import {
   optionNamed,
   Picker,
   PICKER_KINDS,
-  POPUP_ROOM,
+  popupGeometry,
   popupPlacement,
+  popupRoom,
   PickerField,
   searchValueContext,
   searchValueOf,
@@ -275,10 +277,63 @@ describe("picker tree model", () => {
   });
 
   it("opens the popup above a field near the bottom", () => {
-    expect(popupPlacement({ top: 100, bottom: 130 }, 700)).toBe("below");
-    expect(popupPlacement({ top: 520, bottom: 550 }, 700)).toBe("above");
+    expect(popupPlacement({ top: 100, bottom: 130 }, 700, 320)).toBe("below");
+    expect(popupPlacement({ top: 520, bottom: 550 }, 700, 320)).toBe("above");
     // Little room either way: below, where the list starts at its top.
-    expect(popupPlacement({ top: 100, bottom: 130 }, 130 + POPUP_ROOM - 1)).toBe("below");
+    expect(popupPlacement({ top: 100, bottom: 130 }, 130 + 320 - 1, 320)).toBe("below");
+    // A short list fits below.
+    expect(popupPlacement({ top: 520, bottom: 550 }, 700, 100)).toBe("below");
+  });
+
+  it("fixes the popup at its field, inside the viewport", () => {
+    const viewport = { width: 1024, height: 700 };
+    const field = { top: 461, bottom: 491, left: 300, width: 200 };
+    expect(popupGeometry(field, { width: 260, room: 320 }, viewport)).toEqual({
+      placement: "above",
+      declarations: { left: "300px", "min-width": "200px", top: "auto", bottom: "239px" },
+    });
+    expect(
+      popupGeometry(
+        { ...field, top: 100, bottom: 130, left: 900 },
+        { width: 260, room: 320 },
+        viewport,
+      ),
+    ).toEqual({
+      placement: "below",
+      declarations: { left: "764px", "min-width": "200px", top: "130px", bottom: "auto" },
+    });
+  });
+
+  it("takes the room the popup needs from the theme's max-height", () => {
+    // The default theme's `picker.popup` rule is the one source of the size.
+    const rule = defaultTheme().parts.find(
+      (r) => r.selector === "picker.popup" && r.states.length === 0 && r.conditions.length === 0,
+    );
+    expect(rule?.declarations["max-height"]).toBe("min(320px, 50vh)");
+    const popup = document.createElement("span");
+    document.body.append(popup);
+    popup.setAttribute("data-max", "");
+    const style = document.createElement("style");
+    style.textContent = "[data-max] { max-height: 320px; }";
+    document.head.append(style);
+    expect(popupRoom(popup)).toBe(320);
+    style.remove();
+    // Not in px (or not styled): the height it has.
+    expect(popupRoom(popup)).toBe(0);
+    popup.remove();
+  });
+
+  it("outlines the highlighted option, which forced colours (contrast themes) keep", () => {
+    const rule = defaultTheme().parts.find(
+      (r) =>
+        r.selector === "picker.option" &&
+        r.states.join() === "highlighted" &&
+        r.conditions.length === 0,
+    );
+    expect(rule?.declarations).toMatchObject({
+      outline: "2px solid transparent",
+      "outline-offset": "-2px",
+    });
   });
 
   it("finds the one option a typed name means", () => {
@@ -507,17 +562,33 @@ describe("search field values", () => {
     const env = createEnv();
     function Values({ text }: { text: string }) {
       const found = useSearchValues(text);
-      return found && <SearchValues text={text} found={found} onApply={(t) => applied.push(t)} />;
+      return (
+        found && (
+          <div role="listbox">
+            <SearchValues
+              text={text}
+              found={found}
+              onApply={(t) => applied.push(t)}
+              active={0}
+              optionId={(i) => `v-${String(i)}`}
+            />
+          </div>
+        )
+      );
     }
     const view = renderWithProviders(<Values text="subject:x" />, env);
-    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.queryByRole("group")).toBeNull();
     view.unmount();
     renderWithProviders(<Values text="is:unread folder:Rec" />, env);
     await typingPause();
-    const list = await screen.findByRole("list", { name: "Values for this search field" });
+    const list = await screen.findByRole("group", { name: "Values for this search field" });
     // One row per path, though both accounts have one.
-    expect(within(list).getAllByRole("button")).toHaveLength(1);
-    await user.click(within(list).getByRole("button", { name: /Inbox\/Receipts/ }));
+    expect(within(list).getAllByRole("option")).toHaveLength(1);
+    const row = within(list).getByRole("option", { name: /Inbox\/Receipts/ });
+    // The one the arrow keys picked (`aria-activedescendant` names its id).
+    expect(row).toHaveAttribute("id", "v-0");
+    expect(row).toHaveAttribute("aria-selected", "true");
+    await user.click(row);
     expect(applied).toEqual(["is:unread folder:Inbox/Receipts "]);
   });
 });

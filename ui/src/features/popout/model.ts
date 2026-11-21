@@ -74,22 +74,48 @@ export type PopOutPreparer = (
   ctx: PopOutPrepareContext,
 ) => Promise<JsonValue | null | undefined> | JsonValue | null | undefined;
 
-const preparers = new Map<string, PopOutPreparer>();
+/** How a preparer is used. */
+export interface PopOutPreparerOptions {
+  /**
+   * Also runs when the main page opens a window that is popped out already
+   * (`openWindow`): its context then replaces the pop-out's context (e.g.
+   * the rules window gets the mail and rule a message menu picked), and
+   * the pop-out comes to the front. Without it the pop-out only comes to
+   * the front.
+   */
+  refresh?: boolean;
+}
+
+interface Registered {
+  preparer: PopOutPreparer;
+  refresh: boolean;
+}
+
+const preparers = new Map<string, Registered>();
 
 /**
  * Registers the preparer of a window kind (one per kind; a later one
  * replaces it). Returns the unregistration.
  */
-export function registerPopOutPreparer(kind: string, preparer: PopOutPreparer): () => void {
-  preparers.set(kind, preparer);
+export function registerPopOutPreparer(
+  kind: string,
+  preparer: PopOutPreparer,
+  options: PopOutPreparerOptions = {},
+): () => void {
+  preparers.set(kind, { preparer, refresh: options.refresh === true });
   return () => {
-    if (preparers.get(kind) === preparer) preparers.delete(kind);
+    if (preparers.get(kind)?.preparer === preparer) preparers.delete(kind);
   };
 }
 
 /** The preparer of a window (by id or kind). */
 export function preparerOf(window: string): PopOutPreparer | undefined {
-  return preparers.get(windowKind(window));
+  return preparers.get(windowKind(window))?.preparer;
+}
+
+/** Whether opening `window` again hands its popped-out window a new context. */
+export function refreshesPopOut(window: string): boolean {
+  return preparers.get(windowKind(window))?.refresh === true;
 }
 
 /** The answer's pop-out list, or the error it carries. */

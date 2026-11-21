@@ -154,6 +154,20 @@ fn set_focused(service: &Service, window: &str) -> bool {
     found
 }
 
+/// Changes the listed pop-out of `window` (nothing when it is not open).
+fn edit_pop_out(service: &Service, window: &str, edit: impl FnOnce(&mut PopOut)) {
+    if let Some(entry) = service
+        .inner
+        .pop_outs
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter_mut()
+        .find(|p| p.window == window)
+    {
+        edit(entry);
+    }
+}
+
 fn is_open(service: &Service, window: &str) -> bool {
     snapshot(service).iter().any(|p| p.window == window)
 }
@@ -199,6 +213,11 @@ async fn pop_out(
     }
     if already_open {
         host.focus_pop_out(&window)?;
+        if let Some(context) = context {
+            // The page that opens it again hands over what it needs now
+            // (e.g. the rules window's mail and rule).
+            edit_pop_out(service, &window, |entry| entry.context = Some(context));
+        }
         set_focused(service, &window);
         changed(service, &window, PopOutChange::Focused);
         return Ok(pop_outs_response(service));
@@ -315,16 +334,7 @@ pub(crate) fn pop_out_reported(service: &Service, report: PopOutReport) {
     match change {
         PopOutChange::Opened | PopOutChange::Moved => {
             if let Some(geometry) = geometry.filter(WindowGeometry::is_valid) {
-                if let Some(entry) = service
-                    .inner
-                    .pop_outs
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .iter_mut()
-                    .find(|p| p.window == window)
-                {
-                    entry.geometry = Some(geometry);
-                }
+                edit_pop_out(service, &window, |entry| entry.geometry = Some(geometry));
                 let config = service.config().clone();
                 remember(&config, service, &window, |s| s.pop_out = Some(geometry));
             }
@@ -598,8 +608,23 @@ mod tests {
             &seen[1],
             Event::PopOutChanged { change: PopOutChange::Opened, pop_outs, .. } if pop_outs.len() == 1
         ));
-        // Again: focused, not opened twice.
-        pop_outs(
+        // Again: focused, not opened twice; a new context replaces the old
+        // one, none keeps it.
+        let list = pop_outs(
+            service
+                .handle(Request::PopOutWindow {
+                    window: "composer:d1".into(),
+                    title: None,
+                    context: Some(json!({"draft": "d2"})),
+                    size: None,
+                    min_size: None,
+                })
+                .await,
+        );
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].context, Some(json!({"draft": "d2"})));
+        assert_eq!(host.opened.lock().unwrap().len(), 1);
+        let list = pop_outs(
             service
                 .handle(Request::PopOutWindow {
                     window: "composer:d1".into(),
@@ -610,6 +635,7 @@ mod tests {
                 })
                 .await,
         );
+        assert_eq!(list[0].context, Some(json!({"draft": "d2"})));
         // A second window; the first loses the focus.
         let list = pop_outs(
             service
@@ -696,6 +722,7 @@ mod tests {
             host.calls.lock().unwrap().clone(),
             [
                 "open composer:d1",
+                "focus composer:d1",
                 "focus composer:d1",
                 "open settings",
                 "close composer:d1"

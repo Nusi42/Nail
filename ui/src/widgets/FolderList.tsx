@@ -5,7 +5,7 @@
  */
 import type { Folder } from "../api/generated";
 import { useT } from "../i18n/I18nProvider";
-import { Icon } from "./Icon";
+import { folderIcon, Icon } from "./Icon";
 
 export function FolderList({
   rows,
@@ -31,10 +31,7 @@ export function FolderList({
               onPick(folder);
             }}
           >
-            <Icon
-              name={folder.role === "other" ? "folder" : folder.role}
-              part="folder-picker.button.icon"
-            />
+            <Icon name={folderIcon(folder.role)} part="folder-picker.button.icon" />
             <span data-part="folder-picker.button.name">{folder.name}</span>
           </button>
         </li>

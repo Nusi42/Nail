@@ -6,12 +6,14 @@
  * picking one completes the word (quoted when it needs quotes).
  *
  * `searchValueContext` / `applySearchValue` are pure; `SearchValues` is the
- * list the search field shows under its hints (buttons, so Tab reaches them
- * like the hints; a mouse press keeps the focus in the field).
+ * group of options the search field shows in its listbox above the hints:
+ * one combobox, one keyboard model (Up / Down move through the values and
+ * the hints with `aria-activedescendant`, Enter picks; a mouse press keeps
+ * the focus in the field).
  */
 import { useT } from "../../i18n/I18nProvider";
 import { filterFolders } from "../FolderPicker";
-import { Icon } from "../Icon";
+import { folderIcon, Icon } from "../Icon";
 import { optionKey, usePickerOptions } from "./sources";
 import { pickable } from "./tree";
 import type { PickerKind, PickerOption } from "./types";
@@ -120,32 +122,56 @@ export interface SearchValuesProps {
   found: SearchValuesFound;
   /** Called with the new text when a value is picked. */
   onApply: (text: string) => void;
+  /** The index of the value the arrow keys picked (`-1`: none). */
+  active: number;
+  /** The element id of the value at `index` (for `aria-activedescendant`). */
+  optionId: (index: number) => string;
 }
 
-/** The found values as buttons (Tab reaches them; a press keeps the focus in the field). */
-export function SearchValues({ text, found, onApply }: SearchValuesProps) {
+/** The text picking the found value at `index` makes of `text`, `null` without one. */
+export function searchTextWith(
+  text: string,
+  found: SearchValuesFound,
+  index: number,
+): string | null {
+  const option = found.shown[index];
+  return option === undefined ? null : applySearchValue(text, found.context, searchValueOf(option));
+}
+
+/**
+ * The found values: a group of options inside the search field's listbox
+ * (the focus stays in the field; a press keeps it there).
+ */
+export function SearchValues({ text, found, onApply, active, optionId }: SearchValuesProps) {
   const t = useT();
   const { context, shown } = found;
   return (
-    <ul data-part="picker.list" data-kind={context.kind} aria-label={t("pickers-search-values")}>
-      {shown.map((option) => (
-        <li key={optionKey(option)} data-part="picker.option" data-depth={0}>
-          <button
-            type="button"
-            data-part="picker.option.button"
+    <ul
+      data-part="picker.list"
+      data-kind={context.kind}
+      role="group"
+      aria-label={t("pickers-search-values")}
+    >
+      {shown.map((option, index) => (
+        <li
+          key={optionKey(option)}
+          id={optionId(index)}
+          data-part="picker.option"
+          data-depth={0}
+          data-state={index === active ? "highlighted" : undefined}
+          role="option"
+          aria-selected={index === active}
+          tabIndex={-1}
+          onMouseDown={(event) => {
             // Keep the focus in the search field while picking.
-            onMouseDown={(event) => {
-              event.preventDefault();
-            }}
-            onClick={() => {
-              onApply(applySearchValue(text, context, searchValueOf(option)));
-            }}
-          >
+            event.preventDefault();
+            const next = searchTextWith(text, found, index);
+            if (next !== null) onApply(next);
+          }}
+        >
+          <span data-part="picker.option.button">
             {option.folder && (
-              <Icon
-                name={option.folder.role === "other" ? "folder" : option.folder.role}
-                part="picker.option.icon"
-              />
+              <Icon name={folderIcon(option.folder.role)} part="picker.option.icon" />
             )}
             <span data-part="picker.option.label">
               {option.folder ? option.folder.path : option.label}
@@ -153,7 +179,7 @@ export function SearchValues({ text, found, onApply }: SearchValuesProps) {
             {option.detail !== null && (
               <span data-part="picker.option.detail">{option.detail}</span>
             )}
-          </button>
+          </span>
         </li>
       ))}
     </ul>

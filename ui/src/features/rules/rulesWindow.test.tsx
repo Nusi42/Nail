@@ -220,15 +220,65 @@ describe("Run on and Run in the footer", () => {
     );
     expect(requestsOf(env, "RunRules")).toEqual([]);
     // Escape is the safe answer, and goes no further.
-    await ask();
+    const asked = await ask();
+    // Tab stays inside the question (modal).
+    await waitFor(() => {
+      expect(within(asked).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await user.tab();
+    expect(within(asked).getByRole("button", { name: "Run" })).toHaveFocus();
+    await user.tab();
+    expect(within(asked).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(within(asked).getByRole("button", { name: "Run" })).toHaveFocus();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(requestsOf(env, "RunRules")).toEqual([]);
+    // The focus goes back to the button that asked.
+    await waitFor(() => {
+      expect(within(footer).getByRole("button", { name: "Run" })).toHaveFocus();
+    });
 
     const question = await ask();
     await user.click(within(question).getByRole("button", { name: "Run" }));
     await within(footer).findByText(/^The rule ran:/);
     expect(requestsOf(env, "RunRules")).toMatchObject([{ folder_id: INBOX }]);
+  });
+
+  it("counts exactly the selected messages before a run on them moves mail", async () => {
+    // A search hit outside the listed folder and one in it: the run acts on
+    // both, so the count tests both (not the folder or the Inboxes).
+    const search = { text: "from:x", accountId: null, folderId: null, error: null };
+    const env = setup({ state: { ...inInbox.state, search } });
+    const inbox = must(env.transport.data.messages.find((m) => m.folder_id === INBOX));
+    const elsewhere = must(env.transport.data.messages.find((m) => m.folder_id !== INBOX));
+    listSelectionFor(env.store).getState().setScope(NO_LIST_SCOPE);
+    listSelectionFor(env.store)
+      .getState()
+      .setPicked(
+        [elsewhere, inbox].map((m) => ({
+          key: m.id,
+          messageId: m.id,
+          threadId: null,
+          child: false,
+        })),
+      );
+    env.store.getState().selectMessage(inbox.id);
+    addArchiveAllRule(env);
+    const { user, footer, runOn } = await openEditor(env, "Archive all");
+    await user.selectOptions(runOn, "messages");
+    await user.click(within(footer).getByRole("button", { name: "Run" }));
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent(
+      "“Archive all” moves or deletes mail. It matches 2 messages in Selected messages (2). Run it now?",
+    );
+    expect(requestsOf(env, "TestRule")).toMatchObject([
+      { message_ids: [elsewhere.id, inbox.id], folder_id: null },
+    ]);
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Run" }));
+    await within(footer).findByText(/^The rule ran:/);
+    expect(requestsOf(env, "RunRules")).toMatchObject([
+      { message_ids: [elsewhere.id, inbox.id], folder_id: null },
+    ]);
   });
 
   it("waits with Run and Save while something is missing", async () => {

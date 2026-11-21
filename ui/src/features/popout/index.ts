@@ -13,8 +13,10 @@
  *   manager's title bar (`../../layout/`, WP171) renders it per window.
  * - `PopOutHost` — the pop-out page; `usePopOutTitle` names its OS window
  *   (taskbar), `usePopOutContext` reads the context it was opened with.
- * - `registerPopOutPreparer(kind, fn)` — what a kind does before it pops
- *   out (the composer saves its draft and returns `{draft}`).
+ * - `registerPopOutPreparer(kind, fn, {refresh})` — what a kind does before
+ *   it pops out (the composer saves its draft and returns `{draft}`); with
+ *   `refresh` also when the main page opens it again while it is popped
+ *   out (the rules window gets the mail and rule a message menu picked).
  * - actions `popout.open` (the focused window, or the id given) and
  *   `popout.return` (the pop-out page's window, or the id given);
  * - the event handler that takes a popped-out window off the main page and
@@ -57,6 +59,7 @@ export {
   POP_OUT_ACTION,
   RETURN_ACTION,
   isPopOutPage,
+  isPoppedOut,
   popOutPageWindow,
   registerPopOutPreparer,
   type PopOutPreparer,

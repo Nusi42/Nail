@@ -35,3 +35,10 @@ search hints):**
   `views.json` and the `layout_edit` golden (`NAIL_UPDATE_GOLDEN=1`) — a new reader-toolbar item changes it.
 - The Bash tool collapses double backslashes inside heredocs: write files with backslashes through the Write / Edit tools.
 - Python on Windows writes CRLF in text mode: open with `newline=''`.
+
+**Review fixes (after integration):** pop-out handover `features/rules/popOut.ts` (preparer with `refresh`; core
+`PopOutWindow` replaces an open pop-out's context); `TestRule.message_ids`; `MessageFacts.tags`;
+`MessageValue.accountId`; mock header names / `List-Id` only in `api/mockValues.ts`; `Confirm` restores focus and
+traps Tab; picker popup `position: fixed` + `useGeometry` (`popupGeometry`, `popupRoom` reads the theme's
+`max-height`); search values are options in the search listbox; `SETTINGS_BODY_END` for the sticky footer in
+Settings; `folderIcon` in `widgets/Icon.tsx`. Open (low): draft RuleFromText double issues; values button placement.

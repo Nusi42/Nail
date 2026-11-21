@@ -49,8 +49,13 @@ the message menus.
   (`features/pim/PimMenu.tsx`, WAI-ARIA menu button, shared
   `context-menu.*` parts) with a group header per source; parts
   `rules.from-message` and `rules.from-message.button`.
-- **Tags** come from the mail's summary in the list cache (`findSummary`):
-  the facts have none.
+- **Tags** come from the core with the other facts (`MessageFacts.tags`,
+  review fix; the integration read them from the list cache, which a
+  pop-out or a closed search does not have).
+- **Folder values** carry their account (`MessageValue.accountId`, the
+  mail's): picking the mail's folder for a folder condition or a move /
+  copy names it in the mail's account, whatever account the reference
+  named before (review fix).
 - **"Add to rule…"** (`rules.add-to-rule`, `./entryPoints.ts`): a menu
   source lists the saved rules (labels through `literalMenuLabel`); picking
   one (`rules.add-to-rule.pick`, argument: the rule id) opens the rules

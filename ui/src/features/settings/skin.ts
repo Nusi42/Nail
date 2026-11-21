@@ -34,6 +34,12 @@ const inCard = (part: string) => `${p("settings-page.card")} ${p(part)}`;
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: -2px;`;
 
+/**
+ * The settings page body's bottom padding, as a custom property its content
+ * can read: the rules editor's footer sticks over it (`../rules/skin.ts`).
+ */
+export const SETTINGS_BODY_END = "--nail-settings-body-end";
+
 const PAGE = `${p("settings-page")} {
   display: grid; grid-template-columns: minmax(calc(13 * ${T.lg}), calc(16 * ${T.lg})) minmax(0, 1fr);
   height: 100%; min-height: 0; overflow: hidden; color: ${T.fg}; background-color: ${T.bg}; font-family: ${T.fontUi};
@@ -52,14 +58,14 @@ ${p("settings-page.title")}:focus { outline: none; }
 ${p("settings-page.title")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
 ${p("settings-page.body")} {
   display: grid; align-content: start; gap: ${T.lg}; flex: 1 1 auto; min-height: 0; overflow: auto;
-  padding: ${T.xs} ${T.xxl} ${T.xxl};
+  ${SETTINGS_BODY_END}: ${T.xxl}; padding: ${T.xs} ${T.xxl} var(${SETTINGS_BODY_END});
 }
 ${p("settings-page.body")} > * { max-width: calc(52 * ${T.lg}); }
 @media (max-width: 720px) {
   ${p("settings-page")} { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   ${p("settings-page.nav")} { max-height: 40vh; border-inline-end: none; border-bottom: 1px solid ${T.border}; }
   ${p("settings-page.header")} { padding: ${T.lg} ${T.pane} ${T.sm}; }
-  ${p("settings-page.body")} { padding: ${T.xs} ${T.pane} ${T.xl}; }
+  ${p("settings-page.body")} { ${SETTINGS_BODY_END}: ${T.xl}; padding: ${T.xs} ${T.pane} var(${SETTINGS_BODY_END}); }
 }`;
 
 const NAV = `${p("settings-page.search")} {
@@ -176,11 +182,11 @@ const ONE_COLUMN = "40rem";
 const NARROW = `${p("settings-page.content")} { container: nail-settings-content / inline-size; }
 @container nail-settings-content (max-width: ${ONE_COLUMN}) {
   ${p("settings-page.header")} { padding: ${T.lg} ${T.lg} ${T.sm}; }
-  ${p("settings-page.body")} { padding: ${T.xs} ${T.lg} ${T.xl}; }
+  ${p("settings-page.body")} { ${SETTINGS_BODY_END}: ${T.xl}; padding: ${T.xs} ${T.lg} var(${SETTINGS_BODY_END}); }
 }
 @container nail-settings-content (max-width: 30rem) {
   ${p("settings-page.header")} { padding: ${T.md} ${T.md} ${T.sm}; }
-  ${p("settings-page.body")} { padding: ${T.xs} ${T.md} ${T.lg}; gap: ${T.md}; }
+  ${p("settings-page.body")} { ${SETTINGS_BODY_END}: ${T.lg}; padding: ${T.xs} ${T.md} var(${SETTINGS_BODY_END}); gap: ${T.md}; }
   ${p("settings-page.card")} { padding: ${T.md}; }
 }`;
 

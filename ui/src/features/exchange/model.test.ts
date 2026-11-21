@@ -75,6 +75,8 @@ describe("categories", () => {
 
   it("quotes tag views", () => {
     expect(tagQuery("Project Phoenix")).toBe('tag:"Project Phoenix"');
+    // Quoted only when it must be, as every query value (`searchValueText`).
+    expect(tagQuery("Urgent")).toBe("tag:Urgent");
     expect(tagQuery('say "hi"')).toBe('tag:"say \\"hi\\""');
   });
 });

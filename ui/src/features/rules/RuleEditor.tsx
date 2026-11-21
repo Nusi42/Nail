@@ -29,7 +29,6 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
-import { expandTargets } from "../../actions/mailTargets";
 import type { ConfigIssue, MessageSummary, Rule, RuleRun } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useBusyAction } from "../../state/busyAction";
@@ -42,6 +41,7 @@ import {
   ruleFromText,
   ruleToText,
   rulesKeys,
+  RULE_SCOPE_TARGET,
   runRules,
   saveRule,
   testRule,
@@ -69,11 +69,12 @@ import type { ExplainedMatch } from "./types";
 /** Maximum number of matches a test shows. */
 export const TEST_LIMIT = 50;
 /**
- * How many messages a test of the selection (or the count before a run that
- * moves or deletes mail) looks at: the core tests a folder, the selection
- * is picked out of it.
+ * The `limit` of the count before a run that moves or deletes mail: the
+ * largest the protocol takes (`u32`). The core caps it at what a run on
+ * the same target looks at, so the count covers every message the run
+ * acts on.
  */
-export const COUNT_LIMIT = 1000;
+export const COUNT_LIMIT = 0xffff_ffff;
 
 type View = "visual" | "text";
 
@@ -330,20 +331,15 @@ export function RuleEditor({
     setView("visual");
   };
 
-  /** What `next` matches on the "Run on" target (at most `limit` matches). */
+  /**
+   * What `next` matches on the "Run on" target (at most `limit` matches):
+   * the very messages a run there acts on (`ruleRunTargetOf`).
+   */
   const testOn = async (next: Rule, limit: number): Promise<TestResult> => {
-    const target = runOn.target();
-    if (target?.kind === "messages") {
-      const ids = new Set((await expandTargets(client, target.targets)).map((m) => m.id));
-      const found = await testRule(client, next, runOn.testFolder(), COUNT_LIMIT);
-      return {
-        scanned: ids.size,
-        matches: found.matches.filter((m) => ids.has(m.message.id)).slice(0, limit),
-        target: runOn.label,
-      };
-    }
-    const folder = target?.kind === "folder" ? target.folderId : null;
-    return { ...(await testRule(client, next, folder, limit)), target: runOn.label };
+    const chosen = runOn.target();
+    const target = chosen === null ? null : await ruleRunTargetOf(client, chosen);
+    const found = await testRule(client, next, target ?? RULE_SCOPE_TARGET, limit);
+    return { ...found, target: runOn.label };
   };
 
   const test = () =>

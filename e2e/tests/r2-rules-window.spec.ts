@@ -107,17 +107,29 @@ for (const size of SIZES) {
     await expect(question).toContainText("Delete the rule “Flag releases”?");
     await expect(question.getByRole("button", { name: "Cancel" })).toBeFocused();
     await page.screenshot({ path: screenshotFile("r2-rules", `delete-${String(size.width)}`) });
-    await question.getByRole("button", { name: "Cancel" }).click();
+    // Answered from the keyboard, the focus goes back to the button that asked.
+    await page.keyboard.press("Enter");
     await expect(ruleInList(window, "Flag releases")).toBeVisible();
+    await expect(footer.getByRole("button", { name: "Delete rule…" })).toBeFocused();
 
     // Unsaved changes: Escape asks instead of closing the window.
-    await editor.getByRole("textbox", { name: "Name" }).fill("Flag release notes");
+    const name = editor.getByRole("textbox", { name: "Name" });
+    await name.fill("Flag release notes");
     await page.keyboard.press("Escape");
     await expect(question).toContainText("Discard your changes to “Flag release notes”?");
     await expect(window).toBeVisible();
-    await question.getByRole("button", { name: "Keep editing" }).click();
-    await expect(editor.getByRole("textbox", { name: "Name" })).toHaveValue("Flag release notes");
-    await editor.getByRole("textbox", { name: "Name" }).focus();
+    // Tab stays inside the question (modal): never the window's title bar.
+    const keep = question.getByRole("button", { name: "Keep editing" });
+    const discard = question.getByRole("button", { name: "Discard changes" });
+    await expect(keep).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(discard).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(keep).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(name).toHaveValue("Flag release notes");
+    // Back in the field Escape was pressed in.
+    await expect(name).toBeFocused();
     await page.keyboard.press("Escape");
     await question.getByRole("button", { name: "Discard changes" }).click();
     await expect(window).toBeHidden();
@@ -194,6 +206,19 @@ test("Settings shows the rules with the window's look", async ({ page }) => {
   expect(box && windowRow && Math.abs(box.height - windowRow.height) <= 2).toBe(true);
   await expect(rulesFooter(inSettings).getByRole("button", { name: "Save rule" })).toBeVisible();
   await row.scrollIntoViewIfNeeded();
+  // The footer stays in view while the page scrolls the form (design review, item 4).
+  const footer = rulesFooter(inSettings);
+  for (const name of ["Run", "Test rule", "Save rule"]) {
+    const button = footer.getByRole("button", { name, exact: true });
+    await expect(button).toBeInViewport();
+    // On top: nothing of the form scrolls over it.
+    expect(
+      await button.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      }),
+    ).toBe(true);
+  }
   await page.screenshot({ path: screenshotFile("r2-rules", "settings-1024") });
 });
 

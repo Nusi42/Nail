@@ -63,6 +63,12 @@ export interface RulesUiState {
   startNew: (rule: Rule) => void;
   /** Stops editing at once, without asking (the rule was deleted). */
   forget: () => void;
+  /**
+   * Counts the calls of `select` and `startNew` (even of a rule already
+   * shown): a popped-out rules window gets the rule only when one was
+   * asked for since its last handover (`./popOut.ts`).
+   */
+  picks: number;
   /** The message the window was opened from, `null` when opened otherwise. */
   origin: RulesOrigin | null;
   setOrigin: (origin: RulesOrigin | null) => void;
@@ -104,6 +110,7 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
     store = createStore<RulesUiState>((set, get) => ({
       editing: null,
       select: (id) => {
+        set((s) => ({ picks: s.picks + 1 }));
         const editing = get().editing;
         // The rule open already stays as it is (with its changes).
         if (id !== null && editing?.kind === "saved" && editing.id === id) return;
@@ -116,6 +123,7 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
         set((s) => ({ editing: { kind: "saved", id, key: s.editing?.key ?? `saved-${id}` } }));
       },
       startNew: (rule) => {
+        set((s) => ({ picks: s.picks + 1 }));
         get().guard({
           kind: "edit",
           editing: { kind: "new", rule, key: `new-${String(++seq)}` },
@@ -124,6 +132,7 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
       forget: () => {
         set({ editing: null, dirty: false, pending: null });
       },
+      picks: 0,
       origin: null,
       setOrigin: (origin) => {
         set({ origin });

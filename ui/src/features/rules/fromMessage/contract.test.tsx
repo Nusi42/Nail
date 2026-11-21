@@ -4,6 +4,7 @@
  * core: message facts, drafts from the text view, run targets, and a run
  * history that goes with its rule.
  */
+import { LIST_MESSAGE_ID } from "../../../api/mockData";
 import { createEnv } from "../../../test/harness";
 import { must } from "../../../test/must";
 import { deleteRule, ruleFromText, runRules, saveRule } from "../api";
@@ -25,6 +26,29 @@ describe("rules R2 contract (mock core)", () => {
       message.subject,
     );
     await expect(getMessageFacts(env.client, "missing")).rejects.toThrow();
+  });
+
+  it("agrees with the pickers on the mailing-list post's List-Id, header names and tags", async () => {
+    const env = createEnv();
+    const post = must(
+      env.transport.data.messages.find(
+        (m) => env.transport.data.bodies.get(m.id)?.headers.message_id === LIST_MESSAGE_ID,
+      ),
+    );
+    post.tags = ["lists"];
+    const facts = await getMessageFacts(env.client, post.id);
+    const suggested = async (kind: "mailing-list" | "header-name") =>
+      (
+        await env.client.request(
+          { type: "SuggestValues", kind, prefix: "", limit: 100 },
+          "ValueSuggestions",
+        )
+      ).values.map((v) => v.value);
+    expect(facts.list_id).toBe("rust-announce.lists.example");
+    expect(await suggested("mailing-list")).toEqual([facts.list_id]);
+    expect(facts.header_names).toContain("List-Id");
+    for (const name of facts.header_names) expect(await suggested("header-name")).toContain(name);
+    expect(facts.tags).toEqual(["lists"]);
   });
 
   it("keeps a draft without a name and reports the gap", async () => {

@@ -11,8 +11,9 @@
  * Alt+Down open the list and move, Up moves back, Home / End, Right opens a
  * folder row or enters it, Left closes it or goes to its parent, Enter picks
  * (or opens an account row), Escape and Tab close it; a click outside closes
- * it too. The popup overlays the content below (`picker.popup` is
- * positioned in `picker.field`), it never moves it.
+ * it too. The popup overlays the content (`picker.popup` is fixed to the
+ * viewport at the field through a geometry rule, so a scrolling form
+ * around it never clips it), it never moves it.
  *
  * Fields whose value is an id (accounts, folders with `folderValue="id"`)
  * show the option's name; text typed that names exactly one option is taken
@@ -30,7 +31,8 @@
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useT } from "../../i18n/I18nProvider";
-import { Icon } from "../Icon";
+import { useGeometry } from "../../theme/ThemeProvider";
+import { folderIcon, Icon } from "../Icon";
 import { optionKey, usePickerOptions } from "./sources";
 import {
   initialActive,
@@ -61,19 +63,48 @@ export const PICKER_PARTS = [
 ] as const;
 
 /**
- * The popup's tallest size (px) the theme allows (`picker.popup`
- * `max-height`); with less room below the field and more above it, the popup
- * opens above (`data-placement="above"`).
+ * Where the popup opens for a field at `rect` in a viewport `height` px
+ * tall when it needs `room` px: below, unless there is less room below than
+ * that and more above (`data-placement="above"`).
  */
-export const POPUP_ROOM = 320;
-
-/** Where the popup opens for a field at `rect` in a viewport `height` px tall. */
 export function popupPlacement(
   rect: { top: number; bottom: number },
   height: number,
+  room: number,
 ): "below" | "above" {
   const below = height - rect.bottom;
-  return below < POPUP_ROOM && rect.top > below ? "above" : "below";
+  return below < room && rect.top > below ? "above" : "below";
+}
+
+/**
+ * The height (px) a popup may take: its `max-height` as the theme sets it
+ * (the one source of the size), else the height it has now.
+ */
+export function popupRoom(popup: HTMLElement): number {
+  const max = popup.ownerDocument.defaultView?.getComputedStyle(popup).maxHeight ?? "";
+  const px = /^(\d+(?:\.\d+)?)px$/.exec(max.trim());
+  return px ? Number(px[1]) : popup.getBoundingClientRect().height;
+}
+
+/** Where a popup is fixed for its field: the placement and its geometry. */
+export function popupGeometry(
+  field: { top: number; bottom: number; left: number; width: number },
+  popup: { width: number; room: number },
+  viewport: { width: number; height: number },
+): { placement: "below" | "above"; declarations: Record<string, string> } {
+  const placement = popupPlacement(field, viewport.height, popup.room);
+  const left = Math.max(0, Math.min(field.left, viewport.width - popup.width));
+  const px = (n: number) => `${String(Math.round(n))}px`;
+  return {
+    placement,
+    declarations: {
+      left: px(left),
+      "min-width": px(field.width),
+      ...(placement === "below"
+        ? { top: px(field.bottom), bottom: "auto" }
+        : { top: "auto", bottom: px(viewport.height - field.top) }),
+    },
+  };
 }
 
 /** Whether a picker's value is an id that the field shows by its option's name. */
@@ -94,7 +125,7 @@ export function optionNamed(options: readonly PickerOption[], text: string): Pic
 /** The icon of an option row. */
 function optionIcon(kind: PickerKind, option: PickerOption): string | null {
   if (option.variant === "create") return "plus";
-  if (option.folder) return option.folder.role === "other" ? "folder" : option.folder.role;
+  if (option.folder) return folderIcon(option.folder.role);
   if (option.variant === "group" || kind === "account") return "user";
   return null;
 }
@@ -125,6 +156,8 @@ export function Picker({
   const ids = useId();
   const listId = `${ids}-list`;
   const rootRef = useRef<HTMLSpanElement>(null);
+  const fieldRef = useRef<HTMLSpanElement>(null);
+  const popupRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   /** Text typed since the field last showed its value (`null` = not typing). */
@@ -133,7 +166,12 @@ export function Picker({
   const [filtering, setFiltering] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [placement, setPlacement] = useState<"below" | "above">("below");
+  const [place, setPlace] = useState<ReturnType<typeof popupGeometry>>({
+    placement: "below",
+    declarations: {},
+  });
+  const geom = `picker-${ids.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  useGeometry(geom, place.declarations);
   const scope = { accountId, folderValue, virtualAccounts };
   const named = showsLabel(kind, folderValue);
   // Every option: the list while browsing, and the name of an id value (or of typed text).
@@ -197,10 +235,27 @@ export function Picker({
     setOpen(true);
   };
 
+  // Fix the popup at the field, and keep it there while anything scrolls.
   useLayoutEffect(() => {
-    const input = inputRef.current;
-    if (open && input)
-      setPlacement(popupPlacement(input.getBoundingClientRect(), window.innerHeight));
+    if (!open) return;
+    const measure = () => {
+      const field = fieldRef.current?.getBoundingClientRect();
+      const popup = popupRef.current;
+      if (!field || !popup) return;
+      const next = popupGeometry(
+        field,
+        { width: popup.getBoundingClientRect().width, room: popupRoom(popup) },
+        { width: window.innerWidth, height: window.innerHeight },
+      );
+      setPlace((p) => (JSON.stringify(p) === JSON.stringify(next) ? p : next));
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -286,7 +341,7 @@ export function Picker({
       data-kind={kind}
       data-state={open ? "open" : undefined}
     >
-      <span data-part="picker.field">
+      <span ref={fieldRef} data-part="picker.field">
         <input
           ref={inputRef}
           data-part="picker.input"
@@ -342,7 +397,12 @@ export function Picker({
           <Icon name="chevron-down" part="picker.browse.icon" />
         </button>
         {open && (
-          <span data-part="picker.popup" data-placement={placement}>
+          <span
+            ref={popupRef}
+            data-part="picker.popup"
+            data-placement={place.placement}
+            data-geom={geom}
+          >
             <ul
               id={listId}
               data-part="picker.list"

@@ -32,6 +32,7 @@ const FACTS: MessageFacts = {
   reply_to: [{ name: null, email: "list@lists.example.org" }],
   list_id: "nail-users.lists.example.org",
   header_names: ["From", "To", "Subject", "List-Id", "X-Mailer"],
+  tags: ["work"],
 };
 
 const text = (value = "") => ({ op: "contains", value, case_sensitive: false }) as const;
@@ -142,10 +143,10 @@ describe("valuesForCondition", () => {
     expect(subject[0]).toMatchObject({ kind: "subject", op: "contains" });
   });
 
-  it("names the account and the folder from the context, and the tags", () => {
+  it("names the account and the folder from the context, and the tags from the facts", () => {
     const accounts = [{ id: "acc-work", name: "Work", email: "me@example.com" }] as Account[];
     const folders = [{ id: "f-lists", path: "INBOX/Lists" }] as Folder[];
-    const context = { accounts, folders, tags: ["work", "$label1"] };
+    const context = { accounts, folders };
     const account: Condition = { type: "account", account_id: "" };
     expect(valuesForCondition(FACTS, account, context)).toEqual([
       { kind: "account", source: "account", value: "acc-work", label: "Work", op: "equals" },
@@ -159,7 +160,9 @@ describe("valuesForCondition", () => {
     expect(valuesForCondition(FACTS, folder, context).map((v) => v.value)).toEqual(["INBOX/Lists"]);
     expect(valuesForCondition(FACTS, folder)).toEqual([]);
     expect(
-      valuesForCondition(FACTS, { type: "tag", tag: "" }, context).map((v) => v.value),
+      valuesForCondition({ ...FACTS, tags: ["work", "$label1"] }, { type: "tag", tag: "" }).map(
+        (v) => v.value,
+      ),
     ).toEqual(["work", "$label1"]);
   });
 
@@ -210,21 +213,23 @@ describe("applyToCondition", () => {
     });
   });
 
-  it("sets an account, a folder path (keeping its account) and a tag", () => {
+  it("sets an account, a folder path (in the folder's own account) and a tag", () => {
     const value = (v: string) =>
       ({ kind: "folder", source: "folder", value: v, label: v, op: "equals" }) as const;
     expect(applyToCondition({ type: "account", account_id: "" }, value("acc-work"))).toEqual({
       type: "account",
       account_id: "acc-work",
     });
+    // The mail's folder is in the mail's account, not in the account the
+    // condition named before.
     expect(
       applyToCondition(
         { type: "folder", folder: { type: "role", role: "inbox", account_id: "acc-1" } },
-        value("INBOX/Lists"),
+        { ...value("INBOX/Lists"), accountId: "acc-work" },
       ),
     ).toEqual({
       type: "folder",
-      folder: { type: "path", path: "INBOX/Lists", account_id: "acc-1" },
+      folder: { type: "path", path: "INBOX/Lists", account_id: "acc-work" },
     });
     expect(applyToCondition({ type: "tag", tag: "" }, value("work"))).toEqual({
       type: "tag",
@@ -238,15 +243,18 @@ describe("applyToCondition", () => {
 describe("actions", () => {
   const context = {
     folders: [{ id: "f-lists", path: "INBOX/Lists" }] as Folder[],
-    tags: ["work"],
   };
 
   it("offers the mail's folder for move / copy and its tags for tag / untag", () => {
-    const move: RuleAction = { type: "move", folder: { type: "path", path: "", account_id: null } };
+    const move: RuleAction = {
+      type: "move",
+      folder: { type: "path", path: "", account_id: "acc-other" },
+    };
     const [folder] = valuesForAction(FACTS, move, context);
+    // The folder of the mail's account (FACTS), whatever account the action named.
     expect(applyToAction(move, must(folder))).toEqual({
       type: "move",
-      folder: { type: "path", path: "INBOX/Lists", account_id: null },
+      folder: { type: "path", path: "INBOX/Lists", account_id: "acc-work" },
     });
     const untag: RuleAction = { type: "untag", tag: "" };
     const [tag] = valuesForAction(FACTS, untag, context);

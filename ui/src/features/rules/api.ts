@@ -62,14 +62,24 @@ export async function reorderRules(client: NailClient, ruleIds: RuleId[]): Promi
   await client.request({ type: "ReorderRules", rule_ids: ruleIds }, "Done");
 }
 
+/**
+ * A dry run of `rule` on `target`: the very messages a run there acts on
+ * (the named messages, else the folder, else the rule's own messages).
+ */
 export async function testRule(
   client: NailClient,
   rule: Rule,
-  folderId: FolderId | null,
+  target: RuleRunTarget,
   limit: number,
 ): Promise<{ scanned: number; matches: ExplainedMatch[] }> {
   const r = await client.request(
-    { type: "TestRule", rule, folder_id: folderId, limit },
+    {
+      type: "TestRule",
+      rule,
+      message_ids: [...target.messageIds],
+      folder_id: target.folderId,
+      limit,
+    },
     "RuleTested",
   );
   return { scanned: r.scanned, matches: r.matches };

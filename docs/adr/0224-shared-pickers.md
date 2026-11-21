@@ -49,14 +49,18 @@ folders as a searchable tree, free text still allowed.
 - **Row identity.** `PickerOption` gains `key` (a folder path is not unique
   across accounts; `parent` names a key), `account` and `variant`
   (`group` | `create`).
-- **Overlay.** `picker.field` is the positioned box; `picker.popup` is
-  absolutely positioned under the input with a bounded height, so opening
-  the list never moves the content below; with less room below the field
-  than the list's tallest size and more above, it opens above
-  (`data-placement="above"`). Indentation per depth and the
+- **Overlay.** `picker.popup` is fixed to the viewport at `picker.field`
+  through a geometry rule (`useGeometry`: top or bottom, left, min-width;
+  it follows the field while anything scrolls), with a bounded height, so
+  opening the list never moves the content and a scrolling form (the rules
+  editor's body) never clips it; with less room below the field than the
+  list's tallest size (the popup's own `max-height` from the theme,
+  `popupRoom`) and more above, it opens above (`data-placement="above"`). Indentation per depth and the
   highlighted / selected rows are theme rules (`picker.option[depth=…]`,
   state `highlighted`, condition `selected`) using the colour tokens, so dark
-  mode and high contrast follow the theme.
+  mode and high contrast follow the theme. The highlighted row also has a
+  transparent outline, which Windows contrast themes (forced colours) draw
+  in the text colour, so the row Enter picks stays visible there.
 - **Forms.** `PickerField` puts a picker in the shared `form.field` frame
   (`LabelledField`). Used for: the folder sources of a virtual account
   (account + folder path), the account and folder of the synchronization
@@ -68,7 +72,7 @@ folders as a searchable tree, free text still allowed.
 - **Search field.** `searchValues.tsx` holds the helpers for the values
   after `from:` / `to:` / `cc:` / `tag:` / `account:` / `folder:`
   (`searchValueContext`, `applySearchValue`, quoting with `\` escapes) and
-  the `SearchValues` list. The search field (`widgets/SearchBar.tsx`) belongs
+  the `SearchValues` options. The search field (`widgets/SearchBar.tsx`) belongs
   to the R1 leftovers package in this wave; the integrator mounts the list
   under its hints.
 - **Mock.** `SuggestValues` for `mailing-list` answers the mock's
@@ -90,7 +94,10 @@ folders as a searchable tree, free text still allowed.
   disabled); the theme rule keeps only its flex sizing.
 - The search field shows the values in its hints popup through
   `useSearchValues(text)`: the popup opens for them only when there are
-  values; Escape and Enter hide them for that text.
+  values; Escape and Enter hide them for that text. Review fix: they are a
+  group of options in the same listbox as the hints (values first), so the
+  combobox announces the popup (`aria-expanded`, `aria-controls`) and
+  Up / Down / Enter reach them like the hints (`aria-activedescendant`).
 - `foldersQueryOptions` (`state/queries.ts`) is the one `ListFolders` query
   of `useFolders` and the folder sources; `searchValueText` moved to
   `state/queryText.ts` and also quotes the label views' `tag:` searches.

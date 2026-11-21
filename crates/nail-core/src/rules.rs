@@ -486,9 +486,14 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         }
         Request::TestRule {
             rule,
+            message_ids,
             folder_id,
             limit,
-        } => service.test_rule(*rule, folder_id, limit).await?,
+        } => {
+            service
+                .test_rule(*rule, message_ids, folder_id, limit)
+                .await?
+        }
         Request::RunRule {
             rule_id,
             message_ids,
@@ -664,15 +669,24 @@ impl Service {
         .await?
     }
 
-    /// `TestRule`: a dry run.
+    /// `TestRule`: a dry run on the named messages (as a run on them),
+    /// the folder, or the rule's default candidates.
     async fn test_rule(
         &self,
         rule: Rule,
+        message_ids: Vec<MessageId>,
         folder_id: Option<FolderId>,
         limit: u32,
     ) -> Result<Response> {
         check_rule(&rule)?;
-        let ids = self.candidate_messages(folder_id, &rule).await?;
+        // Every named message may match: the count before a run that moves
+        // or deletes mail must not stop short of what the run acts on.
+        let most = SCAN_LIMIT.max(u32::try_from(message_ids.len()).unwrap_or(u32::MAX));
+        let ids = if message_ids.is_empty() {
+            self.candidate_messages(folder_id, &rule).await?
+        } else {
+            message_ids
+        };
         let compiled = CompiledRule::new(rule).map_err(|issues| issues_error(&issues))?;
         let (views, mailbox) = self.load_views(ids).await?;
         let env = Env {
@@ -680,7 +694,7 @@ impl Service {
             utc_offset_secs: utc_offset_secs(),
             mailbox: &mailbox,
         };
-        let limit = limit.clamp(1, SCAN_LIMIT) as usize;
+        let limit = limit.clamp(1, most) as usize;
         let report = nail_rules::test_rule(
             &compiled,
             views.iter().map(|(d, _)| as_view(d)),

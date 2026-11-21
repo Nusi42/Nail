@@ -569,8 +569,8 @@ pub enum RuleRunTarget {
     },
 }
 
-/// The values of one stored message a rule condition can test (R2, ADR
-/// 0222): what the rules window offers as "values from this mail". The
+/// The values of one stored message a rule condition or action can use
+/// (R2, ADR 0222): what the rules window offers as "values from this mail". The
 /// addresses come from the message's headers (the summary's when its raw
 /// form is not stored).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -597,6 +597,8 @@ pub struct MessageFacts {
     pub list_id: Option<String>,
     /// Every header name, once each (first spelling), in message order.
     pub header_names: Vec<String>,
+    /// Its tags (IMAP keywords), as rules see them.
+    pub tags: Vec<String>,
 }
 
 /// What [`crate::Request::SuggestValues`] suggests (R2 shared pickers, ADR

@@ -85,6 +85,7 @@ impl<D: McpData> Shared<D> {
             .data
             .query(Request::TestRule {
                 rule: Box::new(rule),
+                message_ids: Vec::new(),
                 folder_id,
                 limit: a.limit.unwrap_or(TEST_DEFAULT).clamp(1, TEST_MAX),
             })

@@ -157,9 +157,17 @@ test("the search field offers a field's values and puts the picked one in", asyn
   const input = searchBox(page);
   await input.click();
   await input.pressSequentially("folder:Arch");
-  const values = page.getByRole("list", { name: "Values for this search field" });
+  const values = page.getByRole("group", { name: "Values for this search field" });
   await expect(values).toBeVisible();
-  await values.getByRole("button", { name: /^Archive/ }).click();
+  // One combobox: it announces the popup, and the arrow keys reach the values.
+  await expect(input).toHaveAttribute("aria-expanded", "true");
+  const archive = values.getByRole("option", { name: /^Archive/ });
+  await input.press("ArrowDown");
+  await expect(input).toHaveAttribute(
+    "aria-activedescendant",
+    (await archive.getAttribute("id")) ?? "",
+  );
+  await archive.click();
   await expect(input).toHaveValue("folder:Archive ");
   await expect(input).toBeFocused();
   await expect(values).toHaveCount(0);

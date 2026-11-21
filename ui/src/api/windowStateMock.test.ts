@@ -142,6 +142,25 @@ describe("window state (M5c)", () => {
     });
   });
 
+  it("replaces the context of a pop-out that is opened again, keeps it without one", async () => {
+    const env = createEnv();
+    enableMockPopOuts(env.transport);
+    await env.client.call({ type: "PopOutWindow", window: "rules", context: { a: 1 } });
+    const events = recorder(env);
+    expect(
+      await env.client.call({ type: "PopOutWindow", window: "rules", context: { a: 2 } }),
+    ).toEqual({
+      type: "PopOuts",
+      pop_outs: [{ window: "rules", geometry: null, context: { a: 2 }, focused: true }],
+    });
+    expect(events).toMatchObject([
+      { type: "PopOutChanged", change: "focused", pop_outs: [{ context: { a: 2 } }] },
+    ]);
+    expect(await env.client.call({ type: "PopOutWindow", window: "rules" })).toMatchObject({
+      pop_outs: [{ context: { a: 2 } }],
+    });
+  });
+
   it("checks pop-outs like the core", () => {
     expect(checkPopOut(0, false, "composer:d1", "Hi", null)).toBeNull();
     expect(checkPopOut(0, false, "composer:", null, null)).toBe("invalid-window");

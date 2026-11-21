@@ -35,6 +35,7 @@ import { Issues } from "./Issues";
 import { filterRules, moveItemTo, newRule } from "./model";
 import { RuleEditor } from "./RuleEditor";
 import { STARTER_IDS, starterRule } from "./starters";
+import { useRulesHandoff } from "./popOut";
 import { useRulesUi } from "./store";
 
 /** The action that starts a rule from the selected message. */
@@ -276,6 +277,8 @@ function EmptyState({ hasRules }: { hasRules: boolean }) {
 /** The rule list and the editor. */
 export function RuleManagerView() {
   const t = useT();
+  // Popped out: what the main page handed over (`./popOut.ts`).
+  useRulesHandoff();
   const rules = useRules();
   const editing = useRulesUi((s) => s.editing);
   const saved = useRulesUi((s) => s.saved);

@@ -68,7 +68,7 @@ describe("categories", () => {
     expect(swatch?.getAttribute("data-geom")).toBeTruthy();
     await user.click(urgent);
     expect(env.store.getState().search).toMatchObject({
-      text: 'tag:"Urgent"',
+      text: "tag:Urgent",
       accountId: EXCHANGE_ACCOUNT,
       folderId: null,
     });

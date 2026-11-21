@@ -2312,13 +2312,10 @@
       "conditions": [],
       "ancestors": [],
       "declarations": {
-        "position": "absolute",
-        "top": "100%",
-        "left": "0",
+        "position": "fixed",
         "z-index": "20",
         "display": "flex",
         "flex-direction": "column",
-        "min-width": "100%",
         "max-width": "min(480px, 90vw)",
         "max-height": "min(320px, 50vh)",
         "margin-top": "var(--nail-space-xxs)",
@@ -2341,8 +2338,6 @@
       ],
       "ancestors": [],
       "declarations": {
-        "top": "auto",
-        "bottom": "100%",
         "margin-top": "0",
         "margin-bottom": "var(--nail-space-xxs)"
       },
@@ -2397,7 +2392,9 @@
       "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
-        "background-color": "var(--nail-color-selection)"
+        "background-color": "var(--nail-color-selection)",
+        "outline": "2px solid transparent",
+        "outline-offset": "-2px"
       },
       "source": null
     },

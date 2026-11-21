@@ -829,6 +829,13 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
             message_ids: vec![],
             folder_id: Some(message.folder_id.clone()),
         },
+        // A dry run on named messages is checked like a run on them.
+        Request::TestRule {
+            rule: Box::new(common::subject_rule("any", vec![], "any", vec![])),
+            message_ids: vec![message.id.clone()],
+            folder_id: None,
+            limit: 10,
+        },
         // The folder belongs to an account outside the grant.
         Request::ListMessages {
             folder_id: message.folder_id.clone(),

@@ -3,7 +3,9 @@
  * renders nothing). When the main page opens a window (`openWindow`):
  *
  * - that window is popped out already → its OS window comes to the front
- *   instead (`FocusPopOut`) and the page does not show it twice;
+ *   instead (`FocusPopOut`) and the page does not show it twice; a kind
+ *   whose preparer refreshes (`refresh`) hands it a new context on the way
+ *   (`PopOutWindow` again; the front alone when that fails);
  * - its kind was last shown popped out (`WindowState.popped_out`) and may
  *   pop out → it opens as an OS window again.
  *
@@ -20,7 +22,14 @@ import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { usePopOuts, useWindowStates } from "../../state/windowState";
 import { resolveWindowSpec, windowKind } from "../../state/windows";
 import { usePopOutsAvailable } from "./hooks";
-import { focusPopOut, isPopOutPage, isPoppedOut, popOutWindow, windowTitleId } from "./model";
+import {
+  focusPopOut,
+  isPopOutPage,
+  isPoppedOut,
+  popOutWindow,
+  refreshesPopOut,
+  windowTitleId,
+} from "./model";
 
 export function PopOutRouter() {
   const available = usePopOutsAvailable();
@@ -50,14 +59,19 @@ function Router() {
     for (const window of windows) {
       if (before.has(window)) continue;
       const ctx = { client, store, queryClient };
+      const spec = resolveWindowSpec(window, layout, specs);
       if (isPoppedOut(popOuts, window)) {
         store.getState().closeWindow(window);
-        void focusPopOut(ctx, window).catch(() => undefined);
+        const focus = () => focusPopOut(ctx, window);
+        void (
+          refreshesPopOut(window)
+            ? popOutWindow(ctx, window, t(windowTitleId(window)), spec).catch(focus)
+            : focus()
+        ).catch(() => undefined);
         continue;
       }
       const kind = windowKind(window);
       const state = Object.hasOwn(states, kind) ? states[kind] : undefined;
-      const spec = resolveWindowSpec(window, layout, specs);
       if (state?.popped_out && spec.pop_out) {
         void popOutWindow(ctx, window, t(windowTitleId(window)), spec).catch(() => undefined);
       }

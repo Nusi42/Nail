@@ -2,7 +2,7 @@
 //!
 //! * `GetMessageFacts`: what one stored message offers a rule condition
 //!   (sender, recipients, subject, `List-Id`, account, folder, header
-//!   names), for "values from this mail" when the rules window was opened
+//!   names, tags), for "values from this mail" when the rules window was opened
 //!   from a message.
 //! * `SuggestValues`: tags in use, and the `List-Id`s and header names of
 //!   the newest stored mail ([`VALUE_SCAN`] raw messages), for the tag,
@@ -58,6 +58,7 @@ pub(crate) fn facts_of(data: &MessageData) -> MessageFacts {
         reply_to: data.reply_to.clone(),
         list_id: list_ids(&data.headers).map(|(id, _)| id),
         header_names: header_names(&data.headers),
+        tags: data.tags.clone(),
     }
 }
 
@@ -204,7 +205,9 @@ mod tests {
             h("received", "b"),
             h("List-Id", "\"News\" <news.example.org>"),
         ];
+        data.tags = vec!["work".into(), "$label1".into()];
         let facts = facts_of(&data);
+        assert_eq!(facts.tags, ["work", "$label1"]);
         assert_eq!(facts.list_id.as_deref(), Some("news.example.org"));
         assert_eq!(facts.header_names, ["From", "Received", "List-Id"]);
         assert_eq!(facts.subject, "Hello");

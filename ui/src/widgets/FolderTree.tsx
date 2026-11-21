@@ -53,7 +53,7 @@ import { UI_STATE_COLLAPSED_SECTIONS, stringList, useUiStateValue } from "../sta
 import { useOnline } from "../state/online";
 import { useUi } from "../state/uiStore";
 import { useAccountName } from "./AccountSwitcher";
-import { Icon } from "./Icon";
+import { folderIcon, Icon } from "./Icon";
 import {
   DEFAULT_FAVORITES,
   FAVORITE_FOLDERS,
@@ -161,7 +161,7 @@ function FolderRow({
       data-key={`folder:${folder.id}`}
       onClick={onChoose}
     >
-      <Icon name={folder.role === "other" ? "folder" : folder.role} part="folder-tree.item.icon" />
+      <Icon name={folderIcon(folder.role)} part="folder-tree.item.icon" />
       <span data-part="folder-tree.item.name" title={roleLabel ? folder.name : undefined}>
         {roleLabel ? t(roleLabel) : folder.name}
       </span>

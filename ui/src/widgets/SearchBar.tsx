@@ -13,7 +13,7 @@ import { optionBool, optionString, type WidgetProps } from "../layout/widgetRegi
 import { useCheckQuery } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { Icon } from "./Icon";
-import { SearchValues, useSearchValues } from "./pickers";
+import { SearchValues, searchTextWith, useSearchValues } from "./pickers";
 import { ProblemIndicator } from "./ProblemIndicator";
 import { useDebounced } from "../state/debounce";
 import { useLiveSearch } from "../features/search/liveSearch";
@@ -181,8 +181,10 @@ export function SearchBar({ node }: WidgetProps) {
  * listbox): they open while a word is typed that a hint completes, or with
  * ArrowDown; they float over the content under the field (the skin places
  * `search-bar.hints`) and close with Escape, Tab, a click outside the form,
- * or when the focus leaves it. Up / Down pick a hint
- * (`aria-activedescendant`), Enter or a click takes it. They never open on
+ * or when the focus leaves it. After a field that names something
+ * (`from:`, `folder:`, …) its values (R2, ADR 0224) come first in the same
+ * listbox: Up / Down pick a value or a hint (`aria-activedescendant`), Enter
+ * or a click takes it — one combobox, one keyboard model. They never open on
  * focus alone, so a click on the list after focusing the field reaches the
  * list.
  */
@@ -243,10 +245,12 @@ export function SearchForm({
   }, [focusRequest]);
 
   const hints = showHints && focused && hintsOpen ? hintsFor(text) : [];
-  const expanded = hints.length > 0;
-  const picked = activeHint >= 0 && activeHint < hints.length ? activeHint : -1;
   const values = useSearchValues(text, showHints && focused && valuesHiddenFor !== text);
-  const popup = expanded || values !== null;
+  // One listbox: the field's values first, then the hints.
+  const valueCount = values?.shown.length ?? 0;
+  const optionCount = valueCount + hints.length;
+  const popup = optionCount > 0;
+  const picked = activeHint >= 0 && activeHint < optionCount ? activeHint : -1;
 
   const closeHints = () => {
     setHintsOpen(false);
@@ -267,6 +271,12 @@ export function SearchForm({
     };
   }, [popup]);
 
+  const takeValue = (next: string) => {
+    setText(next);
+    closeHints();
+    inputRef.current?.focus();
+  };
+
   const takeHint = (hint: string) => {
     const next = applyHint(text, hint);
     setText(next);
@@ -282,17 +292,27 @@ export function SearchForm({
       case "ArrowUp": {
         event.preventDefault();
         const step = event.key === "ArrowDown" ? 1 : -1;
-        if (!expanded) {
-          // Alt+Down only opens; Down opens and picks the first hint.
+        if (hints.length === 0) {
+          // Alt+Down only opens the hints; Down opens and picks the first option.
           setHintsOpen(true);
-          setActiveHint(event.altKey ? -1 : nextHint(-1, step, hintsFor(text).length));
+          const count = valueCount + hintsFor(text).length;
+          setActiveHint(event.altKey ? -1 : nextHint(picked, step, count));
         } else {
-          setActiveHint(nextHint(picked, step, hints.length));
+          setActiveHint(nextHint(picked, step, optionCount));
         }
         break;
       }
       case "Enter": {
-        const hint = hints[picked];
+        if (picked < 0) break;
+        if (values !== null && picked < valueCount) {
+          const next = searchTextWith(text, values, picked);
+          if (next !== null) {
+            event.preventDefault();
+            takeValue(next);
+          }
+          break;
+        }
+        const hint = hints[picked - valueCount];
         if (hint !== undefined) {
           event.preventDefault();
           takeHint(hint);
@@ -324,7 +344,7 @@ export function SearchForm({
 
   const errorId = `${ids}-error`;
   const hintsId = `${ids}-hints`;
-  const optionId = (index: number) => `${ids}-hint-${String(index)}`;
+  const optionId = (index: number) => `${ids}-option-${String(index)}`;
   return (
     <form
       ref={formRef}
@@ -367,8 +387,8 @@ export function SearchForm({
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
           aria-autocomplete={showHints ? "list" : undefined}
-          aria-expanded={showHints ? expanded : undefined}
-          aria-controls={expanded ? hintsId : undefined}
+          aria-expanded={showHints ? popup : undefined}
+          aria-controls={popup ? hintsId : undefined}
           aria-activedescendant={picked >= 0 ? optionId(picked) : undefined}
           aria-keyshortcuts={keyShortcuts}
           autoComplete="off"
@@ -439,25 +459,24 @@ export function SearchForm({
             event.preventDefault();
           }}
         >
-          {values !== null && (
-            <SearchValues
-              text={text}
-              found={values}
-              onApply={(next) => {
-                setText(next);
-                closeHints();
-                inputRef.current?.focus();
-              }}
-            />
-          )}
-          {expanded && (
-            <div
-              data-part="search-bar.hints.list"
-              id={hintsId}
-              role="listbox"
-              aria-label={t("search-bar-hints")}
-            >
-              {hints.map((hint, index) => (
+          <div
+            data-part="search-bar.hints.list"
+            id={hintsId}
+            role="listbox"
+            aria-label={t("search-bar-hints")}
+          >
+            {values !== null && (
+              <SearchValues
+                text={text}
+                found={values}
+                onApply={takeValue}
+                active={picked < valueCount ? picked : -1}
+                optionId={optionId}
+              />
+            )}
+            {hints.map((hint, hintIndex) => {
+              const index = valueCount + hintIndex;
+              return (
                 <div
                   key={hint}
                   id={optionId(index)}
@@ -479,9 +498,9 @@ export function SearchForm({
                     <span data-part="search-bar.hint.description">{t(hintMessageId(hint))}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
           <div data-part="search-bar.hint" data-state="info">
             <span data-part="search-bar.hint.description">{t("search-hint-operators")}</span>
           </div>

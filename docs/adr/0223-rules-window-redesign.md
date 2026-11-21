@@ -28,12 +28,14 @@ the `ValuesFromMessage` slot.
   boxes in the list are gone (the review's row is name / triggers / On); the
   "Run rule" menus keep "All rules that are on". The run panel's "checked
   rules" text and `picked` in the rules store went with them.
-- **Test on the selection.** `TestRule` tests a folder or the rule's scope;
-  for "Selected messages" the window tests the listed folder (up to
-  `COUNT_LIMIT` = 1000 messages) and keeps the selected ones. A
-  `TestRule.message_ids` would make this exact; it is a follow-up for the
-  core. The question before a run that moves, archives or deletes mail
-  counts the same way.
+- **Test on the selection.** `TestRule.message_ids` (review fix) tests
+  exactly the messages `RunRules` with the same ids acts on, wherever they
+  are (search hits included; the scope is only a filter), and `limit` is at
+  least their number. The window's Test and the count in the question
+  before a run that moves, archives or deletes mail use the run's own
+  target (`ruleRunTargetOf`), so preview, count and run agree; the count
+  asks for every match (`COUNT_LIMIT` = the protocol's largest limit, the
+  core caps it at what the run looks at).
 - **Unsaved changes.** The editor reports `dirty` to the rules store.
   `select` / `startNew` wait in `pending` while it is set; closing the
   window (its button, Escape, a command) is caught like the composer's
@@ -65,17 +67,19 @@ the `ValuesFromMessage` slot.
 
 ## Consequences
 
-- The footer is always in view (sticky in the Settings card), so Save, Run
-  and the problems never scroll away; Test results no longer appear far
-  below the buttons.
+- The footer is always in view — in the window and, sticking to the page's
+  bottom edge, in the Settings card — so Save, Run and the problems never
+  scroll away; Test results no longer appear far below the buttons.
 - Other scenarios that drive the rules editor use the radio group, the
   footer and the "+ Add" menus (`e2e/support/rules.ts`: `saveRule`,
   `addFromMenu`, `rulesFooter`). The window-manager scenarios
   (`e2e/tests/m5c.spec.ts`) use the rules window as their sample window:
   they start from its new size and shrink it before the edge checks; the
   responsive sweep (`p1-windows.spec.ts`) discards its unsaved sample rule.
-- In Settings the page scrolls, so there the footer ends the editor instead
-  of sticking (the page's bottom padding would show the form under it).
+- In Settings the page scrolls; the footer sticks to its bottom edge,
+  reaching over the page's bottom padding (`SETTINGS_BODY_END`, a custom
+  property of `settings-page.body`) and taking it inside, so no form shows
+  under it (review fix; the integration had left it static).
 - The `defaults/` snapshots (nail-config fixtures) change with the theme and
   layout; the integrator regenerates them once for the wave.
 
@@ -93,3 +97,17 @@ the `ValuesFromMessage` slot.
 - The responsive skin's old rules entries (`rules.views`, the two-pane
   grid, `rules.add` as a field row) were removed: the window stacks through
   `features/rules/skin.ts`.
+
+## Review fixes
+
+- **Questions and focus.** A question remembers what had the focus when it
+  came up and gives it back once answered (the button that asked, the rule
+  picked in the list, the field Escape was pressed in); when that is gone
+  (a deleted rule) the focus goes to the window's first control. Tab stays
+  inside the question (`trapTab`).
+- **Compact rows.** A row hides its labels only under a row of the same kind
+  (`data-kind`), so no label stands over another kind's field.
+- **Pop-out.** A popped-out rules window gets the mail and the rule the
+  main page's message menus asked for as its pop-out context (`popOut.ts`:
+  a preparer with `refresh`, see ADR 0116's preparers; `PopOutWindow` on a
+  window that is popped out already replaces its context).

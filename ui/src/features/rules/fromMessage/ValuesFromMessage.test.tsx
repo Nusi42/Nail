@@ -43,6 +43,14 @@ function messageOf(env: Env): MessageSummary {
   return message;
 }
 
+/** The rules window opened from `message`: the origin set, a pick spy and a user. */
+function openedFrom(env: Env, message: MessageSummary) {
+  rulesStore(env.client)
+    .getState()
+    .setOrigin({ messageId: message.id, folderId: message.folder_id });
+  return { onPick: vi.fn(), user: userEvent.setup({ delay: null }) };
+}
+
 function senderDomain(message: MessageSummary): string {
   return must(domainOf(must(message.from).email));
 }
@@ -59,11 +67,7 @@ describe("ValuesFromMessage", () => {
   it("offers the origin mail's values and puts the picked one into the condition", async () => {
     const env = createEnv();
     const message = messageOf(env);
-    rulesStore(env.client)
-      .getState()
-      .setOrigin({ messageId: message.id, folderId: message.folder_id });
-    const onPick = vi.fn();
-    const user = userEvent.setup({ delay: null });
+    const { onPick, user } = openedFrom(env, message);
     renderWithProviders(<ValuesFromMessage condition={FROM} onPick={onPick} />, env);
     const button = await screen.findByRole("button", { name: "Values from this mail" });
     expect(button.closest('[data-part="rules.from-message"]')).toHaveAttribute(
@@ -112,6 +116,21 @@ describe("ValuesFromMessage", () => {
     expect(other.container).toBeEmptyDOMElement();
   });
 
+  it("offers the mail's tags from the core, also when no list holds its summary", async () => {
+    const env = createEnv();
+    // Not listed: only the core knows the message (a pop-out, a closed search).
+    const message = must(env.transport.data.messages.find((m) => m.from !== null));
+    message.tags = ["invoices"];
+    const { onPick, user } = openedFrom(env, message);
+    renderWithProviders(
+      <ActionValuesFromMessage action={{ type: "tag", tag: "" }} onPick={onPick} />,
+      env,
+    );
+    await user.click(await screen.findByRole("button", { name: "Values from this mail" }));
+    await user.click(screen.getByRole("menuitem", { name: /invoices/ }));
+    expect(onPick).toHaveBeenCalledWith("invoices", { type: "tag", tag: "invoices" });
+  });
+
   it("offers the mail's folder for a move action", async () => {
     const env = createEnv();
     const message = messageOf(env);
@@ -125,7 +144,7 @@ describe("ValuesFromMessage", () => {
     await user.click(screen.getByRole("menuitem", { name: folder.path }));
     expect(onPick).toHaveBeenCalledWith(folder.path, {
       type: "move",
-      folder: { type: "path", path: folder.path, account_id: null },
+      folder: { type: "path", path: folder.path, account_id: message.account_id },
     });
   });
 });

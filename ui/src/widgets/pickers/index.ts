@@ -10,9 +10,10 @@
 export {
   Picker,
   PICKER_PARTS,
-  POPUP_ROOM,
   optionNamed,
+  popupGeometry,
   popupPlacement,
+  popupRoom,
   showsLabel,
 } from "./Picker";
 export { PickerField, type PickerFieldProps } from "./PickerField";
@@ -24,6 +25,7 @@ export {
   useSearchValues,
   searchValueContext,
   searchValueOf,
+  searchTextWith,
   searchValueText,
   type SearchValueContext,
   type SearchValuesFound,

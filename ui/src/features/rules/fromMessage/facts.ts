@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { NailClient } from "../../../api/client";
 import type {
   Account,
+  AccountId,
   Address,
   AddressField,
   Condition,
@@ -79,17 +80,17 @@ export interface MessageValue {
   label: string;
   /** The comparison that fits the value (text fields). */
   op: TextOp;
+  /** A folder value: the account the folder belongs to (the message's). */
+  accountId?: AccountId;
 }
 
 /**
- * What the facts alone do not hold: the names of the accounts, the folders
- * of the message's account, and the message's tags (from its summary, when
- * the list has it).
+ * What the facts alone do not hold: the names of the accounts and the
+ * folders of the message's account.
  */
 export interface MessageValueContext {
   accounts?: readonly Account[] | undefined;
   folders?: readonly Folder[] | undefined;
-  tags?: readonly string[] | undefined;
 }
 
 /** Most addresses of one field the list offers (a mail to a crowd). */
@@ -220,11 +221,11 @@ function accountValues(facts: MessageFacts, context: MessageValueContext): Messa
 
 function folderValues(facts: MessageFacts, context: MessageValueContext): MessageValue[] {
   const folder = context.folders?.find((f) => f.id === facts.folder_id);
-  return folder ? [value("folder", "folder", folder.path)] : [];
+  return folder ? [{ ...value("folder", "folder", folder.path), accountId: facts.account_id }] : [];
 }
 
-function tagValues(context: MessageValueContext): MessageValue[] {
-  return (context.tags ?? []).map((tag) => value("tag", "tag", tag));
+function tagValues(facts: MessageFacts): MessageValue[] {
+  return facts.tags.map((tag) => value("tag", "tag", tag));
 }
 
 /** The address fields an address condition's field covers. */
@@ -287,7 +288,7 @@ export function valuesForCondition(
     case "folder":
       return folderValues(facts, context);
     case "tag":
-      return tagValues(context);
+      return tagValues(facts);
     case "all":
     case "any":
     case "not":
@@ -318,7 +319,7 @@ export function valuesForAction(
       return folderValues(facts, context);
     case "tag":
     case "untag":
-      return tagValues(context);
+      return tagValues(facts);
     case "delete":
     case "archive":
     case "flag":
@@ -336,9 +337,12 @@ function matchOf(current: TextMatch | null, picked: MessageValue): TextMatch {
   return { op: picked.op, value: picked.value, case_sensitive: current?.case_sensitive ?? false };
 }
 
-/** A folder reference to the picked path, keeping the reference's account. */
-function folderRefTo(current: FolderRef, path: string): FolderRef {
-  return { type: "path", path, account_id: current.account_id };
+/**
+ * A folder reference to the picked folder: its path in its own account (the
+ * message's), whatever account the reference named before.
+ */
+function folderRefTo(picked: MessageValue): FolderRef {
+  return { type: "path", path: picked.value, account_id: picked.accountId ?? null };
 }
 
 /**
@@ -368,7 +372,7 @@ export function applyToCondition(condition: Condition, picked: MessageValue): Co
     case "account":
       return { ...condition, account_id: picked.value };
     case "folder":
-      return { ...condition, folder: folderRefTo(condition.folder, picked.value) };
+      return { ...condition, folder: folderRefTo(picked) };
     case "tag":
       return { ...condition, tag: picked.value };
     default:
@@ -381,7 +385,7 @@ export function applyToAction(action: RuleAction, picked: MessageValue): RuleAct
   switch (action.type) {
     case "move":
     case "copy":
-      return { ...action, folder: folderRefTo(action.folder, picked.value) };
+      return { ...action, folder: folderRefTo(picked) };
     case "tag":
     case "untag":
       return { ...action, tag: picked.value };

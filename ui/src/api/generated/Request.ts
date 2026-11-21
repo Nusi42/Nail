@@ -482,6 +482,13 @@ rule_ids: Array<RuleId>, } | { "type": "TestRule",
  */
 rule: Rule, 
 /**
+ * Test these messages, exactly the ones [`Request::RunRules`] with
+ * the same `message_ids` acts on (the scope is only a filter);
+ * empty = on `folder_id` or the rule's scope. `limit` is at least
+ * their number.
+ */
+message_ids: Array<MessageId>, 
+/**
  * Test in this folder; `null` = the rule's scope.
  */
 folder_id: FolderId | null, 

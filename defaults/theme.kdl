@@ -972,14 +972,14 @@ theme "default" mode="system" {
     }
     part "picker.browse:hover" { color "$color.fg"; background-color "$color.bg-raised"; }
     part "picker.browse.icon" { width "$size.icon"; height "$size.icon"; }
+    // Fixed at its field (top / bottom, left and min-width come from the
+    // picker's geometry rule), so a scrolling form around it never clips it.
+    // `max-height` is the room the picker looks for below or above the field.
     part "picker.popup" {
-        position "absolute"
-        top "100%"
-        left 0
+        position "fixed"
         z-index 20
         display "flex"
         flex-direction "column"
-        min-width "100%"
         max-width "min(480px, 90vw)"
         max-height "min(320px, 50vh)"
         margin-top "$space.xxs"
@@ -991,8 +991,6 @@ theme "default" mode="system" {
     }
     // Opened above the field when there is more room there.
     part "picker.popup[placement=\"above\"]" {
-        top "auto"
-        bottom "100%"
         margin-top 0
         margin-bottom "$space.xxs"
     }
@@ -1011,9 +1009,14 @@ theme "default" mode="system" {
         white-space "nowrap"
     }
     part "picker.option:hover" { background-color "$color.bg-subtle"; }
+    // The option Enter picks (the focus stays in the field). Windows contrast
+    // themes (forced colours) replace both colours: the outline, invisible
+    // elsewhere, is drawn in the system's text colour there.
     part "picker.option:highlighted" {
         color "$color.selection-fg"
         background-color "$color.selection"
+        outline "2px solid transparent"
+        outline-offset "-2px"
     }
     part "picker.option[selected=\"true\"]" { font-weight "$font-weight.semibold"; }
     part "picker.option[variant=\"group\"]" { font-weight "$font-weight.semibold"; }

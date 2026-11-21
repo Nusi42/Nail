@@ -8,7 +8,6 @@
  */
 import { useState } from "react";
 import { currentTargets, useListSelection } from "../../actions/mailTargets";
-import type { FolderId } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useFolders } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
@@ -115,9 +114,6 @@ export function useRunOn() {
     }
   };
 
-  /** Where Test looks: the listed folder for a folder or the selection, else the rule's own mail. */
-  const testFolder = (): FolderId | null => (kind === "scope" || search !== null ? null : folderId);
-
   return {
     kind,
     choose: setChosen,
@@ -125,7 +121,6 @@ export function useRunOn() {
     /** The chosen target's label (localized). */
     label: choice?.label ?? "",
     target,
-    testFolder,
   };
 }
 

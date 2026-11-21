@@ -593,6 +593,12 @@ pub enum Request {
     TestRule {
         /// The rule (need not be saved).
         rule: Box<Rule>,
+        /// Test these messages, exactly the ones [`Request::RunRules`] with
+        /// the same `message_ids` acts on (the scope is only a filter);
+        /// empty = on `folder_id` or the rule's scope. `limit` is at least
+        /// their number.
+        #[serde(default)]
+        message_ids: Vec<MessageId>,
         /// Test in this folder; `null` = the rule's scope.
         #[serde(default)]
         folder_id: Option<FolderId>,
@@ -3032,7 +3038,8 @@ pub enum Request {
     /// elsewhere, `forbidden` remotely). The shell loads the UI at
     /// [`crate::windows::pop_out_route`] in a new webview on the same core
     /// connection, at the kind's remembered pop-out geometry. A window that
-    /// is already popped out is focused instead. Remembers `popped_out` for
+    /// is already popped out is focused instead; a given `context` then
+    /// replaces its context (the event carries it). Remembers `popped_out` for
     /// the kind. Answered with [`Response::PopOuts`]; `invalid_request` with
     /// a `pop-out-issue-*` id for an invalid id, a context above
     /// `MAX_POP_OUT_CONTEXT_BYTES` / a title above `MAX_POP_OUT_TITLE_CHARS`

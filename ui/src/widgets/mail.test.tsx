@@ -92,14 +92,19 @@ describe("search-bar", () => {
 
   it("offers the values of a field (folder:) and puts the picked one in", async () => {
     const { user, input } = await focusedSearch();
-    const values = () => screen.queryByRole("list", { name: "Values for this search field" });
+    const values = () => screen.queryByRole("group", { name: "Values for this search field" });
     await user.type(input, "is:unread folder:Arch");
     const list = await waitFor(() => must(values()));
-    await user.click(within(list).getByRole("button", { name: /^Archive/ }));
+    // The values are options of the combobox's listbox: it says so.
+    const listbox = must(list.closest<HTMLElement>('[role="listbox"]'));
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(input).toHaveAttribute("aria-controls", listbox.id);
+    await user.click(within(list).getByRole("option", { name: /^Archive/ }));
     expect(input).toHaveValue("is:unread folder:Archive ");
     expect(input).toHaveFocus();
     // The value is complete: the popup closes.
     expect(values()).toBeNull();
+    expect(input).toHaveAttribute("aria-expanded", "false");
     // Escape hides the values and keeps the text.
     await user.type(input, "{Backspace}{Backspace}{Backspace}");
     await waitFor(() => {
@@ -108,6 +113,19 @@ describe("search-bar", () => {
     await user.keyboard("{Escape}");
     expect(values()).toBeNull();
     expect(input).toHaveValue("is:unread folder:Archi");
+  });
+
+  it("moves through the field's values with the arrow keys, like the hints", async () => {
+    const { user, input } = await focusedSearch();
+    await user.type(input, "folder:Arch");
+    const list = await screen.findByRole("group", { name: "Values for this search field" });
+    const archive = within(list).getByRole("option", { name: /^Archive/ });
+    await user.keyboard("{ArrowDown}");
+    expect(input).toHaveAttribute("aria-activedescendant", archive.id);
+    expect(archive).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{Enter}");
+    expect(input).toHaveValue("folder:Archive ");
+    expect(input).toHaveFocus();
   });
 
   it("shows where a query is wrong while typing", async () => {

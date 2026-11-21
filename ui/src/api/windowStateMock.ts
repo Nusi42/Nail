@@ -186,6 +186,9 @@ export function answerWindowState(core: MockCore, request: WindowStateRequest): 
         );
       }
       if (open) {
+        // A new context replaces the old one (`pop_out` in the core).
+        const entry = list.find((p) => p.window === request.window);
+        if (entry !== undefined && request.context != null) entry.context = request.context;
         focus(list, request.window);
         changed(core, request.window, "focused");
         return popOutsAnswer(core);

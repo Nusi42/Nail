@@ -40,6 +40,7 @@ import {
 } from "../../api/generated";
 import { parseHex, textOn } from "../../theme/contrast";
 import { charCount } from "../../text/chars";
+import { searchValueText } from "../../state/queryText";
 export {
   CATEGORY_PRESET_RGB as PRESET_RGB,
   MAX_CATEGORY_NAME,
@@ -102,7 +103,7 @@ export function categoryOfTag(
 
 /** A tag view: the messages of a category across folders. */
 export function tagQuery(tag: string): string {
-  return `tag:"${tag.replace(/["\\]/g, "\\$&")}"`;
+  return `tag:${searchValueText(tag)}`;
 }
 
 // ---------------------------------------------------------------------------

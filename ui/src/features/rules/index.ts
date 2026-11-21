@@ -27,6 +27,7 @@ import {
   runMenuSource,
 } from "./runMenu";
 import { RULES_WINDOW, RulesCloseGuard } from "./closeGuard";
+import { RulesPopOutPreparer } from "./popOut";
 import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
 
@@ -91,10 +92,15 @@ export const actionInfo: NonNullable<Feature["actionInfo"]> = {
 };
 
 /**
- * Background components: the toast of a run from a menu, and the guard that
- * keeps the rules window open while its rule has unsaved changes (R2).
+ * Background components: the toast of a run from a menu, the guard that
+ * keeps the rules window open while its rule has unsaved changes (R2), and
+ * the preparer that hands a popped-out rules window the mail and rule.
  */
-export const effects: NonNullable<Feature["effects"]> = [RunToast, RulesCloseGuard];
+export const effects: NonNullable<Feature["effects"]> = [
+  RunToast,
+  RulesCloseGuard,
+  RulesPopOutPreparer,
+];
 
 /** Named dialogs (opened with `window.open "<name>"`). */
 export const dialogs: NonNullable<Feature["dialogs"]> = {

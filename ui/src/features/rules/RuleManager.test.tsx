@@ -270,6 +270,10 @@ describe("rule manager", () => {
     ).not.toBeNull();
     await user.click(within(question).getByRole("button", { name: "Cancel" }));
     expect(env.transport.data.features.rules.rules).toHaveLength(2);
+    // The focus goes back to the button that asked.
+    await waitFor(() => {
+      expect(within(editor).getByRole("button", { name: "Delete rule…" })).toHaveFocus();
+    });
 
     await user.click(within(editor).getByRole("button", { name: "Delete rule…" }));
     await user.click(
@@ -285,6 +289,10 @@ describe("rule manager", () => {
     expect(
       await screen.findByText("Choose a rule to edit it, or create a new one."),
     ).toBeInTheDocument();
+    // The button that asked is gone with the rule: the focus stays in the window.
+    await waitFor(() => {
+      expect(document.activeElement?.closest('[data-part="rules"]')).not.toBeNull();
+    });
   });
 
   it("shows errors of the core in the footer's badge", async () => {
