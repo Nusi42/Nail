@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { control, nailPerTest } from "../support/nail";
+import { axeViolations } from "../support/axe";
+import { control, nailPerTest, screenshotFile } from "../support/nail";
 import {
   accountSectionNamed,
   readerAction,
@@ -325,13 +326,25 @@ test("a Nail rule is placed as an Exchange inbox rule", async ({ page }) => {
   await editor.getByRole("combobox", { name: "Folder path" }).fill("Inbox/Receipts");
   await saveRule(editor);
   // The rule list shows where it runs for the Exchange account.
-  const badge = rules.locator('[data-part="exchange.rule-badge"]').first();
+  const badgePart = '[data-part="exchange.rule-badge"]';
+  const row = rules
+    .getByRole("option")
+    .filter({ has: page.locator(badgePart) })
+    .first();
+  const badge = row.locator(badgePart);
   await expect(badge).toBeVisible({ timeout: 30_000 });
-  // R2: a compact ⓘ; where the rule runs is its name and its hover text.
-  const info = badge.getByRole("button");
-  await expect(info).toHaveAccessibleName(/^Contoso: /);
-  await info.hover();
-  await expect(info).toHaveAttribute("title", /^Contoso: /);
+  // R3: one ⓘ per rule; its popover lists each account's line on hover (and
+  // while the row has the keyboard focus), over the list: nothing moves.
+  await expect(row).toHaveAccessibleDescription(/Contoso: /);
+  const lines = badge.locator('[data-part="exchange.rule-badge.reasons"]');
+  const before = await row.boundingBox();
+  await badge.hover();
+  await expect(lines.getByRole("listitem").first()).toHaveText(/^Contoso: /);
+  await expect.poll(async () => (await lines.boundingBox())?.width ?? 0).toBeGreaterThan(20);
+  expect(await row.boundingBox()).toEqual(before);
+  // The badge inside the option holds nothing interactive (axe: nested-interactive).
+  expect(await axeViolations(page, '[data-part="rules"]'), "rule list with a badge").toEqual([]);
+  await page.screenshot({ path: screenshotFile("exchange", "rule-badge-popover") });
   await expect.poll(async () => (await graphSettings()).rules.length, { timeout: 30_000 }).toBe(3);
 });
 

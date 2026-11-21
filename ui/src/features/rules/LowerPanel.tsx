@@ -7,13 +7,17 @@
  *   matching message (subject — a button that opens the message —, sender,
  *   folder, the actions with their values, why it matched, folded), and
  *   "Apply to these N", which runs the rule on exactly those messages.
+ *   With several rules selected (R3, ADR 0227) one group per rule, in file
+ *   order, each with its own summary and "Apply to these N"; a note says
+ *   that each rule was tested on its own (not one after another).
  * - Recent runs: when each run started, what started it, what it ran on,
  *   how many messages matched and its state; Undo where the core can still
  *   undo it, else a hover / focus text saying why not.
  *
  * Parts: `rules.lower`, `rules.lower.tabs`, `rules.lower.tab`
- * (`data-selected`), `rules.lower.panel`; inside, `rules.test.*` and
- * `rules.runs` / `rules.run.*`.
+ * (`data-selected`), `rules.lower.panel`; inside, `rules.test.*` (several
+ * rules: `rules.test.note`, `rules.test.group`, `rules.test.group.title`)
+ * and `rules.runs` / `rules.run.*`.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, type KeyboardEvent, type Ref } from "react";
@@ -31,10 +35,17 @@ import type { ConditionHit, ExplainedMatch } from "./types";
 /** The panel's tabs. */
 export type LowerTab = "preview" | "runs";
 
-/** What Test found, and on what. */
-export interface TestResult {
+/** What Test found for one rule. */
+export interface TestGroup {
+  /** The rule as tested (the shown one as edited). */
+  rule: Rule;
   scanned: number;
   matches: readonly ExplainedMatch[];
+}
+
+/** What Test found, per rule in file order, and on what. */
+export interface TestResult {
+  groups: readonly TestGroup[];
   /** The "Run on" target it looked at (localized). */
   target: string;
 }
@@ -87,37 +98,44 @@ function Explanation({ rule, hits }: { rule: Rule; hits: readonly ConditionHit[]
 }
 
 export interface PreviewProps {
-  rule: Rule;
   result: TestResult | null;
   /** The summary line takes the focus after Test. */
   summaryRef: Ref<HTMLParagraphElement>;
   busy: boolean;
   /** Opens a message in the main window. */
   onOpen: (message: MessageSummary) => void;
-  /** Runs the rule on exactly these messages. */
-  onApply: (matches: readonly ExplainedMatch[]) => void;
+  /** Runs `rule` on exactly these messages. */
+  onApply: (rule: Rule, matches: readonly ExplainedMatch[]) => void;
 }
 
-function Preview({ rule, result, summaryRef, busy, onOpen, onApply }: PreviewProps) {
+/** The total matches of a test of several rules (a message once per rule it matches). */
+export function totalMatches(groups: readonly Pick<TestGroup, "matches">[]): number {
+  return groups.reduce((n, g) => n + g.matches.length, 0);
+}
+
+interface GroupProps extends Pick<PreviewProps, "busy" | "onOpen" | "onApply"> {
+  group: TestGroup;
+  target: string;
+  /** Only the first summary takes the focus after Test. */
+  summaryRef?: Ref<HTMLParagraphElement> | undefined;
+}
+
+/** One rule's matches: its summary, "Apply to these N", the matching messages. */
+function MatchGroup({ group, target, summaryRef, busy, onOpen, onApply }: GroupProps) {
   const t = useT();
   const folderName = useFolderName();
-  if (result === null) {
-    return (
-      <p data-part="rules.hint" ref={summaryRef} tabIndex={-1}>
-        {t("rules-preview-empty")}
-      </p>
-    );
-  }
-  const count = result.matches.length;
+  const { rule } = group;
+  const count = group.matches.length;
   return (
-    <section data-part="rules.test" aria-label={t("rules-test-title")}>
+    <>
       <div data-part="rules.test.head">
-        <p data-part="rules.test.summary" role="status" ref={summaryRef} tabIndex={-1}>
-          {t("rules-test-summary-on", {
-            matched: count,
-            scanned: result.scanned,
-            target: result.target,
-          })}
+        <p
+          data-part="rules.test.summary"
+          role={summaryRef ? "status" : undefined}
+          ref={summaryRef}
+          tabIndex={summaryRef ? -1 : undefined}
+        >
+          {t("rules-test-summary-on", { matched: count, scanned: group.scanned, target })}
         </p>
         {count > 0 && (
           <button
@@ -126,7 +144,7 @@ function Preview({ rule, result, summaryRef, busy, onOpen, onApply }: PreviewPro
             data-action="apply-matches"
             disabled={busy}
             onClick={() => {
-              onApply(result.matches);
+              onApply(rule, group.matches);
             }}
           >
             {t("rules-apply-matches", { count })}
@@ -137,7 +155,7 @@ function Preview({ rule, result, summaryRef, busy, onOpen, onApply }: PreviewPro
         <p data-part="rules.hint">{t("rules-test-none")}</p>
       ) : (
         <ul data-part="rules.test.matches">
-          {result.matches.map((m) => (
+          {group.matches.map((m) => (
             <li key={m.message.id} data-part="rules.test.match">
               <button
                 type="button"
@@ -165,6 +183,48 @@ function Preview({ rule, result, summaryRef, busy, onOpen, onApply }: PreviewPro
           ))}
         </ul>
       )}
+    </>
+  );
+}
+
+function Preview({ result, summaryRef, ...group }: PreviewProps) {
+  const t = useT();
+  if (result === null) {
+    return (
+      <p data-part="rules.hint" ref={summaryRef} tabIndex={-1}>
+        {t("rules-preview-empty")}
+      </p>
+    );
+  }
+  const [only] = result.groups;
+  if (result.groups.length === 1 && only) {
+    return (
+      <section data-part="rules.test" aria-label={t("rules-test-title")}>
+        <MatchGroup {...group} group={only} target={result.target} summaryRef={summaryRef} />
+      </section>
+    );
+  }
+  return (
+    <section data-part="rules.test" aria-label={t("rules-test-title")}>
+      <p data-part="rules.test.summary" role="status" ref={summaryRef} tabIndex={-1}>
+        {t("rules-test-summary-many", {
+          rules: result.groups.length,
+          matched: totalMatches(result.groups),
+          target: result.target,
+        })}
+      </p>
+      <p data-part="rules.test.note">{t("rules-test-separately")}</p>
+      {result.groups.map((g) => (
+        <section
+          key={g.rule.id}
+          data-part="rules.test.group"
+          data-rule={g.rule.id}
+          aria-label={g.rule.name}
+        >
+          <h3 data-part="rules.test.group.title">{g.rule.name}</h3>
+          <MatchGroup {...group} group={g} target={result.target} />
+        </section>
+      ))}
     </section>
   );
 }

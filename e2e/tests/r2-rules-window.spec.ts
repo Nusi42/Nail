@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { nailPerTest, screenshotFile } from "../support/nail";
 import {
   FLAG_RELEASES,
@@ -9,6 +9,7 @@ import {
   openRulesWindow,
   openWorkInbox,
   ruleFromMessageRow,
+  ruleInList,
   rulesFooter,
   saveRule,
 } from "../support/rules";
@@ -37,13 +38,6 @@ const SIZES = [
   { width: 1600, height: 1000 },
   { width: 1024, height: 700 },
 ] as const;
-
-/** The rule list's buttons (one per rule). */
-function ruleInList(window: Locator, name: string): Locator {
-  return window
-    .getByRole("list", { name: "Rules, in the order they run" })
-    .getByRole("button", { name, exact: true });
-}
 
 /** Opens the Work Inbox at `size` and the rules window with a saved "Flag releases". */
 async function withSavedRule(page: Page, size: { width: number; height: number }) {
@@ -198,7 +192,7 @@ test("Settings shows the rules with the window's look", async ({ page }) => {
   await expect(window).toBeHidden();
   const settings = await openSettings(page, "Mail & junk");
   const rules = settings.locator('[data-part="rules"]');
-  await rules.getByRole("button", { name: "Flag releases", exact: true }).click();
+  await ruleInList(rules, "Flag releases").click();
   const inSettings = rules.getByRole("form", { name: "Rule" });
   // The same compact row: the condition's controls side by side, as high as in the window.
   const row = inSettings.locator('[data-part="rules.condition"]').first();

@@ -7,6 +7,7 @@ import {
   newRuleFromText as enterRuleText,
   openRulesWindow,
   rulesFooter,
+  rulesList,
   saveRule,
 } from "../support/rules";
 import { readerAction, messageRows, DEMO_MULTI_CONVERSATIONS, openMail } from "../support/views";
@@ -149,7 +150,5 @@ test("a rule is created from a message", async ({ page }) => {
   expect(text).toContain('from equals="users@lists.nail.example"');
   expect(text).toContain('subject starts-with="[nail-users]"');
   expect(text).toContain('move "Lists"');
-  await expect(window.getByRole("list", { name: "Rules, in the order they run" })).toContainText(
-    "when mail arrives",
-  );
+  await expect(rulesList(window)).toContainText("when mail arrives");
 });

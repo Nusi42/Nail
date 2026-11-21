@@ -10,12 +10,18 @@
  * another rule (`select`, `startNew`) or closing the window
  * (`./closeGuard.ts`) does not happen at once: it waits in `pending` until
  * the user discards the changes (`discard`) or keeps editing (`keepEditing`).
+ *
+ * Multi-select (R3, ADR 0227): the list's selected rules (`selected`, with
+ * the `anchor` Shift extends from); the editor shows the focused one
+ * (`editing`). A pick that shows another rule waits for the same question.
  */
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { NailClient } from "../../api/client";
 import type { FolderId, MessageId, Rule, RuleId, RuleRun } from "../../api/generated";
 import { useClient } from "../../state/queries";
+import type { RunTargetKind } from "./runTargets";
+import type { ListSelection } from "./selection";
 
 /**
  * The rule being edited: a saved rule, or a new one. `key` identifies the
@@ -46,17 +52,35 @@ export interface RulesOrigin {
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
+/** The list's selected rules and the anchor of a range (the focus is `editing`). */
+export type RuleSelection = Pick<ListSelection, "selected" | "anchor">;
+
+/** Nothing selected. */
+const NO_SELECTION: RuleSelection = { selected: [], anchor: null };
+
+/** Only `id` selected (nothing for `null`). */
+const only = (id: RuleId | null): RuleSelection =>
+  id === null ? NO_SELECTION : { selected: [id], anchor: id };
+
 /**
- * What waits for "Discard changes": opening another rule (or none), or
- * closing the window (`close` closes it for good).
+ * What waits for "Discard changes": opening another rule (or none) with the
+ * list's selection, or closing the window (`close` closes it for good).
  */
 export type Pending =
-  { kind: "edit"; editing: Editing | null } | { kind: "close"; close: () => void };
+  | { kind: "edit"; editing: Editing | null; selection: RuleSelection }
+  | { kind: "close"; close: () => void };
 
 export interface RulesUiState {
   editing: Editing | null;
-  /** Edits a saved rule (`null`: none); asks first while there are unsaved changes. */
+  /** The rules selected in the list (in the order picked), and the anchor of a range. */
+  selection: RuleSelection;
+  /** Edits a saved rule (`null`: none), selecting only it; asks first while there are unsaved changes. */
   select: (id: RuleId | null) => void;
+  /**
+   * Selects rules in the list and edits the focused one; asks first while
+   * there are unsaved changes and the focus moves to another rule.
+   */
+  choose: (selection: ListSelection) => void;
   /** The rule being edited was saved as `id` (a new rule becomes a saved one). */
   saved: (id: RuleId) => void;
   /** Starts a new rule from `rule` (a blank rule or one from a message); asks first like `select`. */
@@ -71,7 +95,14 @@ export interface RulesUiState {
   picks: number;
   /** The message the window was opened from, `null` when opened otherwise. */
   origin: RulesOrigin | null;
+  /** Sets the origin; "Run on" starts over from its default. */
   setOrigin: (origin: RulesOrigin | null) => void;
+  /**
+   * The user's "Run on" choice (`null`: the default), kept while other
+   * rules are picked in the list (R3), so it holds for several rules.
+   */
+  runOn: RunTargetKind | null;
+  setRunOn: (runOn: RunTargetKind | null) => void;
   /** The rule being edited has changes that are not saved. */
   dirty: boolean;
   setDirty: (dirty: boolean) => void;
@@ -104,38 +135,72 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
         store?.setState({ pending: null, dirty: false });
         pending.close();
       } else {
-        store?.setState({ pending: null, dirty: false, editing: pending.editing });
+        store?.setState({
+          pending: null,
+          dirty: false,
+          editing: pending.editing,
+          selection: pending.selection,
+        });
       }
     };
     store = createStore<RulesUiState>((set, get) => ({
       editing: null,
+      selection: NO_SELECTION,
       select: (id) => {
         set((s) => ({ picks: s.picks + 1 }));
         const editing = get().editing;
         // The rule open already stays as it is (with its changes).
-        if (id !== null && editing?.kind === "saved" && editing.id === id) return;
+        if (id !== null && editing?.kind === "saved" && editing.id === id) {
+          set({ selection: only(id) });
+          return;
+        }
         get().guard({
           kind: "edit",
           editing: id === null ? null : { kind: "saved", id, key: `saved-${id}` },
+          selection: only(id),
+        });
+      },
+      choose: ({ selected, anchor, focus }) => {
+        const editing = get().editing;
+        const selection = { selected, anchor };
+        // The focused rule is open already: only the selection changes.
+        if (editing?.kind === "saved" && editing.id === focus) {
+          set({ selection });
+          return;
+        }
+        set((s) => ({ picks: s.picks + 1 }));
+        get().guard({
+          kind: "edit",
+          editing: { kind: "saved", id: focus, key: `saved-${focus}` },
+          selection,
         });
       },
       saved: (id) => {
-        set((s) => ({ editing: { kind: "saved", id, key: s.editing?.key ?? `saved-${id}` } }));
+        set((s) => ({
+          editing: { kind: "saved", id, key: s.editing?.key ?? `saved-${id}` },
+          // A new rule, once saved, is the one selected.
+          selection: s.editing?.kind === "new" ? only(id) : s.selection,
+        }));
       },
       startNew: (rule) => {
         set((s) => ({ picks: s.picks + 1 }));
         get().guard({
           kind: "edit",
           editing: { kind: "new", rule, key: `new-${String(++seq)}` },
+          selection: NO_SELECTION,
         });
       },
       forget: () => {
-        set({ editing: null, dirty: false, pending: null });
+        set({ editing: null, dirty: false, pending: null, selection: NO_SELECTION });
       },
       picks: 0,
       origin: null,
       setOrigin: (origin) => {
-        set({ origin });
+        set({ origin, runOn: null });
+      },
+      runOn: null,
+      setRunOn: (runOn) => {
+        set({ runOn });
       },
       dirty: false,
       setDirty: (dirty) => {

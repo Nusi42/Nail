@@ -28,6 +28,7 @@ import {
   type ExchangeSetupChoice,
 } from ".";
 import { defaultSchedule, utcOf, wallOf } from "./AutomaticReplies";
+import { badgeSummary } from "./Rules";
 import { exchangeCandidate } from "./model";
 import { EXCHANGE_ACCOUNT } from "./mockSeed";
 import { AUTOMATIC_REPLIES_DIALOG } from "./names";
@@ -158,20 +159,39 @@ describe("automatic replies", () => {
 });
 
 describe("rules", () => {
-  it("badges where a Nail rule runs on each Exchange account, with the reasons", async () => {
+  it("badges a Nail rule once, with every Exchange account's line", async () => {
     const env = setup();
-    renderWithProviders(<ExchangeRuleBadges ruleId="rust-announcements" />, env);
-    const badges = await screen.findByRole("list", {
-      name: "Where this rule runs on Exchange accounts",
+    const { container } = renderWithProviders(
+      <ExchangeRuleBadges ruleId="rust-announcements" />,
+      env,
+    );
+    // R3: one ⓘ per rule with the summed reasons; each account's line in its popover.
+    const items = await screen.findAllByRole("listitem");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent(/^Contoso: in Nail .*Condition 2 uses a search query/);
+    expect(items[0]).toHaveAttribute("data-placement", "client");
+    const badges = container.querySelectorAll('[data-part="exchange.rule-badge"]');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveAttribute("data-placement", "client");
+    expect(badges[0]?.querySelector('[data-part="exchange.rule-badge.count"]')).toHaveTextContent(
+      "1",
+    );
+    // Not a control: the rule list's option holds nothing interactive.
+    expect(within(badges[0] as HTMLElement).queryByRole("button")).toBeNull();
+  });
+
+  it("sums the reasons of every Exchange account and shows the most local placement", () => {
+    expect(
+      badgeSummary([
+        { placement: "server", reasons: 0 },
+        { placement: "client", reasons: 2 },
+        { placement: "not-expressible", reasons: 1 },
+      ]),
+    ).toEqual({ total: 3, placement: "not-expressible" });
+    expect(badgeSummary([{ placement: "server", reasons: 0 }])).toEqual({
+      total: 0,
+      placement: "server",
     });
-    // R2: a compact ⓘ with the number of reasons; where it runs is its name,
-    // the reasons its description (hover / focus text).
-    const button = await within(badges).findByRole("button", { name: "Contoso: in Nail" });
-    expect(button).toHaveAccessibleDescription(/Condition 2 uses a search query/);
-    expect(button.getAttribute("title")).toMatch(/^Contoso: in Nail .*Condition 2/);
-    expect(button).toHaveTextContent("1");
-    const badge = badges.querySelector('[data-part="exchange.rule-badge"]');
-    expect(badge?.getAttribute("data-placement")).toBe("client");
   });
 
   it("lists placements and server rules; switches and deletes the user's own", async () => {

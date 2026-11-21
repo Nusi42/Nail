@@ -1121,7 +1121,8 @@ theme "default" mode="system" {
         background-color "$color.bg"
     }
     part "rules.list.filter:focus-visible" { outline "2px solid $color.focus-ring"; }
-    // A row: handle, the name over its triggers, the Exchange badges, On.
+    // A row (an option of the multi-select list): handle, the name over its
+    // triggers, the Exchange badge, the On mark.
     part "rules.list.items" {
         display "flex"
         flex-direction "column"
@@ -1136,11 +1137,15 @@ theme "default" mode="system" {
         column-gap "$space.xs"
         padding "$space.xxs" "$space.xs"
         border-radius "$radius.sm"
+        cursor "default"
     }
+    part "rules.list.item:hover" { background-color "$color.bg-raised"; }
+    part "rules.list.item:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset "-2px"; }
     part "rules.list.item[selected=\"true\"]" {
         color "$color.selection-fg"
         background-color "$color.selection"
     }
+    part "rules.list.item[current=\"true\"]" { box-shadow "inset 3px 0 0 $color.accent"; }
     part "rules.list.item[enabled=\"false\"]" { opacity "$opacity.muted"; }
     part "rules.list.item[drop=\"target\"]" { box-shadow "inset 0 2px 0 $color.accent"; }
     part "rules.list.handle" {
@@ -1152,25 +1157,19 @@ theme "default" mode="system" {
         background-color "transparent"
         cursor "grab"
     }
-    part "rules.list.handle:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "rules.list.handle[disabled=\"true\"]" { cursor "default"; opacity "$opacity.muted"; }
     part "rules.list.main" {
         display "flex"
         flex-direction "column"
         min-width 0
     }
-    part "rules.list.select" {
+    part "rules.list.name" {
         min-width 0
         overflow "hidden"
-        padding 0
-        border "none"
-        text-align "left"
         text-overflow "ellipsis"
         white-space "nowrap"
         font-weight "$font-weight.medium"
-        color "inherit"
-        background-color "transparent"
     }
-    part "rules.list.select:focus-visible" { outline "2px solid $color.focus-ring"; }
     part "rules.list.triggers" {
         overflow "hidden"
         text-overflow "ellipsis"
@@ -1178,6 +1177,15 @@ theme "default" mode="system" {
         font-size "$font-size.xs"
         color "$color.fg-muted"
     }
+    part "rules.list.about" { display "flex"; align-items "center"; }
+    part "rules.list.enabled" {
+        display "flex"
+        padding "$space.xxs"
+        border-radius "$radius.sm"
+        color "$color.accent"
+        cursor "pointer"
+    }
+    part "rules.list.enabled:hover" { background-color "$color.bg-raised"; }
     // The editor: header, body (form or text), lower panel, footer.
     part "rules.editor" {
         display "flex"
@@ -3682,12 +3690,9 @@ theme "default" mode="system" {
     part "exchange.color:selected" { border "1px solid $color.accent"; }
     part "exchange.color.name" { font-size "$font-size.sm"; }
     part "exchange.mailbox-badge" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; background-color "$color.bg-raised"; }
-    part "exchange.rule-badges" { gap "$space.xxs"; margin 0; padding 0; }
-    part "exchange.rule-badge" { position "relative"; color "$color.fg-muted"; }
-    part "exchange.rule-badge.button" { display "inline-flex"; align-items "center"; gap "$space.xxs"; padding 0 "$space.xxs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "inherit"; background-color "transparent"; }
-    part "exchange.rule-badge.button:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "exchange.rule-badge" { gap "$space.xxs"; padding 0 "$space.xxs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "exchange.rule-badge[placement=\"client\"]" { color "$color.warning"; }
-    part "exchange.rule-badge.reasons" { padding "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg"; background-color "$color.bg-raised"; box-shadow "$shadow.overlay"; }
+    part "exchange.rule-badge.reasons" { display "flex"; flex-direction "column"; gap "$space.xxs"; padding "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg"; background-color "$color.bg-raised"; box-shadow "$shadow.overlay"; }
     part "exchange.task-list-badge" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; background-color "$color.bg-raised"; }
     part "exchange.focus-move" { border "$border.thin"; border-radius "$radius.sm"; padding "$space.xxs" "$space.sm"; color "$color.fg"; background-color "transparent"; cursor "pointer"; }
     part "exchange.rooms" { display "flex"; flex-direction "column"; gap "$space.xs"; }

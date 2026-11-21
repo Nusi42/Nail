@@ -2,7 +2,13 @@ import { p } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
 import { SETTINGS_BODY_END, SETTINGS_SKIN_CSS } from "../settings/skin";
 import { VISUALLY_HIDDEN } from "../../theme/declarations";
-import { RULES_CONTAINER, RULES_SKIN_CSS, RULES_STACKED, repeatedRowLabels } from "./skin";
+import {
+  BADGE_OPEN,
+  RULES_CONTAINER,
+  RULES_SKIN_CSS,
+  RULES_STACKED,
+  repeatedRowLabels,
+} from "./skin";
 
 describe("the rules skin (R2)", () => {
   it("hides a row's labels only under a row of the same kind", () => {
@@ -66,5 +72,18 @@ describe("the rules skin (R2)", () => {
     expect(RULES_SKIN_CSS).toContain(`@container ${RULES_CONTAINER} (max-width: ${RULES_STACKED})`);
     // "Saved" fades, unless the user asks for less motion.
     expect(RULES_SKIN_CSS).toMatch(/prefers-reduced-motion: reduce[^}]*animation: none/);
+  });
+
+  it("shows the Exchange badge's lines on hover and row focus, kept readable while closed (R3)", () => {
+    // Closed: visually hidden, not removed, so the row's description reads it.
+    expect(RULES_SKIN_CSS).toContain(`${p("exchange.rule-badge.reasons")} { ${VISUALLY_HIDDEN} }`);
+    expect(RULES_SKIN_CSS).not.toMatch(/rule-badge\.reasons"\][^{]*\{[^}]*display: none/);
+    expect(BADGE_OPEN).toContain(`${p("exchange.rule-badge")}:hover`);
+    expect(BADGE_OPEN).toContain(`${p("rules.list.item")}:focus-visible`);
+    // Open: over the list (absolute, from the hidden state), so nothing moves.
+    const open = RULES_SKIN_CSS.split(`${BADGE_OPEN} > ${p("exchange.rule-badge.reasons")} {`)[1];
+    expect(open?.slice(0, open.indexOf("}"))).toMatch(/inset-inline: 0; top: 100%;/);
+    expect(RULES_SKIN_CSS).toContain(`${p("rules.list.item")} { position: relative; }`);
+    expect(RULES_SKIN_CSS).toContain(`${p("rules.list.off")} { ${VISUALLY_HIDDEN} }`);
   });
 });

@@ -6,7 +6,6 @@
  * applies (each rule's own folders, else the Inboxes). R1's run panel had
  * the same choices as radio buttons under the editor.
  */
-import { useState } from "react";
 import { currentTargets, useListSelection } from "../../actions/mailTargets";
 import { useT } from "../../i18n/I18nProvider";
 import { useFolders } from "../../state/queries";
@@ -96,7 +95,9 @@ export function useRunOn() {
     fromMessage,
   };
   const choices = runOnChoices(facts, t);
-  const [chosen, setChosen] = useState<RunTargetKind | null>(null);
+  // Kept in the store: picking other rules in the list keeps the choice.
+  const chosen = useRulesUi((s) => s.runOn);
+  const setChosen = useRulesUi((s) => s.setRunOn);
   const preferred = chosen ?? defaultRunOn(facts);
   // A choice that is no longer available (the selection went away) falls back.
   const kind = choices.find((c) => c.kind === preferred)?.why === null ? preferred : "scope";

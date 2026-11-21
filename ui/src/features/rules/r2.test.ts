@@ -94,12 +94,11 @@ describe("the rule list helpers", () => {
     expect(moveItemTo(["a", "b"], 0, 5)).toEqual(["a", "b"]);
   });
 
-  it("reorders with Alt+arrows, or plain arrows on the handle", () => {
-    expect(reorderStep({ key: "ArrowUp", altKey: true }, false)).toBe(-1);
-    expect(reorderStep({ key: "ArrowDown", altKey: true }, false)).toBe(1);
-    expect(reorderStep({ key: "ArrowDown", altKey: false }, false)).toBe(0);
-    expect(reorderStep({ key: "ArrowUp", altKey: false }, true)).toBe(-1);
-    expect(reorderStep({ key: "Enter", altKey: true }, true)).toBe(0);
+  it("reorders with Alt+arrows (plain arrows move the focus)", () => {
+    expect(reorderStep({ key: "ArrowUp", altKey: true })).toBe(-1);
+    expect(reorderStep({ key: "ArrowDown", altKey: true })).toBe(1);
+    expect(reorderStep({ key: "ArrowDown", altKey: false })).toBe(0);
+    expect(reorderStep({ key: "Enter", altKey: true })).toBe(0);
   });
 
   it("starts each starter rule with its localized name", () => {

@@ -4,8 +4,9 @@
  *
  * - mount point `ExchangeRuleBadges`: in the rule list, where one Nail rule
  *   runs for each Exchange account (on the server / in Nail / Nail only),
- *   with the reasons it stays in Nail — a compact ⓘ per account with the
- *   number of reasons; the text is its hover / focus text (R2).
+ *   with the reasons it stays in Nail — one compact ⓘ per rule with the
+ *   number of reasons over all accounts; each account's line is in its
+ *   hover / focus popover (R3).
  * - widget `exchange-rules` (settings): per Exchange account the rules
  *   state, "Sync now", the "run rules on the server" switch (the account's
  *   `server-rules` option), where each Nail rule runs, and every inbox rule
@@ -14,15 +15,18 @@
  *   marked.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { errorMessageId, errorMessageOf } from "../../api/client";
+import { RULE_PLACEMENT_VALUES } from "../../api/generated";
 import type {
   Account,
   AccountConfig,
+  AccountId,
   ExchangeInboxRule,
   ExchangeRulesStatus,
   LocalizedMessage,
   RuleId,
+  RulePlacement,
 } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useLabel, useT } from "../../i18n/I18nProvider";
@@ -42,60 +46,130 @@ import {
 import { PlacementTable } from "../rules/PlacementTable";
 import { Icon } from "../../widgets/Icon";
 
-/**
- * One Exchange account's badge (R2 design review, item 3): a compact ⓘ with
- * the number of reasons the rule stays in Nail there; where the rule runs
- * and why are its hover text and, on focus, its description (shown beside
- * it), so the rule list's row stays one line.
- */
-function AccountBadge({ account, ruleId }: { account: Account; ruleId: RuleId }) {
-  const t = useT();
-  const reasonsId = useId();
-  const rules = useExchangeRules(account.id);
-  const status = rules.data?.rules.find((r) => r.rule_id === ruleId);
-  if (!status || rules.data?.state === "disabled") return null;
-  const placement = t(`exchange-placement-${status.placement}`, { account: account.name });
-  const reasons = status.reasons.map((r) => t(r.id, r.args)).join(" ");
-  const details = reasons === "" ? placement : `${placement} ${reasons}`;
-  return (
-    <li data-part="exchange.rule-badge" data-placement={status.placement}>
-      <button
-        type="button"
-        data-part="exchange.rule-badge.button"
-        aria-label={placement}
-        aria-describedby={reasons === "" ? undefined : reasonsId}
-        title={details}
-      >
-        <Icon name="info" part="exchange.rule-badge.icon" />
-        {status.reasons.length > 0 && (
-          <span data-part="exchange.rule-badge.count" aria-hidden="true">
-            {status.reasons.length}
-          </span>
-        )}
-      </button>
-      {reasons !== "" && (
-        <span id={reasonsId} data-part="exchange.rule-badge.reasons">
-          {reasons}
-        </span>
-      )}
-    </li>
-  );
+/** One account's line of the badge: where the rule runs there, and why. */
+interface AccountLine {
+  placement: RulePlacement;
+  /** "Contoso: in Nail" and the reasons, localized. */
+  text: string;
+  reasons: number;
 }
 
 /**
- * Mount point `ExchangeRuleBadges`: where a Nail rule runs on each
- * Exchange account; nothing without Exchange accounts.
+ * Placements from the server's to Nail's only (the core declares them in
+ * that order): the badge shows the most local one.
+ */
+const PLACEMENT_ORDER: readonly RulePlacement[] = RULE_PLACEMENT_VALUES;
+
+/**
+ * What the badge shows for the accounts' lines: the reasons summed over
+ * every account (the number beside the ⓘ) and the most local placement
+ * (where its colour comes from).
+ */
+export function badgeSummary(lines: readonly Omit<AccountLine, "text">[]): {
+  total: number;
+  placement: RulePlacement;
+} {
+  return {
+    total: lines.reduce((n, l) => n + l.reasons, 0),
+    placement: lines.reduce<RulePlacement>(
+      (most, l) =>
+        PLACEMENT_ORDER.indexOf(l.placement) > PLACEMENT_ORDER.indexOf(most) ? l.placement : most,
+      "server",
+    ),
+  };
+}
+
+/**
+ * Reads where the rule runs on one account and reports its line (`null`:
+ * nothing to show there); renders nothing itself, so the badge can sum
+ * every account's reasons.
+ */
+function AccountProbe({
+  account,
+  ruleId,
+  report,
+}: {
+  account: Account;
+  ruleId: RuleId;
+  report: (accountId: AccountId, line: AccountLine | null) => void;
+}) {
+  const t = useT();
+  const rules = useExchangeRules(account.id);
+  const status = rules.data?.rules.find((r) => r.rule_id === ruleId);
+  const shown = status && rules.data?.state !== "disabled" ? status : null;
+  const placement = shown
+    ? t(`exchange-placement-${shown.placement}`, { account: account.name })
+    : "";
+  const reasons = shown ? shown.reasons.map((r) => t(r.id, r.args)).join(" ") : "";
+  const text = reasons === "" ? placement : `${placement} ${reasons}`;
+  useEffect(() => {
+    report(
+      account.id,
+      shown ? { placement: shown.placement, text, reasons: shown.reasons.length } : null,
+    );
+  }, [report, account.id, shown, text]);
+  useEffect(
+    () => () => {
+      report(account.id, null);
+    },
+    [report, account.id],
+  );
+  return null;
+}
+
+/**
+ * Mount point `ExchangeRuleBadges` (R3, ADR 0227): one compact ⓘ per rule
+ * with the number of reasons the rule stays in Nail, summed over every
+ * Exchange account; its popover (hover, and while the rule list's row has
+ * the focus) lists each account's line. The popover is positioned over the
+ * list, so showing it moves nothing. Inside the list's row (an option, whose
+ * content is not interactive) the badge is not a control: the row names its
+ * lines as its description. Nothing without Exchange accounts.
  */
 export function ExchangeRuleBadges({ ruleId }: { ruleId: RuleId }) {
-  const t = useT();
   const accounts = useExchangeAccounts();
+  const [lines, setLines] = useState<Readonly<Record<AccountId, AccountLine>>>({});
+  const report = useCallback((accountId: AccountId, line: AccountLine | null) => {
+    setLines((all) => {
+      const old = all[accountId];
+      if (line === null) {
+        if (old === undefined) return all;
+        return Object.fromEntries(Object.entries(all).filter(([id]) => id !== accountId));
+      }
+      if (old?.text === line.text && old.placement === line.placement) return all;
+      return { ...all, [accountId]: line };
+    });
+  }, []);
   if (accounts.length === 0) return null;
+  const shown = accounts.flatMap((a) => {
+    const line = lines[a.id];
+    return line ? [{ id: a.id, ...line }] : [];
+  });
+  const { total, placement } = badgeSummary(shown);
   return (
-    <ul data-part="exchange.rule-badges" aria-label={t("exchange-rule-badges-label")}>
+    <>
       {accounts.map((a) => (
-        <AccountBadge key={a.id} account={a} ruleId={ruleId} />
+        <AccountProbe key={a.id} account={a} ruleId={ruleId} report={report} />
       ))}
-    </ul>
+      {shown.length > 0 && (
+        <div data-part="exchange.rule-badge" data-placement={placement}>
+          <Icon name="info" part="exchange.rule-badge.icon" />
+          {total > 0 && (
+            <span data-part="exchange.rule-badge.count" aria-hidden="true">
+              {total}
+            </span>
+          )}
+          {/* No name of its own: as the row's description, the lines are read as they are. */}
+          <ul data-part="exchange.rule-badge.reasons">
+            {shown.map((l) => (
+              <li key={l.id} data-part="exchange.rule-badge.reason" data-placement={l.placement}>
+                {l.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   );
 }
 

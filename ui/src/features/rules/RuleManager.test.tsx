@@ -9,7 +9,7 @@ import { appRegistry } from "../registry";
 import { actions, dialogs, widgets } from "./index";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
-import { addFromMenu, footerOf, setup, showTextView } from "./testing";
+import { addFromMenu, footerOf, ruleOption, setup, showTextView } from "./testing";
 
 /** A field by its `name`, or the control inside the field row `data-field` (pickers). */
 function field(container: HTMLElement, name: string): HTMLElement {
@@ -23,7 +23,7 @@ function field(container: HTMLElement, name: string): HTMLElement {
 async function openSample(env: Env) {
   const user = userEvent.setup({ delay: null });
   const view = renderWithProviders(<RuleManagerView />, env);
-  await user.click(await screen.findByRole("button", { name: "Rust announcements" }));
+  await user.click(await screen.findByRole("option", { name: ruleOption("Rust announcements") }));
   const editor = await screen.findByRole("form", { name: "Rule" });
   return { user, view, editor };
 }
@@ -45,11 +45,12 @@ describe("rule manager", () => {
   it("lists the rules and edits the selected one", async () => {
     const env = setup();
     renderNode(widget("rule-manager"), env);
-    const list = await screen.findByRole("list", { name: "Rules, in the order they run" });
+    const list = await screen.findByRole("listbox", { name: "Rules, in the order they run" });
+    expect(list).toHaveAttribute("aria-multiselectable", "true");
     expect(within(list).getByText("when mail arrives")).toBeInTheDocument();
     expect(screen.getByText("Choose a rule to edit it, or create a new one.")).toBeInTheDocument();
     const user = userEvent.setup({ delay: null });
-    await user.click(screen.getByRole("button", { name: "Rust announcements" }));
+    await user.click(screen.getByRole("option", { name: ruleOption("Rust announcements") }));
     const editor = await screen.findByRole("form", { name: "Rule" });
     expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveValue("Rust announcements");
     expect(within(editor).getByRole("switch", { name: "On" })).toHaveAttribute(
@@ -75,7 +76,9 @@ describe("rule manager", () => {
     expect(await within(editor).findByText("Saved")).toBeInTheDocument();
     const saved = env.transport.requests.find((r) => r.type === "SaveRule");
     expect(saved).toMatchObject({ rule: { id: "rust-announcements", name: "Rust news" } });
-    expect(await screen.findByRole("button", { name: "Rust news" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: ruleOption("Rust news") }),
+    ).toBeInTheDocument();
     // "Saved" goes with the next edit.
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "!");
     expect(within(editor).queryByText("Saved")).toBeNull();
@@ -142,7 +145,7 @@ describe("rule manager", () => {
     });
     // The saved rule is selected, with its id.
     expect(
-      await screen.findByRole("button", { name: "Invoices", pressed: true }),
+      await screen.findByRole("option", { name: ruleOption("Invoices"), selected: true }),
     ).toBeInTheDocument();
     expect(rulesStore(env.client).getState().editing).toMatchObject({
       kind: "saved",
@@ -233,17 +236,19 @@ describe("rule manager", () => {
     env.transport.data.features.rules.rules.push(extra);
     const user = userEvent.setup({ delay: null });
     renderWithProviders(<RuleManagerView />, env);
-    const handle = await screen.findByRole("button", { name: /^Move “Second”/ });
-    handle.focus();
-    await user.keyboard("{ArrowUp}");
+    // Alt+Up on the focused row moves it up.
+    await user.click(await screen.findByRole("option", { name: ruleOption("Second") }));
+    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
     await waitFor(() => {
       expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([
         "second",
         "rust-announcements",
       ]);
     });
-    // Alt+Down on the row's name moves it back.
-    await user.click(screen.getByRole("button", { name: "Second" }));
+    // Alt+Down moves it back; the row keeps the focus.
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: ruleOption("Second") })).toHaveFocus();
+    });
     await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
     await waitFor(() => {
       expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([
@@ -252,7 +257,12 @@ describe("rule manager", () => {
       ]);
     });
 
-    await user.click(screen.getByRole("checkbox", { name: "Rule “Second” is on" }));
+    // The On mark (a pointer target inside the option) switches it off.
+    const on = screen
+      .getByRole("option", { name: ruleOption("Second") })
+      .querySelector<HTMLElement>('[data-part="rules.list.enabled"]');
+    expect(on).toHaveAttribute("title", "Switch “Second” on or off");
+    if (on) await user.click(on);
     await waitFor(() => {
       expect(env.transport.data.features.rules.rules[1]).toMatchObject({ enabled: false });
     });
@@ -265,7 +275,7 @@ describe("rule manager", () => {
     expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
     expect(
       screen
-        .getByRole("list", { name: "Rules, in the order they run", hidden: true })
+        .getByRole("listbox", { name: "Rules, in the order they run", hidden: true })
         .closest("[inert]"),
     ).not.toBeNull();
     await user.click(within(question).getByRole("button", { name: "Cancel" }));

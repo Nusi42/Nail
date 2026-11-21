@@ -6,12 +6,13 @@
  * any of:" — no box and no second legend; nested groups keep their box.
  * "+ Add condition" is a menu button. Every value that names a folder,
  * account, tag, address, mailing list or header name is a shared picker
- * (`./PickerField`); beside each condition the window offers the values of
- * the message it was opened from (`./fromMessage`, `ValuesFromMessage`). A
+ * (`./PickerField`); right after a condition's value field (before the
+ * case check box, R3) the window offers the values of the message it was
+ * opened from (`./fromMessage`, `ValuesFromMessage`). A
  * condition that still misses its value is marked (`aria-invalid`) and
  * names the footer's problem badge.
  */
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import {
   ADDRESS_FIELD_VALUES,
   type AddressField,
@@ -69,12 +70,15 @@ export interface Marked {
 /**
  * Operator, text and case of a comparison; `optional` adds "any" /
  * "exists"; `picker` makes the text a shared picker of that kind.
+ * `values` ("Values from this mail") goes right after the text, before the
+ * case check box (R3, ADR 0227); after the operator while there is no text.
  */
 function TextMatchFields({
   name,
   value,
   optional,
   picker,
+  values,
   invalid,
   describedBy,
   onChange,
@@ -84,6 +88,7 @@ function TextMatchFields({
   /** Fluent id of the choice meaning "no comparison" (`null`). */
   optional?: string;
   picker?: PickerKind;
+  values?: ReactNode;
   onChange: (value: TextMatch | null) => void;
 } & Marked) {
   const ops: Choice[] = [
@@ -126,6 +131,7 @@ function TextMatchFields({
               onChange={setText}
             />
           )}
+          {values}
           <CheckField
             labelId="rules-case-sensitive"
             name={`${name}-case`}
@@ -136,6 +142,7 @@ function TextMatchFields({
           />
         </>
       )}
+      {!value && values}
     </>
   );
 }
@@ -219,11 +226,14 @@ export function FolderRefFields({
 function LeafFields({
   name,
   condition,
+  values,
   onChange,
   ...marked
 }: {
   name: string;
   condition: Condition;
+  /** "Values from this mail", placed right after the field it fills. */
+  values: ReactNode;
   onChange: (c: Condition) => void;
 } & Marked) {
   const c = condition;
@@ -245,6 +255,7 @@ function LeafFields({
             name={name}
             value={c.matches}
             picker="address"
+            values={values}
             {...marked}
             onChange={(m) => {
               onChange({ ...c, matches: m ?? textMatch() });
@@ -258,6 +269,7 @@ function LeafFields({
         <TextMatchFields
           name={name}
           value={c.matches}
+          values={values}
           {...marked}
           onChange={(m) => {
             onChange({ ...c, matches: m ?? textMatch() });
@@ -281,6 +293,7 @@ function LeafFields({
             name={name}
             value={c.matches}
             optional="rules-op-exists"
+            values={values}
             onChange={(matches) => {
               onChange({ ...c, matches });
             }}
@@ -294,6 +307,7 @@ function LeafFields({
           value={c.matches}
           optional="rules-op-exists"
           picker="mailing-list"
+          values={values}
           onChange={(matches) => {
             onChange({ ...c, matches });
           }}
@@ -428,41 +442,50 @@ function LeafFields({
       );
     case "tag":
       return (
-        <PickerField
-          kind="tag"
-          labelId="rules-tag"
-          name={`${name}-tag`}
-          value={c.tag}
-          {...marked}
-          onChange={(tag) => {
-            onChange({ ...c, tag: tag.trim() });
-          }}
-        />
+        <>
+          <PickerField
+            kind="tag"
+            labelId="rules-tag"
+            name={`${name}-tag`}
+            value={c.tag}
+            {...marked}
+            onChange={(tag) => {
+              onChange({ ...c, tag: tag.trim() });
+            }}
+          />
+          {values}
+        </>
       );
     case "account":
       return (
-        <PickerField
-          kind="account"
-          labelId="rules-account"
-          name={`${name}-account`}
-          value={c.account_id}
-          placeholderId="rules-choose"
-          {...marked}
-          onChange={(account_id) => {
-            onChange({ ...c, account_id });
-          }}
-        />
+        <>
+          <PickerField
+            kind="account"
+            labelId="rules-account"
+            name={`${name}-account`}
+            value={c.account_id}
+            placeholderId="rules-choose"
+            {...marked}
+            onChange={(account_id) => {
+              onChange({ ...c, account_id });
+            }}
+          />
+          {values}
+        </>
       );
     case "folder":
       return (
-        <FolderRefFields
-          name={name}
-          value={c.folder}
-          {...marked}
-          onChange={(folder) => {
-            onChange({ ...c, folder });
-          }}
-        />
+        <>
+          <FolderRefFields
+            name={name}
+            value={c.folder}
+            {...marked}
+            onChange={(folder) => {
+              onChange({ ...c, folder });
+            }}
+          />
+          {values}
+        </>
       );
     case "auth":
       return (
@@ -665,14 +688,16 @@ function ConditionNode(node: NodeProps) {
         condition={condition}
         invalid={invalid}
         describedBy={describedBy}
+        values={
+          <ValuesFromMessage
+            condition={condition}
+            onPick={(_value, next) => {
+              onChange(replaceAt(root, path, next));
+            }}
+          />
+        }
         onChange={(c) => {
           onChange(replaceAt(root, path, c));
-        }}
-      />
-      <ValuesFromMessage
-        condition={condition}
-        onPick={(_value, next) => {
-          onChange(replaceAt(root, path, next));
         }}
       />
       {remove}

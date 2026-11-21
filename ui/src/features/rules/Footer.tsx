@@ -8,7 +8,8 @@
  *   last run did, with Undo for all of it.
  * - **Delete…** (destructive, asks first) for a saved rule.
  * - **Run on** (the selected messages, the current folder, where the rule
- *   applies), **Run** ("Save and run" while the rule has unsaved changes),
+ *   applies), **Run** ("Save and run" while the rule has unsaved changes;
+ *   "Run 3 rules" with several rules selected in the list, R3),
  *   **Test** and **Save** (primary). Save stays focusable while something
  *   is missing (`aria-disabled`) and names the problem badge.
  *
@@ -40,8 +41,10 @@ export interface FooterProps {
   /** Delete…; omitted for a new rule. */
   onDelete?: (() => void) | undefined;
   runOn: RunOn;
-  /** The rule has unsaved changes: Run saves it first. */
-  unsaved: boolean;
+  /** Run's text (`runLabel`: how many rules, saving first). */
+  runText: string;
+  /** What keeps the shown rule from being saved also keeps Run from running. */
+  runBlocked: boolean;
   onRun: () => void;
   onTest: () => void;
 }
@@ -54,7 +57,8 @@ export function Footer({
   busy,
   onDelete,
   runOn,
-  unsaved,
+  runText,
+  runBlocked,
   onRun,
   onTest,
 }: FooterProps) {
@@ -128,11 +132,11 @@ export function Footer({
           data-part="form.button"
           data-action="run-rules"
           disabled={busy}
-          aria-disabled={blocked || undefined}
-          aria-describedby={blocked ? detailsId : undefined}
+          aria-disabled={runBlocked || undefined}
+          aria-describedby={runBlocked ? detailsId : undefined}
           onClick={onRun}
         >
-          {t(unsaved ? "rules-save-and-run" : "rules-run")}
+          {runText}
         </button>
         <button
           type="button"

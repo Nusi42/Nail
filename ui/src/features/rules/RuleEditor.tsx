@@ -21,6 +21,14 @@
  * background once typing pauses, so the footer judges the rule Save would
  * write in both views.
  *
+ * Several rules selected in the list (R3, ADR 0227): Run runs them all in
+ * file order on the "Run on" target (one `RunRules`; the shown rule saved
+ * first when it is one of them and has changes), and asks first with the
+ * total preview count when one of them moves or deletes mail. Test tests
+ * each on its own (one `TestRule` per rule) and the Preview groups the
+ * matches by rule; it does not simulate the rules one after another.
+ * Save, Delete and the Text view act on the shown rule only.
+ *
  * Unsaved changes: the editor tells the rules store (`setDirty`), so
  * switching rules or closing the window asks first (`./store.ts`,
  * `./closeGuard.ts`). Delete and a run that moves or deletes mail ask too,
@@ -29,7 +37,7 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
-import type { ConfigIssue, MessageSummary, Rule, RuleRun } from "../../api/generated";
+import type { ConfigIssue, MessageSummary, Rule, RuleId, RuleRun } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useBusyAction } from "../../state/busyAction";
 import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
@@ -50,7 +58,7 @@ import {
 } from "./api";
 import { Confirm } from "./Confirm";
 import { Footer, type FooterState } from "./Footer";
-import { LowerPanel, type LowerTab, type TestResult } from "./LowerPanel";
+import { LowerPanel, type LowerTab, type TestGroup, type TestResult } from "./LowerPanel";
 import { isDestructive, ruleIssues } from "./model";
 import { RuleForm, RuleHeader } from "./RuleForm";
 import { refreshRuns } from "./runMenu";
@@ -109,19 +117,43 @@ interface TextRead {
   errors: readonly ConfigIssue[];
 }
 
-/** A question the editor asks over its content. */
-type Question = { kind: "delete" } | { kind: "run"; count: number; target: string; go: () => void };
+/**
+ * A question the editor asks over its content: before a run that moves or
+ * deletes mail, the rules that run and their total preview count.
+ */
+type Question =
+  | { kind: "delete" }
+  | {
+      kind: "run";
+      rules: readonly Rule[];
+      count: number;
+      target: string;
+      go: () => void;
+    };
+
+/** The Run button's text: how many rules, and whether the shown rule is saved first. */
+export function runLabel(
+  t: ReturnType<typeof useT>,
+  { count, savesFirst }: { count: number; savesFirst: boolean },
+): string {
+  if (count > 1) return t(savesFirst ? "rules-save-and-run-many" : "rules-run-many", { count });
+  return t(savesFirst ? "rules-save-and-run" : "rules-run");
+}
 
 /**
  * Edits `initial` (a saved rule, or a new one with an empty id). Calls
- * `onSaved` with the saved rule and `onDeleted` after a delete.
+ * `onSaved` with the saved rule and `onDeleted` after a delete. `selection`:
+ * the saved rules selected in the list when there are several (in file
+ * order), which Run and Test act on; else empty (the shown rule).
  */
 export function RuleEditor({
   initial,
+  selection,
   onSaved,
   onDeleted,
 }: {
   initial: Rule;
+  selection: readonly Rule[];
   onSaved: (rule: Rule) => void;
   onDeleted: () => void;
 }) {
@@ -160,6 +192,11 @@ export function RuleEditor({
     latest.current = rule;
   }, [rule]);
   const isNew = savedRule.id === "";
+  /** Whether `r` is the rule shown here (a selected rule's saved copy, or itself). */
+  const isShown = (r: Rule) => r.id === savedRule.id;
+  // Run and Test act on the selected rules, else on the shown one.
+  const many = selection.length > 1;
+  const shownRuns = !many || selection.some(isShown);
 
   /** Something changed: "Saved" and the preview describe an older rule. */
   const edited = () => {
@@ -218,6 +255,8 @@ export function RuleEditor({
   const textErrors = textEdited && read?.text === text ? read.errors : [];
   const dirty = draft === undefined || draft === null || ruleChanged(draft, savedRule);
   const unsaved = isNew || dirty;
+  // Run saves the shown rule first when it runs and has changes.
+  const savesFirst = unsaved && shownRuns;
 
   // Unsaved changes ask before the rule or the window goes.
   useEffect(() => {
@@ -331,24 +370,47 @@ export function RuleEditor({
     setView("visual");
   };
 
-  /**
-   * What `next` matches on the "Run on" target (at most `limit` matches):
-   * the very messages a run there acts on (`ruleRunTargetOf`).
-   */
-  const testOn = async (next: Rule, limit: number): Promise<TestResult> => {
+  /** The core's target of the "Run on" choice; `null` when it has no messages. */
+  const runTarget = async (): Promise<RuleRunTarget | null> => {
     const chosen = runOn.target();
-    const target = chosen === null ? null : await ruleRunTargetOf(client, chosen);
-    const found = await testRule(client, next, target ?? RULE_SCOPE_TARGET, limit);
-    return { ...found, target: runOn.label };
+    return chosen === null ? null : ruleRunTargetOf(client, chosen);
   };
+
+  /**
+   * The rules Run and Test act on, in file order, the shown one as edited;
+   * `null` when the shown rule is one of them and its text does not read.
+   */
+  const actedOn = async (): Promise<Rule[] | null> => {
+    const next = shownRuns ? await current() : null;
+    if (shownRuns && !next) return null;
+    if (!many) return next ? [next] : null;
+    return selection.map((r) => (isShown(r) && next ? next : r));
+  };
+
+  /**
+   * What each of `rules` matches on `target` (at most `limit` matches each):
+   * the very messages a run there acts on. Each rule on its own, not one
+   * after another.
+   */
+  const testEach = (
+    rules: readonly Rule[],
+    target: RuleRunTarget | null,
+    limit: number,
+  ): Promise<TestGroup[]> =>
+    Promise.all(
+      rules.map(async (r) => ({
+        rule: r,
+        ...(await testRule(client, r, target ?? RULE_SCOPE_TARGET, limit)),
+      })),
+    );
 
   const test = () =>
     run(async () => {
-      const next = await current();
-      if (!next) return;
-      const result = await testOn(next, TEST_LIMIT);
+      const rules = await actedOn();
+      if (!rules) return;
+      const groups = await testEach(rules, await runTarget(), TEST_LIMIT);
       focusSummary.current = true;
-      setTested(result);
+      setTested({ groups, target: runOn.label });
       setTab("preview");
     });
 
@@ -359,12 +421,23 @@ export function RuleEditor({
       await refreshRuns(queryClient);
     });
 
-  /** Saves the rule first when it has unsaved changes, then runs it on `target`. */
-  const runNow = (target: RuleRunTarget) =>
+  /**
+   * Runs `rules` on `target` (one `RunRules`, file order); the shown rule
+   * is saved first when it is one of them and has unsaved changes.
+   */
+  const runNow = (rules: readonly Rule[], target: RuleRunTarget) =>
     run(async () => {
-      const id = unsaved ? (await persist())?.id : savedRule.id;
-      if (id === undefined) return;
-      const outcome = outcomeOf(await runRules(client, [id], target));
+      const ids: RuleId[] = [];
+      for (const r of rules) {
+        if (!isShown(r)) {
+          ids.push(r.id);
+          continue;
+        }
+        const id = unsaved ? (await persist())?.id : savedRule.id;
+        if (id === undefined) return;
+        ids.push(id);
+      }
+      const outcome = outcomeOf(await runRules(client, ids, target));
       const message = outcomeMessage(outcome);
       setFooter({
         kind: "ran",
@@ -380,35 +453,43 @@ export function RuleEditor({
     });
 
   /**
-   * Runs the rule on `target`; a rule that moves or deletes mail asks
-   * first, with how many messages it matches there (`count`, else tested).
+   * Runs `rules` on `target`; when one of them moves or deletes mail, asks
+   * first with how many matches they have there together (`count`, else
+   * tested).
    */
-  const requestRun = async (target: RuleRunTarget | null, label: string, count?: number) => {
-    const next = await current();
-    if (!next || ruleIssues(next).length > 0 || target === null) return;
-    if (!isDestructive(next)) {
-      await runNow(target);
+  const requestRun = async (
+    rules: readonly Rule[],
+    target: RuleRunTarget | null,
+    label: string,
+    count?: number,
+  ) => {
+    if (target === null || rules.some((r) => ruleIssues(r).length > 0)) return;
+    if (!rules.some(isDestructive)) {
+      await runNow(rules, target);
       return;
     }
-    const matched = count ?? (await testOn(next, COUNT_LIMIT)).matches.length;
+    const matched =
+      count ??
+      (await testEach(rules, target, COUNT_LIMIT)).reduce((n, g) => n + g.matches.length, 0);
     setQuestion({
       kind: "run",
+      rules,
       count: matched,
       target: label,
-      go: () => void runNow(target),
+      go: () => void runNow(rules, target),
     });
   };
 
   const runOnTarget = () =>
     run(async () => {
-      const chosen = runOn.target();
-      const target = chosen === null ? null : await ruleRunTargetOf(client, chosen);
-      await requestRun(target, runOn.label);
+      const rules = await actedOn();
+      if (rules) await requestRun(rules, await runTarget(), runOn.label);
     });
 
-  const apply = (matches: readonly ExplainedMatch[]) =>
+  const apply = (rule: Rule, matches: readonly ExplainedMatch[]) =>
     run(() =>
       requestRun(
+        [rule],
         { messageIds: matches.map((m) => m.message.id), folderId: null },
         t("rules-target-matches", { count: matches.length }),
         matches.length,
@@ -502,12 +583,11 @@ export function RuleEditor({
           tab={tab}
           onTab={setTab}
           ruleId={isNew ? null : savedRule.id}
-          rule={draft ?? rule}
           result={tested}
           summaryRef={summary}
           busy={busy}
           onOpen={open}
-          onApply={(matches) => void apply(matches)}
+          onApply={(r, matches) => void apply(r, matches)}
           onUndo={(target) => void undoRun(target)}
         />
         <Footer
@@ -524,7 +604,8 @@ export function RuleEditor({
                 }
           }
           runOn={runOn}
-          unsaved={unsaved}
+          runText={runLabel(t, { count: many ? selection.length : 1, savesFirst })}
+          runBlocked={shownRuns && problems.length > 0}
           onRun={() => void runOnTarget()}
           onTest={() => void test()}
         />
@@ -548,12 +629,23 @@ export function RuleEditor({
       {question?.kind === "run" && (
         <Confirm
           kind="run"
-          question={t("rules-confirm-run", {
-            name: shownName,
-            count: question.count,
-            target: question.target,
+          question={
+            question.rules.length === 1
+              ? t("rules-confirm-run", {
+                  name: question.rules[0]?.name ?? shownName,
+                  count: question.count,
+                  target: question.target,
+                })
+              : t("rules-confirm-run-many", {
+                  rules: question.rules.length,
+                  count: question.count,
+                  target: question.target,
+                })
+          }
+          confirmLabel={runLabel(t, {
+            count: question.rules.length,
+            savesFirst: unsaved && question.rules.some(isShown),
           })}
-          confirmLabel={t(unsaved ? "rules-save-and-run" : "rules-run")}
           cancelLabel={t("common-cancel")}
           danger
           onCancel={() => {

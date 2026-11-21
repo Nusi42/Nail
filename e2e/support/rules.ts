@@ -64,6 +64,17 @@ export async function newRuleFromText(window: Locator, text: string): Promise<Lo
   return editor;
 }
 
+/** The rule list: a multi-select listbox, one option per rule (R3). */
+export function rulesList(scope: Locator): Locator {
+  return scope.getByRole("listbox", { name: "Rules, in the order they run" });
+}
+
+/** The rule list's option of the rule `name` (named by its name, then its triggers). */
+export function ruleInList(scope: Locator, name: string): Locator {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return rulesList(scope).getByRole("option", { name: new RegExp(`^${escaped} `) });
+}
+
 /** The editor's footer (status, Delete…, Run on, Run, Test, Save; always in view). */
 export function rulesFooter(editor: Locator): Locator {
   return editor.locator('[data-part="rules.footer"]');

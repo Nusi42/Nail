@@ -24,15 +24,25 @@ The list on the left shows your rules in the order they run:
 - **New rule** starts an empty rule. **Find a rule** filters the list by
   name.
 - Each row shows the rule's name and when it runs ("when mail arrives",
-  "by hand"). The checkbox on the right turns the rule on or off; a rule
-  that is off never runs by itself, but you can still run it by hand.
+  "by hand"). Click the check mark on the right to turn the rule on or off
+  (with the keyboard: the **On** switch at the top of the editor). A rule
+  that is off looks faded; it never runs by itself, but you can still run
+  it by hand.
+- Click a rule to open it in the editor. To select several rules, hold
+  **Ctrl** and click each one, or click the first and **Shift**+click the
+  last. With the keyboard: the **Up** and **Down** arrow keys move between
+  rules, **Shift+Up** / **Shift+Down** add the next rule, **Space** adds or
+  removes the rule you are on, **Ctrl+A** selects every rule in the list
+  and **Escape** goes back to just the rule you are on. The editor always
+  shows the rule you clicked or moved to last; **Run** and **Test rule**
+  then act on all selected rules (see [The footer](#the-footer)).
 - To change the order, drag a rule by its handle (the dots on the left), or
-  press **Alt+Up** / **Alt+Down** on it (the arrow keys alone on the handle
-  do the same).
-- With an Exchange account, a small **ⓘ** says where the rule runs for that
-  account (on the server, or in Nail); its number counts the reasons it
-  stays in Nail. Point at it, or move the keyboard focus onto it, to read
-  them.
+  press **Alt+Up** / **Alt+Down** on it.
+- With an Exchange account, a small **ⓘ** says that something about the
+  rule is worth knowing there; its number counts all reasons it stays in
+  Nail, over all your Exchange accounts. Point at it, or move the keyboard
+  focus onto the rule, to read one line per account: where the rule runs
+  for that account (on the server, or in Nail) and why.
 
 With no rule open, the window offers **Create rule from message** (for the
 message selected in the list) and a few templates to start from:
@@ -64,7 +74,8 @@ type the value yourself instead.
 
 When you open the rules window from a message (**Create rule from message**
 or **Add to rule…** in the message's menu), or a message is selected in the
-list, a small button beside a condition's value (and beside the folder of
+list, a small button right after a condition's value (before **Match upper
+and lower case**; and after the folder of
 **Move to folder** / **Copy to folder** and the tag of **Add tag** /
 **Remove tag**) lists that message's values: the sender's address, name and
 domain, the recipients, Reply-To, the subject or one of its words, the
@@ -99,7 +110,14 @@ The bar at the bottom of the window is always in view:
   as you see it first, so the run never uses an older version. A rule that
   moves, archives or deletes mail asks first and says how many messages it
   matches.
-- **Test rule** and **Save rule**.
+- With several rules selected in the list, **Run** says how many ("Run 3
+  rules") and runs them all, one after another in the order of the list,
+  on the same **Run on** messages; **Undo** then takes back what all of them
+  did. If the rule in the editor is one of them and has unsaved changes,
+  it is saved first. If one of them moves, archives or deletes mail, Nail
+  asks first and says how many matches they have together.
+- **Test rule** and **Save rule**. **Save rule**, **Delete rule…** and the
+  **Text** view always act on the rule in the editor only.
 
 Leaving a rule with unsaved changes — opening another rule, closing the
 window, or pressing Escape — asks whether to **Discard changes** or **Keep
@@ -116,7 +134,11 @@ Under the editor are two tabs:
   …"). **Apply to these N** runs the rule on exactly these messages. Any
   change to the rule clears the preview, because it would describe an older
   version. After **Test rule** the keyboard focus is on the preview's
-  summary.
+  summary. With several rules selected, the preview shows one part per
+  rule, in the order of the list, each with its own **Apply to these N**.
+  Each rule is tested on its own: when the rules really run, an earlier rule
+  can move a message away before a later rule sees it, so the preview can
+  show a message under a later rule that the run will not reach.
 - **Recent runs (N)** lists the rule's runs: when each started, what
   started it (new mail, sent mail, a schedule, by hand), what it ran on, how
   many messages it matched and whether it is done. **Undo this run** takes

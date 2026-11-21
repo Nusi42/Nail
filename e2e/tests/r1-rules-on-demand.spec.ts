@@ -8,6 +8,7 @@ import {
   newRuleFromText,
   openRulesWindow,
   openWorkInbox as openWorkInboxOf,
+  ruleInList,
   rulesFooter,
   rulesToast,
   saveRule,
@@ -97,7 +98,7 @@ test("a new rule is saved and run from its editor at 1024×700", async ({ page }
   await expect.poll(() => flagged(WELCOME)).toBe(true);
   expect(await flagged(RELEASE)).not.toBe(true);
   // Saved: the list shows it, and the next click runs it as saved.
-  await expect(window.getByRole("button", { name: "Flag them", exact: true })).toBeVisible();
+  await expect(ruleInList(window, "Flag them")).toBeVisible();
   await expect(footer.getByRole("button", { name: "Run", exact: true })).toBeVisible();
   // What the run did moved nothing.
   expect(await footer.getByRole("button", { name: "Save rule" }).boundingBox()).toEqual(save);

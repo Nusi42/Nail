@@ -24,11 +24,18 @@
  * - **Questions** (items 4, 5): over the whole window, centred.
  * - **"Saved"** fades after a moment (item 2); the problem list inside the
  *   shared problem indicator's details.
- * - **Exchange badges** (item 3): the reasons show beside the ⓘ on hover
- *   and focus.
+ * - **Exchange badge** (R3): one ⓘ per rule; its popover lists each
+ *   account's line on hover and while the rule's row has the keyboard
+ *   focus. Otherwise the lines stay visually hidden (not removed), so the
+ *   row's description still reads them; the popover lies over the list
+ *   under its row, as wide as the row, so it moves nothing and the list's
+ *   edge never clips it.
+ * - **Rule list** (R3): the row's "Off" is for screen readers only (the
+ *   row looks muted); the On mark shows its check only while the rule is
+ *   on.
  */
 import { p, ps } from "../../theme/selectors";
-import { VISUALLY_HIDDEN } from "../../theme/declarations";
+import { INLINE_ROW, VISUALLY_HIDDEN } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 import { SETTINGS_BODY_END } from "../settings/skin";
 import { ACTION_KINDS, CONDITION_KINDS, GROUP_KINDS } from "./model";
@@ -50,7 +57,7 @@ ${inRules("rules.confirm")} {
   position: absolute; inset: 0; z-index: 2; margin: auto; height: fit-content; width: min(28rem, calc(100% - 2 * ${T.md}));
 }
 ${p("rules.issues.items")} { margin: 0; padding-left: ${T.lg}; }
-:is(${ps("rules.text.gutter", "rules.empty.list", "exchange.rule-badges")}) { list-style: none; }
+:is(${ps("rules.text.gutter", "rules.empty.list", "exchange.rule-badge.reasons")}) { list-style: none; }
 ${p("rules.issues.item")} { overflow-wrap: anywhere; }
 ${inRules("rules.footer.state")}[data-state="saved"] { animation: nail-rules-fade ${T.fast} ${SAVED_FADE_DELAY} both; }
 @keyframes nail-rules-fade { to { opacity: 0; } }
@@ -93,10 +100,19 @@ ${inRules("rules.text.source")} { resize: none; overflow: auto; color: transpare
 ${inRules("rules.text.source")}::selection { color: transparent; background-color: ${T.accentSoft}; }
 ${inRules("rules.text.gutter")} { font-size: ${T.body}; line-height: ${T.normal}; }`;
 
-const BADGES = `${p("exchange.rule-badge.reasons")} {
-  position: absolute; inset-inline-end: 0; top: 100%; z-index: 3; width: max-content; max-width: 18rem; display: none;
+/** Where the badge's popover shows: the ⓘ under the pointer, or its row with the keyboard focus. */
+export const BADGE_OPEN = `:is(${p("exchange.rule-badge")}:hover, ${p("rules.list.item")}:focus-visible ${p("exchange.rule-badge")})`;
+
+/* The popover spans its row (the list's width), so the list never clips it. */
+const BADGES = `${p("rules.list.item")} { position: relative; }
+${p("exchange.rule-badge")} { ${INLINE_ROW} }
+${p("exchange.rule-badge.reasons")} { ${VISUALLY_HIDDEN} }
+${BADGE_OPEN} > ${p("exchange.rule-badge.reasons")} {
+  inset-inline: 0; top: 100%; z-index: 3; width: auto; height: auto; margin: 0;
+  overflow: visible; clip-path: none; white-space: normal;
 }
-${p("exchange.rule-badge")}:is(:hover, :focus-within) > ${p("exchange.rule-badge.reasons")} { display: block; }`;
+${p("rules.list.off")} { ${VISUALLY_HIDDEN} }
+${p("rules.list.enabled")}[data-enabled="false"] > * { visibility: hidden; }`;
 
 /**
  * One look in Settings (item 15): the settings card lays its fields out as

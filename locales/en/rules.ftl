@@ -16,7 +16,8 @@ rules-empty = No rules yet. Create one, or use “Create rule from message” on
 rules-select-hint = Choose a rule to edit it, or create a new one.
 rules-list-label = Rules, in the order they run
 rules-list-separator = {", "}
-rules-enable-rule = Rule “{ $name }” is on
+rules-list-off = { common-off }
+rules-list-toggle = Switch “{ $name }” on or off
 rules-when-arrival = when mail arrives
 rules-when-on-send = when sending
 rules-when-manual = by hand
@@ -182,6 +183,12 @@ rules-delete = Delete rule…
 rules-test = Test rule
 rules-test-title = Test results
 rules-test-none = No existing message matches this rule.
+rules-test-summary-many = { $rules } rules tested: { $matched ->
+    [0] no match
+    [one] one match
+   *[other] { $matched } matches
+} in all ({ $target }).
+rules-test-separately = Each rule was tested on its own. When they run one after another, an earlier rule can move a message before a later one sees it.
 rules-test-actions = What would happen
 rules-test-why = Why it matches
 rules-hit = { $condition } matched
@@ -217,6 +224,14 @@ rules-target-messages = { $count ->
 }
 rules-target-no-messages = Select messages in the list first.
 rules-save-and-run = Save and run
+rules-run-many = { $count ->
+    [one] { rules-run }
+   *[other] Run { $count } rules
+}
+rules-save-and-run-many = { $count ->
+    [one] { rules-save-and-run }
+   *[other] Save and run { $count } rules
+}
 rules-ran = { $rules ->
     [one] The rule ran
    *[other] { $rules } rules ran
@@ -249,6 +264,7 @@ rules-filter = Find a rule
 rules-filter-none = No rule matches.
 rules-move-rule = Move “{ $name }” (drag, or Alt+Up and Alt+Down)
 rules-reorder-hint = Drag a rule by its handle, or press Alt+Up or Alt+Down on it, to change the order.
+rules-select-many-hint = Ctrl+click or Shift+click selects several rules: Run and Test then act on all of them.
 rules-name-placeholder = Name the rule
 rules-form-when = { itip-label-when }
 rules-form-where = { itip-label-where }
@@ -291,6 +307,11 @@ rules-confirm-run = “{ $name }” moves or deletes mail. It matches { $count -
     [one] one message
    *[other] { $count } messages
 } in { $target }. Run it now?
+rules-confirm-run-many = Of these { $rules } rules, some move or delete mail. Together they have { $count ->
+    [0] no match
+    [one] one match
+   *[other] { $count } matches
+} in { $target }. Run them now?
 rules-confirm-discard = Discard your changes to “{ $name }”?
 rules-discard = Discard changes
 rules-no-message = Select a message in the list first.

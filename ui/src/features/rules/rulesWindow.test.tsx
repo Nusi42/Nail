@@ -9,44 +9,26 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { listSelectionFor, NO_LIST_SCOPE } from "../../actions/mailTargets";
-import type { Rule } from "../../api/generated";
-import { renderWithProviders, type Env } from "../../test/harness";
+import { renderWithProviders } from "../../test/harness";
 import { requestsOf } from "../../test/env";
 import { INBOX } from "../../test/mockIds";
 import { must } from "../../test/must";
 import { guardRulesWindow } from "./closeGuard";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
-import { addFromMenu, addTagAllRule, footerOf, runsFinished, setup, showTextView } from "./testing";
+import {
+  addArchiveAllRule,
+  addFromMenu,
+  addTagAllRule,
+  IN_INBOX as inInbox,
+  openEditor,
+  ruleOption,
+  runsFinished,
+  setup,
+  showTextView,
+} from "./testing";
 
 /** Renders the window and opens the rule (or "New rule") named `button`. */
-async function openEditor(env: Env, button: string) {
-  const user = userEvent.setup({ delay: null });
-  renderWithProviders(<RuleManagerView />, env);
-  await user.click(await screen.findByRole("button", { name: button }));
-  const editor = await screen.findByRole("form", { name: "Rule" });
-  const footer = footerOf(editor);
-  return { user, editor, footer, runOn: within(footer).getByRole("combobox", { name: "Run on" }) };
-}
-
-/** A manual rule that moves every message of the Inbox to Archive. */
-function addArchiveAllRule(env: Env): Rule {
-  const rule: Rule = {
-    id: "archive-all",
-    name: "Archive all",
-    enabled: true,
-    triggers: [{ type: "manual" }],
-    scope: [],
-    conditions: { type: "all", conditions: [] },
-    actions: [{ type: "archive" }],
-    source: null,
-  };
-  env.transport.data.features.rules.rules.push(rule);
-  return rule;
-}
-
-const inInbox = { state: { activeAccountId: "acc-personal", activeFolderId: INBOX } };
-
 describe("the preview", () => {
   it("tests on the Run on target, focuses the summary and explains each match", async () => {
     const env = setup();
@@ -176,7 +158,7 @@ describe("Run on and Run in the footer", () => {
     const env = setup(inInbox);
     const message = must(env.transport.data.messages.find((m) => m.folder_id === INBOX));
     rulesStore(env.client).getState().setOrigin({ messageId: message.id, folderId: INBOX });
-    const { user, editor } = await openEditor(env, "New rule");
+    const { user, editor } = await openEditor(env, null);
     await addFromMenu(user, editor, "Add action", "Move to folder");
     const action = must(editor.querySelector<HTMLElement>('[data-part="rules.action"]'));
     await user.click(await within(action).findByRole("button", { name: "Values from this mail" }));
@@ -283,7 +265,7 @@ describe("Run on and Run in the footer", () => {
 
   it("waits with Run and Save while something is missing", async () => {
     const env = setup(inInbox);
-    const { user, editor, footer } = await openEditor(env, "New rule");
+    const { user, editor, footer } = await openEditor(env, null);
     const run = within(footer).getByRole("button", { name: "Save and run" });
     expect(run).toHaveAttribute("aria-disabled", "true");
     await user.click(run);
@@ -329,7 +311,7 @@ describe("unsaved changes", () => {
     addTagAllRule(env);
     const { user, editor } = await openEditor(env, "Rust announcements");
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), " 2");
-    await user.click(screen.getByRole("button", { name: "Tag all" }));
+    await user.click(screen.getByRole("option", { name: ruleOption("Tag all") }));
     const question = await screen.findByRole("alertdialog");
     expect(question).toHaveTextContent("Discard your changes to “Rust announcements 2”?");
     expect(within(question).getByRole("button", { name: "Keep editing" })).toHaveFocus();
@@ -338,7 +320,7 @@ describe("unsaved changes", () => {
       "Rust announcements 2",
     );
 
-    await user.click(screen.getByRole("button", { name: "Tag all" }));
+    await user.click(screen.getByRole("option", { name: ruleOption("Tag all") }));
     await user.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", {
         name: "Discard changes",
@@ -373,7 +355,7 @@ describe("unsaved changes", () => {
 describe("Editor and Text", () => {
   it("is a radio group, and keeps an unfinished new rule across the switch", async () => {
     const env = setup();
-    const { user, editor } = await openEditor(env, "New rule");
+    const { user, editor } = await openEditor(env, null);
     const views = within(editor).getByRole("radiogroup", { name: "View" });
     const visual = within(views).getByRole("radio", { name: "Editor" });
     expect(visual).toHaveAttribute("aria-checked", "true");
@@ -426,10 +408,12 @@ describe("the list and the empty state", () => {
     const user = userEvent.setup({ delay: null });
     renderWithProviders(<RuleManagerView />, env);
     const filter = await screen.findByRole("searchbox", { name: "Find a rule" });
-    await screen.findByRole("button", { name: "Tag all" });
+    await screen.findByRole("option", { name: ruleOption("Tag all") });
     await user.type(filter, "rust");
-    expect(screen.queryByRole("button", { name: "Tag all" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Rust announcements" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: ruleOption("Tag all") })).toBeNull();
+    expect(
+      screen.getByRole("option", { name: ruleOption("Rust announcements") }),
+    ).toBeInTheDocument();
     await user.clear(filter);
     await user.type(filter, "zzz");
     expect(screen.getByText("No rule matches.")).toBeInTheDocument();
