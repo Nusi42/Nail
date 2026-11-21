@@ -16,7 +16,7 @@ const server = nailPerTest({ seed: "demo-multi" });
 const VALID = 'subject:"garden party" OR from:users@lists.nail.example';
 const VALID_HITS = 3;
 
-const searchBox = (page: Page) => page.getByRole("searchbox", { name: "Search mail" });
+const searchBox = (page: Page) => page.getByRole("combobox", { name: "Search mail" });
 const field = (page: Page) => page.locator('[data-part="search-bar.field"]');
 const indicator = (page: Page) =>
   page.locator('[data-part="search-bar.field"] [data-part="problem.badge"]');

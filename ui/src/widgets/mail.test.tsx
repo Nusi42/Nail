@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { createEnv, renderNode, widget, stubElementSizesEachTest } from "../test/harness";
 import { filterFolders } from "./FolderPicker";
 import { initiallyExpanded, splitQuotes, visibleMessages } from "./ThreadView";
-import { applyHint, hintMessageId, hintsFor } from "./SearchBar";
+import { applyHint, hintMessageId, hintsFor, hintsWhileTyping, nextHint } from "./SearchBar";
 import { threadModeOf, threadStates, threadTemplateData } from "./MessageList";
 import {
   addMockConversation,
@@ -21,42 +21,80 @@ async function focusedSearch() {
   const user = userEvent.setup();
   const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
   renderNode(widget("search-bar"), env);
-  const input = screen.getByRole("searchbox", { name: "Search mail" });
+  const input = screen.getByRole("combobox", { name: "Search mail" });
   await user.click(input);
   return { user, env, input };
 }
 
+const hintList = () => screen.queryByRole("listbox", { name: "Search fields" });
+
 describe("search-bar", () => {
   it("offers query-language hints that complete the word being typed", async () => {
     const { user, input } = await focusedSearch();
-    const hints = screen.getByRole("list", { name: "Search fields" });
-    expect(within(hints).getByText("from:")).toHaveAttribute("data-part", "search-bar.hint.syntax");
-    expect(within(hints).getByText("Sender name or address")).toBeInTheDocument();
+    // Focus alone opens nothing (R2: the hints float over the list).
+    expect(hintList()).toBeNull();
+    expect(input).toHaveAttribute("aria-expanded", "false");
     await user.type(input, "is");
+    const hints = must(hintList());
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(input).toHaveAttribute("aria-controls", hints.id);
     expect(within(hints).queryByText("from:")).toBeNull();
-    await user.click(within(hints).getByText("is:unread"));
+    expect(within(hints).getByText("is:unread")).toHaveAttribute(
+      "data-part",
+      "search-bar.hint.syntax",
+    );
+    await user.click(within(hints).getByRole("option", { name: /is:unread/ }));
     expect(input).toHaveValue("is:unread ");
+    expect(input).toHaveFocus();
+    // After a space nothing pops up.
+    expect(hintList()).toBeNull();
+  });
+
+  it("picks hints with the arrow keys and Enter, closes with Escape (combobox)", async () => {
+    const { user, input, env } = await focusedSearch();
+    await user.keyboard("{ArrowDown}");
+    const hints = must(hintList());
+    expect(within(hints).getByText("Sender name or address")).toBeInTheDocument();
+    const first = within(hints).getAllByRole("option")[0];
+    expect(first).toHaveAttribute("aria-selected", "true");
+    expect(input).toHaveAttribute("aria-activedescendant", first?.id);
+    await user.keyboard("{ArrowUp}");
+    expect(within(hints).getAllByRole("option").at(-1)).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(input).toHaveValue("from:");
+    expect(env.store.getState().search).toBeNull();
+
+    await user.type(input, "x su");
+    expect(hintList()).not.toBeNull();
+    // Escape closes the hints and keeps the text (a second Escape clears).
+    await user.keyboard("{Escape}");
+    expect(hintList()).toBeNull();
+    expect(input).toHaveValue("from:x su");
     expect(input).toHaveFocus();
   });
 
-  it("keeps the hints while Tab moves into them, hides them when focus leaves (M5b review)", async () => {
-    const { user } = await focusedSearch();
-    await user.tab();
-    const hints = screen.getByRole("list", { name: "Search fields" });
-    expect(document.activeElement).not.toBe(document.body);
-    expect(hints.contains(document.activeElement)).toBe(true);
-    expect(document.activeElement).toHaveAttribute("data-part", "search-bar.hint.button");
+  it("closes the hints on a click outside and when the focus leaves", async () => {
+    const { user, input } = await focusedSearch();
+    await user.type(input, "su");
+    expect(hintList()).not.toBeNull();
+    await user.click(document.body);
+    expect(hintList()).toBeNull();
+    await user.click(input);
+    await user.type(input, "x");
+    expect(hintList()).toBeNull();
+    await user.keyboard("{Backspace}");
+    expect(hintList()).not.toBeNull();
     act(() => {
-      (document.activeElement as HTMLElement).blur();
+      input.blur();
     });
-    expect(screen.queryByRole("list", { name: "Search fields" })).toBeNull();
+    expect(hintList()).toBeNull();
   });
 
   it("shows where a query is wrong while typing", async () => {
     const user = userEvent.setup();
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });
     const { container } = renderNode(widget("search-bar"), env);
-    const input = screen.getByRole("searchbox");
+    const input = screen.getByRole("combobox");
     await user.type(input, "from:ada colour:red");
     await waitFor(() => {
       expect(input).toHaveAttribute("aria-invalid", "true");
@@ -116,7 +154,7 @@ describe("search-bar", () => {
     act(() => {
       env.store.getState().requestFocus("search");
     });
-    expect(screen.getByRole("searchbox")).toHaveFocus();
+    expect(screen.getByRole("combobox")).toHaveFocus();
   });
 
   it("computes hints", () => {
@@ -130,6 +168,14 @@ describe("search-bar", () => {
     ]);
     expect(hintsFor("(fr")).toEqual(["from:"]);
     expect(hintsFor("from:")).toEqual([]);
+    expect(hintsWhileTyping("from:ada ")).toBe(false);
+    expect(hintsWhileTyping("from:ada su")).toBe(true);
+    expect(hintsWhileTyping("subject:")).toBe(false);
+    expect(nextHint(-1, 1, 3)).toBe(0);
+    expect(nextHint(-1, -1, 3)).toBe(2);
+    expect(nextHint(2, 1, 3)).toBe(0);
+    expect(nextHint(0, -1, 3)).toBe(2);
+    expect(nextHint(0, 1, 0)).toBe(-1);
     expect(applyHint("tag:x (fr", "from:")).toBe("tag:x (from:");
     expect(applyHint("has", "has:attachment")).toBe("has:attachment ");
     expect(hintMessageId("size>")).toBe("search-hint-size");

@@ -13,7 +13,13 @@ import type { Feature } from "../types";
 import { onRulesEvent } from "./api";
 import { ruleFromMessage } from "./model";
 import { RuleManager, RulesDialog } from "./RuleManager";
-import { OPEN_RULES_ACTION, RUN_ACTION, RUN_MENU_ACTION, runMenuActions } from "./runMenu";
+import {
+  OPEN_RULES_ACTION,
+  RUN_ACTION,
+  RUN_MENU_ACTION,
+  runMenuActions,
+  runMenuSource,
+} from "./runMenu";
 import { RULES_WINDOW, RulesCloseGuard } from "./closeGuard";
 import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
@@ -57,6 +63,11 @@ export const actions: Feature["actions"] = {
   },
   /** "Run rule" (menus) and running one rule, or every rule that is on, from it. */
   ...runMenuActions,
+};
+
+/** "Run rule": a submenu of the saved rules (R2, ADR 0222). */
+export const menuSources: NonNullable<Feature["menuSources"]> = {
+  [RUN_MENU_ACTION]: runMenuSource,
 };
 
 /**

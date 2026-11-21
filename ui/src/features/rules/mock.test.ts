@@ -142,7 +142,9 @@ describe("rules mock", () => {
         "RuleRan",
       )
     ).run;
-    expect(ran).toMatchObject({ state: "running", matched: 2 });
+    // Finished when it answers, as in the core (R2).
+    expect(ran).toMatchObject({ state: "done", matched: 2, undoable: true });
+    expect(ran.finished_at).not.toBeNull();
     // tag + archive for each (already in Archive: the move is skipped).
     expect(ran.op_ids).toHaveLength(2);
     expect(listPosts().every((m) => m.tags.includes("rust"))).toBe(true);

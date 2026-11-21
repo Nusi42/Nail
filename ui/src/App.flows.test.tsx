@@ -230,7 +230,7 @@ describe("M1a flows", () => {
     const { env } = renderApp();
     await ready();
     fireEvent.keyDown(document.body, { key: "/" });
-    const input = screen.getByRole("searchbox", { name: "Search mail" });
+    const input = screen.getByRole("combobox", { name: "Search mail" });
     expect(input).toHaveFocus();
     await user.type(input, "from:grace{Enter}");
     await eventually(() =>

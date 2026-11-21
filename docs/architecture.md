@@ -1493,3 +1493,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   store's `origin`; texts `rules-from-message.ftl`), dynamic menu sources `ui/src/features/menus/sources.ts`
   (`Feature.menuSources`, `AppRegistry.menuSources`), mock `ui/src/api/mockValues.ts`; theme regions `rules.header*`,
   `rules.segmented*`, `rules.form*`, `rules.lower*`, `rules.footer*`, `rules.empty`, `picker*`.
+- WR6 R1 leftovers (ADR 0223-wr6): `features/menus/ContextMenu.tsx` shows a menu source as a hover / arrow-key
+  submenu (`MenuSourceLoader`, sources loaded when the list appears, `submenuPlace` keeps popups inside the window);
+  the app shell provides `AppRegistry.menuSources` as `MenuSourcesContext` (`App.tsx` `FeatureEffects`);
+  `literalMenuLabel` / `menuLabelText` (backslash mark); "Run rule" = `runMenuSource` in `features/rules/runMenu.ts`.
+  The search field is a combobox with a floating hints listbox (`widgets/SearchBar.tsx`: `hintsWhileTyping`,
+  `nextHint`; skin `search-bar.hints`); a folder change searches the typed text in the picked folder
+  (`features/search/liveSearch.ts` `commitScope`). The mock's `RunRules` answers finished runs.

@@ -13,10 +13,10 @@ import { renderWithProviders, type Env } from "../../test/harness";
 import { actionContext, requestsOf } from "../../test/env";
 import { INBOX } from "../../test/mockIds";
 import { must } from "../../test/must";
-import { menuStoreFor, type ContextTarget } from "../menus";
+import { literalMenuLabel, menuStoreFor, type ContextTarget } from "../menus";
 import { actions } from "./index";
 import { Issues } from "./Issues";
-import { ALL_RULES, RUN_MENU_NAME, runMenuItems } from "./runMenu";
+import { ALL_RULES, runMenuItems, runMenuSource } from "./runMenu";
 import { mayUndo, outcomeOf } from "./runTargets";
 import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
@@ -77,6 +77,10 @@ describe("the Run rule menus", () => {
     // One rule: no "all"; no rules: open the rules window.
     expect(runMenuItems([rule("a", true)])).toHaveLength(1);
     expect(runMenuItems([])).toMatchObject([{ action: "rules.open", label: "@rules.menu.none" }]);
+    // R2: a rule name is shown as written, never read as a Fluent id.
+    expect(runMenuItems([rule("@home", true)])).toMatchObject([
+      { label: literalMenuLabel("@home") },
+    ]);
   });
 
   it("runs a rule on the folder of the folder menu and shows what it did", async () => {
@@ -87,11 +91,11 @@ describe("the Run rule menus", () => {
     openMenu(env, target("folder-tree.folder", { folderId: INBOX, accountId: "acc-personal" }));
     expect(runMenu.enabled?.(ctx, [])).toBe(true);
 
+    // R2: the rules are a submenu (a menu source); the open menu stays.
+    const before = menuStoreFor(env.store).getState().open;
     await runMenu.run(ctx, []);
-    const open = must(menuStoreFor(env.store).getState().open);
-    expect(open.menu.name).toBe(RUN_MENU_NAME);
-    expect(open.target.folderId).toBe(INBOX);
-    expect(open.menu.items).toMatchObject([
+    expect(menuStoreFor(env.store).getState().open).toBe(before);
+    expect(await runMenuSource.load(ctx)).toMatchObject([
       { action: "rules.run", args: ["rust-announcements"], label: "Rust announcements" },
       { type: "separator" },
       { type: "header", label: "@rules.menu.off" },
@@ -133,10 +137,11 @@ describe("the Run rule menus", () => {
     });
   });
 
-  it("does nothing on other parts", () => {
+  it("does nothing on other parts", async () => {
     const env = setup();
     openMenu(env, target("nav-rail", {}));
     expect(runMenu.enabled?.(ctxOf(env), [])).toBe(false);
+    await expect(runMenuSource.load(ctxOf(env))).resolves.toEqual([]);
     expect(run.enabled?.(ctxOf(env), ["rust-announcements"])).toBe(false);
   });
 });

@@ -1,13 +1,15 @@
 /**
  * "Run rule" in the message-list row menu and the folder-tree folder menu
- * (R1, ADR 0219).
+ * (R1, ADR 0219; a hover submenu since R2, ADR 0222).
  *
- * - `rules.run-menu` (the layout's menu item) replaces the open context
- *   menu, in place, with a menu of the saved rules: "All rules that are on"
- *   (when there are several), the rules that are on, then under "Off" the
- *   rules that are off (running a rule by hand works for those too).
- *   Without rules it offers to open the rules window. The menu keeps the
- *   target of the menu it came from.
+ * - `rules.run-menu` (the layout's menu item) has a menu source
+ *   (`runMenuSource`, `../menus/sources.ts`): the context menu shows it as
+ *   a submenu of the saved rules: "All rules that are on" (when there are
+ *   several), the rules that are on, then under "Off" the rules that are
+ *   off (running a rule by hand works for those too). Without rules it
+ *   offers to open the rules window. Rule names are labels as written
+ *   (`literalMenuLabel`: a rule named "@home" is not a Fluent id). The
+ *   action itself only says whether the menu's target can run rules.
  * - `rules.run` (argument: a rule id, or {@link ALL_RULES}) runs on that
  *   target: the selected rows of the list (a conversation row stands for its
  *   messages in the listed folder) or the folder of the folder menu.
@@ -22,7 +24,7 @@ import { currentTargets } from "../../actions/mailTargets";
 import { errorMessageIdOf } from "../../api/client";
 import type { ResolvedMenuEntry, Rule, RuleId } from "../../api/generated";
 import type { UiStore } from "../../state/uiStore";
-import { contextTarget, menuStoreFor } from "../menus";
+import { contextTarget, literalMenuLabel, type MenuSource } from "../menus";
 import type { Feature } from "../types";
 import { rulesKeys, rulesQuery, runRules } from "./api";
 import { ruleRunTargetOf, type RunTarget } from "./runTargets";
@@ -32,8 +34,6 @@ export const RUN_MENU_ACTION = "rules.run-menu";
 export const RUN_ACTION = "rules.run";
 /** The `rules.run` argument for every rule that is on. */
 export const ALL_RULES = "*";
-/** Name of the rules menu (it replaces the menu it was opened from). */
-export const RUN_MENU_NAME = "rules:run";
 
 /** Opens the rules window (also "No rules yet" of the rules menu). */
 export const OPEN_RULES_ACTION = "rules.open";
@@ -76,13 +76,11 @@ export function runMenuItems(rules: readonly Rule[]): ResolvedMenuEntry[] {
   const off = rules.filter((r) => !r.enabled);
   const out: ResolvedMenuEntry[] = [];
   if (on.length > 1) out.push(runItem(ALL_RULES, "@rules.menu.all"), { type: "separator" });
-  out.push(...on.map((r) => runItem(r.id, r.name)));
+  const ruleItem = (r: Rule) => runItem(r.id, literalMenuLabel(r.name));
+  out.push(...on.map(ruleItem));
   if (off.length > 0) {
     if (on.length > 0) out.push({ type: "separator" });
-    out.push(
-      { type: "header", label: "@rules.menu.off" },
-      ...off.map((r) => runItem(r.id, r.name)),
-    );
+    out.push({ type: "header", label: "@rules.menu.off" }, ...off.map(ruleItem));
   }
   return out;
 }
@@ -101,24 +99,29 @@ export function refreshRuns(queryClient: QueryClient): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: rulesKeys.allRuns });
 }
 
+/**
+ * The rules submenu of "Run rule" for the open menu's target; nothing (the
+ * item disabled) when the target cannot run rules or the rules cannot be
+ * read (the toast says why).
+ */
+export const runMenuSource: MenuSource = {
+  load: async (ctx) => {
+    if (menuRunTarget(ctx.store) === null) return [];
+    try {
+      return runMenuItems(await savedRules(ctx));
+    } catch (error) {
+      rulesStore(ctx.client)
+        .getState()
+        .showToast({ kind: "error", id: errorMessageIdOf(error) });
+      return [];
+    }
+  },
+};
+
 export const runMenuActions: Feature["actions"] = {
+  // The item of the rules submenu (`runMenuSource`): running it opens nothing.
   [RUN_MENU_ACTION]: {
-    run: async (ctx) => {
-      // Read before the menu closes (the host closes it after this returns).
-      const menus = menuStoreFor(ctx.store);
-      const open = menus.getState().open;
-      if (!open) return;
-      try {
-        const rules = await savedRules(ctx);
-        menus
-          .getState()
-          .show({ ...open, menu: { name: RUN_MENU_NAME, items: runMenuItems(rules) } });
-      } catch (error) {
-        rulesStore(ctx.client)
-          .getState()
-          .showToast({ kind: "error", id: errorMessageIdOf(error) });
-      }
-    },
+    run: () => undefined,
     enabled: (ctx) => menuRunTarget(ctx.store) !== null,
   },
   [RUN_ACTION]: {

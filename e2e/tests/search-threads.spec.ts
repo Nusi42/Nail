@@ -14,7 +14,7 @@ test("search with the query language", async ({ page }) => {
   await ready(page);
   const list = messageList(page);
   await page.keyboard.press("/");
-  const input = page.getByRole("searchbox", { name: "Search mail" });
+  const input = page.getByRole("combobox", { name: "Search mail" });
   await expect(input).toBeFocused();
 
   // Fields, quotes and OR across both accounts of "All accounts".

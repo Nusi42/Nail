@@ -17,7 +17,10 @@ export const FLAG_RELEASES = `rule "Flag releases" trigger="manual" {
 }
 `;
 
-/** Opens the `demo-multi` "Work" account's Inbox (15 messages), at `size` when given. */
+/** How many messages the `demo-multi` "Work" Inbox lists. */
+export const WORK_INBOX_ROWS = 15;
+
+/** Opens the `demo-multi` "Work" account's Inbox, at `size` when given. */
 export async function openWorkInbox(
   page: Page,
   server: NailServer,
@@ -26,7 +29,7 @@ export async function openWorkInbox(
   if (size) await page.setViewportSize(size);
   await page.goto(server.url);
   await sectionInbox(accountSectionNamed(page, "Work")).click();
-  await expect(messageRows(page)).toHaveCount(15, { timeout: 30_000 });
+  await expect(messageRows(page)).toHaveCount(WORK_INBOX_ROWS, { timeout: 30_000 });
 }
 
 /** Whether the Inbox message whose subject contains `subject` is flagged on the server (`null`: not there). */
@@ -78,3 +81,7 @@ export async function addFromMenu(scope: Locator, button: string, item: string):
   await scope.getByRole("button", { name: button }).first().click();
   await scope.page().getByRole("menuitem", { name: item }).click();
 }
+
+/** The toast of a rule run started from a menu. */
+export const rulesToast = (page: Page) =>
+  page.locator('[data-part="mail-actions.toast"][data-source="rules"]');

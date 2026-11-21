@@ -350,7 +350,7 @@ describe("list header (M5b)", () => {
     const env = createEnv({ state: { activeAccountId: "all", activeFolderId: "all/inbox" } });
     renderNode(widget("list-header"), env, { layout: headerLayout(env) });
     const region = screen.getByRole("region", { name: "Message list" });
-    const input = within(region).getByRole("searchbox", { name: "Search mail" });
+    const input = within(region).getByRole("combobox", { name: "Search mail" });
     expect(input).toHaveAttribute("aria-keyshortcuts", "Control+K");
     expect(region.querySelector('[data-part="search-bar.shortcut"]')).toHaveTextContent("Ctrl+K");
     expect(await within(region).findByRole("heading", { name: "All inboxes" })).toHaveAttribute(

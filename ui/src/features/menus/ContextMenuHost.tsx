@@ -13,16 +13,26 @@
  *
  * Shift+F10 and the menu key are ordinary key bindings of the action
  * `menu.context` (default layout), so they can be rebound.
+ *
+ * Dynamic submenus (R2, ADR 0222): the features' menu sources
+ * (`appRegistry.menuSources`, provided by the app as
+ * `MenuSourcesContext`) load their entries
+ * with the actions' context while the menu is open, so they read its
+ * target; entries that do not apply are dropped like the layout's.
  */
-import { useCallback, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useContext, useEffect, useMemo } from "react";
 import type { JsonValue } from "../../api/generated";
+import type { ActionContext } from "../../actions/registry";
 import { useActions } from "../../actions/ActionsProvider";
-import { useT } from "../../i18n/I18nProvider";
+import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
+import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { ContextMenu } from "./ContextMenu";
 import { withEditShortcuts } from "./editing";
 import { withoutConversationShortcuts, withoutDisabled } from "./resolve";
+import { menuSourceFor, MenuSourcesContext, type MenuSourceLoader } from "./sources";
 import { menuStoreFor, openContextMenu, openTextMenu, useMenu } from "./store";
 import { TEXT_PART } from "./targets";
 import { FRAME_MENU_EVENT, type FrameMenu } from "../../theme/frameHeight";
@@ -33,10 +43,25 @@ const fromKeyboard = (event: Pick<MouseEvent, "clientX" | "clientY" | "button">)
 
 export function ContextMenuHost() {
   const t = useT();
+  const locale = useLocale();
   const ui = useUiStoreApi();
+  const client = useClient();
+  const queryClient = useQueryClient();
   const layout = useLayoutConfig();
   const { dispatch, isEnabled } = useActions();
   const open = useMenu((s) => s.open);
+  const sourceRegistry = useContext(MenuSourcesContext);
+
+  const sources = useMemo((): MenuSourceLoader => {
+    const ctx: ActionContext = { client, store: ui, queryClient, layout, t, locale };
+    return {
+      has: (action) => menuSourceFor(sourceRegistry, action) !== null,
+      load: async (action) => {
+        const entries = (await menuSourceFor(sourceRegistry, action)?.load(ctx)) ?? [];
+        return withoutDisabled(entries, isEnabled);
+      },
+    };
+  }, [sourceRegistry, client, ui, queryClient, layout, t, locale, isEnabled]);
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
@@ -114,6 +139,7 @@ export function ContextMenuHost() {
       focusOnOpen
       onRun={run}
       onClose={close}
+      sources={sources}
     />
   );
 }

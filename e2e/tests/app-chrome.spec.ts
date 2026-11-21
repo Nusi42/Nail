@@ -226,7 +226,7 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
     expect(await userSelect(page.locator('[data-part="list-header.title"]').first())).toBe("none");
     // The user's data: selectable.
     for (const data of [subject, people, body]) expect(await userSelect(data)).toBe("text");
-    await expect(page.getByRole("searchbox", { name: "Search mail" })).toHaveCSS(
+    await expect(page.getByRole("combobox", { name: "Search mail" })).toHaveCSS(
       "-webkit-user-select",
       "text",
     );
@@ -282,7 +282,7 @@ test.describe("selection and right-clicks (ADRs 0182, 0184)", () => {
     await rightClick(page.locator('[data-part="list-header.title"]').first());
     await expect(menu).toHaveCount(0);
     // The search field: the text menu.
-    await rightClick(page.getByRole("searchbox", { name: "Search mail" }));
+    await rightClick(page.getByRole("combobox", { name: "Search mail" }));
     await expect(page.getByRole("menu", { name: "Edit" })).toBeVisible();
     await page.keyboard.press("Escape");
 
@@ -369,7 +369,7 @@ test.describe("Check for new mail (ADR 0183)", () => {
       raw: "From: Grace Hopper <grace@home.example>\nTo: ada@home.example\nSubject: Fetched by Ctrl+R\nMessage-ID: <ctrl-r@home.example>\n\nHello!",
     });
     await page.evaluate(() => Reflect.set(window, "nailStillHere", true));
-    await page.getByRole("searchbox", { name: "Search mail" }).focus();
+    await page.getByRole("combobox", { name: "Search mail" }).focus();
     await page.keyboard.press("Control+R");
     await page.keyboard.press("F5");
     await expect(rows(page).filter({ hasText: "Fetched by Ctrl+R" })).toHaveCount(1);

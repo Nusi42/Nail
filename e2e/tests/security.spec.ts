@@ -363,7 +363,7 @@ test("encryption at rest can be switched on and off with the data intact", async
   await expect(state).toHaveAttribute("data-state", "encrypted", { timeout: 30_000 });
   // Everything still reads and searches.
   await expectReleaseNotes(page);
-  const search = page.getByRole("searchbox");
+  const search = page.getByRole("combobox", { name: "Search mail" });
   await search.fill("unified");
   await search.press("Enter");
   await expect(messageRows(page).filter({ hasText: "Release notes" })).not.toHaveCount(0, {

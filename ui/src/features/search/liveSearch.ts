@@ -16,8 +16,14 @@
  *   dropped, so an older query can never replace a newer one; the search
  *   results themselves are keyed by their text (`useSearch`), so a late
  *   answer for an older text is never shown either.
+ * - **A folder change searches the new folder** (R2, ADR 0222): picking
+ *   another folder while the field holds text runs that text again, in the
+ *   picked folder (checked first, like any committed text). While that
+ *   search is active, editing the text keeps searching that folder; once
+ *   the search ends (an emptied field, Clear), the field searches its own
+ *   scope again. The folder pane, not the field, says where to look.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,6 +51,21 @@ export function planLiveSearch(text: string, active: SearchState | null): LiveSe
   if (query === "") return active === null ? { kind: "none" } : { kind: "clear" };
   if (active?.text === query) return { kind: "none" };
   return { kind: "search", text: query };
+}
+
+/**
+ * Where a committed text is searched: the field's scope, or the folder a
+ * folder change narrowed the active search to (`narrowed`, while that
+ * search is still the active one).
+ */
+export function commitScope(
+  field: LiveSearchScope,
+  active: SearchState | null,
+  narrowed: FolderId | null,
+): LiveSearchScope {
+  const stillNarrowed =
+    narrowed !== null && field.folderId === null && active?.folderId === narrowed;
+  return stillNarrowed ? { accountId: null, folderId: narrowed } : field;
 }
 
 /** A committed text the core found invalid (it was not searched). */
@@ -93,8 +114,10 @@ export function useLiveSearch(text: string, scope: LiveSearchScope, field: strin
   useEffect(() => {
     latest.current = text;
   }, [text]);
+  // The folder a folder change narrowed the search to (see `commitScope`).
+  const narrowed = useRef<FolderId | null>(null);
 
-  const commit = (value: string) => {
+  const commit = (value: string, where: LiveSearchScope = scope) => {
     const plan = planLiveSearch(value, active);
     if (plan.kind === "none") return;
     if (plan.kind === "clear") {
@@ -110,7 +133,11 @@ export function useLiveSearch(text: string, scope: LiveSearchScope, field: strin
         return;
       }
       if (rejected !== null) setRejected(null);
-      const next: SearchState = { text: plan.text, ...scope, error: null };
+      const next: SearchState = {
+        text: plan.text,
+        ...commitScope(where, active, narrowed.current),
+        error: null,
+      };
       setSearch(next);
     };
     // A failed check (no core answer) leaves the verdict to the search.
@@ -121,6 +148,21 @@ export function useLiveSearch(text: string, scope: LiveSearchScope, field: strin
 
   // Before any field had the focus (a test, a search set from elsewhere) nobody commits.
   const flush = useDebouncedAction(text, LIVE_SEARCH_PAUSE_MS, commit, owner === field);
+
+  // A folder change searches the typed text in the new folder.
+  const folderId = useUi((s) => s.activeFolderId);
+  const shownFolder = useRef(folderId);
+  const onFolderChange = useEffectEvent((next: FolderId | null) => {
+    if (owner !== field || next === null || latest.current.trim() === "") return;
+    narrowed.current = next;
+    commit(latest.current, { accountId: null, folderId: next });
+  });
+  useEffect(() => {
+    if (shownFolder.current === folderId) return;
+    shownFolder.current = folderId;
+    onFolderChange(folderId);
+  }, [folderId]);
+
   const claim = () => {
     if (ownerStore.getState().owner !== field) ownerStore.setState({ owner: field });
   };

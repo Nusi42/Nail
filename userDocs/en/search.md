@@ -77,9 +77,19 @@ may find a little more there than Nail would.
 
 ## Hints and mistakes
 
-While the search bar has focus, it lists the fields you can use; the list
-narrows as you type (`is` shows the `is:` choices). Click a hint to insert
-it.
+While you type a word that starts a search field, a list of matching
+fields opens under the search bar (`su` shows `subject:`, `is:` shows the
+`is:` choices); press Down to see every field. Up and Down pick a hint,
+Enter or a click inserts it, Escape closes the list (a second Escape clears
+the search). The list opens over the messages, so they never move, and it
+closes when you click anywhere else.
+
+## Changing folders while searching
+
+When the search bar holds a search and you pick another folder, Nail
+searches the same text in that folder. Changing the text keeps searching
+there; clear the search (the × in the search bar, or Escape) to see the
+whole folder again.
 
 If a query has a mistake, Nail does not search it: the list keeps showing
 the results of the last query that worked, and the search bar turns red and

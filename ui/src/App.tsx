@@ -19,6 +19,7 @@ import { usePluginLayout } from "./features/plugins";
 import { remoteStore } from "./features/remote";
 import { ReauthPrompt, RemoteLoginPage, checkRemoteGate, type GateState } from "./RemoteGate";
 import { appRegistry } from "./features/registry";
+import { MenuSourcesContext } from "./features/menus";
 import { I18nProvider, useT } from "./i18n/I18nProvider";
 import { LayoutContext } from "./layout/LayoutContext";
 import { WindowView } from "./layout/LayoutRenderer";
@@ -418,14 +419,17 @@ function useDefaultSelection(): void {
   }, [folders.data, folderId, selectFolder]);
 }
 
-/** Background components of the feature slots (render nothing). */
+/**
+ * Background components of the feature slots (render nothing); the context
+ * menu among them shows the features' menu sources (R2, ADR 0222).
+ */
 function FeatureEffects() {
   return (
-    <>
+    <MenuSourcesContext.Provider value={appRegistry.menuSources}>
       {appRegistry.effects.map((Effect, index) => (
         <Effect key={index} />
       ))}
-    </>
+    </MenuSourcesContext.Provider>
   );
 }
 

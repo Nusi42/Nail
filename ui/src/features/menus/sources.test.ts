@@ -8,6 +8,7 @@ describe("menu sources (R2 contract, ADR 0222)", () => {
     expect(menuSourceFor({ "rules.run-menu": source }, "rules.run-menu")).toBe(source);
     expect(menuSourceFor({ "rules.run-menu": source }, "toString")).toBeNull();
     expect(literalMenuLabel("Home")).toBe("Home");
+    expect(literalMenuLabel("@home")).not.toBe("@home");
   });
 
   it("merges the features' sources and refuses one registered twice", () => {

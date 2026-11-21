@@ -289,7 +289,11 @@ function apply(
   }
 }
 
-/** Runs one rule on messages as its own run (finished on the next tick). */
+/**
+ * Runs one rule on messages as its own run. Like the core (R2, ADR 0222),
+ * the answer is the finished run — `done`, with its finish time and
+ * whether it can be undone — and `RuleRunFinished` follows.
+ */
 function runOne(
   core: MockCore,
   rule: Rule,
@@ -314,26 +318,24 @@ function runOne(
       irreversible ||= result.irreversible;
     }
   }
+  const at = new Date(MOCK_NOW).toISOString();
   const run: RuleRun = {
     id: runId,
     rule_id: rule.id,
     rule_name: rule.name,
     cause: "manual",
-    state: "running",
-    started_at: new Date(MOCK_NOW).toISOString(),
-    finished_at: null,
+    state: "done",
+    started_at: at,
+    finished_at: at,
     target,
     matched: matching.length,
     op_ids: opIds,
-    undoable: false,
+    undoable: !irreversible && opIds.length > 0,
     message: null,
   };
   s.runs.push(run);
   s.undo.set(runId, steps);
-  core.later(() => {
-    run.state = "done";
-    run.finished_at = new Date(MOCK_NOW).toISOString();
-    run.undoable = !irreversible && opIds.length > 0;
+  queueMicrotask(() => {
     core.emit({ type: "RuleRunFinished", run: { ...run } });
   });
   return { ...run };

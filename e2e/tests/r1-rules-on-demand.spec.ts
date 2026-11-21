@@ -9,6 +9,7 @@ import {
   openRulesWindow,
   openWorkInbox as openWorkInboxOf,
   rulesFooter,
+  rulesToast,
   saveRule,
 } from "../support/rules";
 import { accountSectionNamed, messageRow, sectionInbox } from "../support/views";
@@ -145,11 +146,12 @@ test("Run rule in the row menu and the folder menu, undone from the toast", asyn
   // The row menu: one rule on the row.
   await messageRow(page, WELCOME).click({ button: "right" });
   await page.getByRole("menu").getByRole("menuitem", { name: "Run rule" }).click();
-  const rulesMenu = page.getByRole("menu");
+  // R2: the rules are a submenu beside the menu.
+  const rulesMenu = page.getByRole("menu", { name: "Run rule" });
   await expect(rulesMenu.getByRole("menuitem", { name: "All rules that are on" })).toBeVisible();
   await page.screenshot({ path: screenshotFile("r1-rules", "row-menu") });
   await rulesMenu.getByRole("menuitem", { name: "Flag them" }).click();
-  const toast = page.locator('[data-part="mail-actions.toast"][data-source="rules"]');
+  const toast = rulesToast(page);
   await expect(toast).toHaveText(/The rule ran: 1 message matched|The rule ran: one message/);
   await expect.poll(() => flagged(WELCOME)).toBe(true);
   expect(await flagged(RELEASE)).toBe(false);
@@ -160,7 +162,7 @@ test("Run rule in the row menu and the folder menu, undone from the toast", asyn
   // The folder menu: the folder's messages.
   await sectionInbox(accountSectionNamed(page, "Work")).click({ button: "right" });
   await page.getByRole("menu").getByRole("menuitem", { name: "Run rule" }).click();
-  await page.getByRole("menu").getByRole("menuitem", { name: "Flag releases" }).click();
+  await rulesMenu.getByRole("menuitem", { name: "Flag releases" }).click();
   await expect(toast).toContainText("The rule ran");
   await expect.poll(() => flagged(RELEASE)).toBe(true);
   expect(await flagged(WELCOME)).toBe(false);

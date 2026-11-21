@@ -45,7 +45,7 @@ test("the desktop app shows the demo mail through Tauri IPC", async () => {
   await expect(page.locator('[data-part="message-view.text"]')).toContainText("welcome aboard");
   // Search runs in the core (the seed is indexed).
   await page.keyboard.press("/");
-  const search = page.getByRole("searchbox", { name: "Search mail" });
+  const search = page.getByRole("combobox", { name: "Search mail" });
   await search.fill("nightingale");
   await search.press("Enter");
   await expect(rows.filter({ hasText: "Project Nightingale kickoff" }).first()).toBeVisible();

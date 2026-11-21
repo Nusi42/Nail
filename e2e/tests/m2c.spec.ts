@@ -242,7 +242,7 @@ test("server search finds mail without a local body, and opening fetches it", as
   // "platypus" is only in the body, which is not stored locally: the
   // server search finds it. (Search hits are message rows; the folder lists
   // conversations, P2.)
-  const search = page.getByRole("searchbox");
+  const search = page.getByRole("combobox", { name: "Search mail" });
   await search.fill("platypus");
   await search.press("Enter");
   await expect(row).toHaveCount(1, { timeout: 20_000 });

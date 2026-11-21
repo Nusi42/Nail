@@ -13,6 +13,11 @@
  * - ADR 0184: a right-click never shows the browser's menu — Nail's menu
  *   of the place, or nothing; text fields, editors, selectable text and
  *   mail documents get the text menu (`./editing.ts`).
+ * - R2 (ADR 0222, 0223-wr6): an item whose action has a menu source
+ *   (`./sources.ts`, `Feature.menuSources`) is a hover / arrow-key submenu
+ *   of the source's entries; the app provides the sources as
+ *   `MenuSourcesContext`. Labels that are user data go through
+ *   `literalMenuLabel`.
  *
  * Only WP54 edits the files in this directory (plus
  * `locales/{en,de}/menus.ftl`). The central registry (`../registry.ts`)
@@ -48,7 +53,9 @@ export type { ContextTarget } from "./targets";
 export { ariaShortcut, chordText, keyLabel } from "./keyLabels";
 export {
   literalMenuLabel,
+  menuLabelText,
   menuSourceFor,
+  MenuSourcesContext,
   type MenuSource,
   type MenuSourceRegistry,
 } from "./sources";

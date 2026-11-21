@@ -11,12 +11,14 @@
  * Labels: entries are `ResolvedMenuEntry`s, whose labels are read as
  * Fluent ids when they start with `@`. Labels that are user data (a rule
  * named "@home") go through `literalMenuLabel`, so they always show as
- * written.
+ * written: it marks them with {@link LITERAL_LABEL_MARK}, which the menu
+ * drops instead of resolving the label (`menuLabelText`).
  *
- * Contract stub: the types and `menuSourceFor`; showing a source as a
- * hover submenu and `literalMenuLabel` are the R1 leftovers package's
- * (WR6), which then moves "Run rule" onto a source.
+ * The context menu loads every source of a list when the list appears
+ * (`MenuSourceLoader`), so an empty source shows its item disabled before
+ * it is hovered.
  */
+import { createContext } from "react";
 import type { ActionContext } from "../../actions/registry";
 import type { ResolvedMenuEntry } from "../../api/generated";
 
@@ -32,15 +34,47 @@ export interface MenuSource {
 /** Menu sources by the action id of the layout item that opens them. */
 export type MenuSourceRegistry = Readonly<Record<string, MenuSource>>;
 
+/**
+ * The app's menu sources (`AppRegistry.menuSources`, provided by the app
+ * shell): the context menu cannot import the registry, which imports it.
+ */
+export const MenuSourcesContext = createContext<MenuSourceRegistry>({});
+
 /** The source of a layout item's action, or `null` for a plain item. */
 export function menuSourceFor(registry: MenuSourceRegistry, action: string): MenuSource | null {
   return Object.hasOwn(registry, action) ? (registry[action] ?? null) : null;
 }
 
 /**
- * A label that shows exactly `text`, even when it starts with `@` (stub:
- * returns `text` until the menus read an escape).
+ * The mark of a literal menu label: a label starting with it shows the rest
+ * as written. Labels that already start with it are marked too, so every
+ * text round-trips.
  */
+export const LITERAL_LABEL_MARK = "\\";
+
+/** A label that shows exactly `text`, even when it starts with `@`. */
 export function literalMenuLabel(text: string): string {
-  return text;
+  return text.startsWith("@") || text.startsWith(LITERAL_LABEL_MARK)
+    ? `${LITERAL_LABEL_MARK}${text}`
+    : text;
+}
+
+/**
+ * The text a menu shows for `label`: a literal label as written (without
+ * its mark), else the label resolved (`@a.b` is a Fluent id).
+ */
+export function menuLabelText(label: string, resolve: (label: string) => string): string {
+  return label.startsWith(LITERAL_LABEL_MARK)
+    ? label.slice(LITERAL_LABEL_MARK.length)
+    : resolve(label);
+}
+
+/**
+ * What the context menu needs to show sources: whether an action has one,
+ * and its entries for the open menu (the host binds the menu's context and
+ * drops the entries that do not apply).
+ */
+export interface MenuSourceLoader {
+  has: (action: string) => boolean;
+  load: (action: string) => Promise<ResolvedMenuEntry[]>;
 }

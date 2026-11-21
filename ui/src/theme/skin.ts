@@ -251,6 +251,9 @@ ${p("search-bar.field")}[data-state~="invalid"] { border-color: ${T.danger}; }
 ${p("search-bar")} { position: relative; }
 ${p("search-bar.error.note")} { color: ${T.muted}; }
 ${p("search-bar.status")} { ${VISUALLY_HIDDEN} }
+${p("search-bar.hints")} { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; box-shadow: ${T.overlay}; }
+${p("search-bar.hint")}[role="option"] { cursor: default; }
+${p("search-bar.hint.button")}[data-state~="active"] { background-color: ${T.raised}; }
 ${p("search-bar.shortcut")} {
   flex: 0 0 auto; padding: 0 ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.rSm};
   font-family: ${T.fontMono}; font-size: ${T.label}; line-height: calc(${T.label} + ${T.xs}); color: ${T.muted}; background-color: ${T.bg};
@@ -337,7 +340,7 @@ ${p("problem.details")}[data-mode="toggle"] { max-width: ${floatingWidth(PROBLEM
 ${p("problem.details")}[data-mode="follow"] { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; }
 ${p("problem.details")}[data-mode="follow"]::before { content: ""; position: absolute; inset-inline: 0; bottom: 100%; height: calc(${T.xs} + 1px); }`;
 
-const MENUS = `${p("context-menu")} {
+const MENUS = `${p("context-menu")}, ${p("context-menu.popup")} {
   width: max-content; min-width: calc(16 * ${T.lg}); max-width: ${MENU_MAX_WIDTH};
 }
 ${p("context-menu.list")} {
@@ -587,12 +590,12 @@ ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.icon"
 ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.unread-count")} { color: ${T.accent}; font-weight: ${T.semibold}; }
 ${p("status-bar")} { display: flex; align-items: center; gap: ${T.md}; min-height: calc(${T.control} - ${T.xs}); padding: 0 ${T.pane}; font-size: ${T.small}; color: ${T.muted}; border-top: 1px solid ${T.border}; background-color: ${T.subtle}; }
 ${p("search-bar")} { padding: ${T.md} ${T.pane} ${T.sm}; }
-${p("search-bar")} ${p("problem.details")} { inset-inline: ${T.pane}; top: calc(100% - ${T.sm}); }`;
+${p("search-bar")} ${p("problem.details")}, ${p("search-bar")} ${p("search-bar.hints")} { inset-inline: ${T.pane}; top: calc(100% - ${T.sm}); }`;
 
 /** The message list header (M5b): search, title with counts, filter chips. */
 const LIST_HEADER = `${p("list-header")} { display: grid; gap: ${T.md}; padding: ${T.md} ${T.pane} ${T.sm}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
 ${p("list-header")} ${p("search-bar")} { padding: 0; }
-${p("list-header")} ${p("search-bar")} ${p("problem.details")} { inset-inline: 0; top: 100%; }
+${p("list-header")} ${p("search-bar")} ${p("problem.details")}, ${p("list-header")} ${p("search-bar")} ${p("search-bar.hints")} { inset-inline: 0; top: 100%; }
 ${p("list-header.heading")} { display: flex; align-items: baseline; gap: ${T.sm}; min-width: 0; }
 ${p("list-header.title")} { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("list-header.counts")} { flex: 0 0 auto; font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; white-space: nowrap; }
