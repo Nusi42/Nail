@@ -1,6 +1,9 @@
 //! Replaying queued writes (ADR 0007 / 0015): the store's per-account
-//! queue drives an executor per protocol, and every step is broadcast as
-//! [`Event::OpStatus`].
+//! queue drives an executor per protocol. Progress reaches clients as the
+//! queue's summary ([`Event::OpsChanged`], at most once per replayed group
+//! and interval, and at the end of each pass; ADR 0230), never as one event
+//! per operation: a bulk action of thousands of writes would flood the
+//! event channel.
 //!
 //! * IMAP ([`ImapExecutor`]): flags with `UID STORE`, moves with `MOVE` (or
 //!   `COPY` + `\Deleted` + expunge), deletes to Trash as moves, permanent
@@ -27,15 +30,15 @@
 use std::sync::Arc;
 
 use nail_api::engine::{BoxFuture, EngineError};
-use nail_api::{AccountId, ErrorCode, Event, Folder, IncomingServer, MessageId, OpState, OpStatus};
+use nail_api::{AccountId, ErrorCode, Event, Folder, IncomingServer, MessageId};
 use nail_proto_imap::{Flag, ImapClient};
 use nail_store::{
-    MessageSource, Operation, QueuedOp, ReplayOutcome, ReplayPolicy, ReplayReport, Replayer,
+    MessageSource, OpError, Operation, QueuedOp, ReplayOutcome, ReplayPolicy, ReplayReport,
+    Replayer,
 };
 
 use crate::error::{CoreError, Result};
 use crate::folders::{FolderApplied, FolderChange, server_path};
-use crate::ids;
 use crate::service::Service;
 use crate::sync::{ImapSettings, connect};
 
@@ -102,44 +105,40 @@ async fn one_by_one(
     out
 }
 
-/// Adapts an executor to the store's [`Replayer`], broadcasting progress.
+/// Adapts an executor to the store's [`Replayer`]; progress goes out as
+/// the queue's summary once per group ([`Replayer::group_recorded`]), never
+/// per operation (ADR 0230).
 struct EventReplayer<'a> {
     service: &'a Service,
     executor: &'a dyn OpExecutor,
     policy: ReplayPolicy,
+    /// The error class that deferred the pass, for its one log line.
+    deferred_by: std::sync::Mutex<Option<ErrorCode>>,
 }
 
-impl EventReplayer<'_> {
-    fn status(&self, op: &QueuedOp, state: OpState, error: Option<&EngineError>) {
-        self.service.broadcast(Event::OpStatus {
-            status: OpStatus {
-                op_id: ids::op_id(op.id),
-                account_id: op.account_id.clone(),
-                state,
-                error: error.map(|e| e.code),
-                message: error.map(|e| e.message.clone()),
-                localized: error.and_then(|e| e.localized.as_deref().cloned()),
-            },
-        });
+/// The stored form of a failed attempt: its class and user-facing text
+/// stay with the operation (ADR 0230).
+fn op_error(err: EngineError) -> OpError {
+    let message = err.to_string();
+    OpError {
+        code: err.code,
+        localized: err.localized.map(|l| *l),
+        message,
     }
 }
 
 impl EventReplayer<'_> {
     fn outcome(&self, op: &QueuedOp, result: Result<(), EngineError>) -> ReplayOutcome {
         match result {
-            Ok(()) => {
-                self.status(op, OpState::Done, None);
-                ReplayOutcome::Done
-            }
+            Ok(()) => ReplayOutcome::Done,
             Err(err) if err.retryable && op.attempts < self.policy.max_attempts => {
                 tracing::debug!(op = %op.id, %err, "write deferred");
-                self.status(op, OpState::Pending, Some(&err));
-                ReplayOutcome::Retry(err.to_string())
+                crate::service::lock(&self.deferred_by).get_or_insert(err.code);
+                ReplayOutcome::Retry(op_error(err))
             }
             Err(err) => {
                 tracing::warn!(op = %op.id, %err, "write failed");
-                self.status(op, OpState::Failed, Some(&err));
-                ReplayOutcome::Fail(err.to_string())
+                ReplayOutcome::Fail(op_error(err))
             }
         }
     }
@@ -147,7 +146,6 @@ impl EventReplayer<'_> {
 
 impl Replayer for EventReplayer<'_> {
     async fn replay(&self, op: &QueuedOp) -> ReplayOutcome {
-        self.status(op, OpState::InFlight, None);
         let result = self.executor.execute(op).await;
         self.outcome(op, result)
     }
@@ -157,19 +155,13 @@ impl Replayer for EventReplayer<'_> {
     }
 
     async fn replay_group(&self, ops: &[QueuedOp]) -> Vec<ReplayOutcome> {
-        for op in ops {
-            self.status(op, OpState::InFlight, None);
-        }
+        // Operations without a result were not attempted: the store puts
+        // them back to pending.
         let results = self.executor.execute_group(ops).await;
-        let mut out = Vec::with_capacity(results.len());
-        for (op, result) in ops.iter().zip(results) {
-            out.push(self.outcome(op, result));
-        }
-        // Not attempted: back to pending.
-        for op in &ops[out.len()..] {
-            self.status(op, OpState::Pending, None);
-        }
-        out
+        ops.iter()
+            .zip(results)
+            .map(|(op, result)| self.outcome(op, result))
+            .collect()
     }
 
     async fn group_recorded(&self) {
@@ -187,19 +179,32 @@ pub(crate) async fn replay_account(
 ) -> Result<ReplayReport> {
     // Folder changes first: a move may go into a folder created just now
     // (ADR 0196).
-    crate::folders::replay_folder_ops(service, account, executor).await?;
+    if let Err(err) = crate::folders::replay_folder_ops(service, account, executor).await {
+        // Folder changes count in the summary too (ADR 0230).
+        service.broadcast_ops_changed().await;
+        return Err(err);
+    }
     let replayer = EventReplayer {
         service,
         executor,
         policy: ReplayPolicy::default(),
+        deferred_by: std::sync::Mutex::new(None),
     };
     let report = service
         .store()
         .replay_account(account, &replayer, replayer.policy)
         .await;
     // The pass's final state, also when it stopped early (ADR 0230).
-    service.broadcast_ops_changed().await;
+    let summary = service.broadcast_ops_changed().await;
     let report = report?;
+    if !report.deferred.is_empty() {
+        let code = *crate::service::lock(&replayer.deferred_by);
+        log_deferred_pass(
+            account,
+            summary.as_ref(),
+            code.unwrap_or(ErrorCode::Internal),
+        );
+    }
     if !report.failed.is_empty() {
         // Failed writes: clients show the store's state again.
         service.broadcast(Event::MailChanged {
@@ -207,6 +212,20 @@ pub(crate) async fn replay_account(
         });
     }
     Ok(report)
+}
+
+/// One line per deferred pass (ADR 0230), visible in a diagnostics bundle:
+/// the account, how many writes still wait and the error class; never the
+/// error's text (it may name messages or addresses).
+pub(crate) fn log_deferred_pass(
+    account: &AccountId,
+    summary: Option<&nail_api::OpsSummary>,
+    code: ErrorCode,
+) {
+    let waiting = summary
+        .and_then(|s| s.accounts.iter().find(|a| &a.account_id == account))
+        .map_or(0, |a| a.pending + a.in_flight);
+    tracing::info!(%account, waiting, error = %code, "writes deferred; retrying later");
 }
 
 /// Replays a registered (manual) IMAP account's queue on a fresh
@@ -1281,5 +1300,188 @@ impl Service {
                 tokens: self.inner.tokens.clone(),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Write as _;
+    use std::sync::Mutex;
+
+    use nail_api::{FlagChange, FolderRole, LocalizedMessage};
+    use tracing::field::{Field, Visit};
+    use tracing::{Level, Metadata, span};
+
+    use super::*;
+    use crate::demo::DEMO_ACCOUNT_ID;
+    use crate::testing::TempService;
+
+    /// Answers every operation with the same error.
+    struct Failing(EngineError);
+
+    impl OpExecutor for Failing {
+        fn execute<'a>(&'a self, _op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
+            let err = self.0.clone();
+            Box::pin(async move { Err(err) })
+        }
+    }
+
+    /// A log line: its level and its fields as `name=value` text.
+    type Line = (Level, String);
+
+    /// Records the events logged on this thread.
+    struct Recorder(Arc<Mutex<Vec<Line>>>);
+
+    struct Fields(String);
+
+    impl Visit for Fields {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            // Writing to a `String` cannot fail.
+            let _ = write!(self.0, "{}={value:?} ", field.name());
+        }
+    }
+
+    impl tracing::Subscriber for Recorder {
+        fn enabled(&self, _: &Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &span::Attributes<'_>) -> span::Id {
+            span::Id::from_u64(1)
+        }
+        fn record(&self, _: &span::Id, _: &span::Record<'_>) {}
+        fn record_follows_from(&self, _: &span::Id, _: &span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut fields = Fields(String::new());
+            event.record(&mut fields);
+            crate::service::lock(&self.0).push((*event.metadata().level(), fields.0));
+        }
+        fn enter(&self, _: &span::Id) {}
+        fn exit(&self, _: &span::Id) {}
+    }
+
+    fn demo() -> AccountId {
+        AccountId::new(DEMO_ACCOUNT_ID)
+    }
+
+    /// Queues a flag change on `n` demo messages without waking the
+    /// engines.
+    fn queue_flags(t: &TempService, n: usize) {
+        let store = t.service.store();
+        let inbox = store
+            .folder_with_role(&demo(), FolderRole::Inbox)
+            .unwrap()
+            .unwrap();
+        let messages = store.folder_message_ids(&inbox).unwrap();
+        assert!(messages.len() >= n);
+        for message_id in messages.into_iter().take(n) {
+            store
+                .enqueue(&Operation::UpdateFlags {
+                    message_id,
+                    change: FlagChange {
+                        flagged: Some(true),
+                        ..FlagChange::default()
+                    },
+                })
+                .unwrap();
+        }
+    }
+
+    /// One replay pass with `executor`, and what it logged on this thread.
+    async fn logged_pass(t: &TempService, executor: &dyn OpExecutor) -> Vec<Line> {
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let _guard = tracing::subscriber::set_default(Recorder(Arc::clone(&lines)));
+        replay_account(&t.service, &demo(), executor).await.unwrap();
+        crate::service::lock(&lines).clone()
+    }
+
+    fn deferred_lines(lines: &[Line]) -> Vec<&Line> {
+        lines
+            .iter()
+            .filter(|(_, text)| text.contains("writes deferred"))
+            .collect()
+    }
+
+    /// ADR 0230: a deferred pass logs one INFO line with the account, the
+    /// waiting writes and the error class, never the error's text; giving
+    /// up stays a warning.
+    #[tokio::test]
+    async fn a_deferred_pass_logs_once_at_info_without_the_text() {
+        let t = TempService::seeded();
+        queue_flags(&t, 3);
+        let offline = Failing(EngineError::temporary(
+            ErrorCode::Network,
+            "connection to imap.example.com lost while storing for sam@example.net",
+        ));
+        let lines = logged_pass(&t, &offline).await;
+        let deferred = deferred_lines(&lines);
+        assert_eq!(deferred.len(), 1, "{lines:?}");
+        let (level, text) = deferred[0];
+        assert_eq!(*level, Level::INFO);
+        assert!(text.contains("account=demo"), "{text}");
+        assert!(text.contains("waiting=3"), "{text}");
+        assert!(text.contains("error=network"), "{text}");
+        let info: Vec<&Line> = lines.iter().filter(|(l, _)| *l <= Level::INFO).collect();
+        assert!(
+            info.iter().all(|(_, text)| !text.contains("example")),
+            "{info:?}"
+        );
+
+        // The first write's last attempt gives up (a warning); the next
+        // one defers the pass again (one INFO line).
+        let mut lines = Vec::new();
+        for _ in 1..ReplayPolicy::default().max_attempts {
+            lines = logged_pass(&t, &offline).await;
+        }
+        assert!(
+            lines.iter().any(|(level, _)| *level == Level::WARN),
+            "{lines:?}"
+        );
+        let deferred = deferred_lines(&lines);
+        assert_eq!(deferred.len(), 1, "{lines:?}");
+        assert!(deferred[0].1.contains("waiting=2"), "{deferred:?}");
+        let summary = t.service.ops_summary().await.unwrap();
+        assert_eq!((summary.waiting(), summary.failed), (2, 1));
+    }
+
+    /// ADR 0230: a failed write keeps its error class and user-facing text
+    /// (also after a restart: they are stored with it), and a pass sends
+    /// the queue's summary, never an event per operation.
+    #[tokio::test]
+    async fn a_failure_keeps_its_class_and_a_pass_sends_summaries_only() {
+        let t = TempService::seeded();
+        queue_flags(&t, 4);
+        let mut events = t.service.subscribe();
+        let gone = Failing(
+            EngineError::permanent(ErrorCode::NotFound, "no such message")
+                .with_localized(LocalizedMessage::new("error-not-found")),
+        );
+        replay_account(&t.service, &demo(), &gone).await.unwrap();
+        let summary = t.service.ops_summary().await.unwrap();
+        assert_eq!((summary.waiting(), summary.failed), (0, 4));
+        let failure = summary.newest_failure.expect("a failure");
+        assert_eq!(failure.code, ErrorCode::NotFound);
+        assert_eq!(
+            failure.localized,
+            Some(LocalizedMessage::new("error-not-found"))
+        );
+        assert!(
+            failure
+                .message
+                .is_some_and(|m| m.contains("no such message"))
+        );
+
+        let mut sent = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            sent.push(event);
+        }
+        assert!(
+            !sent.iter().any(|e| matches!(e, Event::OpStatus { .. })),
+            "{sent:?}"
+        );
+        let last = sent.iter().rev().find_map(|e| match e {
+            Event::OpsChanged { summary } => Some(summary),
+            _ => None,
+        });
+        assert!(last.is_some_and(|s| s.failed == 4), "{sent:?}");
     }
 }

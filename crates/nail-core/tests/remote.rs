@@ -1965,3 +1965,61 @@ async fn remote_sessions_follow_their_own_browser_appearance() {
     };
     assert_eq!(service.remote_event(&other, ui.clone()).await, Some(ui));
 }
+
+/// ADR 0230: a remote session sees the queues of its granted accounts
+/// only, in the summary it asks for and in `OpsChanged`; `Resync` reaches
+/// every session.
+#[tokio::test]
+async fn the_queue_summary_is_narrowed_to_granted_accounts() {
+    let f = setup();
+    let service = &f.service;
+    let (reader, narrow) = reader_and_narrow(&f).await;
+    // A queued write of the demo account, without waking the engines.
+    let message = demo_messages(&f).remove(0);
+    service
+        .store()
+        .enqueue(&nail_store::Operation::UpdateFlags {
+            message_id: message.id,
+            change: nail_api::FlagChange {
+                flagged: Some(true),
+                ..nail_api::FlagChange::default()
+            },
+        })
+        .unwrap();
+    let summary = service.ops_summary().await.unwrap();
+    assert_eq!(summary.waiting(), 1);
+
+    let asked = |ctx| service.handle_remote(ctx, Request::GetOpsSummary);
+    assert_eq!(
+        asked(&reader).await,
+        Response::OpsSummary {
+            summary: summary.clone()
+        }
+    );
+    assert_eq!(
+        asked(&narrow).await,
+        Response::OpsSummary {
+            summary: nail_api::OpsSummary::default()
+        }
+    );
+
+    let event = nail_api::Event::OpsChanged {
+        summary: summary.clone(),
+    };
+    assert_eq!(
+        service.remote_event(&reader, event.clone()).await,
+        Some(event.clone())
+    );
+    assert_eq!(
+        service.remote_event(&narrow, event).await,
+        Some(nail_api::Event::OpsChanged {
+            summary: nail_api::OpsSummary::default()
+        })
+    );
+    for ctx in [&reader, &narrow] {
+        assert_eq!(
+            service.remote_event(ctx, nail_api::Event::Resync).await,
+            Some(nail_api::Event::Resync)
+        );
+    }
+}

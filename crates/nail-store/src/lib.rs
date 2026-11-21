@@ -159,8 +159,8 @@ pub use plugins::{
 };
 pub use pop3::{Pop3State, Pop3Uid};
 pub use queue::{
-    Enqueued, FlagChange, MessageSource, OpId, OpState, Operation, QueuedOp, ReplayOutcome,
-    ReplayPolicy, ReplayReport, Replayer,
+    Enqueued, FlagChange, MessageSource, OpError, OpId, OpState, Operation, QueuedOp,
+    ReplayOutcome, ReplayPolicy, ReplayReport, Replayer,
 };
 pub use remote::{
     NewPairingCode, NewPasskey, NewRemoteDevice, NewRemoteSession, REMOTE_UI_CERTIFICATE_KEY,

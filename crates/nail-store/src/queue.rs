@@ -40,7 +40,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, PoisonError};
 
-use nail_api::{AccountId, FolderId, FolderRole, MessageId};
+use nail_api::{AccountId, ErrorCode, FolderId, FolderRole, LocalizedMessage, MessageId};
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 use serde::{Deserialize, Serialize};
 
@@ -479,6 +479,12 @@ pub struct QueuedOp {
     pub attempts: u32,
     /// Error of the last failed attempt.
     pub last_error: Option<String>,
+    /// The error class of the last failed attempt (schema v22, ADR 0230);
+    /// `None` for operations that failed before it was recorded.
+    pub error_code: Option<ErrorCode>,
+    /// The user-facing text of the last failed attempt, when the replayer
+    /// had a more specific one than the error class (ADR 0043).
+    pub error_localized: Option<LocalizedMessage>,
     /// When it was enqueued (RFC 3339, UTC).
     pub created_at: String,
     /// When its state last changed (RFC 3339, UTC).
@@ -494,16 +500,60 @@ pub struct Enqueued {
     pub changed_folders: Vec<FolderId>,
 }
 
+/// Why replaying an operation did not succeed (ADR 0230): the error class
+/// and, when the replayer has one, the user-facing text are kept with the
+/// operation, so a failure names its real reason also after a restart.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpError {
+    /// Machine-readable error class.
+    pub code: ErrorCode,
+    /// The user-facing text, when more specific than the class.
+    pub localized: Option<LocalizedMessage>,
+    /// Diagnostic detail (English).
+    pub message: String,
+}
+
+impl OpError {
+    /// An error of class `code`.
+    pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            localized: None,
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for OpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+/// Only a text: the class is unknown (`internal`).
+impl From<String> for OpError {
+    fn from(message: String) -> Self {
+        Self::new(ErrorCode::Internal, message)
+    }
+}
+
+/// Only a text: the class is unknown (`internal`).
+impl From<&str> for OpError {
+    fn from(message: &str) -> Self {
+        Self::from(message.to_owned())
+    }
+}
+
 /// What a [`Replayer`] reports for one operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReplayOutcome {
     /// The server accepted the operation.
     Done,
     /// A transient problem (offline, timeout); try again in a later pass.
-    Retry(String),
+    Retry(OpError),
     /// A permanent problem (e.g. the message no longer exists on the server);
     /// do not try again.
-    Fail(String),
+    Fail(OpError),
 }
 
 /// Performs queued operations against a server. Implemented by the sync
@@ -636,7 +686,13 @@ pub(crate) fn has_waiting_op(message: &str) -> String {
 }
 
 const OP_COLS: &str =
-    "id, account_id, payload, state, attempts, last_error, created_at, updated_at";
+    "id, account_id, payload, state, attempts, last_error, created_at, updated_at,
+     error_code, error_localized";
+
+/// Schema v22 (ADR 0230): the error class and user-facing text of an
+/// operation's last failed attempt next to its English `last_error`.
+pub(crate) const V22: &str = "ALTER TABLE op_queue ADD COLUMN error_code TEXT;
+ALTER TABLE op_queue ADD COLUMN error_localized TEXT;";
 
 fn op_from_row(row: &Row<'_>) -> rusqlite::Result<QueuedOp> {
     let payload: String = row.get(2)?;
@@ -660,6 +716,13 @@ fn op_from_row(row: &Row<'_>) -> rusqlite::Result<QueuedOp> {
         last_error: row.get(5)?,
         created_at: row.get(6)?,
         updated_at: row.get(7)?,
+        // An unknown class (a newer build's) or text reads as none.
+        error_code: row
+            .get::<_, Option<String>>(8)?
+            .and_then(|c| ErrorCode::ALL.into_iter().find(|k| k.as_str() == c)),
+        error_localized: row
+            .get::<_, Option<String>>(9)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
     })
 }
 
@@ -905,17 +968,32 @@ impl Store {
         })
     }
 
-    /// The queue per account (ADR 0230): `pending`, `in_flight` and
-    /// `failed` operations, accounts in the order of their oldest such
-    /// operation; accounts with none are left out. `done` operations are
-    /// not counted.
-    pub fn op_queue_counts(&self) -> Result<Vec<nail_api::OpsAccountSummary>> {
+    /// The write queues per account (ADR 0230): `pending`, `in_flight` and
+    /// `failed` message writes (`op_queue`), plus the folder changes, Gmail
+    /// label and Exchange writes still waiting, counted as `pending` (they
+    /// have no in-flight state). Their failures are not counted: the folder
+    /// dialogs and the label / category screens report them, and
+    /// `RetryFailedOps` / `DismissFailedOps` act on message writes only.
+    /// Accounts in the order of their oldest such write; accounts with none
+    /// are left out. `done` writes are not counted.
+    pub fn write_queue_counts(&self) -> Result<Vec<nail_api::OpsAccountSummary>> {
         self.with_conn(|conn| {
             let mut stmt = conn.prepare_cached(
-                "SELECT account_id,
-                        SUM(state = 'pending'), SUM(state = 'in_flight'), SUM(state = 'failed')
-                 FROM op_queue WHERE state <> 'done'
-                 GROUP BY account_id ORDER BY MIN(id)",
+                "SELECT account_id, SUM(pending), SUM(in_flight), SUM(failed) FROM (
+                     SELECT account_id, created_at,
+                            state = 'pending' AS pending, state = 'in_flight' AS in_flight,
+                            state = 'failed' AS failed
+                     FROM op_queue WHERE state <> 'done'
+                     UNION ALL
+                     SELECT account_id, created_at, 1, 0, 0 FROM folder_ops WHERE state = 'pending'
+                     UNION ALL
+                     SELECT account_id, created_at, 1, 0, 0 FROM gmail_label_ops
+                     WHERE state = 'pending'
+                     UNION ALL
+                     SELECT account_id, created_at, 1, 0, 0 FROM exchange_ops
+                     WHERE state = 'pending'
+                 )
+                 GROUP BY account_id ORDER BY MIN(created_at), account_id",
             )?;
             let rows = stmt.query_map([], |r| {
                 Ok(nail_api::OpsAccountSummary {
@@ -926,6 +1004,30 @@ impl Store {
                 })
             })?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
+    /// Whether a move or delete of a message with this `Message-ID` (angle
+    /// brackets optional) out of `folder` is still waiting for replay.
+    /// The sync then must not store the server's copy in `folder` as a new
+    /// row: after a UIDVALIDITY reset the folder is fetched again with new
+    /// UIDs, and the message the user moved away would show twice (in its
+    /// new folder and back in the old one) until the move reaches the
+    /// server (ADR 0230).
+    pub fn has_waiting_move_out(&self, folder: &FolderId, message_id: &str) -> Result<bool> {
+        let Some(mid) = crate::mail::normalize_msgid(message_id) else {
+            return Ok(false);
+        };
+        self.with_conn(|conn| {
+            Ok(conn
+                .prepare_cached(&format!(
+                    "SELECT EXISTS (SELECT 1 FROM op_queue
+                     WHERE state IN {WAITING_STATES}
+                       -- Only moves and deletes record a source.
+                       AND json_extract(payload, '$.source.folder_id') = ?1
+                       AND json_extract(payload, '$.source.header_message_id') = ?2)"
+                ))?
+                .query_row(params![folder.as_str(), mid], |r| r.get(0))?)
         })
     }
 
@@ -1130,14 +1232,29 @@ impl Store {
         })
     }
 
-    fn finish_op(&self, id: OpId, state: OpState, error: Option<&str>) -> Result<()> {
+    fn finish_op(&self, id: OpId, state: OpState, error: Option<&OpError>) -> Result<()> {
+        let localized = error
+            .and_then(|e| e.localized.as_ref())
+            .map(serde_json::to_string)
+            .transpose()?;
         self.with_conn(|conn| {
+            // An error replaces all three columns; none keeps them.
             conn.execute(
                 &format!(
-                    "UPDATE op_queue SET state = ?2, last_error = COALESCE(?3, last_error),
+                    "UPDATE op_queue SET state = ?2,
+                         last_error = CASE WHEN ?5 THEN ?3 ELSE last_error END,
+                         error_code = CASE WHEN ?5 THEN ?4 ELSE error_code END,
+                         error_localized = CASE WHEN ?5 THEN ?6 ELSE error_localized END,
                      updated_at = {NOW} WHERE id = ?1"
                 ),
-                params![id.0, state.as_str(), error],
+                params![
+                    id.0,
+                    state.as_str(),
+                    error.map(|e| e.message.as_str()),
+                    error.map(|e| e.code.as_str()),
+                    error.is_some(),
+                    localized
+                ],
             )?;
             Ok(())
         })
@@ -1222,7 +1339,7 @@ impl Store {
                         (OpState::Pending, Some(err))
                     }
                 };
-                self.call(move |s| s.finish_op(id, state, error.as_deref()))
+                self.call(move |s| s.finish_op(id, state, error.as_ref()))
                     .await?;
                 claim.ids.retain(|c| *c != id);
             }

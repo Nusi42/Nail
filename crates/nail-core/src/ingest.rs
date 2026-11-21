@@ -173,25 +173,35 @@ pub(crate) fn meta_of(parsed: &ParsedMessage, size: usize) -> MessageMeta {
 /// yet (same Message-ID, no UID; the oldest), or the id derived from the
 /// UID. Id-only lookups with cached statements (the sync calls this for
 /// every message).
+///
+/// `None` = not stored: the user moved or deleted this message (same
+/// Message-ID) out of `folder` and the write still waits for replay. The
+/// server's copy is the one the write will take away; stored as a new row
+/// it would show the message twice, e.g. when a UIDVALIDITY reset makes
+/// the sync fetch the folder again with new UIDs (ADR 0230).
 fn resolve_id(
     store: &Store,
     folder: &Folder,
     uid_validity: u32,
     message: &IncomingMessage,
     parsed: &ParsedMessage,
-) -> nail_store::Result<MessageId> {
+) -> nail_store::Result<Option<MessageId>> {
     if let Some(id) = &message.id {
-        return Ok(id.clone());
+        return Ok(Some(id.clone()));
     }
     let uid = message.uid.unwrap_or(0);
     if let Some(existing) = store.message_id_by_uid(&folder.id, uid)? {
-        return Ok(existing);
+        return Ok(Some(existing));
     }
-    if let Some(mid) = &parsed.headers.message_id
-        && let Some(moved) = store.uidless_message_by_message_id(&folder.id, mid)?
-    {
-        store.set_message_uid(&moved, Some(uid))?;
-        return Ok(moved);
+    if let Some(mid) = &parsed.headers.message_id {
+        if let Some(moved) = store.uidless_message_by_message_id(&folder.id, mid)? {
+            store.set_message_uid(&moved, Some(uid))?;
+            return Ok(Some(moved));
+        }
+        if store.has_waiting_move_out(&folder.id, mid)? {
+            tracing::debug!(folder = %folder.id, uid, "skipped: a move out of the folder is pending");
+            return Ok(None);
+        }
     }
     // Messages keep their ids when Nail renames their folder (ADR 0196),
     // so a new folder at the old path could derive a taken id: then the
@@ -205,7 +215,7 @@ fn resolve_id(
             ids::message_id(&folder.account_id, &path, uid_validity, uid)
         };
         if !store.message_exists(&id)? {
-            return Ok(id);
+            return Ok(Some(id));
         }
         n = n.saturating_add(1);
     }
@@ -285,11 +295,16 @@ fn merge_prepared(
     let mut addresses: Vec<(MessageId, Vec<Address>)> = Vec::new();
     let mut docs = Vec::with_capacity(batch.messages.len());
     let mut keeps_body: Vec<MessageId> = Vec::new();
+    // The messages behind `rows`, in the same order (some are skipped).
+    let mut kept: Vec<&PreparedMessage> = Vec::with_capacity(batch.messages.len());
     for prepared in &batch.messages {
         let message = &prepared.message;
         let parsed = &prepared.parsed;
         let blob_hash = prepared.blob_hash.clone();
-        let id = resolve_id(store, folder, uid_validity, message, parsed)?;
+        let Some(id) = resolve_id(store, folder, uid_validity, message, parsed)? else {
+            continue;
+        };
+        kept.push(prepared);
         if !store.message_exists(&id)? {
             report.new.push(id.clone());
         } else if message.headers_only
@@ -358,7 +373,7 @@ fn merge_prepared(
     ] {
         let group: Vec<SyncedMessage> = rows
             .iter()
-            .zip(&batch.messages)
+            .zip(&kept)
             .filter(|(_, m)| m.message.headers_only == headers_only)
             .map(|(r, _)| r.clone())
             .collect();
@@ -374,7 +389,7 @@ fn merge_prepared(
     // blob between `put` and the row that references it; store it again.
     // Only a removal since the batch was prepared can have done that.
     if blobs.removed_since(batch.mark) {
-        for (prepared, row) in batch.messages.iter().zip(&rows) {
+        for (prepared, row) in kept.iter().zip(&rows) {
             if let Some(hash) = &row.message.blob_hash
                 && !blobs.contains(hash)
             {

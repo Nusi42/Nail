@@ -388,6 +388,8 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(crate::folder_ops::V20),
     // Schema v21 (ADR 0222): what a rule run acted on.
     Migration::sql(crate::rules::V21),
+    // Schema v22 (ADR 0230): the error class of a failed write.
+    Migration::sql(crate::queue::V22),
 ];
 
 /// The schema version this build creates and understands.

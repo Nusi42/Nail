@@ -153,6 +153,20 @@ pub fn error_of(response: impl Borrow<Response>) -> (ErrorCode, Option<String>) 
     }
 }
 
+/// The store's id of a message write's wire op id (`op-<n>`).
+///
+/// # Panics
+///
+/// When `id` is not a message write's.
+pub fn store_op_id(id: &nail_api::OpId) -> nail_store::OpId {
+    crate::ids::parse_op_id(id).unwrap_or_else(|| panic!("{id} is not a message write"))
+}
+
+/// The wire op id of a queued message write.
+pub fn wire_op_id(id: nail_store::OpId) -> nail_api::OpId {
+    crate::ids::op_id(id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

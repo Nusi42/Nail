@@ -195,6 +195,8 @@ async fn queue_label_op(
     service.broadcast(Event::MailChanged {
         folder_ids: Vec::new(),
     });
+    // Waiting label changes count in the queue's summary (ADR 0230).
+    service.broadcast_ops_changed().await;
     service.inner.engines.request_replay(account);
     Ok(queued)
 }
@@ -518,6 +520,7 @@ async fn replay_label_ops(
     service.broadcast(Event::GmailLabelsChanged {
         account_id: account.clone(),
     });
+    service.broadcast_ops_changed().await;
     Ok(())
 }
 

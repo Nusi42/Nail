@@ -1141,6 +1141,17 @@ mod tests {
             "{:?}",
             seen[0]
         );
+        // ADR 0230: the queue's summary, then the signal to refetch the open
+        // lists, end the resync.
+        let resync = seen
+            .iter()
+            .position(|e| matches!(e, Event::Resync))
+            .expect("a Resync");
+        assert!(
+            matches!(&seen[resync - 1], Event::OpsChanged { summary } if summary.waiting() == 0),
+            "{:?}",
+            seen[resync - 1]
+        );
         let seen: Vec<Event> = seen[1..].to_vec();
         assert!(
             matches!(seen[0], Event::ConfigChanged { .. }),

@@ -317,6 +317,8 @@ async fn queue(
         .call(move |s| s.enqueue_exchange_op(&id, &op))
         .await
         .map_err(store_invalid)?;
+    // Waiting Exchange writes count in the queue's summary (ADR 0230).
+    service.broadcast_ops_changed().await;
     service.inner.engines.request_replay(account);
     Ok(queued)
 }

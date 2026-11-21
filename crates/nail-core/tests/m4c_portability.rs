@@ -527,13 +527,19 @@ async fn importing_into_an_account_files_into_existing_folders_through_the_queue
     let ops = service.store().list_ops(None).unwrap();
     assert_eq!(ops.len(), 2);
     assert!(ops.iter().all(|op| op.operation.kind() == "append_message"));
-    let mut queued = 0;
-    while let Ok(event) = events.try_recv() {
-        if matches!(event, Event::OpStatus { .. }) {
-            queued += 1;
+    // Announced as the queue's summary, not per operation (ADR 0230).
+    let mut per_op = 0;
+    let mut waiting = 0;
+    while let Ok(Ok(event)) = tokio::time::timeout(Duration::from_millis(300), events.recv()).await
+    {
+        match event {
+            Event::OpStatus { .. } => per_op += 1,
+            Event::OpsChanged { summary } => waiting = waiting.max(summary.waiting()),
+            _ => {}
         }
     }
-    assert_eq!(queued, 2, "the queued operations were announced");
+    assert_eq!(per_op, 0, "no event per operation");
+    assert_eq!(waiting, 2, "the queued operations were announced");
 }
 
 fn thunderbird_profile() -> tempfile::TempDir {

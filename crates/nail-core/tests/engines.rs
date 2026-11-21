@@ -132,9 +132,8 @@ async fn configured_accounts_sync_and_list_with_all_accounts_first() {
 async fn writes_reach_the_imap_server() {
     let f = setup().await;
     synced(&f).await;
-    let mut events = f.service.subscribe();
 
-    // Flag: \Flagged on the server, OpStatus done.
+    // Flag: \Flagged on the server, the write done.
     let welcome = find(
         &f.service,
         MULTI_WORK_ID,
@@ -161,7 +160,7 @@ async fn writes_reach_the_imap_server() {
             .is_some_and(|flags| flags.iter().any(|x| x == "\\Flagged"))
     })
     .await;
-    wait_op_done(&mut events, &ops[0]).await;
+    wait_op_done(&f.service, &ops[0]).await;
 
     // Move to Archive by role.
     let moved = find(
@@ -249,14 +248,14 @@ async fn writes_reach_the_imap_server() {
     f.service.shutdown().await;
 }
 
-async fn wait_op_done(events: &mut broadcast::Receiver<Event>, op: &nail_api::OpId) {
-    next_matching(events, "the op to finish", |event| match event {
-        Event::OpStatus { status } if &status.op_id == op => match status.state {
-            nail_api::OpState::Done => Some(()),
-            nail_api::OpState::Failed => panic!("op failed: {status:?}"),
-            _ => None,
-        },
-        _ => None,
+/// Waits until the queued write `op` is done (message writes send no
+/// event per operation; ADR 0230).
+async fn wait_op_done(service: &Service, op: &nail_api::OpId) {
+    let id = nail_core::testing::store_op_id(op);
+    eventually("the op to finish", || async {
+        let op = service.store().get_op(id).unwrap();
+        assert_ne!(op.state, nail_store::OpState::Failed, "op failed: {op:?}");
+        op.state == nail_store::OpState::Done
     })
     .await;
 }

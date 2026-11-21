@@ -1802,6 +1802,7 @@ async fn replay_exchange_ops(
                 folder_ids: Vec::new(),
             });
         }
+        service.broadcast_ops_changed().await;
     }
     Ok(ran)
 }

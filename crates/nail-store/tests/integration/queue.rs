@@ -410,13 +410,13 @@ fn deleting_an_account_drops_its_queue() {
 #[tokio::test]
 async fn queue_counts_retry_and_dismiss_failed_ops() {
     let store = store_with_messages(&["m1", "m2", "m3"]);
-    assert_eq!(store.op_queue_counts().unwrap(), []);
+    assert_eq!(store.write_queue_counts().unwrap(), []);
     assert_eq!(store.newest_failed_op().unwrap(), None);
     let a = store.enqueue(&mark_seen("m1", true)).unwrap().op.id;
     let b = store.enqueue(&mark_seen("m2", true)).unwrap().op.id;
     store.enqueue(&mark_seen("m3", true)).unwrap();
 
-    let counts = store.op_queue_counts().unwrap();
+    let counts = store.write_queue_counts().unwrap();
     assert_eq!(counts.len(), 1);
     assert_eq!(counts[0].account_id, "a1".into());
     assert_eq!(
@@ -433,7 +433,7 @@ async fn queue_counts_retry_and_dismiss_failed_ops() {
         .replay_pending(&replayer, ReplayPolicy::default())
         .await
         .unwrap();
-    let counts = store.op_queue_counts().unwrap();
+    let counts = store.write_queue_counts().unwrap();
     assert_eq!(
         (counts[0].pending, counts[0].in_flight, counts[0].failed),
         (0, 0, 2)
@@ -445,7 +445,7 @@ async fn queue_counts_retry_and_dismiss_failed_ops() {
     // Another account's filter leaves them alone.
     assert_eq!(store.retry_failed_ops(Some(&"other".into())).unwrap(), []);
     assert_eq!(store.retry_failed_ops(Some(&"a1".into())).unwrap(), [a, b]);
-    let counts = store.op_queue_counts().unwrap();
+    let counts = store.write_queue_counts().unwrap();
     assert_eq!((counts[0].pending, counts[0].failed), (2, 0));
     assert_eq!(store.retry_failed_ops(None).unwrap(), []);
 
@@ -455,6 +455,146 @@ async fn queue_counts_retry_and_dismiss_failed_ops() {
         .await
         .unwrap();
     assert_eq!(store.dismiss_failed_ops(None).unwrap(), 1);
-    assert_eq!(store.op_queue_counts().unwrap(), []);
+    assert_eq!(store.write_queue_counts().unwrap(), []);
     assert_eq!(store.newest_failed_op().unwrap(), None);
+}
+
+/// ADR 0230: a failed write keeps its error class and user-facing text
+/// (schema v22); a later attempt's error replaces all three, success keeps
+/// them.
+#[tokio::test]
+async fn a_failure_keeps_its_class_and_text() {
+    let store = store_with_messages(&["m1", "m2"]);
+    let a = store.enqueue(&mark_seen("m1", true)).unwrap().op.id;
+    let b = store.enqueue(&mark_seen("m2", true)).unwrap().op.id;
+    let localized = nail_api::LocalizedMessage::new("error-not-found");
+    let replayer = ScriptedReplayer::with_script([ReplayOutcome::Retry(nail_store::OpError::new(
+        nail_api::ErrorCode::Network,
+        "offline",
+    ))]);
+    store
+        .replay_pending(&replayer, ReplayPolicy::default())
+        .await
+        .unwrap();
+    let op = store.get_op(a).unwrap();
+    assert_eq!(op.state, OpState::Pending);
+    assert_eq!(op.error_code, Some(nail_api::ErrorCode::Network));
+    assert_eq!(op.last_error.as_deref(), Some("offline"));
+
+    let replayer = ScriptedReplayer::with_script([ReplayOutcome::Fail(nail_store::OpError {
+        code: nail_api::ErrorCode::NotFound,
+        localized: Some(localized.clone()),
+        message: "gone".into(),
+    })]);
+    store
+        .replay_pending(&replayer, ReplayPolicy::default())
+        .await
+        .unwrap();
+    let failed = store.newest_failed_op().unwrap().unwrap();
+    assert_eq!(failed.id, a);
+    assert_eq!(
+        (failed.error_code, failed.error_localized, failed.last_error),
+        (
+            Some(nail_api::ErrorCode::NotFound),
+            Some(localized),
+            Some("gone".into())
+        )
+    );
+    // b succeeded: nothing recorded; a text-only error is `internal`.
+    assert_eq!(store.get_op(b).unwrap().error_code, None);
+    assert_eq!(
+        nail_store::OpError::from("text only").code,
+        nail_api::ErrorCode::Internal
+    );
+}
+
+/// ADR 0230: waiting folder changes count in the summary as pending.
+#[test]
+fn write_queue_counts_include_folder_changes() {
+    let store = store_with_messages(&["m1"]);
+    store.enqueue(&mark_seen("m1", true)).unwrap();
+    store
+        .enqueue_folder_op(
+            &"a1".into(),
+            &nail_store::FolderOp::Create {
+                parent_id: None,
+                name: "Receipts".into(),
+            },
+        )
+        .unwrap();
+    let counts = store.write_queue_counts().unwrap();
+    assert_eq!(counts.len(), 1);
+    assert_eq!(
+        (counts[0].pending, counts[0].in_flight, counts[0].failed),
+        (2, 0, 0)
+    );
+}
+
+/// ADR 0230: a move out of a folder that waits for replay is found by the
+/// message's Message-ID (angle brackets optional), until it is replayed.
+#[tokio::test]
+async fn a_waiting_move_out_is_found_by_message_id() {
+    let store = seeded_store();
+    let mut row = nail_store::SyncedMessage {
+        message: message("m1", "a1", "inbox", "2026-01-01T00:00:00Z"),
+        meta: Some(nail_store::MessageMeta {
+            message_id: Some("<m1@example.org>".into()),
+            ..nail_store::MessageMeta::default()
+        }),
+    };
+    row.message.uid = Some(7);
+    store.merge_messages(&[row]).unwrap();
+    let inbox = FolderId::from("inbox");
+    let archive = FolderId::from("archive");
+    assert!(
+        !store
+            .has_waiting_move_out(&inbox, "m1@example.org")
+            .unwrap()
+    );
+    store
+        .enqueue(&Operation::MoveMessage {
+            message_id: "m1".into(),
+            target_folder_id: archive.clone(),
+            source: None,
+        })
+        .unwrap();
+    assert!(
+        store
+            .has_waiting_move_out(&inbox, "m1@example.org")
+            .unwrap()
+    );
+    assert!(
+        store
+            .has_waiting_move_out(&inbox, "<m1@example.org>")
+            .unwrap()
+    );
+    assert!(
+        !store
+            .has_waiting_move_out(&archive, "m1@example.org")
+            .unwrap()
+    );
+    assert!(
+        !store
+            .has_waiting_move_out(&inbox, "other@example.org")
+            .unwrap()
+    );
+    assert!(!store.has_waiting_move_out(&inbox, "<>").unwrap());
+    store
+        .replay_pending(&AllDone, ReplayPolicy::default())
+        .await
+        .unwrap();
+    assert!(
+        !store
+            .has_waiting_move_out(&inbox, "m1@example.org")
+            .unwrap()
+    );
+}
+
+/// Replays every operation successfully.
+struct AllDone;
+
+impl Replayer for AllDone {
+    fn replay(&self, _op: &QueuedOp) -> impl Future<Output = ReplayOutcome> + Send {
+        std::future::ready(ReplayOutcome::Done)
+    }
 }

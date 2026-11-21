@@ -236,6 +236,7 @@ pub(crate) fn collect(
                     "state": op.state,
                     "attempts": op.attempts,
                     "error": op.last_error,
+                    "error_code": op.error_code,
                     "created_at": op.created_at,
                     "updated_at": op.updated_at,
                 })

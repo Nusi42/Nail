@@ -464,7 +464,7 @@ fn queue_flags(
             change,
         })
         .unwrap();
-    nail_api::OpId::new(format!("op-{}", queued.op.id.0))
+    nail_core::testing::wire_op_id(queued.op.id)
 }
 
 /// Replays the demo account's queue, failing every operation.
@@ -506,10 +506,10 @@ async fn retry_op_requeues_a_failed_operation() {
             op_ids: vec![op_id.clone()]
         }
     );
+    // The queue's summary, not an event for the operation (ADR 0230).
     match next_event(&mut events).await {
-        Event::OpStatus { status } => {
-            assert_eq!(status.op_id, op_id);
-            assert_eq!(status.state, nail_api::OpState::Pending);
+        Event::OpsChanged { summary } => {
+            assert_eq!((summary.pending, summary.failed), (1, 0), "{summary:?}");
         }
         other => panic!("unexpected {other:?}"),
     }

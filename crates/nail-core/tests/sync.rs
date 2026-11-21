@@ -699,3 +699,159 @@ async fn the_connection_log_is_kept_on_disk_only_when_asked() {
     f.service.handle(settings(false)).await;
     assert!(!folder.exists(), "turning it off deletes the files");
 }
+
+/// The messages of the folder with `role` (store order).
+fn local_messages(f: &Fixture, role: FolderRole) -> Vec<nail_api::MessageSummary> {
+    let store = f.service.store();
+    let folder = store.folder_with_role(&f.account, role).unwrap().unwrap();
+    store.list_messages(&folder, 0, 10_000).unwrap().messages
+}
+
+/// The server's messages in `mailbox` whose raw text contains `needle`.
+fn server_count(f: &Fixture, mailbox: &str, needle: &str) -> usize {
+    f.server
+        .store()
+        .mailbox(mailbox)
+        .unwrap()
+        .messages
+        .iter()
+        .filter(|m| String::from_utf8_lossy(&m.raw).contains(needle))
+        .count()
+}
+
+/// ADR 0230 (maintainer report: a bulk move left "Saving 14 changes"):
+/// moving and deleting 2,000 messages sends a handful of queue summaries,
+/// never an event per operation, so the 256-event channel cannot overflow;
+/// the summary ends at zero waiting writes.
+#[tokio::test]
+async fn a_bulk_move_and_delete_sends_a_few_events() {
+    const BULK: usize = 2_000;
+    let f = setup("secret").await;
+    assert!(f.server.store().add_mailbox("Trash", FolderRole::Trash));
+    for n in 0..BULK {
+        let raw = format!(
+            "From: sender@example.com\r\nTo: reader@example.org\r\nSubject: Bulk {n}\r\n\
+             Message-ID: <bulk-{n}@example.com>\r\nDate: Mon, 2 Nov 2026 10:00:00 +0000\r\n\r\n\
+             Body {n}\r\n"
+        );
+        f.server
+            .store()
+            .append::<&str>("INBOX", raw.as_bytes(), &[])
+            .unwrap();
+    }
+    f.service.sync_account(&f.account).await.unwrap();
+    let ids: Vec<nail_api::MessageId> = local_messages(&f, FolderRole::Inbox)
+        .into_iter()
+        .filter(|m| m.subject.starts_with("Bulk "))
+        .map(|m| m.id)
+        .collect();
+    assert_eq!(ids.len(), BULK);
+    let (moved, deleted) = ids.split_at(BULK / 2);
+
+    let mut events = f.service.subscribe();
+    for request in [
+        Request::MoveMessages {
+            message_ids: moved.to_vec(),
+            target: nail_api::MoveTarget::Role(FolderRole::Archive),
+        },
+        Request::DeleteMessages {
+            message_ids: deleted.to_vec(),
+            permanent: false,
+        },
+    ] {
+        match f.service.handle(request).await {
+            Response::Queued { op_ids } => assert_eq!(op_ids.len(), BULK / 2),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(120), async {
+        while f.service.ops_summary().await.unwrap().waiting() > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("the queue drains");
+    let mut sent = Vec::new();
+    loop {
+        match tokio::time::timeout(std::time::Duration::from_millis(500), events.recv()).await {
+            Ok(Ok(event)) => sent.push(event),
+            Ok(Err(broadcast::error::RecvError::Lagged(missed))) => {
+                panic!("the event channel overflowed ({missed} events lost)")
+            }
+            _ => break,
+        }
+    }
+    let kinds: Vec<String> = sent
+        .iter()
+        .map(|e| {
+            format!("{e:?}")
+                .split([' ', '{'])
+                .next()
+                .unwrap_or("?")
+                .to_owned()
+        })
+        .collect();
+    assert!(
+        !sent.iter().any(|e| matches!(e, Event::OpStatus { .. })),
+        "no event per operation: {kinds:?}"
+    );
+    assert!(
+        sent.len() < nail_core::EVENT_CAPACITY / 8,
+        "{} events: {kinds:?}",
+        sent.len()
+    );
+    let last = sent.iter().rev().find_map(|e| match e {
+        Event::OpsChanged { summary } => Some(summary),
+        _ => None,
+    });
+    assert_eq!(last, Some(&nail_api::OpsSummary::default()), "{kinds:?}");
+    assert_eq!(server_count(&f, "INBOX", "Subject: Bulk "), 0);
+    assert_eq!(server_count(&f, "Archive", "Subject: Bulk "), BULK / 2);
+    assert_eq!(server_count(&f, "Trash", "Subject: Bulk "), BULK / 2);
+}
+
+/// ADR 0230 (maintainer report: moved messages showed in two folders until
+/// a restart): a folder fetched again after a UIDVALIDITY reset while moves
+/// out of it wait for replay must not get the moved messages back as new
+/// rows.
+#[tokio::test]
+async fn a_uidvalidity_reset_with_pending_moves_shows_no_duplicates() {
+    let f = setup("secret").await;
+    f.service.sync_account(&f.account).await.unwrap();
+    let store = f.service.store();
+    let archive = store
+        .folder_with_role(&f.account, FolderRole::Archive)
+        .unwrap()
+        .unwrap();
+    let before = local_messages(&f, FolderRole::Inbox);
+    let archived = local_messages(&f, FolderRole::Archive).len();
+    let moved = &before[..2];
+    // Queued without waking the engines: the moves wait for the next pass,
+    // which fetches INBOX again before it replays them.
+    for message in moved {
+        store
+            .enqueue(&nail_store::Operation::MoveMessage {
+                message_id: message.id.clone(),
+                target_folder_id: archive.clone(),
+                source: None,
+            })
+            .unwrap();
+    }
+    f.server.store().reset_uid_validity("INBOX").unwrap();
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(report.reset_folders, 1);
+    assert_eq!(f.service.ops_summary().await.unwrap().waiting(), 0);
+
+    let inbox = local_messages(&f, FolderRole::Inbox);
+    assert_eq!(inbox.len(), before.len() - 2, "no moved message came back");
+    assert_eq!(local_messages(&f, FolderRole::Archive).len(), archived + 2);
+    for message in moved {
+        assert!(
+            !inbox.iter().any(|m| m.subject == message.subject),
+            "{} shows in INBOX again",
+            message.subject
+        );
+    }
+    let server_inbox = f.server.store().mailbox("INBOX").unwrap().messages.len();
+    assert_eq!(server_inbox, inbox.len(), "the server moved them too");
+}

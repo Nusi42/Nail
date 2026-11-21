@@ -149,6 +149,8 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
     };
     let op_id = folder_op_id(id);
     broadcast_status(service, &op_id, &account, OpState::Pending, None);
+    // Waiting folder changes count in the queue's summary (ADR 0230).
+    service.broadcast_ops_changed().await;
     service.request_replay(&account);
     Ok(Response::Queued {
         op_ids: vec![op_id],

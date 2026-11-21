@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use nail_api::{
     Account, AccountId, AccountKind, ApiError, Event, FlagChange, Folder, FolderId, MessageId,
-    MessageSummary, MoveTarget, OpId, OpState, OpStatus, ThreadId, ThreadSummary,
+    MessageSummary, MoveTarget, OpId, ThreadId, ThreadSummary,
 };
 use nail_store::{Enqueued, MessagePage, Operation, ThreadPage};
 
@@ -240,18 +240,9 @@ impl Service {
             if !accounts.contains(&item.op.account_id) {
                 accounts.push(item.op.account_id.clone());
             }
-            let op_id = ids::op_id(item.op.id);
-            self.broadcast(Event::OpStatus {
-                status: OpStatus {
-                    op_id: op_id.clone(),
-                    account_id: item.op.account_id.clone(),
-                    state: OpState::Pending,
-                    error: None,
-                    message: None,
-                    localized: None,
-                },
-            });
-            op_ids.push(op_id);
+            // No event per operation: the batch's one summary below tells
+            // the clients (ADR 0230).
+            op_ids.push(ids::op_id(item.op.id));
         }
         // Deleted messages leave the search index at once.
         let gone: Vec<MessageId> = queued
@@ -305,16 +296,6 @@ impl Service {
             )
             .into());
         }
-        self.broadcast(Event::OpStatus {
-            status: OpStatus {
-                op_id: id.clone(),
-                account_id: queued.account_id.clone(),
-                state: OpState::Pending,
-                error: None,
-                message: None,
-                localized: None,
-            },
-        });
         self.broadcast_ops_changed().await;
         self.request_replay(&queued.account_id);
         Ok(vec![id.clone()])

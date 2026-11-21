@@ -25,25 +25,26 @@ impl Service {
         let (accounts, newest) = self
             .inner
             .store
-            .call(|s| Ok((s.op_queue_counts()?, s.newest_failed_op()?)))
+            .call(|s| Ok((s.write_queue_counts()?, s.newest_failed_op()?)))
             .await?;
-        // The store keeps only the English text of a failure; the precise
-        // class and localized text are the core's (ADR 0230: WS1 keeps them).
+        // The class and user-facing text recorded with the failed write
+        // (schema v22); writes that failed before it know only the text.
         let newest_failure = newest.map(|op| OpFailure {
             op_id: ids::op_id(op.id),
             account_id: op.account_id,
-            code: ErrorCode::Internal,
-            localized: None,
+            code: op.error_code.unwrap_or(ErrorCode::Internal),
+            localized: op.error_localized,
             message: op.last_error,
             failed_at: op.updated_at,
         });
         Ok(OpsSummary::from_accounts(accounts, newest_failure))
     }
 
-    /// Sends [`Event::OpsChanged`] with the summary now. Calls are
-    /// serialized, so summaries go out in the order they were read.
-    pub(crate) async fn broadcast_ops_changed(&self) {
-        self.send_ops_changed(None).await;
+    /// Sends [`Event::OpsChanged`] with the summary now and returns it.
+    /// Calls are serialized, so summaries go out in the order they were
+    /// read.
+    pub(crate) async fn broadcast_ops_changed(&self) -> Option<OpsSummary> {
+        self.send_ops_changed(None).await
     }
 
     /// [`Self::broadcast_ops_changed`] unless one went out less than
@@ -52,26 +53,34 @@ impl Service {
         self.send_ops_changed(Some(OPS_CHANGED_INTERVAL)).await;
     }
 
-    async fn send_ops_changed(&self, min_gap: Option<Duration>) {
+    async fn send_ops_changed(&self, min_gap: Option<Duration>) -> Option<OpsSummary> {
         let mut last = self.inner.ops_events.lock().await;
         if let (Some(gap), Some(at)) = (min_gap, *last)
             && at.elapsed() < gap
         {
-            return;
+            return None;
         }
         match self.ops_summary().await {
             Ok(summary) => {
-                self.broadcast(Event::OpsChanged { summary });
+                self.broadcast(Event::OpsChanged {
+                    summary: summary.clone(),
+                });
                 *last = Some(Instant::now());
+                Some(summary)
             }
-            Err(err) => tracing::warn!(%err, "cannot read the operation queue's summary"),
+            Err(err) => {
+                tracing::warn!(%err, "cannot read the operation queue's summary");
+                None
+            }
         }
     }
 
     /// [`Self::broadcast_ops_changed`] from synchronous code (a task).
     pub(crate) fn spawn_ops_changed(&self) {
         let service = self.clone();
-        tokio::spawn(async move { service.broadcast_ops_changed().await });
+        tokio::spawn(async move {
+            service.broadcast_ops_changed().await;
+        });
     }
 
     /// `RetryFailedOps`: every failed write of `account` (or of all
