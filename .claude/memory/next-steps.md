@@ -1,11 +1,16 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (wave R3 integrated 2026-11-21; next: installer 0.8.8 for the maintainer, then release; 0.8.6 released 2026-11-19)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.8 prepared 2026-11-21 with R1-R3; waits for the maintainer to try it, then release:publish; 0.8.6 released 2026-11-19)"
 metadata:
   type: project
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
+
+**0.8.8 prepared 2026-11-21** (`chore(release): release 0.8.8`, all checks passed in prepare, copied to the
+releases folder, `0.8.8/x64/Nail_0.8.8_x64-setup.exe`). Holds R1-R3 (0.8.7 was never published). Waiting for the
+maintainer: try the installer, then `npm run release:publish -- --yes` (the maintainer runs it, see below). `main`
+is not yet pushed to GitHub; publish does that.
 
 **Wave R3 integrated 2026-11-21** (ADRs 0228 pickers multi-value / strict, 0229 rule list multi-select;
 [[r3-status]], `docs/plan.md` "Wave R3" status): multi-select rule list with Run / Test on all selected rules, one
