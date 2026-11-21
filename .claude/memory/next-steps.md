@@ -1,11 +1,21 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.8 prepared 2026-11-21 with R1-R3; waits for the maintainer to try it, then release:publish; 0.8.6 released 2026-11-19)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (0.8.8 released 2026-11-21; wave R4 running: bulk-action status, stale lists, move picker, drafts safety)"
 metadata:
   type: project
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
+
+**Wave R4 started 2026-11-21** (nail-wave, packages in folders 2-4, memory r4-status): maintainer report on
+0.8.8 after bulk moves/deletes over IMAP: "Saving 14 changes" stuck until restart and stale rows of moved messages
+in another folder's list (gone after restart); the diagnostics bundle showed every op done on the server. Fixes:
+real queue summary + coalesced ops events + resync refetching lists (no event flood in the 256-slot channel),
+deferred replays logged at INFO, no duplicate rows after a UIDVALIDITY reset with pending moves, the Move window
+no longer moves on Enter to the first substring match and confirms Drafts/Trash/Junk, non-draft messages in
+Drafts open in the reader. Release notes section "Nail 0.8.9". Next: integrate, review, then the 0.8.9 installer.
+
+**0.8.8 released 2026-11-21** (GitHub release `v0.8.8`, `main` published at `f3f00068`).
 
 **0.8.8 prepared 2026-11-21** (`chore(release): release 0.8.8`, all checks passed in prepare, copied to the
 releases folder, `0.8.8/x64/Nail_0.8.8_x64-setup.exe`). Holds R1-R3 (0.8.7 was never published). Waiting for the
