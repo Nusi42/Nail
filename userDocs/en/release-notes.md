@@ -3,12 +3,12 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
-## Nail 0.8.7 (`0.8.7`)
+## Nail 0.8.8 (`0.8.8`)
 
 Run your rules on exactly the mail you choose, a redesigned rules window,
 and pickers instead of typing folder names. Search now runs while you type.
 
-### New in 0.8.7
+### New in 0.8.8
 
 - **Run rules where you want** — right-click messages or a folder and pick
   **Run rule**, or choose **Run on** in the rules window: the selected

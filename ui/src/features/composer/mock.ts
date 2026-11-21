@@ -368,10 +368,13 @@ function collected(core: MockCore): Address[] {
     .map((e) => e.address);
 }
 
-/** `SuggestAddresses`: prefix of the address or of a word of the name. */
+/**
+ * `SuggestAddresses`: prefix of the address or of a word of the name; an
+ * empty prefix lists the most-used addresses (ADR 0227).
+ */
 export function suggest(core: MockCore, prefix: string, limit: number): Address[] {
   const p = prefix.trim().toLowerCase();
-  if (p === "") return [];
+  if (p === "") return collected(core).slice(0, limit);
   return collected(core)
     .filter(
       (a) =>

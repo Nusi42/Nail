@@ -60,6 +60,33 @@ pub struct RankedAddress {
     pub score: f64,
 }
 
+/// How many rows of each source the autocomplete reads before ranking.
+const CANDIDATE_ROWS: u32 = 500;
+
+/// How much using an address adds to its rank: `count` uses, the last at
+/// `last` (Unix seconds), seen from `now`. Frequency fades to half over
+/// months, recency over weeks.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a ranking heuristic; counts and ages in seconds stay far below 2^52"
+)]
+fn usage_score(count: i64, last: i64, now: i64) -> f64 {
+    let age_days = ((now - last).max(0) as f64) / 86_400.0;
+    2.0 * (1.0 + count.max(0) as f64).ln() * (0.5 + 0.5 * (-age_days / 90.0).exp())
+        + 3.0 * (-age_days / 30.0).exp()
+}
+
+/// `ranked` best first (ties by address), at most `limit`.
+fn best_first(mut ranked: Vec<RankedAddress>, limit: u32) -> Vec<RankedAddress> {
+    ranked.sort_by(|a, b| {
+        b.score
+            .total_cmp(&a.score)
+            .then_with(|| a.address.email.cmp(&b.address.email))
+    });
+    ranked.truncate(limit as usize);
+    ranked
+}
+
 /// Digits of a phone number for comparisons; `None` when it has fewer
 /// than seven. The last nine digits are kept, so `+49 30 1234567` and
 /// `030 1234567` compare equal.
@@ -714,12 +741,7 @@ impl Store {
         if prefix.is_empty() || limit == 0 {
             return Ok(Vec::new());
         }
-        let books: Vec<String> = self
-            .address_books(None)?
-            .into_iter()
-            .filter(|b| b.settings.autocomplete && b.role.is_none())
-            .map(|b| b.id.0)
-            .collect();
+        let books = self.autocomplete_books()?;
         let pattern = format!("{}%", crate::util::escape_like(&prefix));
         let word = format!("% {}%", crate::util::escape_like(&prefix));
         // Contacts: (contact id, name, email, preferred).
@@ -735,7 +757,7 @@ impl Store {
                      WHERE {} AND (e.email LIKE ?{a} ESCAPE '\\'
                            OR p.display_name LIKE ?{a} ESCAPE '\\'
                            OR p.display_name LIKE ?{b} ESCAPE '\\')
-                     LIMIT 500",
+                     LIMIT {CANDIDATE_ROWS}",
                     in_list("p.address_book_id", n, 1),
                     a = n + 1,
                     b = n + 2
@@ -752,9 +774,9 @@ impl Store {
                 "SELECT email, name, use_count, last_used FROM collected_addresses
                  WHERE email LIKE ?1 ESCAPE '\\' OR name LIKE ?1 ESCAPE '\\'
                     OR name LIKE ?2 ESCAPE '\\'
-                 ORDER BY use_count DESC, last_used DESC LIMIT 500",
+                 ORDER BY use_count DESC, last_used DESC LIMIT ?3",
             )?;
-            crate::util::collect_rows(&mut stmt, params![pattern, word])
+            crate::util::collect_rows(&mut stmt, params![pattern, word, CANDIDATE_ROWS])
         })?;
         // Usage of the contacts' addresses.
         let mut usage: HashMap<String, (i64, i64)> = collected_rows
@@ -782,18 +804,10 @@ impl Store {
                 Ok(())
             })?;
         }
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a ranking heuristic; counts and ages in seconds stay far below 2^52"
-        )]
         let usage_score = |email: &str| -> f64 {
-            let Some(&(count, last)) = usage.get(email) else {
-                return 0.0;
-            };
-            let age_days = ((now - last).max(0) as f64) / 86_400.0;
-            // Frequency fades to half over months; recency over weeks.
-            2.0 * (1.0 + count.max(0) as f64).ln() * (0.5 + 0.5 * (-age_days / 90.0).exp())
-                + 3.0 * (-age_days / 30.0).exp()
+            usage
+                .get(email)
+                .map_or(0.0, |&(count, last)| usage_score(count, last, now))
         };
         let match_score = |name: &str, email: &str| -> f64 {
             let name = name.to_lowercase();
@@ -845,13 +859,67 @@ impl Store {
                 score,
             });
         }
-        let mut out: Vec<RankedAddress> = best.into_values().collect();
-        out.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
-                .then_with(|| a.address.email.cmp(&b.address.email))
-        });
-        out.truncate(limit as usize);
+        Ok(best_first(best.into_values().collect(), limit))
+    }
+
+    /// The address books whose contacts autocomplete offers (autocomplete
+    /// on, not a special book such as Collected).
+    fn autocomplete_books(&self) -> Result<Vec<String>> {
+        Ok(self
+            .address_books(None)?
+            .into_iter()
+            .filter(|b| b.settings.autocomplete && b.role.is_none())
+            .map(|b| b.id.0)
+            .collect())
+    }
+
+    /// The addresses used most, for a picker before anything is typed
+    /// (R3, ADR 0227): collected addresses ranked by how often and how
+    /// recently they were used (as in [`Store::suggest_recipients`]),
+    /// without the addresses in `exclude` (case-insensitive; the user's
+    /// own). An address that is a contact in an autocomplete book carries
+    /// the contact's name and id. Best first, at most `limit`.
+    pub fn most_used_recipients(
+        &self,
+        limit: u32,
+        now: i64,
+        exclude: &[String],
+    ) -> Result<Vec<RankedAddress>> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let exclude: HashSet<String> = exclude.iter().map(|e| e.trim().to_lowercase()).collect();
+        let rows: Vec<(String, Option<String>, i64, i64)> = self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT email, name, use_count, last_used FROM collected_addresses
+                 ORDER BY use_count DESC, last_used DESC LIMIT ?1",
+            )?;
+            crate::util::collect_rows(&mut stmt, params![CANDIDATE_ROWS])
+        })?;
+        let candidates: Vec<RankedAddress> = rows
+            .into_iter()
+            .filter(|(email, ..)| !exclude.contains(&email.to_lowercase()))
+            .map(|(email, name, count, last)| RankedAddress {
+                address: Address { name, email },
+                source: SuggestionSource::Collected,
+                score: usage_score(count, last, now),
+            })
+            .collect();
+        let mut out = best_first(candidates, limit);
+        let books = self.autocomplete_books()?;
+        for entry in &mut out {
+            if let Some(contact) = self
+                .contacts_by_email(&entry.address.email)?
+                .into_iter()
+                .find(|c| books.iter().any(|b| b == c.address_book_id.as_str()))
+            {
+                let name = contact.fields.display_name.trim();
+                if !name.is_empty() {
+                    entry.address.name = Some(name.to_owned());
+                }
+                entry.source = SuggestionSource::Contact(contact.id);
+            }
+        }
         Ok(out)
     }
 }
@@ -1364,5 +1432,70 @@ mod tests {
         assert!(!emails.contains(&"alan@example.org".to_owned()));
         // LIKE wildcards are literal.
         assert_eq!(store.suggest_recipients("%", 10, now).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn most_used_ranks_by_use_and_skips_excluded() {
+        let store = testing::store();
+        let day = 86_400;
+        let now = 1_000 * day;
+        save(
+            &store,
+            &testing::contact("al", "u2", "Alan Turing", &["alan@example.org"]),
+        );
+        let addr = |name: Option<&str>, email: &str| Address {
+            name: name.map(str::to_owned),
+            email: email.into(),
+        };
+        for _ in 0..20 {
+            store
+                .record_addresses(&[addr(None, "old@example.net")], now - 400 * day)
+                .unwrap();
+            store
+                .record_addresses(&[addr(Some("Me"), "me@example.com")], now)
+                .unwrap();
+        }
+        for _ in 0..8 {
+            store
+                .record_addresses(&[addr(Some("Busy Bee"), "busy@example.org")], now - day)
+                .unwrap();
+        }
+        for _ in 0..3 {
+            store
+                .record_addresses(&[addr(None, "alan@example.org")], now - 2 * day)
+                .unwrap();
+        }
+        store
+            .record_addresses(&[addr(None, "once@example.org")], now - 200 * day)
+            .unwrap();
+        let ranked = store
+            .most_used_recipients(10, now, &["ME@example.com".to_owned()])
+            .unwrap();
+        let emails: Vec<&str> = ranked.iter().map(|r| r.address.email.as_str()).collect();
+        // Frequent recent use first, old use fades; the own address is left out.
+        assert_eq!(
+            emails,
+            [
+                "busy@example.org",
+                "alan@example.org",
+                "old@example.net",
+                "once@example.org"
+            ]
+        );
+        assert_eq!(ranked[0].address.name.as_deref(), Some("Busy Bee"));
+        assert_eq!(ranked[0].source, SuggestionSource::Collected);
+        // A contact's address carries the contact's name and id.
+        assert_eq!(ranked[1].address.name.as_deref(), Some("Alan Turing"));
+        assert_eq!(ranked[1].source, SuggestionSource::Contact("al".into()));
+        // The limit applies; zero asks for nothing.
+        assert_eq!(store.most_used_recipients(2, now, &[]).unwrap().len(), 2);
+        assert_eq!(store.most_used_recipients(0, now, &[]).unwrap().len(), 0);
+        // Without the exclusion the own address leads.
+        assert_eq!(
+            store.most_used_recipients(1, now, &[]).unwrap()[0]
+                .address
+                .email,
+            "me@example.com"
+        );
     }
 }

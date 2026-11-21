@@ -382,6 +382,30 @@ async fn html_markdown_and_attachments_reach_the_smtp_server() {
         addresses.iter().any(|a| a.email == "bob@example.org"),
         "{addresses:?}"
     );
+    // Before anything is typed: the most-used correspondents, without the
+    // user's own addresses (ADR 0227).
+    let Response::AddressSuggestions { addresses } = request(
+        &f.service,
+        Request::SuggestAddresses {
+            prefix: " ".into(),
+            limit: 50,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    assert!(
+        addresses.iter().any(|a| a.email == "bob@example.org"),
+        "{addresses:?}"
+    );
+    assert!(
+        addresses.len() <= 50
+            && !addresses
+                .iter()
+                .any(|a| a.email.eq_ignore_ascii_case(MULTI_WORK_EMAIL)),
+        "{addresses:?}"
+    );
 
     // Bad uploads are refused.
     assert!(matches!(

@@ -1,15 +1,24 @@
 ---
 name: next-steps
-description: "Where the project stands and what to do next — read first when continuing in a new session (wave R2 integrated 2026-11-21: rules window redesign, shared pickers, values from the mail; 0.8.6 released 2026-11-19)"
+description: "Where the project stands and what to do next — read first when continuing in a new session (wave R3 contract done 2026-11-21; 0.8.7 not published, next release 0.8.8; 0.8.6 released 2026-11-19)"
 metadata:
   type: project
 ---
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
 
+**Wave R3 contract done 2026-11-21** (ADR 0227, `docs/plan.md` "Wave R3"): `SuggestAddresses` with an empty
+prefix lists the most-used correspondents (`Store::most_used_recipients`, own addresses left out; mock too); the
+rules window decisions (multi-select Run / Test, combined badge, values button place) are fixed in the ADR. 0.8.7
+will NOT be published (no tag): the release notes' section is now "Nail 0.8.8", `CHANGELOG.md` holds the entries
+under `[Unreleased]` again, the workspace version stays 0.8.7 until `release:prepare --version 0.8.8`. Packages
+WR7 (rules list / condition row), WR8 (pickers everywhere), WR9 (Paper theme from the sister project's
+`paper.kdl`) start from `main`; the integrator adds the R3 items to the 0.8.8 notes and the changelog. Then
+installer 0.8.8 for the maintainer, then release.
+
 **0.8.7 prepared 2026-11-21** (R1 + R2; commit `chore(release): release 0.8.7`, copied to the releases folder;
 first prepare run failed on e2e load flakes in m5c / m5d / a11y-windows that passed alone, re-run with
-`--skip-checks`). Waiting for the maintainer to try the installer, then `npm run release:publish`. Maintainer decided 2026-11-21 (next wave R3): one combined Exchange badge per rule row (hover lists every
+`--skip-checks`). The maintainer tried it; it is not published (superseded by 0.8.8). Maintainer decided 2026-11-21 (next wave R3): one combined Exchange badge per rule row (hover lists every
 account); the values-from-mail button right after the text field; multi-select in the rule list with Run running the
 selected rules in order on the Run on target; switch every remaining plain dropdown (junk, search index, Sieve,
 vacation, MCP grants, import/export, Also my addresses) to the shared picker; the address picker lists the most-used

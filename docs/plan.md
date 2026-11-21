@@ -1122,6 +1122,65 @@ footer sticky in Settings; a row hides its labels only under a row of the same k
 runs only deleted with their rule. Deferred (low): draft `RuleFromText` reporting an empty tag / recipient /
 folder twice; "Values from this mail" placed directly after the value field.
 
+### Wave R3 (rules window decisions, pickers everywhere, Paper theme)
+
+Maintainer decisions of 2026-11-21 after trying the 0.8.7 build fully (including the R2 "Scope decisions"):
+one combined Exchange badge per rule row; the "Values from this mail" button right after the condition's text
+field; multi-select in the rule list with Run running the selected rules; every remaining plain folder / account /
+address field switched to the shared picker; the address picker lists the most-used addresses while empty; a new
+built-in theme "Paper" ported from the sister project's `paper` theme. 0.8.7 is not published: the next release,
+0.8.8, contains R1–R3. Contract ADR 0227.
+
+#### Scope decisions for R3
+
+- **Exchange badge:** one ⓘ per rule row with the total count; hover / focus lists every account's reason.
+- **Values from this mail:** in the condition row after the text field, before the case checkbox.
+- **Multi-select:** the rule list is a multi-select listbox (`aria-multiselectable`; Click, Ctrl+click,
+  Shift+click, Shift+Up / Down, Ctrl+A while the list has focus); the editor shows the focused rule. Run sends one
+  `RunRules` with the selected ids on the Run on target (file order, one run and undo per rule), labelled with the
+  count; a destructive run asks with the total preview count. Test previews each selected rule on its own (one
+  `TestRule` each), grouped by rule in file order, without simulating them one after another (said in the
+  Preview); Save, Delete and Text act on the shown rule.
+- **Pickers everywhere:** junk settings, search index, Sieve, the vacation account, MCP grants, import / export
+  folders and "Also my addresses" (a multi-address mode: chips plus the input) use `Picker` / `PickerField`; free
+  text stays where it was allowed.
+- **Most-used addresses (core, contract):** `SuggestAddresses` with an empty prefix answers the most-used
+  correspondents (`Store::most_used_recipients`: collected addresses by use and recency, the user's own addresses
+  left out, contact names for contacts); the mock does the same. The address picker asks on open.
+- **Paper theme:** `defaults/themes/paper.kdl` (light), registered in `nail-config` `themes.rs`; the sister
+  project's tokens mapped onto Nail's names (no new tokens for one theme); contrast tests and visual baselines.
+- **Release:** the release notes' 0.8.7 section is now "Nail 0.8.8"; `CHANGELOG.md` keeps the entries under
+  `[Unreleased]`; the integrator adds the R3 items to both.
+- No new crates and no new slots: each package works in folders it already owns.
+
+#### Packages of R3
+
+- **Contract (done):** ADR 0227; `Store::most_used_recipients` (with `usage_score` / `CANDIDATE_ROWS` shared with
+  `suggest_recipients`), the empty-prefix branch of `SuggestAddresses` in `nail-core` `composer.rs`, the API doc,
+  TS regenerated, the mock's `suggest`; tests in `nail-store`, `nail-core` `m1b` and the composer mock; the release
+  notes and changelog prepared for 0.8.8.
+- **WR7 — rules list and condition row (parallel):** `ui/src/features/rules/` (multi-select, Run / Test with
+  several rules, the values button's place), the combined badge in `ui/src/features/exchange/Rules.tsx`,
+  `locales/en/rules.ftl` (and `exchange.ftl` for the badge text), `userDocs/en/rules.md`, e2e rules scenarios.
+- **WR8 — pickers everywhere (parallel):** `ui/src/widgets/pickers/` (the address source asking on open with an
+  empty text, multi-address mode) and the fields in junk settings, search index, Sieve, vacation, MCP grants,
+  import / export and "Also my addresses", `locales/en/pickers.ftl` plus the texts of those features, the
+  userDocs pages of those settings, e2e picker scenarios.
+- **WR9 — Paper theme (parallel):** `defaults/themes/paper.kdl`, its registration (`themes.rs`, `gen:api`, the UI's
+  built-in theme tests), contrast and visual tests and baselines, `userDocs/en/theme-reference.md`,
+  `userDocs/en/themes.md` / `appearance.md`.
+- **Integration:** rebase, renumber ADRs, regenerate the layout / theme snapshots once, the R3 items in the release
+  notes (0.8.8) and `CHANGELOG.md` (`[Unreleased]`), the full suite incl. `npm run visual`, memory `next-steps`.
+
+Gates: every suite green; the rule list's keyboard model and `aria-multiselectable` in the accessibility scenario;
+Paper passes the built-in themes' contrast tests; the maintainer's human gate on the real app (multi-select and
+Run, the combined badge, the values button's place, the new pickers with the most-used addresses, Paper), then
+0.8.8.
+
+*Status (contract):* done (ADR 0227). Core: `SuggestAddresses` with an empty prefix lists the most-used
+correspondents (`Store::most_used_recipients`); API doc and TS regenerated; mock. Release notes renamed to 0.8.8,
+changelog entries back under `[Unreleased]`. Next: WR7–WR9 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

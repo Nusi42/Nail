@@ -275,14 +275,22 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         },
         Request::SuggestAddresses { prefix, limit } => {
             // Contacts (books with autocomplete on), the Collected book and
-            // addresses used recently, ranked (M3a, ADR 0061).
+            // addresses used recently, ranked (M3a, ADR 0061); an empty
+            // prefix lists the most-used correspondents (R3, ADR 0227).
             let limit = limit.clamp(1, MAX_SUGGESTIONS);
             let now = service.pim_now();
+            let own = service.own_addresses();
             Response::AddressSuggestions {
                 addresses: service
                     .inner
                     .store
-                    .call(move |s| s.suggest_recipients(&prefix, limit, now))
+                    .call(move |s| {
+                        if prefix.trim().is_empty() {
+                            s.most_used_recipients(limit, now, &own)
+                        } else {
+                            s.suggest_recipients(&prefix, limit, now)
+                        }
+                    })
                     .await?
                     .into_iter()
                     .map(|r| r.address)

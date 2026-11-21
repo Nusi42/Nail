@@ -555,10 +555,13 @@ pub enum Request {
         content_id: Option<String>,
     },
     /// Addresses for autocomplete, from the addresses collected from sent
-    /// and received mail, best first. Answered with
-    /// [`Response::AddressSuggestions`].
+    /// and received mail, best first. An empty (or blank) `prefix` lists the
+    /// most-used and most recent correspondents, without the user's own
+    /// addresses, so a picker can offer them before anything is typed (R3,
+    /// ADR 0227). Answered with [`Response::AddressSuggestions`].
     SuggestAddresses {
-        /// What the user typed (matches name or address, case-insensitive).
+        /// What the user typed (matches name or address, case-insensitive);
+        /// empty = the most-used addresses.
         prefix: String,
         /// Maximum number of suggestions.
         limit: u32,

@@ -209,7 +209,12 @@ describe("composer mock", () => {
     expect(suggest(transport, "gr", 5).map((a) => a.email)).toEqual(["grace@navy.example"]);
     expect(suggest(transport, "hopper", 5).map((a) => a.email)).toEqual(["grace@navy.example"]);
     expect(suggest(transport, "ada", 5)).toEqual([]);
-    expect(suggest(transport, " ", 5)).toEqual([]);
+    // Nothing typed: the most-used addresses, without the user's own.
+    const mostUsed = suggest(transport, " ", 5);
+    expect(mostUsed.length).toBeGreaterThan(0);
+    expect(mostUsed.length).toBeLessThanOrEqual(5);
+    expect(mostUsed.some((a) => a.email.startsWith("ada"))).toBe(false);
+    expect(suggest(transport, "", 1)).toEqual(mostUsed.slice(0, 1));
     transport.data.features.composer.addresses.push({ name: "Grete", email: "grete@x.example" });
     expect(suggest(transport, "gr", 1)).toHaveLength(1);
   });

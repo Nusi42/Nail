@@ -453,7 +453,8 @@ data: string,
  */
 content_id: string | null, } | { "type": "SuggestAddresses", 
 /**
- * What the user typed (matches name or address, case-insensitive).
+ * What the user typed (matches name or address, case-insensitive);
+ * empty = the most-used addresses.
  */
 prefix: string, 
 /**

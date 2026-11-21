@@ -1527,3 +1527,11 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   rules; `selectedOrigin`, also used by `rules.create-from-message`). Registered in `features/rules/index.ts`.
 - Shared helpers from the integration: `state/mailOps.ts` `cachedFolder` (rules lower panel, `mail-actions`
   `folderRole`), `e2e/support/rules.ts` (Work inbox, rules window, footer, toast helpers).
+
+### R3
+
+- Contract (ADR 0227): `SuggestAddresses` with an empty prefix answers the most-used correspondents
+  (`nail-core` `composer.rs` → `Store::most_used_recipients` in `crates/nail-store/src/pim/contacts.rs`: collected
+  addresses by `usage_score`, the user's own addresses (`Service::own_addresses`) left out, contact names for
+  contacts in autocomplete books; `CANDIDATE_ROWS` shared with `suggest_recipients`). Mock: `features/composer/mock.ts`
+  `suggest`.
