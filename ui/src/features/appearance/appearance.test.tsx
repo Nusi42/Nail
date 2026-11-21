@@ -55,7 +55,7 @@ function stubMedia(initial: { dark: boolean; contrast: boolean }) {
 describe("theme files for the mock core", () => {
   it("reads the shipped built-in themes", () => {
     expect([...BUILTIN_THEME_FILES.keys()]).toEqual(
-      expect.arrayContaining(["frost", "sage", "graphite", "nocturne", "high-contrast"]),
+      expect.arrayContaining(["frost", "sage", "paper", "graphite", "nocturne", "high-contrast"]),
     );
     expect(BUILTIN_THEME_FILES.get("frost")?.mode).toBe("light");
     expect(BUILTIN_THEME_FILES.get("graphite")?.mode).toBe("dark");
@@ -192,6 +192,7 @@ describe("appearance-settings widget", () => {
     expect(cards.map((c) => c.getAttribute("data-theme-id"))).toEqual([
       "frost",
       "sage",
+      "paper",
       "graphite",
       "nocturne",
       "high-contrast",

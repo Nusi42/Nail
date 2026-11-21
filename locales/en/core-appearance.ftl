@@ -11,6 +11,7 @@
 
 theme-name-frost = Frost
 theme-name-sage = Sage
+theme-name-paper = Paper
 theme-name-graphite = Graphite
 theme-name-nocturne = Nocturne
 theme-name-high-contrast = { common-high-contrast }

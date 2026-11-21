@@ -315,7 +315,7 @@ export const DEFAULT_DARK_THEME = "graphite" as const;
 export const HIGH_CONTRAST_THEME = "high-contrast" as const;
 
 /** The built-in themes, in gallery order: `[id, kind]`. */
-export const BUILTIN_THEMES = [["frost","light"],["sage","light"],["graphite","dark"],["nocturne","dark"],["high-contrast","high-contrast"]] as const satisfies readonly (readonly [string, ThemeKind])[];
+export const BUILTIN_THEMES = [["frost","light"],["sage","light"],["paper","light"],["graphite","dark"],["nocturne","dark"],["high-contrast","high-contrast"]] as const satisfies readonly (readonly [string, ThemeKind])[];
 
 /** Longest theme id (file stem). */
 export const MAX_THEME_ID_CHARS = 64 as const;

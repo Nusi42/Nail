@@ -51,7 +51,7 @@
   "DEFAULT_LIGHT_THEME": "frost",
   "DEFAULT_DARK_THEME": "graphite",
   "HIGH_CONTRAST_THEME": "high-contrast",
-  "BUILTIN_THEMES": [["frost","light"],["sage","light"],["graphite","dark"],["nocturne","dark"],["high-contrast","high-contrast"]],
+  "BUILTIN_THEMES": [["frost","light"],["sage","light"],["paper","light"],["graphite","dark"],["nocturne","dark"],["high-contrast","high-contrast"]],
   "MAX_THEME_ID_CHARS": 64,
   "MAX_THEME_NAME_CHARS": 64,
   "FONT_SIZE_RANGE": [11,20],

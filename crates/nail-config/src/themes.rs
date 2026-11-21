@@ -56,6 +56,11 @@ pub const BUILTIN_THEME_FILES: &[BuiltinTheme] = &[
         kdl: include_str!("../../../defaults/themes/sage.kdl"),
     },
     BuiltinTheme {
+        id: "paper",
+        file: "defaults/themes/paper.kdl",
+        kdl: include_str!("../../../defaults/themes/paper.kdl"),
+    },
+    BuiltinTheme {
         id: "graphite",
         file: "defaults/themes/graphite.kdl",
         kdl: include_str!("../../../defaults/themes/graphite.kdl"),

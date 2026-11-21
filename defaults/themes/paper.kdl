@@ -1,0 +1,58 @@
+// Nail built-in theme: Paper (light).
+//
+// Warm paper neutrals with a confident blue accent. Ported from Paper in
+// Bugaboo, the sister project by the same author; its token names are
+// mapped onto Nail's and no new tokens are added (ADR 0227).
+// Colours only: spacing, type, corners, elevation and density come from
+// the base theme (defaults/theme.kdl). Pick it in Settings → Appearance.
+// See userDocs/en/theme-reference.md for every token.
+//
+// Mapping (Bugaboo → Nail): bg-canvas → bg, bg-surface → bg-subtle,
+// bg-sunken → bg-raised (Nail's raised surfaces are the darker toolbars
+// and headers), bg-hover → canvas, border-subtle → rail, border → border,
+// border-control → border-strong; fg, fg-muted, fg-subtle, accent,
+// danger, warning and success keep their names and values. Nail's
+// `accent-fg` is the text on the accent (white), not Bugaboo's
+// accent-coloured text. The soft accent and the selection derive from the
+// accent as in Frost, mixed close to Bugaboo's accent-soft and
+// bg-selected. Nail has no `more=` (more contrast): Paper's normal values
+// already pass WCAG AA (4.5:1) for every text on every surface, the
+// selection included (the closest, success on the selection, is 4.69:1),
+// so none of Bugaboo's `more=` values is needed. The contrast test
+// (crates/nail-config/tests/integration/theme_contrast.rs) checks each
+// pair. `print=` is the print view (white paper, black text).
+
+theme "Paper" extends="default" mode="light" {
+    tokens {
+        // Surfaces.
+        color "bg"            "#fbf8f3" print="#ffffff"
+        color "bg-subtle"     "#f4efe7" print="#ffffff"
+        color "bg-raised"     "#ede6da" print="#ffffff"
+        color "canvas"        "#ede6db" print="#ffffff"
+        color "rail"          "#eae3d7" print="#ffffff"
+
+        // Text.
+        color "fg"            "#2b2620" print="#000000"
+        color "fg-muted"      "#463f37" print="#444444"
+        color "fg-subtle"     "#5e554b" print="#555555"
+
+        // Lines.
+        color "border"        "#e1d8ca" print="#999999"
+        color "border-strong" "#7a7366" print="#767676"
+
+        // Accent; the soft accent and the selection derive from it.
+        color "accent"        "#1d58a8"
+        color "accent-fg"     "#ffffff"
+        color "accent-soft"   "color-mix(in srgb, $color.accent 12%, $color.bg)"
+        color "selection"     "color-mix(in srgb, $color.accent 18%, $color.bg)"
+        color "selection-fg"  "$color.fg"
+        color "unread"        "$color.accent"
+        color "focus-ring"    "$color.accent"
+
+        // States.
+        color "danger"        "#a8352a"
+        color "flagged"       "$color.danger"
+        color "warning"       "#934405"
+        color "success"       "#3a6835"
+    }
+}

@@ -21,6 +21,7 @@ const server = nailPerTest({ seed: "demo-multi" });
 const ACCENT = {
   frost: "#3b5bdb",
   sage: "#2c7153",
+  paper: "#1d58a8",
   graphite: "#7c9cff",
   nocturne: "#45c9bb",
   "high-contrast": "#ffff00",
@@ -70,6 +71,7 @@ test("themes are picked in Settings → Appearance and kept in theme.kdl", async
   await expect(gallery.getByRole("radio")).toHaveText([
     /Frost/,
     /Sage/,
+    /Paper/,
     /Graphite/,
     /Nocturne/,
     /High contrast/,
@@ -81,6 +83,7 @@ test("themes are picked in Settings → Appearance and kept in theme.kdl", async
   for (const [name, id] of [
     ["Nocturne", "nocturne"],
     ["Sage", "sage"],
+    ["Paper", "paper"],
     ["Graphite", "graphite"],
   ] as const) {
     await gallery.getByRole("radio", { name: new RegExp(name) }).click();

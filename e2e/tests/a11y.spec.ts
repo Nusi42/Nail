@@ -149,13 +149,20 @@ test.describe("windows and dialogs of demo-multi", () => {
 });
 
 /**
- * M5b: every built-in theme (Frost, Sage, Graphite, Nocturne, High
+ * M5b: every built-in theme (Frost, Sage, Paper, Graphite, Nocturne, High
  * contrast), Follow Windows off, over the new shell: the mail view with a
  * message and the reader's More menu open, the calendar view, the settings
  * page (colour contrast included, which jsdom cannot check).
  */
 test.describe("every built-in theme", () => {
-  for (const theme of ["frost", "sage", "graphite", "nocturne", "high-contrast"] as const) {
+  for (const theme of [
+    "frost",
+    "sage",
+    "paper",
+    "graphite",
+    "nocturne",
+    "high-contrast",
+  ] as const) {
     test(`${theme} has no accessibility violations in the views`, async ({ page }) => {
       test.setTimeout(120_000);
       const server = await startNail({ seed: "demo" });

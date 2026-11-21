@@ -1,5 +1,5 @@
-// My paper theme.
-theme "Paper" extends="frost" {
+// My parchment theme.
+theme "Parchment" extends="frost" {
     tokens {
         // The accent I like.
         color "accent" "#1c7ed6" dark="#91a7ff" high-contrast="#a5d8ff" // blue

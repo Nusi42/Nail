@@ -4,10 +4,11 @@
  *
  * The theme list is data-driven: the core's `ListThemes` answer (probed
  * once by the runner, checked again by every worker) decides which themes
- * exist. The five built-in themes of the proposal are always part of the
- * matrix, so a theme the core does not list (yet) shows up as a skipped
- * variant with its reason instead of silently disappearing; any further
- * built-in theme the core lists is added after them.
+ * exist. The built-in themes (the five of the M5 proposal and Paper) are
+ * always part of the matrix, so a theme the core does not list (yet)
+ * shows up as a skipped variant with its reason instead of silently
+ * disappearing; any further built-in theme the core lists is added after
+ * them.
  *
  * Pure and dependency-free (only erasable TypeScript), so `node --test`
  * runs its tests directly (`matrix.test.ts`).
@@ -15,8 +16,15 @@
 import { DENSITY_VALUES } from "../../../ui/src/api/generated/constants.ts";
 import type { Density } from "../../../ui/src/api/generated/Density.ts";
 
-/** The built-in themes of the M5 proposal, in gallery order. */
-export const EXPECTED_THEMES = ["frost", "sage", "graphite", "nocturne", "high-contrast"] as const;
+/** The built-in themes (the M5 proposal's five and Paper), in gallery order. */
+export const EXPECTED_THEMES = [
+  "frost",
+  "sage",
+  "paper",
+  "graphite",
+  "nocturne",
+  "high-contrast",
+] as const;
 
 /**
  * A pseudo theme: whatever the server starts in, not switched. Only on

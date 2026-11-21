@@ -797,7 +797,7 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
 defaults/              shipped theme.kdl (base + token schema) + layout.kdl (Lucide icon names; M5b: main = nav-rail +
                        view-host, views mail / calendar / contacts / tasks / settings, the mail window, settings window =
                        settings-page, ranked reader bar with More, no main toolbar); themes/ = the built-in
-                       themes frost, sage (light), graphite, nocturne (dark), high-contrast (M5a, ADR 0102)
+                       themes frost, sage, paper (light), graphite, nocturne (dark), high-contrast (M5a, ADR 0102)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
                        M3c: core-exchange.ftl (WP93 + contract ids), core-graph.ftl (WP91), core-ews.ftl

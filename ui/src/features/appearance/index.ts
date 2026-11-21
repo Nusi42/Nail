@@ -1,6 +1,6 @@
 /**
  * Feature slot of M5a WP153 (contract ADR 0102): appearance — switching
- * themes (built-in Frost, Sage, Graphite, Nocturne, High contrast and the
+ * themes (built-in Frost, Sage, Paper, Graphite, Nocturne, High contrast and the
  * user's own), Follow Windows with a light / dark pair, Comfortable /
  * Compact density and the text-size / corner-radius / accent overrides,
  * through `ListThemes`, `SetTheme`, `SetThemePreferences` and the

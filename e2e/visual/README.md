@@ -11,7 +11,7 @@ after saving one, a dialog, a modal confirmation and the M5d editors
 theme editor) and the P2 conversation (its row and the reader's card feed,
 collapsed and with every card open), the connection log and an error's
 details (ADR 0190; its time-dependent lines are masked) — for every
-built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) × density
+built-in theme (Frost, Sage, Paper, Graphite, Nocturne, High contrast) × density
 (Comfortable, Compact), compared with reviewed baselines. ADR 0106 (package),
 contract ADR 0102.
 
@@ -45,7 +45,7 @@ skipped). Open the file in a browser; nothing is served.
 1. **Theme list from the core.** While Playwright collects the tests, the
    config starts a throw-away `nail serve --seed demo-multi` and asks
    `ListThemes` (`lib/probe-themes.mjs`). The matrix (`lib/matrix.ts`) is the
-   five built-ins in gallery order plus any further built-in the core lists,
+   six built-ins in gallery order plus any further built-in the core lists,
    each in both densities; user themes are never captured. A theme the core
    does not list, lists with a problem, or cannot list at all (before
    WP152 the core answers `unsupported` / `m5a-not-ready`) becomes a skipped

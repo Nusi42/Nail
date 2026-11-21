@@ -1,4 +1,4 @@
-// My paper theme.
+// My parchment theme.
 theme "Newsprint" extends="frost" {
     tokens {
         // The accent I like.

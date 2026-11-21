@@ -48,7 +48,7 @@ const DEEP_OCEAN: &str = r##"theme "Deep ocean" extends="ocean" {
 }
 "##;
 
-const PAPER: &str = r##"theme "Paper" extends="default" mode="light" {
+const PARCHMENT: &str = r##"theme "Parchment" extends="default" mode="light" {
     tokens { color "bg" "#fbf8f0"; }
 }
 "##;
@@ -64,7 +64,7 @@ const HIGH_CONTRAST: SystemAppearance = SystemAppearance {
 #[test]
 fn user_themes_come_after_the_builtins_and_extend_them() {
     let catalog = ThemeCatalog::with_user_themes(vec![
-        user("paper", PAPER),
+        user("parchment", PARCHMENT),
         user("ocean", OCEAN),
         user("deep-ocean", DEEP_OCEAN),
     ]);
@@ -75,12 +75,13 @@ fn user_themes_come_after_the_builtins_and_extend_them() {
         [
             "frost",
             "sage",
+            "paper",
             "graphite",
             "nocturne",
             "high-contrast",
             "deep-ocean",
             "ocean",
-            "paper"
+            "parchment"
         ]
     );
     let ocean = catalog.get("ocean").unwrap();
@@ -93,7 +94,7 @@ fn user_themes_come_after_the_builtins_and_extend_them() {
     assert_eq!(ocean.kind, ThemeKind::Dark);
     assert!(ocean.usable());
     assert_eq!(catalog.get("deep-ocean").unwrap().kind, ThemeKind::Dark);
-    assert_eq!(catalog.get("paper").unwrap().kind, ThemeKind::Light);
+    assert_eq!(catalog.get("parchment").unwrap().kind, ThemeKind::Light);
     assert!(catalog.file_errors().is_empty());
 
     // The chain: base ← graphite ← ocean ← deep-ocean.
@@ -464,7 +465,8 @@ fn a_broken_or_missing_fixed_theme_falls_back_by_kind() {
 
 #[test]
 fn density_applies_to_every_theme() {
-    let catalog = ThemeCatalog::with_user_themes(vec![user("ocean", OCEAN), user("paper", PAPER)]);
+    let catalog =
+        ThemeCatalog::with_user_themes(vec![user("ocean", OCEAN), user("parchment", PARCHMENT)]);
     let compact_file = parse(
         "theme \"Mine\" extends=\"default\" {\n    appearance follow-system=#false density=\"compact\"\n}\n",
     );
@@ -695,7 +697,11 @@ fn the_manager_lists_user_themes_and_follows_the_os() {
     );
     let manager = ConfigManager::load(dir.path());
     let appearance = manager.appearance();
-    assert_eq!(appearance.themes.len(), 7);
+    // The built-ins plus the two user themes (a broken one is listed too).
+    assert_eq!(
+        appearance.themes.len(),
+        nail_api::appearance::BUILTIN_THEMES.len() + 2
+    );
     assert_eq!(appearance.active, "frost");
     assert_eq!(appearance.system, None);
     assert!(
@@ -1091,30 +1097,30 @@ fn the_watcher_hot_reloads_user_themes() {
     write(
         &config_dir,
         "theme.kdl",
-        "theme \"Mine\" extends=\"paper\"\n",
+        "theme \"Mine\" extends=\"parchment\"\n",
     );
     let manager = ConfigManager::load(&config_dir);
     let (_watcher, rx) = watch(&manager);
     assert!(config_dir.join("themes").is_dir(), "watch creates themes/");
 
-    write(&config_dir, "themes/paper.kdl", PAPER);
+    write(&config_dir, "themes/parchment.kdl", PARCHMENT);
     let update = wait_for(
         &rx,
-        |u| matches!(u, ConfigUpdate::ThemeChanged { appearance } if appearance.active == "paper"),
+        |u| matches!(u, ConfigUpdate::ThemeChanged { appearance } if appearance.active == "parchment"),
     );
     let ConfigUpdate::ThemeChanged { appearance } = update else {
         unreachable!()
     };
-    assert!(appearance.themes.iter().any(|t| t.id == "paper"));
+    assert!(appearance.themes.iter().any(|t| t.id == "parchment"));
     wait_for(
         &rx,
         |u| matches!(u, ConfigUpdate::Changed { theme, .. } if theme.tokens.get("color", "bg") == Some("#fbf8f0")),
     );
 
-    write(&config_dir, "themes/paper.kdl", "theme \"Paper\" {");
+    write(&config_dir, "themes/parchment.kdl", "theme \"Parchment\" {");
     wait_for(
         &rx,
-        |u| matches!(u, ConfigUpdate::ThemeFileErrors { file, errors } if file == "themes/paper.kdl" && !errors.is_empty()),
+        |u| matches!(u, ConfigUpdate::ThemeFileErrors { file, errors } if file == "themes/parchment.kdl" && !errors.is_empty()),
     );
     assert_eq!(manager.appearance().active, "frost");
 }

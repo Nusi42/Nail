@@ -5,7 +5,7 @@
 //! # Where things live
 //!
 //! * **Built-in themes** ship as `defaults/themes/<id>.kdl` ([`BUILTIN_THEMES`]:
-//!   Frost and Sage (light), Graphite and Nocturne (dark), High contrast).
+//!   Frost, Sage and Paper (light), Graphite and Nocturne (dark), High contrast).
 //!   Each is a normal theme file, `theme "<name>" extends="default"
 //!   mode="light|dark|high-contrast" { … }`, on top of the shipped base
 //!   `defaults/theme.kdl` ([`BASE_THEME_ID`], not listed as a theme).
@@ -99,6 +99,7 @@ pub const HIGH_CONTRAST_THEME: &str = "high-contrast";
 pub const BUILTIN_THEMES: &[(&str, ThemeKind)] = &[
     ("frost", ThemeKind::Light),
     ("sage", ThemeKind::Light),
+    ("paper", ThemeKind::Light),
     ("graphite", ThemeKind::Dark),
     ("nocturne", ThemeKind::Dark),
     ("high-contrast", ThemeKind::HighContrast),

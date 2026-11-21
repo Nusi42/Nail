@@ -58,6 +58,7 @@ describe("appearance slot (M5a contract)", () => {
     expect(listed.appearance.themes.map((th) => th.id)).toEqual([
       "frost",
       "sage",
+      "paper",
       "graphite",
       "nocturne",
       "high-contrast",

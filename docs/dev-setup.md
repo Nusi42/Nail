@@ -760,7 +760,7 @@ How it works:
 | `e2e/tests/p2-list.spec.ts` | Conversation rows and expandable rows at every standard size in Frost, Graphite Compact, Nocturne and High contrast (`<build dir>/screens/p1/p2-list-*`) |
 | `e2e/tests/p2-quickwin.spec.ts` | A strip-era user layout keeps the strip (newest three, "N earlier messages"); the one-time offer turns it into cards |
 | `e2e/tests/send.spec.ts` | `--seed demo-multi`: a plain-text mail cancelled by undo send, then sent to the mock SMTP server, with the Sent copy on the IMAP server; a Sent copy queued while IMAP is offline and filed once it is back |
-| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, the snoozed list, the snooze picker, a folder's context menu and sync dialog, every section of the settings page and the merge dialog; M5b: every built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) over the mail view, the reader's More menu, the calendar view and the settings page, colour contrast included; any violation, whatever its impact, fails |
+| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, the snoozed list, the snooze picker, a folder's context menu and sync dialog, every section of the settings page and the merge dialog; M5b: every built-in theme (Frost, Sage, Paper, Graphite, Nocturne, High contrast) over the mail view, the reader's More menu, the calendar view and the settings page, colour contrast included; any violation, whatever its impact, fails |
 | `e2e/tests/composer.spec.ts` | `--seed demo-multi`: HTML and Markdown mails (bold text, Markdown source part, attachment, core-rendered preview) with their MIME parts as the mock SMTP server received them; reply quoting in HTML (blockquote) and Markdown (`>`); drafts autosaved to the server's Drafts folder, continued from the outbox after a reload, removed after sending |
 | `e2e/tests/rules.spec.ts` | `--seed demo-multi`: an arrival rule (entered in the text view) moves and flags new mail on the IMAP server and its run is undone as one unit; the test-rule preview with "why it matches"; a rule created from a message and written to `rules.kdl` |
 | `e2e/tests/mcp.spec.ts` | an MCP client created in the settings is denied until "Read mail" is granted, then reads `nail://accounts` and finds messages with `search_messages` over Streamable HTTP (`e2e/support/mcp.ts`); the activity log shows both |
@@ -838,7 +838,7 @@ customize-layout mode, the toolbar customizer, Settings → Appearance and the
 theme editor, and — P2 — a conversation in the card feed and the
 expandable conversation list, and — ADR 0190 — the connection log and the error
 details window; `e2e/visual/screens.ts`) for every built-in theme
-(Frost, Sage, Graphite, Nocturne, High contrast) × density (Comfortable,
+(Frost, Sage, Paper, Graphite, Nocturne, High contrast) × density (Comfortable,
 Compact), compared with reviewed baselines. Its own Playwright config
 (`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.
 The screens of a worker share one `nail serve`: a screen that changes data

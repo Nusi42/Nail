@@ -76,7 +76,14 @@ async fn first_run_follows_windows_with_frost_and_graphite() {
     let ids: Vec<&str> = appearance.themes.iter().map(|t| t.id.as_str()).collect();
     assert_eq!(
         ids,
-        ["frost", "sage", "graphite", "nocturne", "high-contrast"]
+        [
+            "frost",
+            "sage",
+            "paper",
+            "graphite",
+            "nocturne",
+            "high-contrast"
+        ]
     );
     assert!(appearance.settings.follow_system);
     assert_eq!(

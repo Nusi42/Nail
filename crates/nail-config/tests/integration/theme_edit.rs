@@ -25,8 +25,8 @@ fn error_id(error: &nail_api::ApiError) -> (ErrorCode, &str) {
     )
 }
 
-const PAPER: &str = r##"// My paper theme.
-theme "Paper" extends="frost" {
+const PARCHMENT: &str = r##"// My parchment theme.
+theme "Parchment" extends="frost" {
     tokens {
         // The accent I like.
         color "accent" "#3b5bdb" dark="#91a7ff" // blue
@@ -50,7 +50,7 @@ theme "Paper" extends="frost" {
 fn setup(theme_kdl: Option<&str>) -> (tempfile::TempDir, ConfigManager) {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("themes")).unwrap();
-    std::fs::write(dir.path().join("themes/paper.kdl"), PAPER).unwrap();
+    std::fs::write(dir.path().join("themes/parchment.kdl"), PARCHMENT).unwrap();
     if let Some(text) = theme_kdl {
         std::fs::write(dir.path().join("theme.kdl"), text).unwrap();
     }
@@ -62,9 +62,9 @@ fn read(dir: &Path, file: &str) -> Option<String> {
     std::fs::read_to_string(dir.join(file)).ok()
 }
 
-fn paper() -> ThemeEditTarget {
+fn parchment() -> ThemeEditTarget {
     ThemeEditTarget::Theme {
-        theme_id: "paper".into(),
+        theme_id: "parchment".into(),
     }
 }
 
@@ -92,7 +92,7 @@ fn token_edits_change_lines_in_place() {
     let (dir, manager) = setup(None);
     manager
         .edit_theme(
-            &paper(),
+            &parchment(),
             &[
                 // In place: the value and a mode property.
                 token("color", "accent", Some("#1c7ed6"), None),
@@ -107,9 +107,9 @@ fn token_edits_change_lines_in_place() {
             None,
         )
         .unwrap();
-    let out = read(dir.path(), "themes/paper.kdl").unwrap();
+    let out = read(dir.path(), "themes/parchment.kdl").unwrap();
     golden("tokens_set", &out);
-    let details = manager.theme_details("paper").unwrap();
+    let details = manager.theme_details("parchment").unwrap();
     let find = |category: &str, name: &str| {
         details
             .tokens
@@ -134,7 +134,7 @@ fn removing_tokens_lets_the_extended_values_apply() {
     let (dir, manager) = setup(None);
     manager
         .edit_theme(
-            &paper(),
+            &parchment(),
             &[
                 token("color", "accent", None, Some("dark")),
                 token("radius", "md", None, None),
@@ -143,13 +143,13 @@ fn removing_tokens_lets_the_extended_values_apply() {
             None,
         )
         .unwrap();
-    let out = read(dir.path(), "themes/paper.kdl").unwrap();
+    let out = read(dir.path(), "themes/parchment.kdl").unwrap();
     golden("tokens_removed", &out);
     assert!(
         !out.contains("modes"),
         "the emptied modes block goes: {out}"
     );
-    let details = manager.theme_details("paper").unwrap();
+    let details = manager.theme_details("parchment").unwrap();
     let radius = details
         .tokens
         .iter()
@@ -163,7 +163,7 @@ fn part_edits_change_one_declaration() {
     let (dir, manager) = setup(None);
     manager
         .edit_theme(
-            &paper(),
+            &parchment(),
             &[
                 part(UNREAD, "font-weight", Some("600")),
                 part(UNREAD, "background-color", Some("$color.accent-soft")),
@@ -173,9 +173,9 @@ fn part_edits_change_one_declaration() {
             None,
         )
         .unwrap();
-    let out = read(dir.path(), "themes/paper.kdl").unwrap();
+    let out = read(dir.path(), "themes/parchment.kdl").unwrap();
     golden("parts_set", &out);
-    let details = manager.theme_details("paper").unwrap();
+    let details = manager.theme_details("parchment").unwrap();
     let own: Vec<_> = details
         .parts
         .iter()
@@ -192,7 +192,7 @@ fn part_edits_change_one_declaration() {
     // Removing the last declarations removes the rule; reset removes it whole.
     manager
         .edit_theme(
-            &paper(),
+            &parchment(),
             &[
                 part("message-list.row", "padding", None),
                 ThemePatch::ResetPart {
@@ -202,7 +202,7 @@ fn part_edits_change_one_declaration() {
             None,
         )
         .unwrap();
-    let out = read(dir.path(), "themes/paper.kdl").unwrap();
+    let out = read(dir.path(), "themes/parchment.kdl").unwrap();
     golden("parts_removed", &out);
     assert!(!out.contains("unread"), "{out}");
     assert!(out.contains("folder-tree.item"), "{out}");
@@ -283,7 +283,11 @@ fn theme_edits_are_checked() {
         (ErrorCode::NotFound, "edit-issue-theme-not-found")
     );
     let bad = manager
-        .edit_theme(&paper(), &[token("colour", "x", Some("#000"), None)], None)
+        .edit_theme(
+            &parchment(),
+            &[token("colour", "x", Some("#000"), None)],
+            None,
+        )
         .unwrap_err();
     assert_eq!(
         error_id(&bad),
@@ -292,7 +296,7 @@ fn theme_edits_are_checked() {
     // A reference to a token no theme has fails when the theme resolves.
     let dangling = manager
         .edit_theme(
-            &paper(),
+            &parchment(),
             &[token("color", "accent", Some("$color.no-such-token"), None)],
             None,
         )
@@ -302,7 +306,7 @@ fn theme_edits_are_checked() {
         (ErrorCode::InvalidRequest, "edit-issue-invalid-token")
     );
     let bad_part = manager
-        .edit_theme(&paper(), &[part(UNREAD, "behavior", Some("x"))], None)
+        .edit_theme(&parchment(), &[part(UNREAD, "behavior", Some("x"))], None)
         .unwrap_err();
     assert_eq!(
         error_id(&bad_part),
@@ -314,7 +318,7 @@ fn theme_edits_are_checked() {
         .unwrap();
     assert!(updates.is_empty(), "{updates:?}");
     assert!(read(dir.path(), "theme.kdl").is_none());
-    assert_eq!(read(dir.path(), "themes/paper.kdl").unwrap(), PAPER);
+    assert_eq!(read(dir.path(), "themes/parchment.kdl").unwrap(), PARCHMENT);
     assert!(
         manager
             .edit_history(HistoryScope::Appearance)
@@ -328,36 +332,36 @@ fn theme_edits_are_checked() {
 #[test]
 fn a_stale_revision_is_a_conflict_and_undo_restores_the_text() {
     let (dir, manager) = setup(None);
-    let details = manager.theme_details("paper").unwrap();
+    let details = manager.theme_details("parchment").unwrap();
     assert!(details.editable);
-    assert_eq!(details.revision, config_revision(Some(PAPER)));
+    assert_eq!(details.revision, config_revision(Some(PARCHMENT)));
     manager
         .edit_theme(
-            &paper(),
+            &parchment(),
             &[token("color", "accent", Some("#000000"), None)],
             Some(&details.revision),
         )
         .unwrap();
-    let edited = read(dir.path(), "themes/paper.kdl").unwrap();
+    let edited = read(dir.path(), "themes/parchment.kdl").unwrap();
     // The editor still holds the old revision.
     let err = manager
         .edit_theme(
-            &paper(),
+            &parchment(),
             &[token("radius", "md", Some("1"), None)],
             Some(&details.revision),
         )
         .unwrap_err();
     assert_eq!(error_id(&err), (ErrorCode::Conflict, "edit-issue-conflict"));
-    assert_eq!(read(dir.path(), "themes/paper.kdl").unwrap(), edited);
+    assert_eq!(read(dir.path(), "themes/parchment.kdl").unwrap(), edited);
 
     let history = manager.edit_history(HistoryScope::Appearance);
     assert_eq!(history.undo.len(), 1);
     assert_eq!(history.undo[0].kind, EditKind::EditTheme);
-    assert_eq!(history.undo[0].files, ["themes/paper.kdl"]);
+    assert_eq!(history.undo[0].files, ["themes/parchment.kdl"]);
     manager.undo_edit(HistoryScope::Appearance, false).unwrap();
-    assert_eq!(read(dir.path(), "themes/paper.kdl").unwrap(), PAPER);
+    assert_eq!(read(dir.path(), "themes/parchment.kdl").unwrap(), PARCHMENT);
     manager.redo_edit(HistoryScope::Appearance, false).unwrap();
-    assert_eq!(read(dir.path(), "themes/paper.kdl").unwrap(), edited);
+    assert_eq!(read(dir.path(), "themes/parchment.kdl").unwrap(), edited);
 }
 
 #[test]
@@ -376,10 +380,13 @@ fn duplicating_copies_a_theme_under_a_new_id() {
     assert_eq!(info.source, ThemeSource::User);
     assert!(info.problem.is_none(), "{info:?}");
     // The same name again gets a free id; a user theme is copied too.
-    let (again, _, _) = manager.duplicate_theme("paper", "My Sage").unwrap();
+    let (again, _, _) = manager.duplicate_theme("parchment", "My Sage").unwrap();
     assert_eq!(again, "my-sage-2");
     let copy = read(dir.path(), "themes/my-sage-2.kdl").unwrap();
-    assert_eq!(copy, PAPER.replace("theme \"Paper\"", "theme \"My Sage\""));
+    assert_eq!(
+        copy,
+        PARCHMENT.replace("theme \"Parchment\"", "theme \"My Sage\"")
+    );
     // Undo removes the copy.
     manager.undo_edit(HistoryScope::Appearance, false).unwrap();
     assert!(read(dir.path(), "themes/my-sage-2.kdl").is_none());
@@ -394,37 +401,39 @@ fn duplicating_copies_a_theme_under_a_new_id() {
 
 #[test]
 fn renaming_with_a_new_id_moves_the_file_and_the_selection_follows() {
-    let theme = "theme \"custom\" extends=\"paper\" {\n    appearance follow-system=#false light=\"paper\" dark=\"graphite\"\n}\n";
+    let theme = "theme \"custom\" extends=\"parchment\" {\n    appearance follow-system=#false light=\"parchment\" dark=\"graphite\"\n}\n";
     let (dir, manager) = setup(Some(theme));
     std::fs::write(
-        dir.path().join("themes/paper-dim.kdl"),
-        "theme \"Paper dim\" extends=\"paper\" mode=\"dark\" {\n}\n",
+        dir.path().join("themes/parchment-dim.kdl"),
+        "theme \"Parchment dim\" extends=\"parchment\" mode=\"dark\" {\n}\n",
     )
     .unwrap();
     // Only the display name.
-    let (id, _, _) = manager.rename_theme("paper", "Paper 2", None).unwrap();
-    assert_eq!(id, "paper");
+    let (id, _, _) = manager
+        .rename_theme("parchment", "Parchment 2", None)
+        .unwrap();
+    assert_eq!(id, "parchment");
     assert!(
-        read(dir.path(), "themes/paper.kdl")
+        read(dir.path(), "themes/parchment.kdl")
             .unwrap()
-            .contains("theme \"Paper 2\" extends=\"frost\" {")
+            .contains("theme \"Parchment 2\" extends=\"frost\" {")
     );
     // A new id: the file moves, theme.kdl and the extending theme follow.
     let (id, appearance, _) = manager
-        .rename_theme("paper", "Newsprint", Some("newsprint"))
+        .rename_theme("parchment", "Newsprint", Some("newsprint"))
         .unwrap();
     assert_eq!(id, "newsprint");
-    assert!(read(dir.path(), "themes/paper.kdl").is_none());
+    assert!(read(dir.path(), "themes/parchment.kdl").is_none());
     golden(
         "rename_new_id",
         &read(dir.path(), "themes/newsprint.kdl").unwrap(),
     );
     assert_eq!(
         read(dir.path(), "theme.kdl").unwrap(),
-        theme.replace("\"paper\"", "\"newsprint\"")
+        theme.replace("\"parchment\"", "\"newsprint\"")
     );
     assert!(
-        read(dir.path(), "themes/paper-dim.kdl")
+        read(dir.path(), "themes/parchment-dim.kdl")
             .unwrap()
             .contains("extends=\"newsprint\"")
     );
@@ -437,15 +446,15 @@ fn renaming_with_a_new_id_moves_the_file_and_the_selection_follows() {
     manager.undo_edit(HistoryScope::Appearance, false).unwrap();
     assert_eq!(read(dir.path(), "theme.kdl").unwrap(), theme);
     assert!(read(dir.path(), "themes/newsprint.kdl").is_none());
-    assert!(read(dir.path(), "themes/paper.kdl").is_some());
+    assert!(read(dir.path(), "themes/parchment.kdl").is_some());
 
     for (new_id, expected) in [
         ("frost", "edit-issue-theme-exists"),
-        ("paper-dim", "edit-issue-theme-exists"),
+        ("parchment-dim", "edit-issue-theme-exists"),
         ("Not An Id", "edit-issue-invalid-theme-name"),
     ] {
         let err = manager
-            .rename_theme("paper", "X", Some(new_id))
+            .rename_theme("parchment", "X", Some(new_id))
             .unwrap_err();
         assert_eq!(error_id(&err), (ErrorCode::InvalidRequest, expected));
     }
@@ -455,19 +464,19 @@ fn renaming_with_a_new_id_moves_the_file_and_the_selection_follows() {
 
 #[test]
 fn deleting_a_selected_theme_falls_back_to_the_default_of_its_kind() {
-    let theme = "// Mine.\ntheme \"custom\" extends=\"paper\" {\n    appearance follow-system=#true light=\"paper\" dark=\"nocturne\"\n}\n";
+    let theme = "// Mine.\ntheme \"custom\" extends=\"parchment\" {\n    appearance follow-system=#true light=\"parchment\" dark=\"nocturne\"\n}\n";
     let (dir, manager) = setup(Some(theme));
-    let (appearance, _) = manager.delete_theme("paper").unwrap();
-    assert!(read(dir.path(), "themes/paper.kdl").is_none());
+    let (appearance, _) = manager.delete_theme("parchment").unwrap();
+    assert!(read(dir.path(), "themes/parchment.kdl").is_none());
     assert_eq!(
         read(dir.path(), "theme.kdl").unwrap(),
-        theme.replace("\"paper\"", "\"frost\"")
+        theme.replace("\"parchment\"", "\"frost\"")
     );
-    assert!(appearance.themes.iter().all(|t| t.id != "paper"));
+    assert!(appearance.themes.iter().all(|t| t.id != "parchment"));
     let last = manager.edit_history(HistoryScope::Appearance);
     assert_eq!(last.undo.last().unwrap().kind, EditKind::DeleteTheme);
     manager.undo_edit(HistoryScope::Appearance, false).unwrap();
-    assert_eq!(read(dir.path(), "themes/paper.kdl").unwrap(), PAPER);
+    assert_eq!(read(dir.path(), "themes/parchment.kdl").unwrap(), PARCHMENT);
     assert_eq!(read(dir.path(), "theme.kdl").unwrap(), theme);
     // A dark theme falls back to Graphite.
     std::fs::write(
@@ -495,8 +504,8 @@ fn deleting_a_selected_theme_falls_back_to_the_default_of_its_kind() {
 #[test]
 fn details_show_where_values_come_from() {
     let (_dir, manager) = setup(None);
-    let details = manager.theme_details("paper").unwrap();
-    assert_eq!(details.info.id, "paper");
+    let details = manager.theme_details("parchment").unwrap();
+    assert_eq!(details.info.id, "parchment");
     let origin = |category: &str, name: &str| {
         details
             .tokens

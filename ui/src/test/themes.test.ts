@@ -3,10 +3,11 @@ import { BUILTIN_THEMES } from "../api/generated";
 import { THEME_DENSITY_CASES, builtinTheme } from "./themes";
 
 describe("the theme matrix of the accessibility tests", () => {
-  it("covers the five built-in themes", () => {
+  it("covers the six built-in themes", () => {
     expect(BUILTIN_THEMES.map(([id]) => id)).toEqual([
       "frost",
       "sage",
+      "paper",
       "graphite",
       "nocturne",
       "high-contrast",

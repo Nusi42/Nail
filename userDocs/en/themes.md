@@ -1,6 +1,6 @@
 # Your own themes and the theme editor
 
-Besides the five built-in themes (see [Appearance](appearance.md)), Nail
+Besides the six built-in themes (see [Appearance](appearance.md)), Nail
 lets you make themes of your own and change every colour, size and part
 style in the **theme editor**, with a live preview. Your themes are files in
 the `themes` folder of your configuration folder (`themes/<id>.kdl`), so you

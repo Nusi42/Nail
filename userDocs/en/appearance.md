@@ -1,6 +1,6 @@
 # Appearance: themes, Follow Windows, density
 
-Nail comes with five themes and lets you switch between them without
+Nail comes with six themes and lets you switch between them without
 touching a file. Open **Settings → Appearance**.
 
 ## Themes
@@ -9,6 +9,7 @@ touching a file. Open **Settings → Appearance**.
 | --- | --- | --- |
 | **Frost** | light | Cool blue-grey neutrals with an indigo accent. The default. |
 | **Sage** | light | Soft green-grey neutrals with a green accent. |
+| **Paper** | light | Warm paper neutrals with a confident blue accent. |
 | **Graphite** | dark | Neutral dark greys with a periwinkle accent. The default dark theme. |
 | **Nocturne** | dark | Deep blue night tones with a teal accent. |
 | **High contrast** | high contrast | Pure black and white with yellow and cyan accents, thick focus rings, visible borders on every control, bigger text and no animations. |

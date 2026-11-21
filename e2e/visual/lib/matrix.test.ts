@@ -77,7 +77,7 @@ test("missing and broken themes are skipped with a clear message; extra built-in
   const byId = new Map(planVariants(probe).map((v) => [v.id, v]));
   assert.match(
     byId.get("sage-compact")?.skip ?? "",
-    /theme "sage" is not listed by ListThemes \(listed: frost, graphite/,
+    /theme "sage" is not listed by ListThemes \(listed: frost, paper, graphite/,
   );
   assert.match(byId.get("nocturne-comfortable")?.skip ?? "", /problem theme-problem-invalid/);
   assert.ok(byId.has("frost-compact"));

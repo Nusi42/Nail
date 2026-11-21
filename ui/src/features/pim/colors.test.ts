@@ -57,15 +57,16 @@ function tintedThemes(): [string, string, string][] {
 }
 
 describe("event card colours", () => {
-  it("covers the four tinted built-in themes and High contrast", () => {
+  it("covers the five tinted built-in themes and High contrast", () => {
     expect([...BUILTIN_THEME_FILES.keys()]).toEqual([
       "frost",
       "graphite",
       "high-contrast",
       "nocturne",
+      "paper",
       "sage",
     ]);
-    expect(tintedThemes()).toHaveLength(6);
+    expect(tintedThemes()).toHaveLength(7);
   });
 
   it.each(tintedThemes())("%s: card text reaches 4.5:1 on every calendar colour", (_n, bg, fg) => {

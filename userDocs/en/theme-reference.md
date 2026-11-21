@@ -6,7 +6,7 @@ folder. The layout (which panes exist and where) lives in
 [`layout.kdl`](layout-reference.md).
 
 Most people never need to edit it: **Settings → Appearance** picks one of
-the five built-in themes, Follow Windows, the density, the text size, the
+the six built-in themes, Follow Windows, the density, the text size, the
 corner radius and the accent colour, and writes them into this file for you
 (see [Appearance](appearance.md)). This page is the reference for writing
 the file, or your own theme files, by hand.
@@ -53,7 +53,7 @@ theme "<name>" extends="default" mode="system" {
 | Property | Meaning |
 | --- | --- |
 | `"<name>"` | The theme's name (required). |
-| `extends` | What the file starts from: `"default"` (the base theme in `defaults/theme.kdl`), a built-in theme id (`frost`, `sage`, `graphite`, `nocturne`, `high-contrast`) or one of your themes in `themes/` (see [Appearance](appearance.md#your-own-themes)). In your `theme.kdl` it is the theme used while Follow Windows is off. Without `extends`, the file must define everything itself (at least the complete `message` section) and is used as it is. |
+| `extends` | What the file starts from: `"default"` (the base theme in `defaults/theme.kdl`), a built-in theme id (`frost`, `sage`, `paper`, `graphite`, `nocturne`, `high-contrast`) or one of your themes in `themes/` (see [Appearance](appearance.md#your-own-themes)). In your `theme.kdl` it is the theme used while Follow Windows is off. Without `extends`, the file must define everything itself (at least the complete `message` section) and is used as it is. |
 | `mode` | `system` (follow Windows, the default), `light`, `dark` or `high-contrast`. In `theme.kdl`, leave it out: the chosen theme sets it. |
 
 `appearance` (only in your `theme.kdl`; every property optional) holds what

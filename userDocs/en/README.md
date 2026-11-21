@@ -16,7 +16,7 @@ Guides and references for people using Nail.
 | [Writing mail](composer.md) | The composer: plain text, HTML and Markdown, attachments and the reminder, replies and signatures, drafts saved to the server, undo send, send later, the outbox |
 | [Markdown mail](markdown-mail.md) | What Markdown can do, what recipients get, the mail stylesheet and code colours per identity |
 | [Settings](settings.md) | The settings page: sections and where the old tabs went, searching settings, links to a section (`settings.section` / `settings.search`) |
-| [Appearance](appearance.md) | The five themes (Frost, Sage, Graphite, Nocturne, High contrast), Follow Windows and its light / dark pair, Comfortable / Compact density, text size, corner radius and accent colour, undo, your own themes in `themes/` |
+| [Appearance](appearance.md) | The six themes (Frost, Sage, Paper, Graphite, Nocturne, High contrast), Follow Windows and its light / dark pair, Comfortable / Compact density, text size, corner radius and accent colour, undo, your own themes in `themes/` |
 | [Your own themes and the theme editor](themes.md) | New theme, Duplicate as new theme, the theme editor (tokens by group, values per mode, part styles, live preview), rename and delete, undo, Edit style from the inspector |
 | [Customizing the layout and the toolbars](customizing-the-layout.md) | Customize layout (move, swap, dock, hide and remove panes, presets, adding widgets, the keyboard way, undo, Reset to default, files changed outside Nail) and Customize toolbar (bar, More menu, available actions, keyboard keys) |
 | [Accessibility](accessibility.md) | Keyboard use, context menus (Shift+F10), shortcut / toolbar / column editors, screen readers, the high-contrast theme, reduced motion |

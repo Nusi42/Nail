@@ -520,7 +520,10 @@ mod tests {
     async fn list_themes_reads_the_themes_directory() {
         let f = open();
         let appearance = themes(f.service.handle(Request::ListThemes).await);
-        assert_eq!(appearance.themes.len(), 5);
+        assert_eq!(
+            appearance.themes.len(),
+            nail_api::appearance::BUILTIN_THEMES.len()
+        );
         assert_eq!(appearance.active, "frost");
 
         let dir = f.config.path().join("themes");
@@ -536,7 +539,7 @@ mod tests {
         let events = drain(&mut rx);
         assert!(
             events.iter().any(
-                |e| matches!(e, Event::ThemeChanged { appearance } if appearance.themes.len() == 6)
+                |e| matches!(e, Event::ThemeChanged { appearance } if appearance.themes.len() == nail_api::appearance::BUILTIN_THEMES.len() + 1)
             ),
             "{events:?}"
         );

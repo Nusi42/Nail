@@ -57,9 +57,9 @@ action can be undone, also when an AI agent or a plug-in did it.
 
 <img src="docs/media/triage.gif" alt="A message is archived from the reader toolbar, then restored with Undo." width="100%">
 
-### Five themes, live
+### Six themes, live
 
-Frost, Nocturne, Sage, Graphite and High contrast ship built in, each in a
+Frost, Nocturne, Sage, Paper, Graphite and High contrast ship built in, each in a
 comfortable and a compact density, or following Windows' light and dark mode.
 Every colour, size and pane is a token in `theme.kdl` and `layout.kdl`, editable
 in the app or in any text editor.
