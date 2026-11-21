@@ -1280,7 +1280,10 @@ queue in `mockOps.ts`, `status.ftl` slot, 0.8.9 notes prepared. Next: WS1–WS3 
 queues counted, INFO per deferred pass, no duplicates after a UIDVALIDITY reset), WS2 and WS3 (ADR 0232: summary
 tracker with re-check, `Resync` refetch and selection pruning, combobox Move window with confirmation, drafts by
 `\Draft` only, Move out of Drafts) integrated; the core no longer links a non-draft as a draft's server copy. 0.8.9
-notes and changelog complete. Next: review, then the maintainer's human gate on the 0.8.9 installer. Follow-ups:
+notes and changelog complete. Verified: `cargo test --workspace`, `npm test`, `npm run check`, `npm run e2e` (one
+webkit p3-card-height timeout under load, passed alone), the desktop specs, `npm run visual` (new baselines for the
+Move window and the toolbar customizer). Next: review, then the maintainer's human gate on the 0.8.9 installer.
+Follow-ups:
 failures of folder / Gmail label / Exchange writes are not in `OpsSummary.failed` (bulk Retry / Dismiss act on
 message writes only); a mass permanent failure still logs one WARN per operation; a second copy with the same
 Message-ID in a folder with a waiting move-out is fetched only on the next full fetch; Retry / Dismiss errors show
