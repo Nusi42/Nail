@@ -12,6 +12,7 @@ import type { LaunchRequest, Event as NailEvent, Request, Response } from "./gen
 import * as accounts from "./mockAccounts";
 import { createMockData, type MockData } from "./mockData";
 import * as mail from "./mockMail";
+import * as ops from "./mockOps";
 import { errorResponse, type MockCore } from "./mockMail";
 import * as outbox from "./mockOutbox";
 import { editDraftMessage } from "./mockDrafts";
@@ -296,7 +297,14 @@ export class MockTransport extends ClosableTransport implements MockCore {
       case "ListOutbox":
         return outbox.listOutbox(this);
       case "RetryOp":
-        return mail.retryOp(this, request.op_id);
+        return ops.retryOp(this, request.op_id);
+      // ADR 0230: the real queue summary and bulk Retry / Dismiss.
+      case "GetOpsSummary":
+        return { type: "OpsSummary", summary: ops.opsSummaryOf(d.opQueue) };
+      case "RetryFailedOps":
+        return ops.retryFailedOps(this, request.account_id ?? null);
+      case "DismissFailedOps":
+        return ops.dismissFailedOps(this, request.account_id ?? null);
       case "ReportUiContext":
         d.uiContext = structuredClone(request.context);
         return { type: "Done" };

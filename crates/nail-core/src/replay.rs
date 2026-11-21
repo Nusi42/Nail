@@ -171,6 +171,12 @@ impl Replayer for EventReplayer<'_> {
         }
         out
     }
+
+    async fn group_recorded(&self) {
+        // At most one summary per replayed group and interval (ADR 0230);
+        // the pass's end sends the final one.
+        self.service.ops_changed_throttled().await;
+    }
 }
 
 /// Replays `account`'s queue with `executor`.
@@ -190,7 +196,10 @@ pub(crate) async fn replay_account(
     let report = service
         .store()
         .replay_account(account, &replayer, replayer.policy)
-        .await?;
+        .await;
+    // The pass's final state, also when it stopped early (ADR 0230).
+    service.broadcast_ops_changed().await;
+    let report = report?;
     if !report.failed.is_empty() {
         // Failed writes: clients show the store's state again.
         service.broadcast(Event::MailChanged {

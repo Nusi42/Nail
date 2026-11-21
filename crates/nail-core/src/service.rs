@@ -332,6 +332,10 @@ pub(crate) struct Inner {
     pub(crate) pop_outs: Mutex<Vec<nail_api::windows::PopOut>>,
     /// The connection logs (ADR 0190).
     pub(crate) connlog: crate::connlog::ConnLogCtl,
+    /// Serializes [`Event::OpsChanged`] and holds when the last one went
+    /// out: each summary is read and sent under it, so a newer summary
+    /// never goes out before an older one (ADR 0230).
+    pub(crate) ops_events: tokio::sync::Mutex<Option<std::time::Instant>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -536,6 +540,7 @@ impl Service {
                 connlog: crate::connlog::ConnLogCtl::new(
                     (!options.data_dir.as_os_str().is_empty()).then(|| options.data_dir.clone()),
                 ),
+                ops_events: tokio::sync::Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
             }),
@@ -722,9 +727,11 @@ impl Service {
 
     /// Events that bring a client that missed events back in sync: the
     /// current configuration ([`Event::ConfigChanged`] followed by any
-    /// [`Event::ConfigError`]s), [`Event::AccountsChanged`] and an
-    /// [`Event::MailChanged`] for every folder. Transports send them when a
-    /// subscriber lagged behind the event channel
+    /// [`Event::ConfigError`]s), [`Event::AccountsChanged`], an
+    /// [`Event::MailChanged`] for every folder, the queue's
+    /// [`Event::OpsChanged`] and, last, [`Event::Resync`] (ADR 0230: the
+    /// client refetches its open lists and selection). Transports send
+    /// them when a subscriber lagged behind the event channel
     /// ([`broadcast::error::RecvError::Lagged`]).
     pub async fn resync_events(&self) -> Vec<Event> {
         let config = &self.inner.config;
@@ -759,6 +766,11 @@ impl Service {
             Ok(_) => {}
             Err(err) => tracing::warn!(%err, "cannot list folders for a resync"),
         }
+        match self.ops_summary().await {
+            Ok(summary) => events.push(Event::OpsChanged { summary }),
+            Err(err) => tracing::warn!(%err, "cannot read the operation queue for a resync"),
+        }
+        events.push(Event::Resync);
         events
     }
 
@@ -1167,6 +1179,16 @@ impl Service {
             Request::RetryOp { op_id } => Response::Queued {
                 op_ids: self.retry_op(&op_id).await?,
             },
+            Request::GetOpsSummary => Response::OpsSummary {
+                summary: self.ops_summary().await?,
+            },
+            Request::RetryFailedOps { account_id } => Response::Queued {
+                op_ids: self.retry_failed_ops(account_id).await?,
+            },
+            Request::DismissFailedOps { account_id } => {
+                self.dismiss_failed_ops(account_id).await?;
+                Response::Done
+            }
 
             // --- M1b: UI context and saved searches (core) ---
             Request::ReportUiContext { context } => {

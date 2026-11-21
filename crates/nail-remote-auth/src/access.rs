@@ -155,6 +155,9 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::CancelSend { .. } => ("CancelSend", Scope(S::Send)),
         Request::ListOutbox => ("ListOutbox", Scope(S::Read)),
         Request::RetryOp { .. } => ("RetryOp", Scope(S::Organize)),
+        Request::GetOpsSummary => ("GetOpsSummary", Scope(S::Read)),
+        Request::RetryFailedOps { .. } => ("RetryFailedOps", Scope(S::Organize)),
+        Request::DismissFailedOps { .. } => ("DismissFailedOps", Scope(S::Organize)),
 
         // --- Composer ---
         Request::NewDraft { .. } => ("NewDraft", Scope(S::Draft)),

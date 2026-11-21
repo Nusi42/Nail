@@ -266,6 +266,7 @@ impl Service {
             | Request::ListIdentities { account_id: None }
             | Request::ListVirtualAccounts
             | Request::ListAccountStatuses
+            | Request::GetOpsSummary
             | Request::ListSyncErrors { account_id: None }
             | Request::GetThread { .. }
             | Request::CheckQuery { .. }
@@ -520,6 +521,15 @@ impl Service {
             }
             Request::CancelSend { outbox_id } => self.check_outbox(access, outbox_id).await,
             Request::RetryOp { op_id } => self.check_op(access, op_id).await,
+            // ADR 0230: one account must be granted; all accounts need a
+            // grant of every account.
+            Request::RetryFailedOps { account_id } | Request::DismissFailedOps { account_id } => {
+                match account_id {
+                    Some(account) => check_account(access, account),
+                    None if access.all_accounts() => Ok(()),
+                    None => Err(forbidden("not every account is granted".to_owned()).into()),
+                }
+            }
             Request::NewDraft {
                 identity_id,
                 account_id,
@@ -1257,6 +1267,10 @@ impl Service {
                 settings.overrides = kept;
                 Response::NotificationSettings { settings }
             }
+            // ADR 0230: the granted accounts' queues only.
+            Response::OpsSummary { summary } => Response::OpsSummary {
+                summary: summary.retain_accounts(|a| access.allows_account(a)),
+            },
             Response::AccountStatuses { mut statuses } => {
                 statuses.retain(|s| access.allows_account(&s.account_id));
                 Response::AccountStatuses { statuses }
@@ -1434,7 +1448,15 @@ impl Service {
             | Event::UiStateChanged { .. }
             | Event::WindowStateChanged { .. }
             | Event::EditHistoryChanged { .. }
-            | Event::RulesChanged => true,
+            | Event::RulesChanged
+            | Event::Resync => true,
+            Event::OpsChanged { summary } => {
+                return Some(Event::OpsChanged {
+                    summary: summary
+                        .clone()
+                        .retain_accounts(|a| access.allows_account(a)),
+                });
+            }
             Event::MailChanged { folder_ids } => {
                 let mut kept = Vec::with_capacity(folder_ids.len());
                 for folder in folder_ids {

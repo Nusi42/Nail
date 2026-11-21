@@ -276,6 +276,8 @@ impl Service {
         self.broadcast(Event::MailChanged {
             folder_ids: folders,
         });
+        // One summary for the whole batch (ADR 0230).
+        self.spawn_ops_changed();
         for account in accounts {
             self.request_replay(&account);
         }
@@ -313,6 +315,7 @@ impl Service {
                 localized: None,
             },
         });
+        self.broadcast_ops_changed().await;
         self.request_replay(&queued.account_id);
         Ok(vec![id.clone()])
     }

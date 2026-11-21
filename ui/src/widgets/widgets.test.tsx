@@ -377,7 +377,12 @@ describe("toolbar", () => {
 describe("status-bar", () => {
   it("retries a failed write with RetryOp", async () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });
-    env.transport.data.failedOps.set("op-9", "acc-personal");
+    env.transport.data.opQueue.set("op-9", {
+      accountId: "acc-personal",
+      state: "failed",
+      error: "unavailable",
+      failedAt: "2026-11-21T10:00:00Z",
+    });
     renderNode(widget("status-bar", { options: { items: "ops" } }), env);
     act(() => {
       env.store.getState().opQueued(["op-9"]);

@@ -513,7 +513,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        `plugin:<id>`), plan_snooze / plan_mark_junk (undo cancels wake timers / training), replay.rs
                        grouped IMAP UID STORE / MOVE per folder, gmail.rs + exchange/sync.rs grouped writes,
                        exchange/batch.rs (RunningEngine.batch = the concrete Graph / EWS engine for write_many);
-                       tests/mail_actions.rs
+                       tests/mail_actions.rs; R4 (ADR 0230): ops_summary.rs (GetOpsSummary, coalesced OpsChanged,
+                       RetryFailedOps / DismissFailedOps)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -1554,3 +1555,14 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - WR9: built-in theme Paper (`defaults/themes/paper.kdl`, mapped from the sister project's tokens in its header;
   registered in `nail-config` `themes.rs` and `nail_api::appearance::BUILTIN_THEMES`); theme counts in tests derive
   from `BUILTIN_THEMES`. A user theme may not use a built-in id, so the config tests' user theme is `parchment`.
+
+### R4
+
+- Contract (ADR 0230): the queue summary of message writes. `nail_api::ops` `OpsSummary` / `OpsAccountSummary` /
+  `OpFailure` (`from_accounts`, `retain_accounts`, `waiting`); requests `GetOpsSummary`, `RetryFailedOps`,
+  `DismissFailedOps`; events `OpsChanged` and `Resync`. Store `queue.rs` `op_queue_counts`, `newest_failed_op`,
+  `retry_failed_ops`, `dismiss_failed_ops` and the `Replayer::group_recorded` hook. Core `ops_summary.rs`
+  (`Service::ops_summary`, `broadcast_ops_changed` / `ops_changed_throttled` under `Inner::ops_events`,
+  `OPS_CHANGED_INTERVAL`), sent from `mail.rs` `announce_enqueued` / `retry_op`, `replay.rs` (per group and at the end
+  of `replay_account`); `Service::resync_events` ends with `OpsChanged` and `Resync`. Mock queue:
+  `ui/src/api/mockOps.ts` (`MockData.opQueue`). Status bar texts of the summary: `locales/*/status.ftl`.

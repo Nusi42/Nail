@@ -244,7 +244,9 @@ pub use mapi::{MapiMessage, MapiResult};
 pub use mcp::{McpClient, McpGrant, McpRateLimits, McpScope, McpSettings};
 pub use menus::{ResolvedMenu, ResolvedMenuEntry};
 pub use message_source::{MessageSource, SourceChunk};
-pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
+pub use ops::{
+    FlagChange, MoveTarget, OpFailure, OpState, OpStatus, OpsAccountSummary, OpsSummary,
+};
 pub use pim::{
     Calendar, CalendarEvent, Contact, PimSource, PimSourceConfig, PimTime, Reminder, Task,
 };

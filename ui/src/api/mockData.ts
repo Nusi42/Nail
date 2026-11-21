@@ -6,6 +6,7 @@
  * real core: the accounts configuration (accounts, identities, virtual
  * accounts), connection states, drafts and the outbox.
  */
+import type { MockOpQueue } from "./mockOps";
 import defaultLayoutJson from "../../../crates/nail-api/fixtures/default-layout.json";
 import defaultThemeJson from "../../../crates/nail-api/fixtures/default-theme.json";
 import type {
@@ -85,8 +86,8 @@ export interface MockData {
   discovery: Record<string, DiscoveredAccount[]>;
   /** OAuth flows by id (a `done` flow has "tokens" the core can use). */
   oauthFlows: Map<string, "pending" | "done" | "failed" | "cancelled">;
-  /** Failed queued writes (op id → account), for `RetryOp`. */
-  failedOps: Map<string, string>;
+  /** Queued writes not yet done, for the queue summary and Retry (`./mockOps.ts`, ADR 0230). */
+  opQueue: MockOpQueue;
   /** The last reported UI context. */
   uiContext: UiContext;
   /** Launch requests waiting for the UI (`TakeLaunchRequests`). */
@@ -489,7 +490,7 @@ export function createMockData(inboxSize = 250): MockData {
         },
       ],
     },
-    failedOps: new Map(),
+    opQueue: new Map(),
     uiContext: emptyUiContext(),
     launches: [],
     messageFiles: new Map(),

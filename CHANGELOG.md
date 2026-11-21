@@ -8,6 +8,18 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Fixed — bulk actions (ADR 0230)
+
+- The status bar's "Saving N changes" counts the core's real queue of
+  message writes (new request `GetOpsSummary`, event `OpsChanged` once per
+  queued batch and per replayed group instead of one event per operation),
+  so it no longer stays up after several hundred moves or deletes.
+- A client that missed events (more than the event channel holds) gets the
+  queue summary and a new `Resync` event and refetches its open message
+  lists and selection, so moved messages no longer linger in other lists.
+- Failed writes can be retried or dismissed all at once
+  (`RetryFailedOps`, `DismissFailedOps`).
+
 ## [0.8.8] — 2026-11-21
 
 ### Added — rules on demand (ADRs 0219, 0221)

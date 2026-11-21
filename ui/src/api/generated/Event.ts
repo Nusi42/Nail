@@ -25,6 +25,7 @@ import type { McpClientId } from "./McpClientId";
 import type { MessageId } from "./MessageId";
 import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpStatus } from "./OpStatus";
+import type { OpsSummary } from "./OpsSummary";
 import type { OutboxId } from "./OutboxId";
 import type { OutboxState } from "./OutboxState";
 import type { PimOpStatus } from "./PimOpStatus";
@@ -127,7 +128,11 @@ details?: ErrorDetails, } | { "type": "OpStatus",
 /**
  * The new status.
  */
-status: OpStatus, } | { "type": "SendStatus", 
+status: OpStatus, } | { "type": "OpsChanged", 
+/**
+ * The queue's state now.
+ */
+summary: OpsSummary, } | { "type": "Resync" } | { "type": "SendStatus", 
 /**
  * The entry.
  */

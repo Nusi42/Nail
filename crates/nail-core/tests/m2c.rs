@@ -49,7 +49,10 @@ fn work() -> AccountId {
 /// of marks and snoozes finish asynchronously).
 async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
     next_event_except(rx, |e| {
-        matches!(e, Event::OpStatus { .. } | Event::MailChanged { .. })
+        matches!(
+            e,
+            Event::OpStatus { .. } | Event::OpsChanged { .. } | Event::MailChanged { .. }
+        )
     })
     .await
 }

@@ -8,7 +8,8 @@
  */
 import type { Folder, Request, Response } from "../../api/generated";
 import { mockFolderId } from "../../api/mockData";
-import { replayOp, type MockCore } from "../../api/mockMail";
+import type { MockCore } from "../../api/mockMail";
+import { enqueueOps } from "../../api/mockOps";
 import { canManage, deleteMode, isInside, isSystemFolder, subfoldersOf } from "./model";
 
 /** The requests this feature answers. */
@@ -46,7 +47,7 @@ function place(folders: Folder[], folder: Folder, parent: Folder | null, name: s
 function queued(core: MockCore, accountId: string): Response {
   const opId = core.nextId("folder-");
   core.emit({ type: "MailChanged", folder_ids: [] });
-  replayOp(core, opId, accountId);
+  enqueueOps(core, [{ opId, accountId }]);
   return { type: "Queued", op_ids: [opId] };
 }
 

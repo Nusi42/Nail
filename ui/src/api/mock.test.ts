@@ -651,7 +651,7 @@ describe("M1b requests in the mock core", () => {
     );
     const opId = must(op_ids[0]);
     await vi.waitFor(() => {
-      expect(transport.data.failedOps.has(opId)).toBe(true);
+      expect(transport.data.opQueue.get(opId)?.state).toBe("failed");
     });
     transport.data.behaviour.opError = null;
     expect(await client.request({ type: "RetryOp", op_id: opId }, "Queued")).toEqual({

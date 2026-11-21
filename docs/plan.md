@@ -1203,6 +1203,78 @@ focus without selecting (Space then toggles); Escape first hides a focused row's
 a selected rule row readable (inherited colours, a `selection-fg` bar for the focused rule); the visual matrix and
 the theme e2e take the built-in themes from the generated `BUILTIN_THEMES`.
 
+### Wave R4 (bulk actions: status, lists, move picker, drafts safety)
+
+Maintainer report of 2026-11-21 on the installed 0.8.8 (one plain IMAP account): after moving and deleting
+several hundred messages in a few bulk actions, the status bar kept saying "Saving 14 changes" until a restart
+although every operation was done on the server, and moved messages showed as stale rows in another folder (Drafts,
+apparently selected) and still in the Inbox until a restart. Causes: the status bar counts a UI-only list of op ids
+cleared only by per-operation `OpStatus` events; a bulk action sends several events per operation into the
+256-event channel, the lagging client loses the `done` events, and the resync after a lag says nothing about the
+queue or the open lists. The Move window moves on Enter to the first folder that merely contains the typed text,
+and every message in a Drafts folder opens in the composer. The maintainer asked for all fixes. Release 0.8.9.
+Contract ADR 0230.
+
+#### Scope decisions for R4
+
+- **Real queue summary (contract):** `GetOpsSummary` → `OpsSummary` (pending, in flight, failed per account and in
+  total, the newest failure); `RetryFailedOps` / `DismissFailedOps` for every failed write of an account or of all.
+- **Coalesced events (contract + WS1):** `OpsChanged { summary }` once per queued batch, per replayed group (at most
+  every 250 ms) and at each pass's end; message writes stop sending `OpStatus` (WS1), folder changes keep it.
+- **Resync (contract):** a lagging client gets `OpsChanged` and then `Resync`; the UI re-reads the summary, refetches
+  open lists, conversations and the reader and prunes the selection (WS2).
+- **Failure details and logs (WS1):** the summary's newest failure names the real error class, also after a restart;
+  deferred replays are logged at INFO (today debug, invisible in a diagnostics bundle); the summary counts the
+  other write queues the old count included, or the ADR says why not.
+- **No duplicates after a UIDVALIDITY reset (WS1):** a folder resynced after a UIDVALIDITY change while moves out of
+  it are still pending must not show a moved message twice (in the old and the new folder) or bring it back.
+- **Move window (WS3):** Enter moves only to the highlighted row or an exact name match; moving into Drafts, Trash
+  or Junk asks first.
+- **Drafts safety (WS3):** only `\Draft` messages continue in the composer; others in a Drafts folder open in the
+  reader.
+- `EVENT_CAPACITY` stays 256. No new crates. New slot: `locales/*/status.ftl` (WS2's new status bar texts;
+  the older `status-*` texts stay in `app.ftl`).
+- **Release:** "Nail 0.8.9" in the release notes and `CHANGELOG.md` `[Unreleased]` are prepared by the contract;
+  packages add their user-visible items, the integrator merges them.
+
+#### Packages of R4
+
+- **Contract (done):** ADR 0230; `nail-api` `OpsSummary` / `OpsAccountSummary` / `OpFailure`, `GetOpsSummary`,
+  `RetryFailedOps`, `DismissFailedOps`, `OpsChanged`, `Resync` (TS regenerated); store `op_queue_counts`,
+  `newest_failed_op`, `retry_failed_ops`, `dismiss_failed_ops`, `Replayer::group_recorded`; core
+  `nail-core/src/ops_summary.rs` (summary, throttled and serialized `OpsChanged`, bulk retry / dismiss), events at
+  enqueue, retry, per group and pass end, `resync_events` ending with `OpsChanged` + `Resync`; remote narrowing and
+  scopes; the mock's queue `ui/src/api/mockOps.ts`; tests in `nail-api`, `nail-store`, `nail-core` `service.rs`, the
+  mock; the `status` locale slot; release notes 0.8.9 and the changelog prepared.
+- **WS1 — core (parallel):** `crates/nail-core`, `crates/nail-store`, `crates/nail-api` (bodies only, not the
+  contract's types), `app/src-tauri`: remove per-operation `OpStatus` for message writes (enqueue, replay, retry);
+  the failure's error class with the failed operation; other write queues in the summary; deferred replays at INFO;
+  no duplicate rows after a UIDVALIDITY reset with pending moves (a test with the IMAP mock); tests that a lagging
+  forwarder (`forward_events`) and the web socket send `OpsChanged` and `Resync`, and that a remote session's
+  `OpsChanged` is narrowed; a bulk-action test that counts the events (a few, never one per operation).
+- **WS2 — status and lists (parallel):** `ui/src/widgets/StatusBar.tsx`, `ui/src/state/`, `ui/src/App.tsx`,
+  `ui/src/widgets/MessageList.tsx`, `ui/src/actions/mailTargets.ts`, `locales/en/status.ftl` (and the status
+  bar's `app.ftl` texts), e2e specs `e2e/tests/r4-status-*.spec.ts`: the count from the summary (start, reconnect,
+  `OpsChanged`, `Resync`), no op-id list; failures with count, Retry (`RetryFailedOps`) and Dismiss
+  (`DismissFailedOps`); lists refetched on a failure and on `Resync`; the selection pruned to rows that still exist;
+  `opQueued` keeps its signature for callers outside the package.
+- **WS3 — move picker and drafts safety (parallel):** `ui/src/widgets/FolderPicker.tsx`,
+  `ui/src/widgets/FolderTree.tsx`, `ui/src/features/mail-actions/`, `ui/src/features/conversation-reader/`, their ftl
+  files, the userDocs pages on moving mail and drafts, e2e specs `e2e/tests/r4-move-*.spec.ts`: Enter only on the
+  highlighted row or an exact match, arrow keys move the highlight, a confirmation before Drafts / Trash / Junk;
+  `isDraftMessage` by the `\Draft` flag only (non-drafts in Drafts open in the reader).
+- **Integration:** rebase, renumber ADRs, shared ftl files, the R4 items in the 0.8.9 release notes and
+  `CHANGELOG.md`, the full suite incl. `npm run visual`, memory `next-steps` and `r4-status`.
+
+Gates: every suite green; a bulk action of 500 messages on the IMAP mock ends with an empty status bar and no
+stale rows (core test and e2e); a forced lag (`Resync`) refetches the open list and prunes the selection (Vitest);
+Enter in the Move window never moves to a partial match; the maintainer's human gate on the 0.8.9 installer (bulk
+move / delete of several hundred messages on a real IMAP account), then release.
+
+*Status (contract):* done (ADR 0230). Queue summary request and event, bulk retry / dismiss, `Resync` after a lag,
+serialized and throttled `OpsChanged` in the core (per-operation `OpStatus` still sent until WS1 removes it), mock
+queue in `mockOps.ts`, `status.ftl` slot, 0.8.9 notes prepared. Next: WS1–WS3 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

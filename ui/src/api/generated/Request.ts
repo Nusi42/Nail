@@ -401,9 +401,18 @@ expected_revision?: string, } | { "type": "CancelSend",
  */
 outbox_id: OutboxId, } | { "type": "ListOutbox" } | { "type": "RetryOp", 
 /**
- * The operation (from [`Event::OpStatus`]).
+ * The operation (from [`Event::OpStatus`] or
+ * [`OpsSummary::newest_failure`]).
  */
-op_id: OpId, } | { "type": "NewDraft", 
+op_id: OpId, } | { "type": "GetOpsSummary" } | { "type": "RetryFailedOps", 
+/**
+ * The account; `null` = every account.
+ */
+account_id: AccountId | null, } | { "type": "DismissFailedOps", 
+/**
+ * The account; `null` = every account.
+ */
+account_id: AccountId | null, } | { "type": "NewDraft", 
 /**
  * The identity; `null` = choose one.
  */

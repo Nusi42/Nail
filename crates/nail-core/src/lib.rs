@@ -56,6 +56,7 @@ mod mcp;
 mod message_source;
 mod notify;
 mod oauth;
+mod ops_summary;
 mod outbox;
 mod palette;
 pub mod paths;

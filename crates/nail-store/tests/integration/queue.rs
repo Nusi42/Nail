@@ -406,3 +406,55 @@ fn deleting_an_account_drops_its_queue() {
     store.delete_account(&"a1".into()).unwrap();
     assert_eq!(store.list_ops(None).unwrap().len(), 0);
 }
+
+#[tokio::test]
+async fn queue_counts_retry_and_dismiss_failed_ops() {
+    let store = store_with_messages(&["m1", "m2", "m3"]);
+    assert_eq!(store.op_queue_counts().unwrap(), []);
+    assert_eq!(store.newest_failed_op().unwrap(), None);
+    let a = store.enqueue(&mark_seen("m1", true)).unwrap().op.id;
+    let b = store.enqueue(&mark_seen("m2", true)).unwrap().op.id;
+    store.enqueue(&mark_seen("m3", true)).unwrap();
+
+    let counts = store.op_queue_counts().unwrap();
+    assert_eq!(counts.len(), 1);
+    assert_eq!(counts[0].account_id, "a1".into());
+    assert_eq!(
+        (counts[0].pending, counts[0].in_flight, counts[0].failed),
+        (3, 0, 0)
+    );
+
+    // a and b fail permanently, the third is replayed.
+    let replayer = ScriptedReplayer::with_script([
+        ReplayOutcome::Fail("gone".into()),
+        ReplayOutcome::Fail("gone too".into()),
+    ]);
+    store
+        .replay_pending(&replayer, ReplayPolicy::default())
+        .await
+        .unwrap();
+    let counts = store.op_queue_counts().unwrap();
+    assert_eq!(
+        (counts[0].pending, counts[0].in_flight, counts[0].failed),
+        (0, 0, 2)
+    );
+    let newest = store.newest_failed_op().unwrap().unwrap();
+    assert_eq!(newest.id, b, "the same second: the higher id is newer");
+    assert_eq!(newest.last_error.as_deref(), Some("gone too"));
+
+    // Another account's filter leaves them alone.
+    assert_eq!(store.retry_failed_ops(Some(&"other".into())).unwrap(), []);
+    assert_eq!(store.retry_failed_ops(Some(&"a1".into())).unwrap(), [a, b]);
+    let counts = store.op_queue_counts().unwrap();
+    assert_eq!((counts[0].pending, counts[0].failed), (2, 0));
+    assert_eq!(store.retry_failed_ops(None).unwrap(), []);
+
+    let replayer = ScriptedReplayer::with_script([ReplayOutcome::Fail("again".into())]);
+    store
+        .replay_pending(&replayer, ReplayPolicy::default())
+        .await
+        .unwrap();
+    assert_eq!(store.dismiss_failed_ops(None).unwrap(), 1);
+    assert_eq!(store.op_queue_counts().unwrap(), []);
+    assert_eq!(store.newest_failed_op().unwrap(), None);
+}

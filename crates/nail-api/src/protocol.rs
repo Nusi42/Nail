@@ -69,7 +69,7 @@ use crate::links::LinkOutcome;
 use crate::localized::LocalizedMessage;
 use crate::mail_actions::{MailAction, MailActionResult, MailTargetResolution, MessageTarget};
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpRateLimits, McpServerInfo, McpSettings};
-use crate::ops::{FlagChange, MoveTarget, OpStatus};
+use crate::ops::{FlagChange, MoveTarget, OpStatus, OpsSummary};
 use crate::pim::calendar::FreeSlot;
 use crate::pim::contact::DuplicateGroup;
 use crate::pim::import::{PimImportPreview, PimImportResult, PimImportSource};
@@ -497,8 +497,29 @@ pub enum Request {
     /// with [`Response::Queued`] (the same op id); `conflict` when the
     /// operation has not failed.
     RetryOp {
-        /// The operation (from [`Event::OpStatus`]).
+        /// The operation (from [`Event::OpStatus`] or
+        /// [`OpsSummary::newest_failure`]).
         op_id: OpId,
+    },
+    /// The real state of the queue of message writes, per account and in
+    /// total (ADR 0230). Answered with [`Response::OpsSummary`]; changes
+    /// arrive as [`Event::OpsChanged`].
+    GetOpsSummary,
+    /// Put every failed message write (of one account, or of all when
+    /// `null`) back into the queue (ADR 0230). Answered with
+    /// [`Response::Queued`] (the retried op ids, possibly none).
+    RetryFailedOps {
+        /// The account; `null` = every account.
+        #[serde(default)]
+        account_id: Option<AccountId>,
+    },
+    /// Forget the failed message writes (of one account, or of all when
+    /// `null`): the status bar stops reporting them; the next sync shows the
+    /// server's state (ADR 0230). Answered with [`Response::Done`].
+    DismissFailedOps {
+        /// The account; `null` = every account.
+        #[serde(default)]
+        account_id: Option<AccountId>,
     },
 
     // --- Composer (M1b WP21) ---
@@ -3374,6 +3395,11 @@ pub enum Response {
         /// The configuration as saved (with the assigned id).
         config: Box<VirtualAccountConfig>,
     },
+    /// Answer to [`Request::GetOpsSummary`].
+    OpsSummary {
+        /// The queue's state.
+        summary: OpsSummary,
+    },
     /// Answer to [`Request::ListAccountStatuses`].
     AccountStatuses {
         /// One entry per real account.
@@ -4575,11 +4601,26 @@ pub enum Event {
         #[ts(optional)]
         details: Option<Box<ErrorDetails>>,
     },
-    /// A queued operation changed state.
+    /// A queued operation changed state. Sent for folder changes (ADR
+    /// 0196); message writes report through [`Event::OpsChanged`] instead
+    /// (ADR 0230).
     OpStatus {
         /// The new status.
         status: OpStatus,
     },
+    /// The queue of message writes changed (ADR 0230): at most once per
+    /// enqueued batch, once per replayed group and once per retry or
+    /// dismissal, never once per operation. Carries the whole summary, so
+    /// a client that missed one is right again with the next.
+    OpsChanged {
+        /// The queue's state now.
+        summary: OpsSummary,
+    },
+    /// The client missed events (its subscription lagged behind the event
+    /// channel; ADR 0230). Sent last in [`Event`]s of a resync: re-read the
+    /// queue summary, refetch every open message list and conversation, and
+    /// drop selected messages that are no longer in their list.
+    Resync,
     /// An outbox entry changed state.
     SendStatus {
         /// The entry.
@@ -5228,6 +5269,36 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Event::AccountsChanged).unwrap(),
             json!({"type": "AccountsChanged"})
+        );
+    }
+
+    #[test]
+    fn ops_summary_requests_and_events_serialize() {
+        assert_eq!(
+            serde_json::to_value(Request::GetOpsSummary).unwrap(),
+            json!({"type": "GetOpsSummary"})
+        );
+        let retry: Request = serde_json::from_value(json!({"type": "RetryFailedOps"})).unwrap();
+        assert_eq!(retry, Request::RetryFailedOps { account_id: None });
+        assert_eq!(
+            serde_json::to_value(Request::DismissFailedOps {
+                account_id: Some(AccountId::new("acc-1"))
+            })
+            .unwrap(),
+            json!({"type": "DismissFailedOps", "account_id": "acc-1"})
+        );
+        assert_eq!(
+            serde_json::to_value(Event::OpsChanged {
+                summary: OpsSummary::default()
+            })
+            .unwrap(),
+            json!({"type": "OpsChanged", "summary": {
+                "pending": 0, "in_flight": 0, "failed": 0, "accounts": [], "newest_failure": null
+            }})
+        );
+        assert_eq!(
+            serde_json::to_value(Event::Resync).unwrap(),
+            json!({"type": "Resync"})
         );
     }
 

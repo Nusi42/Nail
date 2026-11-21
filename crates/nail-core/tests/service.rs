@@ -452,6 +452,29 @@ impl nail_store::Replayer for FailAll {
     }
 }
 
+/// Queues a flag change without waking the engines; answers its wire op id.
+fn queue_flags(
+    store: &nail_store::Store,
+    message: MessageId,
+    change: nail_store::FlagChange,
+) -> nail_api::OpId {
+    let queued = store
+        .enqueue(&nail_store::Operation::UpdateFlags {
+            message_id: message,
+            change,
+        })
+        .unwrap();
+    nail_api::OpId::new(format!("op-{}", queued.op.id.0))
+}
+
+/// Replays the demo account's queue, failing every operation.
+async fn fail_queued(store: &nail_store::Store) {
+    store
+        .replay_account(&demo(), &FailAll, nail_store::ReplayPolicy::default())
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn retry_op_requeues_a_failed_operation() {
     let fx = open(false, None);
@@ -462,20 +485,15 @@ async fn retry_op_requeues_a_failed_operation() {
     };
     let message = messages[0].id.clone();
     let store = fx.service.store().clone();
-    let queued = store
-        .enqueue(&nail_store::Operation::UpdateFlags {
-            message_id: message,
-            change: nail_store::FlagChange {
-                flagged: Some(true),
-                ..nail_store::FlagChange::default()
-            },
-        })
-        .unwrap();
-    store
-        .replay_account(&demo(), &FailAll, nail_store::ReplayPolicy::default())
-        .await
-        .unwrap();
-    let op_id = nail_api::OpId::new(format!("op-{}", queued.op.id.0));
+    let op_id = queue_flags(
+        &store,
+        message,
+        nail_store::FlagChange {
+            flagged: Some(true),
+            ..nail_store::FlagChange::default()
+        },
+    );
+    fail_queued(&store).await;
 
     let mut events = fx.service.subscribe();
     assert_eq!(
@@ -509,6 +527,131 @@ async fn retry_op_requeues_a_failed_operation() {
                 .await
         ),
         ErrorCode::NotFound
+    );
+}
+
+/// The `OpsChanged` events sent until the channel stays quiet for a moment.
+async fn ops_changed_events(rx: &mut broadcast::Receiver<Event>) -> Vec<nail_api::OpsSummary> {
+    let mut out = Vec::new();
+    while let Ok(Ok(event)) =
+        tokio::time::timeout(std::time::Duration::from_millis(300), rx.recv()).await
+    {
+        if let Event::OpsChanged { summary } = event {
+            out.push(summary);
+        }
+    }
+    out
+}
+
+async fn ops_summary(service: &Service) -> nail_api::OpsSummary {
+    match service.handle(Request::GetOpsSummary).await {
+        Response::OpsSummary { summary } => summary,
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_bulk_write_sends_few_queue_summaries() {
+    let fx = open(false, None);
+    let Response::Messages { messages, .. } =
+        page(&fx.service, inbox(&fx.service).await, 0, 50).await
+    else {
+        panic!("expected messages");
+    };
+    assert!(messages.len() > 3, "the demo inbox has several messages");
+    assert_eq!(
+        ops_summary(&fx.service).await,
+        nail_api::OpsSummary::default()
+    );
+
+    let mut events = fx.service.subscribe();
+    let Response::Queued { op_ids } = fx
+        .service
+        .handle(Request::UpdateFlags {
+            message_ids: messages.iter().map(|m| m.id.clone()).collect(),
+            change: nail_api::FlagChange {
+                flagged: Some(true),
+                ..nail_api::FlagChange::default()
+            },
+        })
+        .await
+    else {
+        panic!("expected Queued");
+    };
+    // The demo account replays locally, one operation at a time: a few
+    // summaries (the batch, throttled progress, the pass's end), never one
+    // per operation.
+    let sent = ops_changed_events(&mut events).await;
+    assert!(sent.len() < op_ids.len() / 2, "{} summaries", sent.len());
+    assert!(sent.first().is_some_and(|s| s.waiting() > 0), "{sent:?}");
+    assert_eq!(sent.last(), Some(&nail_api::OpsSummary::default()));
+
+    // Queued without waking the engines, replayed as failures: the newest
+    // failure carries its op and text.
+    let store = fx.service.store().clone();
+    let seen = nail_store::FlagChange {
+        seen: Some(true),
+        ..nail_store::FlagChange::default()
+    };
+    let queued: Vec<nail_api::OpId> = messages
+        .iter()
+        .map(|m| queue_flags(&store, m.id.clone(), seen.clone()))
+        .collect();
+    let count = u32::try_from(queued.len()).unwrap();
+    let summary = ops_summary(&fx.service).await;
+    assert_eq!(
+        (summary.pending, summary.in_flight, summary.failed),
+        (count, 0, 0)
+    );
+    assert_eq!(summary.accounts.len(), 1);
+    assert_eq!(summary.accounts[0].account_id, demo());
+    fail_queued(&store).await;
+    let summary = ops_summary(&fx.service).await;
+    assert_eq!((summary.waiting(), summary.failed), (0, count));
+    let failure = summary.newest_failure.expect("a failure");
+    assert_eq!(failure.message.as_deref(), Some("rejected"));
+    assert!(queued.contains(&failure.op_id), "{failure:?}");
+
+    // Retry all (the engine replays them), then dismiss what fails again.
+    let Response::Queued { op_ids: retried } = fx
+        .service
+        .handle(Request::RetryFailedOps { account_id: None })
+        .await
+    else {
+        panic!("expected Queued");
+    };
+    assert_eq!(retried, queued);
+    let sent = ops_changed_events(&mut events).await;
+    assert_eq!(
+        sent.first().map(nail_api::OpsSummary::waiting),
+        Some(count),
+        "{sent:?}"
+    );
+    assert_eq!(sent.last(), Some(&nail_api::OpsSummary::default()));
+    queue_flags(&store, messages[0].id.clone(), seen);
+    fail_queued(&store).await;
+    assert_eq!(ops_summary(&fx.service).await.failed, 1);
+    assert_eq!(
+        fx.service
+            .handle(Request::DismissFailedOps {
+                account_id: Some(demo())
+            })
+            .await,
+        Response::Done
+    );
+    assert_eq!(
+        ops_summary(&fx.service).await,
+        nail_api::OpsSummary::default()
+    );
+    let sent = ops_changed_events(&mut events).await;
+    assert_eq!(sent.last(), Some(&nail_api::OpsSummary::default()));
+
+    // A lagging client gets the summary and, last, the resync signal.
+    let resync = fx.service.resync_events().await;
+    assert!(matches!(resync.last(), Some(Event::Resync)), "{resync:?}");
+    assert!(
+        matches!(&resync[resync.len() - 2], Event::OpsChanged { summary } if summary.waiting() == 0),
+        "{resync:?}"
     );
 }
 

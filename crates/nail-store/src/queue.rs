@@ -539,6 +539,14 @@ pub trait Replayer: Send + Sync {
             out
         }
     }
+
+    /// Called once after the outcomes of a group (or of a single
+    /// operation) are recorded in the store, so a caller can report the
+    /// queue's new state once per group instead of once per operation
+    /// (ADR 0230). The default does nothing.
+    fn group_recorded(&self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 /// Limits for [`Store::replay_pending`].
@@ -897,6 +905,86 @@ impl Store {
         })
     }
 
+    /// The queue per account (ADR 0230): `pending`, `in_flight` and
+    /// `failed` operations, accounts in the order of their oldest such
+    /// operation; accounts with none are left out. `done` operations are
+    /// not counted.
+    pub fn op_queue_counts(&self) -> Result<Vec<nail_api::OpsAccountSummary>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT account_id,
+                        SUM(state = 'pending'), SUM(state = 'in_flight'), SUM(state = 'failed')
+                 FROM op_queue WHERE state <> 'done'
+                 GROUP BY account_id ORDER BY MIN(id)",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok(nail_api::OpsAccountSummary {
+                    account_id: AccountId(r.get(0)?),
+                    pending: r.get(1)?,
+                    in_flight: r.get(2)?,
+                    failed: r.get(3)?,
+                })
+            })?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
+    /// The most recently failed operation (by the time it failed, then by
+    /// id), if any.
+    pub fn newest_failed_op(&self) -> Result<Option<QueuedOp>> {
+        self.with_conn(|conn| {
+            Ok(conn
+                .query_row(
+                    &format!(
+                        "SELECT {OP_COLS} FROM op_queue WHERE state = 'failed'
+                         ORDER BY updated_at DESC, id DESC LIMIT 1"
+                    ),
+                    [],
+                    op_from_row,
+                )
+                .optional()?)
+        })
+    }
+
+    /// Puts every `failed` operation of `account` (of all accounts when
+    /// `None`) back to `pending`, attempt counters reset. Returns their ids,
+    /// oldest first.
+    pub fn retry_failed_ops(&self, account: Option<&AccountId>) -> Result<Vec<OpId>> {
+        let account = account.map(AccountId::as_str);
+        self.with_tx(|tx| {
+            let ids = {
+                let mut stmt = tx.prepare_cached(
+                    "SELECT id FROM op_queue
+                     WHERE state = 'failed' AND (?1 IS NULL OR account_id = ?1) ORDER BY id",
+                )?;
+                let rows = stmt.query_map([account], |r| Ok(OpId(r.get(0)?)))?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()?
+            };
+            tx.execute(
+                &format!(
+                    "UPDATE op_queue SET state = 'pending', attempts = 0, updated_at = {NOW}
+                     WHERE state = 'failed' AND (?1 IS NULL OR account_id = ?1)"
+                ),
+                [account],
+            )?;
+            Ok(ids)
+        })
+    }
+
+    /// Deletes the `failed` operations of `account` (of all accounts when
+    /// `None`): the user dismissed them; their local change was already
+    /// given up (the next sync shows the server's state). Returns how many
+    /// were deleted.
+    pub fn dismiss_failed_ops(&self, account: Option<&AccountId>) -> Result<usize> {
+        let account = account.map(AccountId::as_str);
+        self.with_conn(|conn| {
+            Ok(conn.execute(
+                "DELETE FROM op_queue WHERE state = 'failed' AND (?1 IS NULL OR account_id = ?1)",
+                [account],
+            )?)
+        })
+    }
+
     /// Puts a `failed` operation back to `pending` (e.g. a user's "retry").
     /// Its attempt counter restarts. Returns whether it was failed.
     pub fn retry_op(&self, id: OpId) -> Result<bool> {
@@ -1138,6 +1226,7 @@ impl Store {
                     .await?;
                 claim.ids.retain(|c| *c != id);
             }
+            replayer.group_recorded().await;
             if deferred {
                 break;
             }

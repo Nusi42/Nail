@@ -82,6 +82,7 @@ import type { MessageSummary } from "./MessageSummary";
 import type { NotificationSettings } from "./NotificationSettings";
 import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpId } from "./OpId";
+import type { OpsSummary } from "./OpsSummary";
 import type { OutboxEntry } from "./OutboxEntry";
 import type { OutboxId } from "./OutboxId";
 import type { PairingCode } from "./PairingCode";
@@ -265,7 +266,11 @@ virtual_accounts: Array<VirtualAccountConfig>, } | { "type": "VirtualAccountSave
 /**
  * The configuration as saved (with the assigned id).
  */
-config: VirtualAccountConfig, } | { "type": "AccountStatuses", 
+config: VirtualAccountConfig, } | { "type": "OpsSummary", 
+/**
+ * The queue's state.
+ */
+summary: OpsSummary, } | { "type": "AccountStatuses", 
 /**
  * One entry per real account.
  */

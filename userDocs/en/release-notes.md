@@ -3,6 +3,25 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.9 (`0.8.9`)
+
+Moving or deleting hundreds of messages at once is reliable again: the
+status bar shows what is really still being saved, message lists stay
+right, and the Move window no longer moves mail somewhere you did not
+mean.
+
+### Corrected in 0.8.9
+
+- **"Saving changes" ends when the changes are saved** — after moving or
+  deleting many messages in a few steps, the status bar could keep saying
+  "Saving 14 changes" until Nail was restarted, although everything had
+  reached the server. It now shows the real number of changes still
+  waiting, for all accounts together.
+- **Lists stay right after large moves** — messages you moved could still
+  show in their old folder, or in another folder, until a restart. Nail now
+  refreshes the open lists and the selection when it notices it fell
+  behind.
+
 ## Nail 0.8.8 (`0.8.8`)
 
 Run your rules on exactly the mail you choose, a redesigned rules window,

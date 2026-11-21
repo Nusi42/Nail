@@ -1,8 +1,8 @@
 /**
  * Mail behaviour of the mock core: virtual accounts (the built-in "All
  * accounts" plus user-defined ones), folder merging by role and by hand-made
- * mappings, Message-ID dedupe, queued writes with `OpStatus` events,
- * threads and search.
+ * mappings, Message-ID dedupe, queued writes (`./mockOps.ts`), threads and
+ * search.
  */
 import type {
   Account,
@@ -25,6 +25,7 @@ import type { MockData } from "./mockData";
 import { matches, parseQuery, type Searchable } from "./mockSearch";
 import type { Event as NailEvent } from "./generated";
 import { ALL_ACCOUNTS, FOLDER_ROLES } from "./contract";
+import { enqueueOps } from "./mockOps";
 
 /** Roles merged across the members of a virtual account: every special-use role, in the contract's order. */
 export const MERGED_ROLES: readonly FolderRole[] = FOLDER_ROLES;
@@ -227,9 +228,8 @@ export function findMessages(d: MockData, ids: readonly MessageId[]): MessageSum
 
 /**
  * Queues one op per affected account, applies the change locally at once
- * (as the core does) and replays it asynchronously with `OpStatus` events.
+ * (as the core does) and replays it asynchronously (`./mockOps.ts`).
  */
-/** Applies a write at once and "replays" it per account (`Queued` + `OpStatus`). */
 export function queue(
   core: MockCore,
   targets: MessageSummary[],
@@ -239,39 +239,8 @@ export function queue(
   const accounts = [...new Set(targets.map((m) => m.account_id))];
   const ops = accounts.map((accountId) => ({ accountId, opId: core.nextId("op-") }));
   core.emit({ type: "MailChanged", folder_ids: folders });
-  for (const { accountId, opId } of ops) replayOp(core, opId, accountId);
+  enqueueOps(core, ops);
   return { type: "Queued", op_ids: ops.map((op) => op.opId) };
-}
-
-/** `RetryOp`: a failed write is queued and replayed again. */
-export function retryOp(core: MockCore, opId: string): Response {
-  const accountId = core.data.failedOps.get(opId);
-  if (accountId === undefined) return errorResponse("conflict", `operation ${opId} has not failed`);
-  core.data.failedOps.delete(opId);
-  const base = { op_id: opId, account_id: accountId, error: null, message: null };
-  queueMicrotask(() => {
-    core.emit({ type: "OpStatus", status: { ...base, state: "pending" } });
-  });
-  replayOp(core, opId, accountId);
-  return { type: "Queued", op_ids: [opId] };
-}
-
-/** Replays one queued write asynchronously with `OpStatus` events. */
-export function replayOp(core: MockCore, op_id: string, accountId: string): void {
-  const base = { op_id, account_id: accountId, error: null, message: null };
-  core.later(() => {
-    core.emit({ type: "OpStatus", status: { ...base, state: "in-flight" } });
-    core.later(() => {
-      const error = core.data.behaviour.opError;
-      if (error) core.data.failedOps.set(op_id, accountId);
-      core.emit({
-        type: "OpStatus",
-        status: error
-          ? { ...base, state: "failed", error, message: "mock replay failed" }
-          : { ...base, state: "done" },
-      });
-    });
-  });
 }
 
 export function updateFlags(core: MockCore, ids: MessageId[], change: FlagChange): Response {
