@@ -1,57 +1,17 @@
 /**
  * Editor of one MCP client's grant: reading and (M4a) writing scopes,
- * accounts (or all accounts) and hidden folders. Nothing is granted until the user saves a grant here.
+ * accounts (or all accounts) and hidden folders (shared multi-value
+ * pickers, R3). Nothing is granted until the user saves a grant here.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
-import type { Account, McpClient, McpGrant, McpScope } from "../../api/generated";
+import type { McpClient, McpGrant, McpScope } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { useAccounts, useClient, useFolders } from "../../state/queries";
+import { useAccounts, useClient } from "../../state/queries";
 import { CheckField, Section } from "../../widgets/forms";
+import { PickerListField } from "../../widgets/pickers";
 import { ALL_SCOPES, READ_SCOPES, WRITE_SCOPES, grantIsEmpty, mcpKeys, toggled } from "./queries";
-
-function FolderExclusions({
-  account,
-  grant,
-  disabled,
-  onChange,
-}: {
-  account: Account;
-  grant: McpGrant;
-  disabled: boolean;
-  onChange: (grant: McpGrant) => void;
-}) {
-  const folders = useFolders(account.id);
-  const t = useT();
-  const hidden = (folders.data ?? []).filter((f) => grant.excluded_folders.includes(f.id)).length;
-  return (
-    <details data-part="mcp-grants.folders.account" data-account={account.id}>
-      <summary data-part="mcp-grants.folders.summary">
-        {t("mcp-grant-folders-of", { account: account.name, hidden })}
-      </summary>
-      <div data-part="mcp-grants.folders.list">
-        {(folders.data ?? []).map((folder) => (
-          <CheckField
-            key={folder.id}
-            labelId="mcp-grant-folder-hidden"
-            args={{ folder: folder.path }}
-            name={`hide-${folder.id}`}
-            checked={grant.excluded_folders.includes(folder.id)}
-            onChange={(on) => {
-              if (!disabled) {
-                onChange({
-                  ...grant,
-                  excluded_folders: toggled(grant.excluded_folders, folder.id, on),
-                });
-              }
-            }}
-          />
-        ))}
-      </div>
-    </details>
-  );
-}
 
 /** The grant of `client`, editable unless the client is revoked. */
 export function GrantEditor({ client }: { client: McpClient }) {
@@ -124,33 +84,35 @@ export function GrantEditor({ client }: { client: McpClient }) {
               change({ ...grant, all_accounts: on });
             }}
           />
-          {!grant.all_accounts &&
-            all.map((account) => (
-              <CheckField
-                key={account.id}
-                labelId="mcp-grant-account"
-                args={{ name: account.name, email: account.email }}
-                name={`account-${account.id}`}
-                checked={grant.accounts.includes(account.id)}
-                onChange={(on) => {
-                  change({ ...grant, accounts: toggled(grant.accounts, account.id, on) });
-                }}
-              />
-            ))}
+          {!grant.all_accounts && (
+            <PickerListField
+              kind="account"
+              virtualAccounts
+              labelId="mcp-grant-chosen-accounts"
+              name="accounts"
+              disabled={disabled}
+              values={grant.accounts}
+              onChange={(accounts) => {
+                change({ ...grant, accounts });
+              }}
+            />
+          )}
         </Section>
         {inScope.length > 0 && (
           <Section titleId="mcp-grant-folders">
-            {inScope
-              .filter((a) => a.kind !== "virtual")
-              .map((account) => (
-                <FolderExclusions
-                  key={account.id}
-                  account={account}
-                  grant={grant}
-                  disabled={disabled}
-                  onChange={change}
-                />
-              ))}
+            <PickerListField
+              kind="folder"
+              folderValue="id"
+              labelId="mcp-grant-hidden-folders"
+              hintId="mcp-grant-hidden-folders-hint"
+              name="hidden-folders"
+              disabled={disabled}
+              accounts={inScope.filter((a) => a.kind !== "virtual").map((a) => a.id)}
+              values={grant.excluded_folders}
+              onChange={(excluded_folders) => {
+                change({ ...grant, excluded_folders });
+              }}
+            />
           </Section>
         )}
       </fieldset>

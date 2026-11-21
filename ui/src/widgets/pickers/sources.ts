@@ -6,7 +6,8 @@
  *   or path, a match keeps its parents.
  * - `account`: `ListAccounts` (`useAccounts`).
  * - `address`: `SuggestAddresses`: contacts, collected addresses and recent
- *   correspondents (the core ranks them), matching a name or an address.
+ *   correspondents (the core ranks them), matching a name or an address;
+ *   with nothing typed the most-used correspondents (R3, ADR 0227).
  * - `tag`, `mailing-list`, `header-name`: `SuggestValues` (`suggestValues`
  *   below): tags in use (plus "Create tag …" for a new one), the `List-Id`s
  *   and header names of recent mail (header names after the common ones).
@@ -245,11 +246,24 @@ export interface PickerQuery {
   enabled?: boolean;
 }
 
+/** `accounts` limited to the scope's `accounts` when it names any. */
+function inScope(accounts: readonly Account[], scope: PickerScope): Account[] {
+  const only = scope.accounts;
+  return only === undefined ? [...accounts] : accounts.filter((a) => only.includes(a.id));
+}
+
 /** The real accounts a folder picker offers: the scope's, or every real one. */
-function folderAccounts(accounts: readonly Account[], scope: PickerScope): Account[] {
+export function folderAccounts(accounts: readonly Account[], scope: PickerScope): Account[] {
   return scope.accountId === null
-    ? accounts.filter((a) => a.kind !== "virtual")
+    ? inScope(accounts, scope).filter((a) => a.kind !== "virtual")
     : accounts.filter((a) => a.id === scope.accountId);
+}
+
+/** The accounts an account picker offers: real ones (and virtual ones when asked), in scope. */
+export function offeredAccounts(accounts: readonly Account[], scope: PickerScope): Account[] {
+  return inScope(accounts, scope).filter(
+    (a) => scope.virtualAccounts === true || a.kind !== "virtual",
+  );
 }
 
 /** The options of a picker for the text typed so far. */
@@ -278,7 +292,8 @@ export function usePickerOptions(request: PickerQuery): PickerOptions {
           "AddressSuggestions",
         )
       ).addresses,
-    enabled: enabled && kind === "address" && query.trim() !== "",
+    // An empty text asks too: the core answers the most-used addresses.
+    enabled: enabled && kind === "address",
   });
   const values = useQuery({
     queryKey: ["pickers", "values", suggestKind, query],
@@ -308,13 +323,11 @@ export function usePickerOptions(request: PickerQuery): PickerOptions {
         loading: accounts.isLoading || folderQueries.some((q) => q.isLoading),
       };
     }
-    case "account": {
-      const offered =
-        scope.virtualAccounts === true
-          ? accountList
-          : accountList.filter((a) => a.kind !== "virtual");
-      return { options: accountOptions(offered, query), loading: accounts.isLoading };
-    }
+    case "account":
+      return {
+        options: accountOptions(offeredAccounts(accountList, scope), query),
+        loading: accounts.isLoading,
+      };
     case "address":
       return { options: addressOptions(addresses.data ?? []), loading: addresses.isLoading };
     case "tag":

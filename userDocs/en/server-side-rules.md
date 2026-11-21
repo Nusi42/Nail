@@ -69,9 +69,17 @@ identities plus the ones you add), so it does not answer mail you were only
 copied on through a list. With **Don't reply to mailing lists** on, it also
 skips mailing lists, bulk mail and automatic messages.
 
-**Reply from** sets the sender of the reply; the field suggests your
-contacts and the people you write with as you type, and any address you
-type yourself is fine, too.
+**Also my addresses** lists further addresses of yours (aliases) the reply
+should count as yours: type an address and press **Enter** or a comma, or
+pick one from the list; each address becomes a chip with **×** to remove
+it ([several values](settings.md#choosing-a-folder-an-account-or-an-address)).
+
+**Reply from** sets the sender of the reply; opened empty, its list shows
+the addresses you use most, typing searches your contacts and the people
+you write with, and any address you type yourself is fine, too.
+
+The **Account** field at the top chooses whose reply (or server rules) you
+edit; its list offers only the accounts that have them.
 
 A start and end date are checked by the server when it supports dates.
 Otherwise Nail switches the reply on and off itself on those days, which

@@ -81,11 +81,3 @@ export function manageSieveIssues(c: {
   }
   return out;
 }
-
-/** Addresses typed as a comma / whitespace separated list. */
-export function parseAddressList(text: string): string[] {
-  return text
-    .split(/[\s,;]+/)
-    .map((a) => a.trim())
-    .filter(Boolean);
-}

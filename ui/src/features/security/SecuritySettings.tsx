@@ -22,8 +22,9 @@ import type {
 } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
-import { useAccounts, useClient } from "../../state/queries";
+import { useClient } from "../../state/queries";
 import { CheckField, SelectField } from "../../widgets/forms";
+import { PickerListField } from "../../widgets/pickers";
 import { applyVaultStatus, securityKeys, useSecuritySettings, useVaultStatus } from "./queries";
 
 export const LOOKUP_POLICIES: readonly KeyLookupPolicy[] = KEY_LOOKUP_POLICY_VALUES;
@@ -177,7 +178,6 @@ function LookupAndIndex({ settings }: { settings: Settings }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
-  const accounts = (useAccounts().data ?? []).filter((a) => a.kind !== "virtual");
   const [error, setError] = useState<string | null>(null);
 
   const save = async (next: Settings) => {
@@ -228,23 +228,13 @@ function LookupAndIndex({ settings }: { settings: Settings }) {
       <section data-part="security-index-settings" aria-label={t("security-index-title")}>
         <h3 data-part="security-settings.title">{t("security-index-title")}</h3>
         <p data-part="security-settings.intro">{t("security-index-intro")}</p>
-        {accounts.map((account) => (
-          <CheckField
-            key={account.id}
-            labelId="security-index-account"
-            args={{ account: account.name, email: account.email }}
-            name={`index-${account.id}`}
-            checked={settings.index_decrypted.includes(account.id)}
-            onChange={(on) =>
-              void save({
-                ...settings,
-                index_decrypted: on
-                  ? [...settings.index_decrypted, account.id]
-                  : settings.index_decrypted.filter((id) => id !== account.id),
-              })
-            }
-          />
-        ))}
+        <PickerListField
+          kind="account"
+          labelId="security-index-accounts"
+          name="index-accounts"
+          values={settings.index_decrypted}
+          onChange={(index_decrypted) => void save({ ...settings, index_decrypted })}
+        />
       </section>
       {error && (
         <p data-part="security-settings.error" role="alert">

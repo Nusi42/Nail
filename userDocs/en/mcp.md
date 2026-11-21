@@ -73,8 +73,12 @@ member accounts), or **All accounts, including ones added later**. Filter
 rules can only be read with all accounts, because rules can mention
 addresses and folders of every account.
 
-**Hidden folders.** Under *Hidden folders*, open an account and tick the
-folders the agent must never see, for example a folder with HR mail.
+**Accounts it may use** lists the chosen accounts: pick them from the list
+(each becomes a chip with **×** to remove it).
+
+**Hidden folders.** Under *Hidden folders*, pick the folders the agent must
+never see from the folder tree of the granted accounts, for example a
+folder with HR mail.
 Hidden folders and accounts you did not grant are hidden everywhere: a
 search only counts and pages through messages the agent may read, so it
 cannot even tell whether a hidden folder has mail that matches.

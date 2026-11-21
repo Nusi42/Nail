@@ -18,7 +18,8 @@ import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccountsConfig, useClient, useMessage } from "../../state/queries";
 import { useUi } from "../../state/uiStore";
-import { CheckField, NumberField, SelectField } from "../../widgets/forms";
+import { CheckField, NumberField } from "../../widgets/forms";
+import { PickerField } from "../../widgets/pickers";
 import { junkIssues, MAX_MIN_TRAINING } from "./model";
 import { triageKeys, useJunkStatus } from "./queries";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
@@ -300,12 +301,16 @@ export function JunkSettingsWidget({ node }: WidgetProps) {
         <p data-part="junk-settings.empty">{t("common-no-accounts-yet")}</p>
       ) : (
         <>
-          <SelectField
+          <PickerField
+            kind="account"
+            strict
             labelId="junk-settings-account"
             name="account"
+            accounts={accounts.map((a) => a.id)}
             value={accountId ?? ""}
-            choices={accounts.map((a) => ({ value: a.id, label: a.name, literal: true }))}
-            onChange={setChosen}
+            onChange={(id) => {
+              setChosen(id === "" ? null : id);
+            }}
           />
           {accountId !== null && <SettingsForm key={accountId} accountId={accountId} />}
         </>

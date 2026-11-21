@@ -7,6 +7,7 @@ import { runtimeIds } from "./messages";
 import { answerMcp, createMcpMockState, simulateContextRead } from "./mock";
 import { clientState } from "./McpClients";
 import { emptyGrant, grantIsEmpty, toggled } from "./queries";
+import { chipsOf, pickOption } from "../../widgets/pickers/testing";
 import { INDICATOR_MS, mcpStore } from "./state";
 import { readerSelection, REPORT_DELAY_MS, UiContextReporter } from "./UiContextReporter";
 import { must } from "../../test/must";
@@ -95,15 +96,14 @@ describe("mcp-clients", () => {
 
     await user.click(checkbox("Original message source"));
     await user.click(checkbox("Read mail"));
-    await user.click(checkbox("Work (ada@work.example)"));
-    // Folders of the granted account can be hidden.
-    const folders = await within(form).findByText(/^Work/, { selector: "summary" });
-    await user.click(folders);
-    const hide = await within(form).findAllByLabelText(/^Hide /);
-    for (const element of hide) {
-      expect(element).toHaveRole("checkbox");
-    }
-    await user.click(must(hide[0]));
+    await pickOption(user, form, "Accounts it may use", /^Work/);
+    expect(chipsOf(form, "Accounts it may use")).toEqual(["Work"]);
+    // Folders of the granted account can be hidden: the folder tree offers only its folders.
+    await pickOption(user, form, "Folders it cannot see", /^Archive/);
+    expect(within(form).queryByRole("treeitem", { name: /^Personal/ })).toBeNull();
+    await waitFor(() => {
+      expect(chipsOf(form, "Folders it cannot see")).toEqual(["Archive"]);
+    });
     expect(save).toBeEnabled();
     await user.click(save);
 
@@ -123,7 +123,7 @@ describe("mcp-clients", () => {
 
     // All accounts replaces the account list.
     await user.click(checkbox(/All accounts/));
-    expect(within(form).queryByLabelText("Work (ada@work.example)")).not.toBeInTheDocument();
+    expect(within(form).queryByRole("combobox", { name: "Accounts it may use" })).toBeNull();
   });
 
   it("revokes a client after confirmation", async () => {

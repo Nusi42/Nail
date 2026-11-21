@@ -47,6 +47,7 @@ import { setAutomaticReplies, useAutomaticReplies, useExchangeAccounts } from ".
 import { exchangeStoreFor, useExchangeUi } from "./store";
 import { EmptyDialog } from "../../widgets/DialogStates";
 import { CloseButton } from "../../widgets/CloseButton";
+import { PickerField } from "../../widgets/pickers";
 
 const STATUSES: readonly AutomaticRepliesStatus[] = AUTOMATIC_REPLIES_STATUS_VALUES;
 const AUDIENCES: readonly ExternalAudience[] = EXTERNAL_AUDIENCE_VALUES;
@@ -305,7 +306,6 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
   const activeAccountId = useUi((s) => s.activeAccountId);
   const accounts = useExchangeAccounts();
   const [picked, setPicked] = useState<string | null>(null);
-  const ids = { account: useId() };
   const account =
     accounts.find((a) => a.id === (picked ?? chosen)) ??
     accounts.find((a) => a.id === activeAccountId) ??
@@ -328,25 +328,17 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
     <div data-part="exchange.dialog" data-dialog="automatic-replies">
       <p data-part="exchange.intro">{t("exchange-oof-intro")}</p>
       {accounts.length > 1 && (
-        <div data-part="form.field" data-field="account">
-          <label data-part="form.label" htmlFor={ids.account}>
-            {t("common-account")}
-          </label>
-          <select
-            id={ids.account}
-            data-part="form.select"
-            value={account.id}
-            onChange={(e) => {
-              setPicked(e.target.value);
-            }}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <PickerField
+          kind="account"
+          strict
+          labelId="common-account"
+          name="account"
+          accounts={accounts.map((a) => a.id)}
+          value={account.id}
+          onChange={(id) => {
+            setPicked(id === "" ? null : id);
+          }}
+        />
       )}
       <AutomaticRepliesEditor key={account.id} accountId={account.id} />
       <div data-part="exchange.actions">

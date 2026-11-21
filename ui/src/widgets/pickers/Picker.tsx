@@ -17,7 +17,16 @@
  *
  * Fields whose value is an id (accounts, folders with `folderValue="id"`)
  * show the option's name; text typed that names exactly one option is taken
- * as that option when the field loses the focus.
+ * as that option when the field loses the focus. A `strict` field changes
+ * its value only to an option (or to an empty text).
+ *
+ * Multi-value mode (`multiple`, R3, ADR 0228): the chosen values are chips
+ * before the input (each with a remove button); the list is
+ * `aria-multiselectable` and stays open while picking, a picked option is
+ * added or, when it is chosen already, removed. Typed text becomes a value
+ * on Enter, a comma or a semicolon and when the field loses the focus (an
+ * id kind only takes text that names an option); Backspace in the empty
+ * field removes the last value. Rules in `./multiple.ts`.
  *
  * Parts (`PICKER_PARTS`, looks in `defaults/theme.kdl`): `picker`
  * (`data-kind`, `data-state="open"`; the host may name another root part
@@ -26,13 +35,17 @@
  * above the field), `picker.list`, `picker.option` (`data-depth`,
  * `data-selected`, `data-variant`, state `highlighted`), `picker.option.toggle`
  * (`data-expanded`), `picker.option.icon`, `picker.option.label`,
- * `picker.option.detail`, `picker.empty`; the search field's values
- * (`./searchValues.tsx`) render `picker.option.button` rows.
+ * `picker.option.detail`, `picker.empty`, in multi-value mode (`data-multiple`
+ * on the root) `picker.chips`, `picker.chip` (`data-value`),
+ * `picker.chip.label`, `picker.chip.remove` (`picker.chip.remove.icon`); the
+ * search field's values (`./searchValues.tsx`) render `picker.option.button`
+ * rows.
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import { useGeometry } from "../../theme/ThemeProvider";
 import { folderIcon, Icon } from "../Icon";
+import { hasValue, splitTyped, toggledValue, withValues, withoutValue } from "./multiple";
 import { optionKey, usePickerOptions } from "./sources";
 import {
   initialActive,
@@ -60,6 +73,11 @@ export const PICKER_PARTS = [
   "picker.option.label",
   "picker.option.detail",
   "picker.empty",
+  "picker.chips",
+  "picker.chip",
+  "picker.chip.label",
+  "picker.chip.remove",
+  "picker.chip.remove.icon",
 ] as const;
 
 /**
@@ -122,6 +140,21 @@ export function optionNamed(options: readonly PickerOption[], text: string): Pic
   return named.length === 1 ? (named[0] ?? null) : null;
 }
 
+/** What a chip shows for a value: a folder's path, another option's name, else the value. */
+export function chipLabel(options: readonly PickerOption[], value: string): string {
+  const option = options.find((o) => pickable(o) && o.variant !== "create" && o.value === value);
+  if (!option) return value;
+  return option.folder ? option.folder.path : option.label;
+}
+
+/** Whether an option's name or value starts with the typed text (Enter then picks it). */
+function startsWithTyped(option: PickerOption, text: string): boolean {
+  const needle = text.toLowerCase();
+  return (
+    option.label.toLowerCase().startsWith(needle) || option.value.toLowerCase().startsWith(needle)
+  );
+}
+
 /** The icon of an option row. */
 function optionIcon(kind: PickerKind, option: PickerOption): string | null {
   if (option.variant === "create") return "plus";
@@ -145,6 +178,9 @@ export function Picker({
   accountId = null,
   folderValue = "path",
   virtualAccounts = false,
+  accounts,
+  multiple,
+  strict = false,
   id,
   placeholder,
   disabled,
@@ -172,14 +208,16 @@ export function Picker({
   });
   const geom = `picker-${ids.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
   useGeometry(geom, place.declarations);
-  const scope = { accountId, folderValue, virtualAccounts };
+  const scope = { accountId, folderValue, virtualAccounts, accounts };
   const named = showsLabel(kind, folderValue);
-  // Every option: the list while browsing, and the name of an id value (or of typed text).
+  const values = multiple?.values ?? [];
+  // Every option: the list while browsing, and the name of an id value (or of typed text or a chip).
   const all = usePickerOptions({
     kind,
     query: "",
     scope,
-    enabled: (open && !filtering) || (named && (value !== "" || typed !== null)),
+    enabled:
+      (open && !filtering) || (named && (value !== "" || typed !== null || values.length > 0)),
   });
   const filtered = usePickerOptions({
     kind,
@@ -196,9 +234,10 @@ export function Picker({
       : filtering
         ? initialActive(rows, null, typed)
         : initialActive(rows, value);
-  const shownValue = named
-    ? (all.options.find((o) => pickable(o) && o.value === value)?.label ?? value)
-    : value;
+  const shownValue =
+    named && !multiple
+      ? (all.options.find((o) => pickable(o) && o.value === value)?.label ?? value)
+      : value;
   const display = typed ?? shownValue;
   const tree = kind === "folder";
   const rowId = (key: string) => `${listId}-${String(rows.findIndex((r) => optionKey(r) === key))}`;
@@ -208,9 +247,28 @@ export function Picker({
     setActive(null);
   };
 
+  /**
+   * Multi-value mode: typed `text` becomes a value (an id kind's only when
+   * it names an option) and the field empties; `false` when nothing was added.
+   */
+  const commit = (text: string): boolean => {
+    const typedText = text.trim();
+    if (!multiple || typedText === "") return false;
+    const added = named ? optionNamed(all.options, typedText)?.value : typedText;
+    if (added === undefined) return false;
+    multiple.onChange(withValues(values, [added]));
+    setTyped(null);
+    onChange("", null);
+    // Nothing is left to filter by: the list closes (Down or ▾ opens it again).
+    close();
+    return true;
+  };
+
   /** Leaves typing: an id field takes the option the typed text names. */
   const settle = () => {
-    if (typed !== null && named) {
+    if (multiple) {
+      commit(typed ?? "");
+    } else if (typed !== null && named) {
       const option = optionNamed(all.options, typed);
       if (option) onChange(option.value, option);
     }
@@ -220,6 +278,15 @@ export function Picker({
   const pick = (option: PickerOption) => {
     if (!pickable(option)) {
       setCollapsed((c) => toggled(c, optionKey(option)));
+      setActive(optionKey(option));
+      return;
+    }
+    if (multiple) {
+      // Added or removed; the list stays open for the next one.
+      multiple.onChange(toggledValue(values, option.value));
+      setTyped(null);
+      if (value !== "") onChange("", null);
+      setFiltering(false);
       setActive(optionKey(option));
       return;
     }
@@ -281,6 +348,23 @@ export function Picker({
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     const move = MOVES[event.key];
+    if (multiple) {
+      const text = (typed ?? value).trim();
+      const last = values.at(-1);
+      if (event.key === "Backspace" && (typed ?? value) === "" && last !== undefined) {
+        event.preventDefault();
+        multiple.onChange(withoutValue(values, last));
+        return;
+      }
+      if (event.key === "Enter" && text !== "") {
+        // The row moved to, or one that starts with the text, else the text itself.
+        event.preventDefault();
+        const option = open ? rows.find((r) => optionKey(r) === current) : undefined;
+        if (option && (active !== null || startsWithTyped(option, text))) pick(option);
+        else commit(text);
+        return;
+      }
+    }
     if (event.key === "ArrowDown" && (!open || event.altKey)) {
       event.preventDefault();
       if (!open) browse();
@@ -340,7 +424,34 @@ export function Picker({
       data-part={part ?? "picker"}
       data-kind={kind}
       data-state={open ? "open" : undefined}
+      data-multiple={multiple ? "true" : undefined}
     >
+      {multiple && values.length > 0 && (
+        <ul data-part="picker.chips" aria-label={t("pickers-chosen", { field: label })}>
+          {values.map((chosen) => {
+            const name = named ? chipLabel(all.options, chosen) : chosen;
+            const remove = t("pickers-remove", { value: name });
+            return (
+              <li key={chosen} data-part="picker.chip" data-value={chosen}>
+                <span data-part="picker.chip.label">{name}</span>
+                <button
+                  type="button"
+                  data-part="picker.chip.remove"
+                  disabled={disabled}
+                  aria-label={remove}
+                  title={remove}
+                  onClick={() => {
+                    multiple.onChange(withoutValue(values, chosen));
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <Icon name="x" part="picker.chip.remove.icon" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <span ref={fieldRef} data-part="picker.field">
         <input
           ref={inputRef}
@@ -367,12 +478,20 @@ export function Picker({
             close();
           }}
           onChange={(event) => {
-            const text = event.target.value;
+            let text = event.target.value;
+            if (multiple && !named) {
+              // A comma or semicolon (also in pasted text) ends a value.
+              const { done, rest } = splitTyped(text);
+              if (done.length > 0) {
+                multiple.onChange(withValues(values, done));
+                text = rest;
+              }
+            }
             setTyped(text);
             setFiltering(true);
             setActive(null);
             setOpen(true);
-            onChange(text, null);
+            if (!strict || text === "") onChange(text, null);
           }}
         />
         <button
@@ -408,11 +527,14 @@ export function Picker({
               data-part="picker.list"
               role={tree ? "tree" : "listbox"}
               aria-label={t("pickers-list", { field: label })}
+              aria-multiselectable={multiple ? true : undefined}
             >
               {rows.map((option, index) => {
                 const key = optionKey(option);
                 const selected =
-                  pickable(option) && option.variant !== "create" && option.value === value;
+                  pickable(option) &&
+                  option.variant !== "create" &&
+                  (multiple ? hasValue(values, option.value) : option.value === value);
                 const isParent = parents.has(key);
                 const expanded = isParent ? filtering || !collapsed.has(key) : undefined;
                 const icon = optionIcon(kind, option);

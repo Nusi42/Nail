@@ -23,16 +23,9 @@ import {
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccountsConfig, useClient } from "../../state/queries";
-import {
-  CheckField,
-  NumberField,
-  SelectField,
-  TextAreaField,
-  TextField,
-  SaveRow,
-} from "../../widgets/forms";
-import { PickerField } from "../../widgets/pickers";
-import { manageSieveIssues, parseAddressList, vacationIssues } from "./model";
+import { CheckField, NumberField, TextAreaField, TextField, SaveRow } from "../../widgets/forms";
+import { PickerField, PickerListField } from "../../widgets/pickers";
+import { manageSieveIssues, vacationIssues } from "./model";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
 import { PlacementTable } from "../rules/PlacementTable";
 
@@ -358,7 +351,6 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
   const queryClient = useQueryClient();
   const ids = useId();
   const [draft, setDraft] = useState(saved);
-  const [addresses, setAddresses] = useState(saved.addresses.join(", "));
   const [problems, setProblems] = useState<LocalizedMessage[]>([]);
   const [notice, setNotice] = useState(false);
 
@@ -368,7 +360,7 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
   };
 
   const save = async () => {
-    const settings = { ...draft, addresses: parseAddressList(addresses) };
+    const settings = draft;
     const issues = vacationIssues(settings);
     if (issues.length > 0) {
       setProblems(issues.map((i) => ({ id: VACATION_ISSUE_MESSAGE_IDS[i] })));
@@ -448,14 +440,14 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
           change({ days: days ?? 0 });
         }}
       />
-      <TextField
+      <PickerListField
+        kind="address"
         labelId="vacation-addresses"
         hintId="vacation-addresses-hint"
         name="vacation-addresses"
-        value={addresses}
-        onChange={(value) => {
-          setAddresses(value);
-          setNotice(false);
+        values={draft.addresses}
+        onChange={(addresses) => {
+          change({ addresses });
         }}
       />
       <PickerField
@@ -546,7 +538,7 @@ export function VacationEditorWidget({ node }: WidgetProps) {
   );
 }
 
-/** The IMAP account a Sieve setting is for. */
+/** The IMAP account a Sieve setting is for (an empty text keeps the first one). */
 function ImapAccountField({
   labelId,
   accounts,
@@ -556,15 +548,19 @@ function ImapAccountField({
   labelId: string;
   accounts: readonly AccountConfig[];
   value: string;
-  onChange: (id: string) => void;
+  onChange: (id: string | null) => void;
 }) {
   return (
-    <SelectField
+    <PickerField
+      kind="account"
+      strict
       labelId={labelId}
       name="account"
+      accounts={accounts.map((a) => a.id)}
       value={value}
-      choices={accounts.map((a) => ({ value: a.id, label: a.name, literal: true }))}
-      onChange={onChange}
+      onChange={(id) => {
+        onChange(id === "" ? null : id);
+      }}
     />
   );
 }

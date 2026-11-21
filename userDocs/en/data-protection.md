@@ -77,11 +77,12 @@ Credential Manager.
 Mail that was sent to you end-to-end encrypted (OpenPGP or S/MIME) is
 decrypted only for display. By default the search index gets only what
 was visible outside the encryption: sender, recipients and the outer
-subject (often just `...`). If you turn on **searching encrypted mail**
-for an account, Nail also indexes the decrypted subject, text and
-attachment names of that account's encrypted mail. The search index then
-contains sensitive text — turn on encryption at rest as well. Turning the
-option off removes that text from the index again.
+subject (often just `...`). If you add an account to **Accounts with
+searchable decrypted mail** (Settings → Privacy & data protection,
+*Searching encrypted mail*), Nail also indexes the decrypted subject, text
+and attachment names of that account's encrypted mail. The search index then
+contains sensitive text — turn on encryption at rest as well. Removing the
+account from the list (its **×**) removes that text from the index again.
 
 ## The sender check
 

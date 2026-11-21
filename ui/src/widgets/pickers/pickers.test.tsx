@@ -11,10 +11,20 @@ import { defaultTheme } from "../../api/mockData";
 import { rankValues } from "../../api/mockValues";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
 import { must } from "../../test/must";
+import { requestsOf } from "../../test/env";
+import { chipsOf } from "./testing";
 import {
   accountOptions,
   addressOptions,
   applySearchValue,
+  chipLabel,
+  folderAccounts,
+  offeredAccounts,
+  splitTyped,
+  toggledValue,
+  withValues,
+  withoutValue,
+  PickerListField,
   COMMON_HEADER_NAMES,
   folderTreeOptions,
   initialActive,
@@ -465,11 +475,16 @@ describe("Picker", () => {
     expect(changes.at(-1)).toEqual(["wox", "wox"]);
   });
 
-  it("finds contacts and correspondents by name or address", async () => {
+  it("lists the most-used addresses while empty and finds contacts by name or address", async () => {
     const user = userEvent.setup();
-    const { input } = renderPicker("address");
+    const { env, input } = renderPicker("address");
     await user.click(screen.getByRole("button", { name: `Show choices for ${LABEL}` }));
-    expect(await screen.findByText("Type a name or an address")).toBeInTheDocument();
+    // Opened empty: the core's most-used correspondents (an empty prefix).
+    const list = await screen.findByRole("listbox");
+    expect((await within(list).findAllByRole("option")).length).toBeGreaterThan(0);
+    expect(requestsOf(env, "SuggestAddresses")).toContainEqual(
+      expect.objectContaining({ prefix: "" }),
+    );
     await user.type(input, "grace");
     await typingPause();
     const grace = await screen.findByRole("option", { name: /Grace Hopper/ });
@@ -518,6 +533,180 @@ describe("Picker", () => {
     await waitFor(() => {
       expect(input).toHaveValue("Archive");
     });
+  });
+});
+
+describe("picker scope and multi-value rules", () => {
+  it("offers only the scope's accounts, real ones unless virtual ones are asked for", () => {
+    const V = account("v", "All mail", "virtual");
+    const scope = { accountId: null, folderValue: "path" as const };
+    expect(offeredAccounts([A, B, V], scope).map((a) => a.id)).toEqual(["a", "b"]);
+    expect(
+      offeredAccounts([A, B, V], { ...scope, virtualAccounts: true }).map((a) => a.id),
+    ).toEqual(["a", "b", "v"]);
+    expect(offeredAccounts([A, B, V], { ...scope, accounts: ["b"] }).map((a) => a.id)).toEqual([
+      "b",
+    ]);
+    expect(folderAccounts([A, B, V], { ...scope, accounts: ["b", "v"] }).map((a) => a.id)).toEqual([
+      "b",
+    ]);
+    expect(folderAccounts([A, B, V], { ...scope, accountId: "a" }).map((a) => a.id)).toEqual(["a"]);
+  });
+
+  it("adds, removes and toggles values case-insensitively, keeping the first spelling", () => {
+    expect(withValues(["a@x.org"], [" b@x.org ", "A@X.org", "", "b@x.org"])).toEqual([
+      "a@x.org",
+      "b@x.org",
+    ]);
+    expect(withoutValue(["a@x.org", "b@x.org"], "B@x.org")).toEqual(["a@x.org"]);
+    expect(toggledValue(["a"], "b")).toEqual(["a", "b"]);
+    expect(toggledValue(["a", "b"], "a")).toEqual(["b"]);
+  });
+
+  it("splits typed text at commas and semicolons", () => {
+    expect(splitTyped("a@x.org, b@x.org; c")).toEqual({ done: ["a@x.org", "b@x.org"], rest: " c" });
+    expect(splitTyped("abc")).toEqual({ done: [], rest: "abc" });
+    expect(splitTyped(" , ;")).toEqual({ done: [], rest: "" });
+  });
+
+  it("names a chip by its folder's path or its option's name", () => {
+    const options = tree("", true, "id");
+    expect(chipLabel(options, "a/Lists/Rust")).toBe("Lists/Rust");
+    expect(chipLabel(accountOptions([A], ""), "a")).toBe("Home");
+    expect(chipLabel(options, "unknown")).toBe("unknown");
+  });
+});
+
+/** A multi-value picker that keeps its values, recording them. */
+function MultiControlled(props: {
+  kind: PickerKind;
+  initial: string[];
+  folderValue?: "id" | undefined;
+}) {
+  const [values, setValues] = useState<string[]>(props.initial);
+  return (
+    <PickerListField
+      kind={props.kind}
+      folderValue={props.folderValue}
+      labelId="vacation-addresses"
+      name="multi"
+      values={values}
+      onChange={(next) => {
+        chosen.push(next);
+        setValues(next);
+      }}
+    />
+  );
+}
+
+let chosen: string[][] = [];
+const MULTI = "Also my addresses";
+
+function renderMulti(kind: PickerKind, initial: string[] = [], folderValue?: "id") {
+  chosen = [];
+  renderWithProviders(
+    <MultiControlled kind={kind} initial={initial} folderValue={folderValue} />,
+    createEnv(),
+  );
+  return screen.getByRole("combobox", { name: MULTI });
+}
+
+describe("Picker: multi-value mode", () => {
+  it("turns typed addresses into chips on comma, Enter and leaving the field", async () => {
+    const user = userEvent.setup();
+    const input = renderMulti("address");
+    await user.type(input, "a@example.org, b@example.org;");
+    expect(chipsOf(document.body, MULTI)).toEqual(["a@example.org", "b@example.org"]);
+    expect(input).toHaveValue("");
+    await user.type(input, "zz@example.net{Enter}");
+    // The typed value is taken; the list closes until it is opened again.
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(chipsOf(document.body, MULTI)).toEqual([
+      "a@example.org",
+      "b@example.org",
+      "zz@example.net",
+    ]);
+    await user.type(input, "last@example.com");
+    await user.tab();
+    expect(chosen.at(-1)).toEqual([
+      "a@example.org",
+      "b@example.org",
+      "zz@example.net",
+      "last@example.com",
+    ]);
+    expect(input.closest('[data-part="picker"]')).toHaveAttribute("data-multiple", "true");
+  });
+
+  it("removes a chip by its button and the last one by Backspace in the empty field", async () => {
+    const user = userEvent.setup();
+    const input = renderMulti("address", ["a@example.org", "b@example.org", "c@example.org"]);
+    await user.click(screen.getByRole("button", { name: "Remove b@example.org" }));
+    expect(chipsOf(document.body, MULTI)).toEqual(["a@example.org", "c@example.org"]);
+    expect(input).toHaveFocus();
+    await user.keyboard("{Backspace}");
+    expect(chipsOf(document.body, MULTI)).toEqual(["a@example.org"]);
+    // Backspace with text only edits the text.
+    await user.type(input, "x{Backspace}");
+    expect(chipsOf(document.body, MULTI)).toEqual(["a@example.org"]);
+  });
+
+  it("picks several options from a multi-selectable list that stays open", async () => {
+    const user = userEvent.setup();
+    const input = renderMulti("account");
+    input.focus();
+    await user.keyboard("{ArrowDown}");
+    const list = await screen.findByRole("listbox");
+    expect(list).toHaveAttribute("aria-multiselectable", "true");
+    await within(list).findByRole("option", { name: /Work/ });
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(chosen.at(-1)).toHaveLength(2);
+    const picked = within(list).getAllByRole("option", { selected: true });
+    expect(picked).toHaveLength(2);
+    // Picking a chosen option again removes it.
+    await user.click(must(picked[0]));
+    expect(chosen.at(-1)).toHaveLength(1);
+    // An id kind shows names on its chips, and only takes typed text that names an option.
+    await user.keyboard("{Escape}");
+    await user.type(input, "nobody{Enter}");
+    expect(chosen.at(-1)).toHaveLength(1);
+    expect(input).toHaveValue("nobody");
+    const names = chipsOf(document.body, MULTI);
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/^(Work|Personal)$/);
+  });
+
+  it("shows folder chips by path", async () => {
+    renderMulti("folder", ["acc-work/Archive"], "id");
+    await waitFor(() => {
+      expect(chipsOf(document.body, MULTI)).toEqual(["Archive"]);
+    });
+  });
+});
+
+describe("Picker: strict and scoped", () => {
+  it("changes a strict field's value only to an option or an empty text", async () => {
+    const user = userEvent.setup();
+    const { input } = renderPicker("account", { initial: "acc-work", strict: true });
+    await waitFor(() => {
+      expect(input).toHaveValue("Work");
+    });
+    await user.type(input, "zz");
+    expect(changes).toEqual([]);
+    await user.tab();
+    expect(input).toHaveValue("Work");
+    await user.clear(input);
+    expect(changes.at(-1)).toEqual(["", null]);
+  });
+
+  it("offers only the given accounts", async () => {
+    const user = userEvent.setup();
+    renderPicker("account", { accounts: ["acc-personal"] });
+    await user.click(screen.getByRole("button", { name: `Show choices for ${LABEL}` }));
+    const list = await screen.findByRole("listbox");
+    await within(list).findByRole("option", { name: /Personal/ });
+    expect(within(list).queryByRole("option", { name: /Work/ })).toBeNull();
   });
 });
 

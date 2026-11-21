@@ -52,14 +52,10 @@ mcp-scope-context = What is on screen
 mcp-scope-context-hint = The open message, selected text and the draft you are writing. Nail shows an indicator whenever the client reads it.
 mcp-grant-accounts = { common-accounts }
 mcp-grant-all-accounts = All accounts, including ones added later
-mcp-grant-account = { $name } ({ $email })
+mcp-grant-chosen-accounts = Accounts it may use
 mcp-grant-folders = Hidden folders
-mcp-grant-folders-of = { $account }{ $hidden ->
-    [0] {""}
-    [one] {" "}(1 hidden)
-   *[other] {" "}({ $hidden } hidden)
-}
-mcp-grant-folder-hidden = Hide { $folder }
+mcp-grant-hidden-folders = Folders it cannot see
+mcp-grant-hidden-folders-hint = Mail in these folders stays hidden from the client, also in searches.
 mcp-grant-saved = { common-access-saved }
 
 ## Audit log

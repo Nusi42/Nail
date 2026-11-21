@@ -255,7 +255,9 @@ test("a folder exported to mbox imports again identically", async ({ page }) => 
   const settings = await settingsTab(page, "Import and export");
   await settings.getByRole("button", { name: "Export…" }).click();
   const dialog = page.getByRole("dialog", { name: "Export" });
-  await expect(dialog.getByRole("checkbox", { name: "Source/old-mail" })).toBeChecked();
+  await expect(
+    dialog.getByRole("list", { name: "Chosen for Folders" }).getByRole("listitem"),
+  ).toHaveText(["Source/old-mail"]);
   // One folder without subfolders: one mbox file.
   await dialog.getByRole("checkbox", { name: "Include subfolders" }).uncheck();
   await dialog.getByLabel("Save as").fill(first);

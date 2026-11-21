@@ -31,6 +31,7 @@ import { PathField, useSavePath } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars } from "./queries";
 import { useBusyAction } from "../../state/busyAction";
 import { CloseButton } from "../../widgets/CloseButton";
+import { PickerField, PickerListField } from "../../widgets/pickers";
 
 type SourceKind = ExportSource["type"];
 const SOURCE_KINDS: readonly SourceKind[] = EXPORT_SOURCE_KINDS;
@@ -143,34 +144,24 @@ export function ExportWizard({ close }: { close: () => void }) {
         />
         {kind === "folders" && (
           <>
-            <SelectField
-              label={t("common-account")}
-              field="account"
+            <PickerField
+              kind="account"
+              strict
+              labelId="common-account"
+              name="account"
               value={account ?? ""}
-              onChange={(v) => {
-                setAccountId(v);
+              onChange={(id) => {
+                setAccountId(id === "" ? null : id);
               }}
-            >
-              {real.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {t("portability-account-option", {
-                    name: a.name,
-                    email: a.email,
-                    hasEmail: a.email ? "yes" : "no",
-                  })}
-                </option>
-              ))}
-            </SelectField>
-            <CheckGroup
-              legend={t("common-folders")}
-              field="folders"
-              selected={chosenFolders}
+            />
+            <PickerListField
+              kind="folder"
+              folderValue="id"
+              accountId={account}
+              labelId="common-folders"
+              name="folders"
+              values={chosenFolders}
               onChange={setFolderIds}
-              choices={(folders.data ?? []).map((f) => ({
-                value: f.id,
-                label: f.path,
-                hint: t("common-message-count", { count: f.total }),
-              }))}
             />
             <Check
               label={t("portability-export-subfolders")}

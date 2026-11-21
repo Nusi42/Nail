@@ -14,7 +14,8 @@ Nail uses two sources to decide whether a message is junk:
 2. **Nail's own filter** (optional, off by default). It learns from you.
    Every time you choose **Mark as junk** or **Not junk**, it learns
    which words, senders and links show up in your junk and in your normal
-   mail. Each account has its own filter.
+   mail. Each account has its own filter: choose the account at the top of
+   Settings → Junk mail (type its name or pick it from the list).
 
 Nail's filter gives each arriving message a junk score from 0 to 100:
 

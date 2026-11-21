@@ -1,9 +1,10 @@
 /**
  * A labelled picker for forms (settings, the virtual account editor, the
  * rules editor): the shared `Picker` in the `form.field` frame of
- * `../forms.tsx` (label above, optional hint below).
+ * `../forms.tsx` (label above, optional hint below). `PickerListField` is
+ * its multi-value form (R3): chips plus the input, the typed text kept here.
  */
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import type { MessageArgs } from "../../i18n/localizer";
 import { LabelledField } from "../forms";
@@ -42,5 +43,30 @@ export function PickerField({
         describedBy={described === "" ? undefined : described}
       />
     </LabelledField>
+  );
+}
+
+export interface PickerListFieldProps extends Omit<
+  PickerFieldProps,
+  "value" | "onChange" | "multiple" | "strict"
+> {
+  /** The values chosen so far. */
+  values: readonly string[];
+  /** Called with the new values when one is added or removed. */
+  onChange: (values: string[]) => void;
+}
+
+/** A labelled multi-value picker: several addresses, accounts or folders. */
+export function PickerListField({ values, onChange, ...field }: PickerListFieldProps) {
+  const [text, setText] = useState("");
+  return (
+    <PickerField
+      {...field}
+      value={text}
+      onChange={(next) => {
+        setText(next);
+      }}
+      multiple={{ values, onChange }}
+    />
   );
 }

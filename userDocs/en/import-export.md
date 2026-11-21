@@ -34,7 +34,8 @@ and collections to import and where they go:
 
 * **Mail** goes into **Local Folders**, a local account that is never
   synchronized (Nail creates it the first time), or into a folder of one
-  of your accounts.
+  of your accounts: pick the account in **Account** (empty means Local
+  Folders) and the folder in **Into the folder**.
   * Into **Local Folders** the source's folder tree is created. You can
     have Nail create a folder for the import (for example "Import from
     Thunderbird"); otherwise folders with the same name are merged.
@@ -124,7 +125,10 @@ Thunderbird before importing so its files are complete.
 ## Exporting
 
 You can export folders (with or without their subfolders) or selected
-messages, calendars and task lists, and address books.
+messages, calendars and task lists, and address books. For folders, choose
+the **Account** and pick the **Folders** from its folder tree; each chosen
+folder is a chip with **×** to remove it (the folder selected in the main
+window is chosen at the start).
 
 | Format | What Nail writes |
 | --- | --- |

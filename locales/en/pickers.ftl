@@ -12,9 +12,13 @@ pickers-list = Choices for { $field }
 pickers-loading = { common-loading }
 # Nothing in the list matches what was typed (the typed text still counts).
 pickers-no-match = Nothing matches. The text you typed is used as it is.
-# An address list before anything was typed.
-pickers-type-to-search = Type a name or an address
+# An address list with nothing typed and no address used yet.
+pickers-type-to-search = No addresses used yet. Type a name or an address.
 # Row that takes the typed text as a new tag; $tag is the typed text.
 pickers-create-tag = Create tag “{ $tag }”
 # Accessible name of the values the search field offers after `from:`, `tag:`, `folder:` and similar fields.
 pickers-search-values = Values for this search field
+# Multi-value fields (several addresses, accounts or folders): the list of values chosen so far; $field is the field's name.
+pickers-chosen = Chosen for { $field }
+# Button on a chosen value that removes it; $value is the value's name.
+pickers-remove = Remove { $value }

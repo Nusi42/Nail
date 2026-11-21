@@ -4,6 +4,7 @@
  * and the command palette.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
+import { pickOption } from "./pickers";
 
 export type ViewName = "Mail" | "Calendar" | "Contacts" | "Tasks" | "Settings";
 
@@ -50,7 +51,7 @@ export async function saveVacationReply(
 ): Promise<void> {
   const settings = await openSettingsTab(page, "Vacation reply");
   const vacation = settings.locator('[data-part="vacation-editor"]');
-  await vacation.getByRole("combobox", { name: "Account" }).selectOption({ label: account });
+  await pickOption(vacation, "Account", new RegExp(`^${account} `));
   await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
   await vacation.getByRole("textbox", { name: "Message" }).fill(message);
   await vacation.getByRole("button", { name: "Save", exact: true }).click();

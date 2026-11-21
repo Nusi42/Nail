@@ -26,7 +26,7 @@ import {
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { DATE_ONLY, useDateFormat } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
-import { queryKeys, useAccounts, useClient, useFolders } from "../../state/queries";
+import { queryKeys, useClient } from "../../state/queries";
 import {
   Check,
   CheckGroup,
@@ -51,6 +51,7 @@ import { PathField } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars, useImportSources } from "./queries";
 import { useBusyAction } from "../../state/busyAction";
 import { CloseButton } from "../../widgets/CloseButton";
+import { PickerField } from "../../widgets/pickers";
 
 type Step = "source" | "options" | "job";
 
@@ -176,32 +177,21 @@ function TargetFields({
   setFolderName: (name: string) => void;
 }) {
   const t = useT();
-  const accounts = useAccounts();
-  const real = (accounts.data ?? []).filter((a) => a.kind !== "virtual");
-  const folders = useFolders(target);
   return (
     <fieldset data-part="form.section" data-field="mail-target">
       <legend data-part="form.section.title">{t("portability-import-target")}</legend>
-      <SelectField
-        label={t("common-account")}
-        field="target-account"
+      <PickerField
+        kind="account"
+        strict
+        labelId="common-account"
+        name="target-account"
+        placeholder={t("portability-import-target-local")}
         value={target ?? ""}
-        onChange={(v) => {
-          setTarget(v === "" ? null : v);
+        onChange={(id) => {
+          setTarget(id === "" ? null : id);
           setParentId(null);
         }}
-      >
-        <option value="">{t("portability-import-target-local")}</option>
-        {real.map((a) => (
-          <option key={a.id} value={a.id}>
-            {t("portability-account-option", {
-              name: a.name,
-              email: a.email,
-              hasEmail: a.email ? "yes" : "no",
-            })}
-          </option>
-        ))}
-      </SelectField>
+      />
       <p data-part="form.hint">
         {t(
           target === null
@@ -210,21 +200,19 @@ function TargetFields({
         )}
       </p>
       {target !== null && (
-        <SelectField
-          label={t("portability-import-target-parent")}
-          field="target-parent"
+        <PickerField
+          kind="folder"
+          folderValue="id"
+          strict
+          accountId={target}
+          labelId="portability-import-target-parent"
+          name="target-parent"
+          placeholder={t("portability-import-target-inbox")}
           value={parentId ?? ""}
-          onChange={(v) => {
-            setParentId(v === "" ? null : v);
+          onChange={(id) => {
+            setParentId(id === "" ? null : id);
           }}
-        >
-          <option value="">{t("portability-import-target-inbox")}</option>
-          {(folders.data ?? []).map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.path}
-            </option>
-          ))}
-        </SelectField>
+        />
       )}
       {target === null && (
         <TextField

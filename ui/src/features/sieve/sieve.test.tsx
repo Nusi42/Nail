@@ -2,8 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
-import { manageSieveIssues, parseAddressList } from "./model";
+import { manageSieveIssues } from "./model";
 import { requestsOf } from "../../test/env";
+import { chipsOf, pickOption } from "../../widgets/pickers/testing";
 
 function withSieve(): Env {
   const env = createEnv();
@@ -26,7 +27,6 @@ describe("sieve model", () => {
       "script-name",
     ]);
     expect(manageSieveIssues({ host: "h", port: 1, script_name: "Nail rules" })).toEqual([]);
-    expect(parseAddressList("a@x, b@y;c@z  ")).toEqual(["a@x", "b@y", "c@z"]);
   });
 });
 
@@ -36,7 +36,7 @@ describe("sieve-status", () => {
     const env = withSieve();
     renderWithProviders(<NodeView node={widget("sieve-status")} path="t" />, env);
     const section = await screen.findByRole("region", { name: "Server-side rules" });
-    await user.selectOptions(await within(section).findByLabelText("Account"), "acc-work");
+    await pickOption(user, section, "Account", /^Work/);
     expect(await within(section).findByText("Waiting to upload")).toBeVisible();
     await user.click(within(section).getByRole("button", { name: "Upload now" }));
     expect(await within(section).findByText("Up to date on the server")).toBeVisible();
@@ -80,8 +80,7 @@ describe("sieve-status", () => {
     env.transport.data.features.sieve.failWith = "network";
     renderWithProviders(<NodeView node={widget("sieve-status")} path="t" />, env);
     const section = await screen.findByRole("region", { name: "Server-side rules" });
-    const select = await within(section).findByLabelText("Account");
-    await userEvent.setup().selectOptions(select, "acc-work");
+    await pickOption(userEvent.setup(), section, "Account", /^Work/);
     expect(await within(section).findByText("Upload failed")).toBeVisible();
     expect(within(section).getAllByRole("alert").length).toBeGreaterThan(0);
   });
@@ -93,16 +92,20 @@ describe("vacation-editor", () => {
     const env = withSieve();
     renderWithProviders(<NodeView node={widget("vacation-editor")} path="t" />, env);
     const section = await screen.findByRole("region", { name: "Vacation reply" });
-    await user.selectOptions(await within(section).findByLabelText("Account"), "acc-work");
+    await pickOption(user, section, "Account", /^Work/);
     await user.click(await within(section).findByLabelText("Send a vacation reply"));
     await user.click(within(section).getByRole("button", { name: "Save" }));
     expect(await within(section).findByRole("alert")).toHaveTextContent("Write the reply text.");
     await user.type(within(section).getByLabelText("Message"), "Back on Monday.");
-    await user.type(within(section).getByLabelText("Also my addresses"), "me@work.example, x");
+    // "Also my addresses": chips; a comma ends one, leaving the field ends the last.
+    const addresses = within(section).getByRole("combobox", { name: "Also my addresses" });
+    await user.type(addresses, "me@work.example, x");
+    expect(chipsOf(section, "Also my addresses")).toEqual(["me@work.example"]);
     await user.click(within(section).getByRole("button", { name: "Save" }));
+    expect(chipsOf(section, "Also my addresses")).toEqual(["me@work.example", "x"]);
     expect(await within(section).findByRole("alert")).toHaveTextContent("not an email address");
-    await user.clear(within(section).getByLabelText("Also my addresses"));
-    await user.type(within(section).getByLabelText("Also my addresses"), "me@work.example");
+    await user.click(within(section).getByRole("button", { name: "Remove x" }));
+    expect(chipsOf(section, "Also my addresses")).toEqual(["me@work.example"]);
     await user.click(within(section).getByRole("button", { name: "Save" }));
     expect(await within(section).findByRole("status")).toHaveTextContent("Saved.");
     expect(requestsOf(env, "UpdateVacation")[0]).toMatchObject({

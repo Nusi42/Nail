@@ -446,8 +446,8 @@ security-lookup-policy-on-demand-hint = Nail asks only when you click “Look up
 security-lookup-policy-automatic-hint = Nail asks for every recipient without a key. The servers learn which addresses you write to.
 
 security-index-title = Searching encrypted mail
-security-index-intro = Decrypted mail is not searchable by default. Turn it on per account: its decrypted text then goes into the search index, which becomes sensitive.
-security-index-account = { $account } ({ $email })
+security-index-intro = Decrypted mail is not searchable by default. Choose the accounts whose decrypted text goes into the search index, which then becomes sensitive.
+security-index-accounts = Accounts with searchable decrypted mail
 security-index-plain-warning = Decrypted text is indexed while encryption at rest is off. Turn on encryption at rest to protect the search index.
 security-settings-error = The settings could not be saved.
 

@@ -17,6 +17,7 @@ import type {
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { SelectField, TextAreaField, TextField } from "../../widgets/forms";
+import { PickerField } from "../../widgets/pickers";
 import { identityText } from "./IdentityCrypto";
 import {
   bytesToBase64,
@@ -490,12 +491,14 @@ export function LookupTool({ onKeys }: { onKeys: OnKeys }) {
         </p>
       )}
       <form data-part="security-lookup" noValidate onSubmit={(e) => void search(e)}>
-        <TextField
+        <PickerField
+          kind="address"
           labelId="security-lookup-email"
           name="lookup-email"
-          type="email"
           value={email}
-          onChange={setEmail}
+          onChange={(value) => {
+            setEmail(value);
+          }}
         />
         <button
           type="submit"

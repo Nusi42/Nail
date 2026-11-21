@@ -5,6 +5,7 @@ import { createEnv, renderNode, widget } from "../../test/harness";
 import { handleSecurityEvent } from "./index";
 import { vaultPercent } from "./SecuritySettings";
 import { requestsOf, wireEvents } from "../../test/env";
+import { chipsOf, pickOption } from "../../widgets/pickers/testing";
 
 async function open() {
   const user = userEvent.setup();
@@ -112,28 +113,33 @@ describe("security-settings: lookup and indexing", () => {
   it("opts accounts into indexing decrypted mail and warns while the disk is plain", async () => {
     const { user, env } = await open();
     const section = await screen.findByRole("region", { name: "Searching encrypted mail" });
-    const work = await within(section).findByRole("checkbox", { name: "Work (ada@work.example)" });
+    const label = "Accounts with searchable decrypted mail";
     expect(screen.queryByText(/Decrypted text is indexed/)).not.toBeInTheDocument();
-    await user.click(work);
+    await pickOption(user, section, label, /^Work/);
     expect(await screen.findByText(/Decrypted text is indexed/)).toBeInTheDocument();
     expect(env.transport.data.features.security.settings.index_decrypted).toEqual(["acc-work"]);
-    await user.click(work);
+    await waitFor(() => {
+      expect(chipsOf(section, label)).toEqual(["Work"]);
+    });
+    await user.click(within(section).getByRole("button", { name: "Remove Work" }));
     await waitFor(() => {
       expect(env.transport.data.features.security.settings.index_decrypted).toEqual([]);
     });
-    expect(
-      within(section).queryByRole("checkbox", { name: /All accounts/ }),
-    ).not.toBeInTheDocument();
+    expect(chipsOf(section, label)).toEqual([]);
   });
 
   it("shows when saving fails and restores the stored value", async () => {
     const { user, env } = await open();
     const section = await screen.findByRole("region", { name: "Searching encrypted mail" });
-    const work = await within(section).findByRole("checkbox", { name: "Work (ada@work.example)" });
+    const label = "Accounts with searchable decrypted mail";
+    await user.click(within(section).getByRole("button", { name: `Show choices for ${label}` }));
+    const work = await within(section).findByRole("option", { name: /^Work/ });
     // The mock rejects accounts it does not know.
     env.transport.data.accounts = env.transport.data.accounts.filter((a) => a.id !== "acc-work");
     await user.click(work);
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    await waitFor(() => expect(work).not.toBeChecked());
+    await waitFor(() => {
+      expect(chipsOf(section, label)).toEqual([]);
+    });
   });
 });

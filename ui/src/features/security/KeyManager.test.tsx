@@ -271,12 +271,12 @@ describe("security-keys tools", () => {
     const { user, env } = await open();
     await user.click(screen.getByRole("button", { name: "Find online" }));
     const tool = screen.getByRole("region", { name: "Find online" });
-    await user.type(within(tool).getByRole("textbox", { name: "Address" }), "nobody@x.example");
+    await user.type(within(tool).getByRole("combobox", { name: "Address" }), "nobody@x.example");
     await user.click(within(tool).getByRole("button", { name: "Search" }));
     expect(await within(tool).findByText("No key found for nobody@x.example.")).toBeInTheDocument();
 
-    await user.clear(within(tool).getByRole("textbox", { name: "Address" }));
-    await user.type(within(tool).getByRole("textbox", { name: "Address" }), "liskov@mit.example");
+    await user.clear(within(tool).getByRole("combobox", { name: "Address" }));
+    await user.type(within(tool).getByRole("combobox", { name: "Address" }), "liskov@mit.example");
     await user.click(within(tool).getByRole("button", { name: "Search" }));
     const found = await within(tool).findByRole("list", { name: "Keys found" });
     expect(within(found).getByText("Barbara Liskov <liskov@mit.example>")).toBeInTheDocument();
@@ -290,9 +290,9 @@ describe("security-keys tools", () => {
       expect(keyButton(list, /Barbara Liskov/)).toHaveAttribute("aria-pressed", "true"),
     );
 
-    await user.clear(within(tool).getByRole("textbox", { name: "Address" }));
+    await user.clear(within(tool).getByRole("combobox", { name: "Address" }));
     await user.type(
-      within(tool).getByRole("textbox", { name: "Address" }),
+      within(tool).getByRole("combobox", { name: "Address" }),
       "a@unreachable.example",
     );
     await user.click(within(tool).getByRole("button", { name: "Search" }));
@@ -308,7 +308,7 @@ describe("security-keys tools", () => {
     await user.click(screen.getByRole("button", { name: "Find online" }));
     const tool = screen.getByRole("region", { name: "Find online" });
     expect(await within(tool).findByRole("note")).toHaveTextContent(/turned off/);
-    await user.type(within(tool).getByRole("textbox", { name: "Address" }), "liskov@mit.example");
+    await user.type(within(tool).getByRole("combobox", { name: "Address" }), "liskov@mit.example");
     expect(within(tool).getByRole("button", { name: "Search" })).toBeDisabled();
   });
 

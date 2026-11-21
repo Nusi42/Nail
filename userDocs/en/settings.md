@@ -91,12 +91,24 @@ a header name have a list to choose from: the **▾** button beside the field
 Folders are a tree: each account with its folders (Inbox, Sent, Archive and
 the other special folders first, with their purpose beside a folder whose
 name differs); addresses come from your contacts and the people you write
-with, found by name or address; tags offer the ones in use and **Create
-tag "…"** for a new one.
+with, found by name or address — opened while the field is empty, the list
+shows the addresses you use most (your own addresses are left out); tags
+offer the ones in use and **Create tag "…"** for a new one.
 
 You can still type any value yourself; the list only helps to find one.
 For a field that holds an account or a folder, a typed name that matches
-exactly one choice is taken as that choice when you leave the field.
+exactly one choice is taken as that choice when you leave the field. A
+field that selects which account a setting is for only ever changes to an
+account from its list.
+
+**Several values.** Some fields hold a list (several addresses, accounts or
+folders). Each value is shown as a chip before the field, with **×** to
+remove it. Picking a choice adds it, and the list stays open for the next
+one; picking a choice that is already there removes it. Typed text becomes
+a value with **Enter**, a comma or a semicolon, or when you leave the field
+(for accounts and folders only a name that matches a choice); pasting
+several addresses separated by commas adds them all. **Backspace** in the
+empty field removes the last value.
 
 Keyboard: **Down** / **Up** move through the list, **Home** / **End** jump
 to its ends while it shows every choice, **Right** opens a folder with
@@ -107,9 +119,16 @@ without changing the field. A click outside the list closes it, too.
 These fields use it: in **Accounts**, the folders of a merged folder of a
 virtual account and an identity's reply-to address; in **Mail & junk →
 Synchronization**, the account and folder whose synchronization you set; in
+**Mail & junk → Junk mail**, the account whose filter you set; in
 **Notifications**, the folder you add an override for; in **Server rules &
-vacation**, the sender of the vacation reply. The rules editor uses the same
-lists ([Rules](rules.md)).
+vacation**, the account, the sender of the vacation reply and **Also my
+addresses** (several); in **Privacy & data protection**, the accounts with
+searchable decrypted mail (several); in **Keys & encryption**, the address
+of **Find online**; in **Agents (MCP)**, a client's accounts and hidden
+folders (several); in **Import** and **Export**, the account, the target
+folder and the folders to export (several); in **Automatic replies** of
+Exchange accounts, the account. The rules editor uses the same lists
+([Rules](rules.md)).
 
 ## Links to a section
 

@@ -27,6 +27,7 @@ import { defaultBackupContents } from "./model";
 import { must } from "../../test/must";
 import { arrayContaining, notArrayContaining } from "../../test/matchers";
 import { RunAction } from "../../test/actions";
+import { chipsOf, pickOption } from "../../widgets/pickers/testing";
 
 /** Routes the core's events to the feature, like the app shell. */
 function listen(env: Env): () => void {
@@ -65,6 +66,16 @@ function renderDialogs(env: Env, extra: React.ReactNode = null) {
   );
 }
 
+/** Opens the import wizard through its action; the dialog and the render's container. */
+async function openImport(env: Env, user: ReturnType<typeof userEvent.setup>) {
+  const { container } = renderDialogs(env, <RunAction id={IMPORT_ACTION} />);
+  await user.click(screen.getByRole("button", { name: `run ${IMPORT_ACTION}` }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "Import mail, calendars and contacts",
+  });
+  return { dialog, container };
+}
+
 function step(env: Env, n = 1) {
   act(() => {
     advancePortabilityJobs(env.transport, n);
@@ -81,11 +92,7 @@ describe("import wizard", () => {
   it("imports an mbox file with progress and a report of every problem", async () => {
     const { env, stop } = setup();
     const user = userEvent.setup();
-    const { container } = renderDialogs(env, <RunAction id={IMPORT_ACTION} />);
-    await user.click(screen.getByRole("button", { name: `run ${IMPORT_ACTION}` }));
-    const dialog = await screen.findByRole("dialog", {
-      name: "Import mail, calendars and contacts",
-    });
+    const { dialog, container } = await openImport(env, user);
     expect(within(dialog).getByText("Step 1 of 3")).toBeVisible();
     expect(within(dialog).getByRole("radio", { name: "mbox file" })).toBeChecked();
     await user.type(within(dialog).getByLabelText("File"), "archive.mbox");
@@ -126,6 +133,34 @@ describe("import wizard", () => {
     expect(within(issues).getByText("Welcome to the list")).toBeVisible();
     expect(within(issues).getAllByText("Details").length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
+    stop();
+  });
+
+  it("imports into a folder of an account chosen with the pickers", async () => {
+    const { env, stop } = setup();
+    const user = userEvent.setup();
+    const { dialog } = await openImport(env, user);
+    await user.type(within(dialog).getByLabelText("File"), "C:\\Mail\\archive.mbox");
+    await user.click(within(dialog).getByRole("button", { name: "Read source" }));
+    expect(await within(dialog).findByText("Step 2 of 3")).toBeVisible();
+    // Empty = Local Folders (the placeholder says so); an account brings its folder picker.
+    const account = within(dialog).getByRole("combobox", { name: "Account" });
+    expect(account).toHaveAttribute("placeholder", "Local Folders (on this computer only)");
+    expect(within(dialog).queryByRole("combobox", { name: "Into the folder" })).toBeNull();
+    await pickOption(user, dialog, "Account", /^Work/);
+    expect(account).toHaveValue("Work");
+    await pickOption(user, dialog, "Into the folder", /^Archive/);
+    expect(within(dialog).getByRole("combobox", { name: "Into the folder" })).toHaveValue(
+      "Archive",
+    );
+    // Typing alone does not change a strict field's value.
+    await user.type(account, "x");
+    await user.tab();
+    expect(account).toHaveValue("Work");
+    await user.click(within(dialog).getByRole("button", { name: "Import" }));
+    expect(env.transport.requests.find((r) => r.type === "StartImport")).toMatchObject({
+      options: { mail: { account_id: "acc-work", parent_folder_id: "acc-work/Archive" } },
+    });
     stop();
   });
 
@@ -219,7 +254,14 @@ describe("export wizard", () => {
       env.store.getState().openWindow(EXPORT_DIALOG);
     });
     const dialog = await screen.findByRole("dialog", { name: "Export" });
-    expect(await within(dialog).findByRole("checkbox", { name: "Inbox" })).toBeChecked();
+    // The selected folder is chosen; the folder picker adds and removes others.
+    await waitFor(() => {
+      expect(chipsOf(dialog, "Folders")).toEqual(["Inbox"]);
+    });
+    await pickOption(user, dialog, "Folders", /^Receipts/);
+    expect(chipsOf(dialog, "Folders")).toEqual(["Inbox", "Inbox/Receipts"]);
+    await user.click(within(dialog).getByRole("button", { name: "Remove Inbox/Receipts" }));
+    expect(chipsOf(dialog, "Folders")).toEqual(["Inbox"]);
     expect(within(dialog).getByRole("radio", { name: "The selected message" })).toBeDisabled();
     await user.click(within(dialog).getByRole("checkbox", { name: "Include subfolders" }));
     expect(within(dialog).queryByRole("radio", { name: "Calendar file (.ics)" })).toBeNull();

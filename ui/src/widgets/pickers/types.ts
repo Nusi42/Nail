@@ -61,6 +61,8 @@ export interface PickerScope {
   folderValue: FolderValue;
   /** Account pickers: offer virtual accounts too (default: real accounts only). */
   virtualAccounts?: boolean;
+  /** Account and folder pickers: offer only these accounts (default: every one the kind offers). */
+  accounts?: readonly AccountId[] | undefined;
 }
 
 /** The options of one picker for the text typed so far. */
@@ -70,12 +72,35 @@ export interface PickerOptions {
   loading: boolean;
 }
 
+/**
+ * The values of a picker in multi-value mode (R3): shown as chips before
+ * the input; picking an option adds it (or removes it when it is already
+ * there), and so does typed text on Enter, a comma or a semicolon, or when
+ * the field loses the focus (for kinds whose value is an id only text that
+ * names an option). Backspace in the empty field removes the last one.
+ */
+export interface PickerValues {
+  values: readonly string[];
+  onChange: (values: string[]) => void;
+}
+
 export interface PickerProps {
   kind: PickerKind;
-  /** The field's value (free text or a picked option's value). */
+  /**
+   * The field's value (free text or a picked option's value); in
+   * multi-value mode (`multiple`) the text typed for the next value.
+   */
   value: string;
   /** Called on typing (`option` `null`) and on picking an option. */
   onChange: (value: string, option: PickerOption | null) => void;
+  /** Multi-value mode: the values chosen so far (chips plus the input). */
+  multiple?: PickerValues | undefined;
+  /**
+   * Only an option (or an empty text) becomes the value: typing changes the
+   * field, not the value, and text that names one option is taken as it
+   * when the field loses the focus (an account a setting is for).
+   */
+  strict?: boolean | undefined;
   /** Accessible name of the field (localized). */
   label: string;
   /** Folder pickers: the account whose folders are offered; `null` / omitted = every account. */
@@ -84,6 +109,8 @@ export interface PickerProps {
   folderValue?: FolderValue | undefined;
   /** Account pickers: offer virtual accounts too (default: real accounts only). */
   virtualAccounts?: boolean | undefined;
+  /** Account and folder pickers: offer only these accounts (default: every one the kind offers). */
+  accounts?: readonly AccountId[] | undefined;
   /** The input's id (a host's `<label htmlFor>`). */
   id?: string | undefined;
   /** Localized placeholder. */
