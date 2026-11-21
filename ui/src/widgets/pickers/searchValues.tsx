@@ -15,6 +15,7 @@ import { Icon } from "../Icon";
 import { optionKey, usePickerOptions } from "./sources";
 import { pickable } from "./tree";
 import type { PickerKind, PickerOption } from "./types";
+import { searchValueText } from "../../state/queryText";
 
 /** Query-language fields whose value a picker offers, with the picker's kind. */
 export const SEARCH_VALUE_FIELDS = {
@@ -54,11 +55,7 @@ export function searchValueContext(text: string): SearchValueContext | null {
   const prefix = raw.startsWith('"') ? raw.slice(1).replace(/\\(.)/g, "$1") : raw;
   return { field, kind: SEARCH_VALUE_FIELDS[field], prefix, start };
 }
-
-/** A value as the query language reads it: quoted (with `\` escapes) when it holds spaces, quotes or brackets. */
-export function searchValueText(value: string): string {
-  return /[\s()"\\]/.test(value) ? `"${value.replace(/["\\]/g, "\\$&")}"` : value;
-}
+export { searchValueText };
 
 /** The value a search takes from an option: an address, a tag, an account's address, a folder's path. */
 export function searchValueOf(option: PickerOption): string {
@@ -92,17 +89,19 @@ function distinctValues(options: readonly PickerOption[], prefix: string): Picke
 /** How many values the search field shows at most. */
 export const SEARCH_VALUES_SHOWN = 8;
 
-export interface SearchValuesProps {
-  /** The search field's text. */
-  text: string;
-  /** Called with the new text when a value is picked. */
-  onApply: (text: string) => void;
+/** The values offered for a search text: the field being typed and its values. */
+export interface SearchValuesFound {
+  context: SearchValueContext;
+  shown: readonly PickerOption[];
 }
 
-/** The values for the field being typed at the end of the search text (nothing for other words). */
-export function SearchValues({ text, onApply }: SearchValuesProps) {
-  const t = useT();
-  const context = searchValueContext(text);
+/**
+ * The values for the field being typed at the end of the search text,
+ * `null` when the last word is no such field or nothing fits (the search
+ * field opens its popup only then).
+ */
+export function useSearchValues(text: string, enabled = true): SearchValuesFound | null {
+  const context = enabled ? searchValueContext(text) : null;
   const { options } = usePickerOptions({
     kind: context?.kind ?? "tag",
     query: context?.prefix ?? "",
@@ -111,7 +110,22 @@ export function SearchValues({ text, onApply }: SearchValuesProps) {
   });
   if (context === null) return null;
   const shown = distinctValues(options, context.prefix).slice(0, SEARCH_VALUES_SHOWN);
-  if (shown.length === 0) return null;
+  return shown.length === 0 ? null : { context, shown };
+}
+
+export interface SearchValuesProps {
+  /** The search field's text. */
+  text: string;
+  /** What `useSearchValues(text)` found. */
+  found: SearchValuesFound;
+  /** Called with the new text when a value is picked. */
+  onApply: (text: string) => void;
+}
+
+/** The found values as buttons (Tab reaches them; a press keeps the focus in the field). */
+export function SearchValues({ text, found, onApply }: SearchValuesProps) {
+  const t = useT();
+  const { context, shown } = found;
   return (
     <ul data-part="picker.list" data-kind={context.kind} aria-label={t("pickers-search-values")}>
       {shown.map((option) => (

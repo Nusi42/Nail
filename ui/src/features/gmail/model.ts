@@ -15,6 +15,7 @@ import {
   MAX_LABEL_NAME,
 } from "../../api/generated";
 import { charCount, chars } from "../../text/chars";
+import { searchValueText } from "../../state/queryText";
 export { MAX_LABEL_NAME } from "../../api/generated";
 
 /** Gmail's system label ids; user labels cannot take these names. */
@@ -126,14 +127,9 @@ export function pruneTree(nodes: readonly LabelNode[], showHidden: boolean): Lab
   });
 }
 
-/** Quotes a value for the query language when it needs it. */
-function quoted(value: string): string {
-  return /[\s()"]/.test(value) ? `"${value.replaceAll('"', "")}"` : value;
-}
-
 /** The search behind a label view (user labels are Nail tags). */
 export function labelQuery(tag: string): string {
-  return `tag:${quoted(tag)}`;
+  return `tag:${searchValueText(tag)}`;
 }
 
 /** The search behind a category filter (`category:<name>`, ADR 0065). */

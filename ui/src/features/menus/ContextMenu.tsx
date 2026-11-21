@@ -8,7 +8,8 @@
  *
  * Dynamic submenus (R2, ADR 0222): an action item whose action has a menu
  * source (`./sources.ts`) shows as a submenu whose entries the source loads
- * when the list appears; a source without entries shows its item disabled.
+ * when the list appears; a source without entries shows its item disabled
+ * (or, with `runsWhenEmpty`, as a plain item running its action).
  *
  * The menu is positioned through the theme's stylesheet (`useGeometry`),
  * never with inline styles.
@@ -183,7 +184,16 @@ function MenuList({
   const submenuOf = (entry: Navigable, index: number): SubmenuOf | null => {
     if (entry.type === "submenu") return { kind: "static", items: entry.items };
     const loaded = sourced.get(index);
-    return loaded === undefined ? null : { kind: "source", loaded };
+    if (loaded === undefined) return null;
+    // A source without entries that runs its own action: a plain item.
+    if (
+      loaded !== "loading" &&
+      loaded.length === 0 &&
+      sources?.runsWhenEmpty?.(entry.action) === true
+    ) {
+      return null;
+    }
+    return { kind: "source", loaded };
   };
   /** A source that loaded no entries: its item is disabled. */
   const emptySource = (index: number) => {

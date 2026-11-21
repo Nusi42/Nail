@@ -26,7 +26,7 @@ import type {
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
-import { queryKeys, useAccounts, useClient } from "../../state/queries";
+import { foldersQueryOptions, useAccounts, useClient } from "../../state/queries";
 import { filterFolders } from "../FolderPicker";
 import { flattenFolders } from "../FolderTree";
 import { folderRoleLabelId } from "../folderNames";
@@ -265,9 +265,7 @@ export function usePickerOptions(request: PickerQuery): PickerOptions {
   const shown = kind === "folder" ? folderAccounts(accountList, scope) : [];
   const folderQueries = useQueries({
     queries: shown.map((account) => ({
-      queryKey: queryKeys.folders(account.id),
-      queryFn: async () =>
-        (await client.request({ type: "ListFolders", account_id: account.id }, "Folders")).folders,
+      ...foldersQueryOptions(client, account.id),
       enabled,
     })),
   });

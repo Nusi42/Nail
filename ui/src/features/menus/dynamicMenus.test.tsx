@@ -173,6 +173,19 @@ describe("a menu source as a submenu", () => {
     });
   });
 
+  it("shows an empty source that runs when empty as its plain, enabled item", async () => {
+    const env = setup();
+    const runs: MenuSourceRegistry = {
+      "rules.run-menu": { load: () => Promise.resolve([]), runsWhenEmpty: true },
+    };
+    const menu = await openFolderMenu(env, runs);
+    const item = within(menu).getByRole("menuitem", { name: RUN_RULE });
+    await waitFor(() => {
+      expect(item).not.toHaveAttribute("aria-haspopup");
+    });
+    expect(item).not.toHaveAttribute("aria-disabled");
+  });
+
   it("is a plain item where the app provides no sources", async () => {
     const env = setup();
     const menu = await openFolderMenu(env, {});

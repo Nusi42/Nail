@@ -8,7 +8,7 @@
  * `../../state/uiStore.ts` and `../../state/queries.ts`); this slot holds
  * what the package adds around it: `./liveSearch.ts` (`useLiveSearch`,
  * `planLiveSearch`; ADR 0220; R2: a folder change searches the typed text
- * in the picked folder, `commitScope`, ADR 0223-wr6).
+ * in the picked folder, `commitScope`, ADR 0226).
  *
  * Texts: `locales/{en,de}/search.ftl` (prefixes in `./messages.ts`; the
  * field's older texts are `search-bar-*` / `search-error-*` in `app.ftl`).

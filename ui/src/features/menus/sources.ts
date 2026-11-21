@@ -26,9 +26,11 @@ import type { ResolvedMenuEntry } from "../../api/generated";
 export interface MenuSource {
   /**
    * The entries for the open menu's target (read it from `ctx`); an empty
-   * list shows the item disabled.
+   * list shows the item disabled, unless `runsWhenEmpty`.
    */
   load: (ctx: ActionContext) => Promise<ResolvedMenuEntry[]>;
+  /** Without entries the item is a plain item that runs its own action (default: disabled). */
+  runsWhenEmpty?: boolean;
 }
 
 /** Menu sources by the action id of the layout item that opens them. */
@@ -77,4 +79,6 @@ export function menuLabelText(label: string, resolve: (label: string) => string)
 export interface MenuSourceLoader {
   has: (action: string) => boolean;
   load: (action: string) => Promise<ResolvedMenuEntry[]>;
+  /** Whether the item runs its own action when its source has no entries. */
+  runsWhenEmpty?: (action: string) => boolean;
 }

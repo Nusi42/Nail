@@ -422,38 +422,6 @@ export function ruleFromMessage(message: MessageSummary): Rule {
 }
 
 /**
- * A condition with `value` (picked from the message the window was opened
- * from, R2) as its value: the text a comparison tests, the header's name,
- * the tag, the account or the folder path. Kinds without a text value stay
- * as they are.
- */
-export function withPickedValue(condition: Condition, value: string): Condition {
-  switch (condition.type) {
-    case "address":
-    case "subject":
-    case "body":
-      return { ...condition, matches: { ...condition.matches, value } };
-    case "list-id":
-      return { ...condition, matches: { ...(condition.matches ?? textMatch()), value } };
-    case "header":
-      return { ...condition, name: value };
-    case "query":
-      return { ...condition, query: value };
-    case "tag":
-      return { ...condition, tag: value };
-    case "account":
-      return { ...condition, account_id: value };
-    case "folder":
-      return {
-        ...condition,
-        folder: { type: "path", path: value, account_id: condition.folder.account_id },
-      };
-    default:
-      return condition;
-  }
-}
-
-/**
  * Whether running the rule can take mail away from where it is (it moves,
  * archives or deletes): such a run asks first, with the number of messages.
  */

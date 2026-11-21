@@ -6,7 +6,6 @@
  */
 import { NailError, errorMessageOf } from "../../api/client";
 import type {
-  Folder,
   FolderId,
   FolderRole,
   MailAction,
@@ -25,6 +24,7 @@ import {
   type ActionTargets,
 } from "../../actions/mailTargets";
 import {
+  cachedFolder,
   findSummary,
   findThread,
   nextSelection,
@@ -42,14 +42,7 @@ type ConversationResponse = Extract<Response, { type: "Conversation" }>;
 /** The role of a cached folder (`null` when unknown). */
 export function folderRole(ctx: WriteContext, folderId: FolderId | null): FolderRole | null {
   if (folderId === null) return null;
-  for (const [, folders] of ctx.queryClient.getQueriesData<Folder[]>({
-    queryKey: queryKeys.allFolders,
-  })) {
-    if (!Array.isArray(folders)) continue;
-    const found = folders.find((f) => f.id === folderId);
-    if (found) return found.role;
-  }
-  return null;
+  return cachedFolder(ctx.queryClient, folderId)?.role ?? null;
 }
 
 /**

@@ -17,7 +17,7 @@ import { must } from "../../test/must";
 import { guardRulesWindow } from "./closeGuard";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
-import { addTagAllRule, footerOf, runsFinished, setup, showTextView } from "./testing";
+import { addFromMenu, addTagAllRule, footerOf, runsFinished, setup, showTextView } from "./testing";
 
 /** Renders the window and opens the rule (or "New rule") named `button`. */
 async function openEditor(env: Env, button: string) {
@@ -170,6 +170,19 @@ describe("Run on and Run in the footer", () => {
     const selected = within(runOn).getByRole("option", { name: "Selected messages" });
     expect(selected).toBeDisabled();
     expect(selected).toHaveAttribute("title", "Select messages in the list first.");
+  });
+
+  it("offers the mail's folder beside a move action and puts the picked path in", async () => {
+    const env = setup(inInbox);
+    const message = must(env.transport.data.messages.find((m) => m.folder_id === INBOX));
+    rulesStore(env.client).getState().setOrigin({ messageId: message.id, folderId: INBOX });
+    const { user, editor } = await openEditor(env, "New rule");
+    await addFromMenu(user, editor, "Add action", "Move to folder");
+    const action = must(editor.querySelector<HTMLElement>('[data-part="rules.action"]'));
+    await user.click(await within(action).findByRole("button", { name: "Values from this mail" }));
+
+    await user.click(await screen.findByRole("menuitem", { name: /Inbox/ }));
+    expect(within(action).getByRole("combobox", { name: "Folder path" })).toHaveValue("Inbox");
   });
 
   it("saves an edited rule before running it, never the old saved one", async () => {

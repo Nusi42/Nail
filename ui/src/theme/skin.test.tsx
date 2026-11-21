@@ -161,7 +161,7 @@ describe("M5a skin (theme/skin.ts)", () => {
       .map((block) => block.trim())
       .find((block) =>
         block.startsWith(
-          '[data-part="form.input"], [data-part="form.select"], [data-part="form.textarea"] {',
+          '[data-part="form.input"], [data-part="form.select"], [data-part="form.textarea"], [data-part="picker.input"] {',
         ),
       );
     expect(rule).toBeDefined();
@@ -179,7 +179,13 @@ describe("M5a skin (theme/skin.ts)", () => {
   it("outlines input controls with the theme's control border", () => {
     // The base theme has no default rules for these since M5a (WP155).
     const blocks = SKIN_CSS.split("}").map((block) => block.split("{"));
-    for (const part of ["form.input", "form.select", "form.textarea", "search-bar.field"]) {
+    for (const part of [
+      "form.input",
+      "form.select",
+      "form.textarea",
+      "picker.input",
+      "search-bar.field",
+    ]) {
       const own = blocks.filter(([selectors = ""]) =>
         selectors.split(",").some((s) => s.trim() === `[data-part="${part}"]`),
       );

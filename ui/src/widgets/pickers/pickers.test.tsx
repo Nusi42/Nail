@@ -30,6 +30,7 @@ import {
   searchValueText,
   SearchValues,
   suggestKindOf,
+  useSearchValues,
   suggestValues,
   toggled,
   valueOptions,
@@ -504,16 +505,14 @@ describe("search field values", () => {
     const user = userEvent.setup();
     const applied: string[] = [];
     const env = createEnv();
-    const view = renderWithProviders(
-      <SearchValues text="subject:x" onApply={(t) => applied.push(t)} />,
-      env,
-    );
+    function Values({ text }: { text: string }) {
+      const found = useSearchValues(text);
+      return found && <SearchValues text={text} found={found} onApply={(t) => applied.push(t)} />;
+    }
+    const view = renderWithProviders(<Values text="subject:x" />, env);
     expect(screen.queryByRole("list")).toBeNull();
     view.unmount();
-    renderWithProviders(
-      <SearchValues text="is:unread folder:Rec" onApply={(t) => applied.push(t)} />,
-      env,
-    );
+    renderWithProviders(<Values text="is:unread folder:Rec" />, env);
     await typingPause();
     const list = await screen.findByRole("list", { name: "Values for this search field" });
     // One row per path, though both accounts have one.

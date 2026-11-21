@@ -152,6 +152,19 @@ test("the search hints float over the list and let clicks reach it", async ({ pa
   await expect(hints(page)).toHaveCount(0);
 });
 
+test("the search field offers a field's values and puts the picked one in", async ({ page }) => {
+  await openWorkInbox(page, server);
+  const input = searchBox(page);
+  await input.click();
+  await input.pressSequentially("folder:Arch");
+  const values = page.getByRole("list", { name: "Values for this search field" });
+  await expect(values).toBeVisible();
+  await values.getByRole("button", { name: /^Archive/ }).click();
+  await expect(input).toHaveValue("folder:Archive ");
+  await expect(input).toBeFocused();
+  await expect(values).toHaveCount(0);
+});
+
 test("a folder change searches the typed text in the new folder", async ({ page }) => {
   await openWorkInbox(page, server);
   const input = searchBox(page);

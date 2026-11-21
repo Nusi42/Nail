@@ -73,7 +73,7 @@ describe("P1 responsive skin (theme/skinResponsive.ts)", () => {
   });
 
   it("shares a row of controls between its fields; a sized control keeps its width (ADR 0160)", () => {
-    const [rows] = rulesFor(':is([data-part="rules.add"]');
+    const [rows] = rulesFor(':is([data-part="rules.condition"]');
     expect(rows).toBeDefined();
     expect(rows).toMatch(/align-items: flex-end;/);
     for (const part of FIELD_ROWS) {
@@ -132,7 +132,7 @@ describe("P1 responsive skin (theme/skinResponsive.ts)", () => {
       ),
     );
     expect(narrow).toMatch(
-      /:is\(\[data-part="account-settings"\], \[data-part="rules"\]\) \{\s*grid-template-columns: minmax\(0, 1fr\);/,
+      /\[data-part="window.body"\] \[data-part="account-settings"\], \[data-part="settings-page.card"\] \[data-part="account-settings"\] \{\s*grid-template-columns: minmax\(0, 1fr\);/,
     );
     expect(narrow).toMatch(
       /\[data-part="account-settings.list"\] \{ flex-direction: row; flex-wrap: wrap;/,
@@ -144,7 +144,7 @@ describe("P1 responsive skin (theme/skinResponsive.ts)", () => {
       expect(RESPONSIVE_SKIN_CSS).toContain(`[data-part="${part}"]`);
     }
     const [switcher] = rulesFor(
-      '[data-part="confirmation-center.view"], [data-part="rules.view"], [data-part="message-source.view"])[aria-pressed="true"]',
+      '[data-part="confirmation-center.view"], [data-part="message-source.view"])[aria-pressed="true"]',
     );
     expect(switcher).toMatch(/font-weight: var\(--nail-font-weight-semibold\)/);
     // Key rows: aligned columns that the theme's flex row cannot undo.

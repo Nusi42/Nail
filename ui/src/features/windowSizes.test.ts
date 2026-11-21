@@ -31,7 +31,7 @@ describe("window sizes", () => {
     expect(frames.composer?.size).toEqual({ width: 820, height: 720 });
     expect(frames.composer?.min_size).toEqual({ width: 520, height: 400 });
     expect(frames.composer?.instances).toBe("multiple");
-    expect(frames.rules?.size).toEqual({ width: 900, height: 640 });
+    expect(frames.rules?.size).toEqual({ width: 1100, height: 760 });
     expect(frames.snoozed?.size).toEqual({ width: 720, height: 520 });
   });
 });

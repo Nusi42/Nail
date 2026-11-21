@@ -15,12 +15,12 @@
  * (`data-selected`), `rules.lower.panel`; inside, `rules.test.*` and
  * `rules.runs` / `rules.run.*`.
  */
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useId, type KeyboardEvent, type Ref } from "react";
-import type { Folder, FolderId, MessageSummary, Rule, RuleRun } from "../../api/generated";
+import type { FolderId, MessageSummary, Rule, RuleRun } from "../../api/generated";
 import { DATE_TIME, useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
-import { queryKeys } from "../../state/queries";
+import { cachedFolder } from "../../state/mailOps";
 import { folderTitle } from "../../widgets/ListHeader";
 import { HORIZONTAL, moveRovingFocus } from "../../widgets/rovingFocus";
 import { useRuleRuns } from "./api";
@@ -37,17 +37,6 @@ export interface TestResult {
   matches: readonly ExplainedMatch[];
   /** The "Run on" target it looked at (localized). */
   target: string;
-}
-
-/** A folder the app has loaded (folder lists are cached per account), else `undefined`. */
-export function cachedFolder(queryClient: QueryClient, id: FolderId): Folder | undefined {
-  for (const [, folders] of queryClient.getQueriesData<Folder[]>({
-    queryKey: queryKeys.allFolders,
-  })) {
-    const found = Array.isArray(folders) ? folders.find((f) => f.id === id) : undefined;
-    if (found) return found;
-  }
-  return undefined;
 }
 
 /** A folder's name as the folder list shows it, `null` while it is not loaded. */

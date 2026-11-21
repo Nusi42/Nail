@@ -371,6 +371,14 @@
             "type": "action"
           },
           {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "action": "rules.run-menu",
             "args": [],
             "icon": "list-checks",
@@ -581,6 +589,14 @@
             "args": [],
             "icon": "funnel",
             "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
             "shortcut": null,
             "type": "action"
           },
@@ -799,6 +815,14 @@
             "type": "action"
           },
           {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "action": "rules.run-menu",
             "args": [],
             "icon": "list-checks",
@@ -1013,6 +1037,14 @@
             "type": "action"
           },
           {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
             "action": "rules.run-menu",
             "args": [],
             "icon": "list-checks",
@@ -1223,6 +1255,14 @@
             "args": [],
             "icon": "funnel",
             "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
             "shortcut": null,
             "type": "action"
           },
@@ -1997,6 +2037,14 @@
             "label": "@rules.action.create-from-message",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-view"
@@ -2209,6 +2257,14 @@
             "args": [],
             "icon": "funnel",
             "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
             "shortcut": null,
             "type": "action"
           }
@@ -2425,6 +2481,14 @@
             "label": "@rules.action.create-from-message",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-view"
@@ -2639,6 +2703,14 @@
             "label": "@rules.action.create-from-message",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-view"
@@ -2851,6 +2923,14 @@
             "args": [],
             "icon": "funnel",
             "label": "@rules.action.create-from-message",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "action": "rules.add-to-rule",
+            "args": [],
+            "icon": "list-plus",
+            "label": "@rules-from-message.add-to-rule",
             "shortcut": null,
             "type": "action"
           }

@@ -10,6 +10,7 @@ import { NailError, type NailClient } from "../api/client";
 import type {
   AccountId,
   FlagChange,
+  Folder,
   FolderId,
   MessageId,
   MessageSummary,
@@ -320,4 +321,15 @@ export function refreshAfterAction(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.allMessages });
   void queryClient.invalidateQueries({ queryKey: queryKeys.allSearches });
   void queryClient.invalidateQueries({ queryKey: queryKeys.allThreadDetails });
+}
+
+/** A folder the app has loaded (folder lists are cached per account), else `undefined`. */
+export function cachedFolder(queryClient: QueryClient, id: FolderId): Folder | undefined {
+  for (const [, folders] of queryClient.getQueriesData<Folder[]>({
+    queryKey: queryKeys.allFolders,
+  })) {
+    const found = Array.isArray(folders) ? folders.find((f) => f.id === id) : undefined;
+    if (found) return found;
+  }
+  return undefined;
 }

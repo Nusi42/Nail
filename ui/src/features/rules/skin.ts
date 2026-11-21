@@ -53,8 +53,6 @@ ${inRules("rules.footer.state")}[data-state="saved"] { animation: nail-rules-fad
   ${inRules("rules.footer.state")}[data-state="saved"] { animation: none; }
 }
 ${inRules("rules.run.why")} { ${VISUALLY_HIDDEN} }
-/* "+ Add condition": the menu button's name (localized, its aria-label) beside its icon. */
-${inRules("rules.add.button")}::after { content: attr(aria-label); margin-inline-start: ${T.xxs}; }
 ${inRules("form.button")}[aria-disabled="true"] { opacity: ${T.disabled}; }`;
 
 const ROWS = `:is(${ps("rules.condition", "rules.action")}) ${p("form.label")} { font-size: ${T.small}; color: ${T.muted}; }

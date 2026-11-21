@@ -51,6 +51,7 @@ export function AddMenu<K extends string>({
         entries={entries}
         field={field}
         part="rules.add.button"
+        showLabel
       />
     </span>
   );

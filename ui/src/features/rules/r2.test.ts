@@ -1,10 +1,10 @@
 /**
  * R2 (ADR 0222, rules window design review): the pure pieces — problems
- * with their fields, picked values, destructive rules, the list filter and
+ * with their fields, destructive rules, the list filter and
  * drag order, starter rules, the run-on choices, how actions and runs are
  * named, the text view's tokens and the unsaved-changes store.
  */
-import type { Condition, Rule, RuleRun } from "../../api/generated";
+import type { Rule, RuleRun } from "../../api/generated";
 import { createEnv } from "../../test/harness";
 import { guardRulesWindow, RULES_WINDOW } from "./closeGuard";
 import { actionText, folderRefText, runTargetText, whyNoUndo, type Localize } from "./describe";
@@ -15,11 +15,9 @@ import {
   filterRules,
   isDestructive,
   moveItemTo,
-  newCondition,
   newRule,
   ruleIssues,
   ruleProblems,
-  withPickedValue,
 } from "./model";
 import { reorderStep } from "./RuleManager";
 import { defaultRunOn, runOnChoices, type ListFacts } from "./runOn";
@@ -64,22 +62,6 @@ describe("rule problems with their fields", () => {
     expect(ruleIssues({ ...newRule(), name: "A" })).toEqual([
       { id: "rules-error-no-actions", at: { kind: "action", index: -1 } },
     ]);
-  });
-});
-
-describe("values picked from the message", () => {
-  it("puts the value where each condition kind keeps it", () => {
-    const value = "news@example.org";
-    const pick = (c: Condition) => withPickedValue(c, value);
-    expect(pick(newCondition("address"))).toMatchObject({ matches: { value } });
-    expect(pick(newCondition("subject"))).toMatchObject({ matches: { value } });
-    expect(pick(newCondition("list-id"))).toMatchObject({ matches: { op: "contains", value } });
-    expect(pick(newCondition("header"))).toMatchObject({ name: value });
-    expect(pick(newCondition("tag"))).toMatchObject({ tag: value });
-    expect(pick(newCondition("account"))).toMatchObject({ account_id: value });
-    expect(pick(newCondition("folder"))).toMatchObject({ folder: { type: "path", path: value } });
-    expect(pick(newCondition("query"))).toMatchObject({ query: value });
-    expect(pick(newCondition("size"))).toEqual(newCondition("size"));
   });
 });
 

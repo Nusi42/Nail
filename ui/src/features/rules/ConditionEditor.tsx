@@ -44,7 +44,6 @@ import {
   removeAt,
   replaceAt,
   textMatch,
-  withPickedValue,
   type ConditionKind,
   type ConditionPath,
   type RuleIssue,
@@ -672,8 +671,8 @@ function ConditionNode(node: NodeProps) {
       />
       <ValuesFromMessage
         condition={condition}
-        onPick={(value) => {
-          onChange(replaceAt(root, path, withPickedValue(condition, value)));
+        onPick={(_value, next) => {
+          onChange(replaceAt(root, path, next));
         }}
       />
       {remove}

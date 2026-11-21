@@ -322,7 +322,7 @@ test("a Nail rule is placed as an Exchange inbox rule", async ({ page }) => {
   await expect(editor.locator('[data-part="rules.condition"]').first()).toBeVisible();
   // Filed into Inbox/Receipts: something Exchange can run itself.
   await addFromMenu(editor, "Add action", "Move to folder");
-  await editor.getByRole("textbox", { name: "Folder path" }).fill("Inbox/Receipts");
+  await editor.getByRole("combobox", { name: "Folder path" }).fill("Inbox/Receipts");
   await saveRule(editor);
   // The rule list shows where it runs for the Exchange account.
   const badge = rules.locator('[data-part="exchange.rule-badge"]').first();

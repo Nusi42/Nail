@@ -802,6 +802,13 @@
                 "icon": null,
                 "label": null,
                 "type": "action"
+              },
+              {
+                "action": "rules.add-to-rule",
+                "args": [],
+                "icon": null,
+                "label": null,
+                "type": "action"
               }
             ],
             "label": null,

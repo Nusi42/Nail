@@ -2,7 +2,9 @@
  * The visual editor of a rule's actions (the THEN row): an ordered, numbered
  * list, each action kind with its fields, reordering and removal, and
  * "+ Add action" (a menu button, R2 design review item 9). Folders, tags
- * and recipients are shared pickers (`./PickerField`); an action that still
+ * and recipients are shared pickers (`./PickerField`), and the folder and tag
+ * fields offer the values of the mail the window was opened from
+ * (`./fromMessage`); an action that still
  * misses its value is marked and names the footer's problem badge.
  */
 import { useState } from "react";
@@ -10,6 +12,7 @@ import type { RuleAction } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { CheckField, SelectField, TextAreaField, type Choice } from "../../widgets/forms";
 import { AddMenu } from "./AddMenu";
+import { ActionValuesFromMessage } from "./fromMessage";
 import { FolderRefFields, type Marked } from "./ConditionEditor";
 import {
   ACTION_KINDS,
@@ -198,6 +201,12 @@ export function ActionEditor({
               describedBy={describedBy}
               onChange={(a) => {
                 set(index, a);
+              }}
+            />
+            <ActionValuesFromMessage
+              action={action}
+              onPick={(_value, next) => {
+                set(index, next);
               }}
             />
             <span data-part="rules.action.tools">

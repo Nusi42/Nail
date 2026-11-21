@@ -10,7 +10,7 @@
  * for the field.
  *
  * Parts: `rules.from-message` (wrapper, `data-from` = `origin` |
- * `selection`), `rules.from-message.button`; the menu uses the shared
+ * `selection`) around the shared menu button (`pim.menu-button`); the menu uses the shared
  * `context-menu.*` parts.
  */
 import { useQueryClient } from "@tanstack/react-query";
@@ -159,7 +159,6 @@ function ValuesMenu({
         label={label}
         icon="mail-open"
         field="rules-from-message-values"
-        part="rules.from-message.button"
         entries={menuEntries(values, t, onPick)}
       />
     </span>

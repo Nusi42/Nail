@@ -106,7 +106,7 @@ fn a_sparse_file_overrides_window_properties_field_by_field() {
     assert_eq!(composer.instances, Some(WindowInstances::Multiple));
     assert_eq!(
         layout.window_frames["rules"].size,
-        Some(WindowSize::new(900, 640))
+        Some(WindowSize::new(1100, 760))
     );
     assert_eq!(
         layout.window_frames["my-tool"],

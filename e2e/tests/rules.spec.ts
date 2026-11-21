@@ -143,7 +143,7 @@ test("a rule is created from a message", async ({ page }) => {
   // The rule matches the sender and the list's subject tag; the user adds
   // where it goes.
   await addFromMenu(editor, "Add action", "Move to folder");
-  await editor.getByRole("textbox", { name: "Folder path" }).fill("Lists");
+  await editor.getByRole("combobox", { name: "Folder path" }).fill("Lists");
   await saveRule(editor);
   const text = rulesFile();
   expect(text).toContain('from equals="users@lists.nail.example"');

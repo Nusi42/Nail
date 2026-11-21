@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { nailPerTest } from "../support/nail";
-import { messageRows } from "../support/views";
+import { ruleFromMessageRow } from "../support/rules";
 
 /**
  * R2 (ADR 0222): values from the selected mail. Opened from a mail's row
@@ -16,17 +16,14 @@ const DOMAIN = "lists.nail.example";
 
 test("a rule from a mail's row menu takes the sender domain from that mail", async ({ page }) => {
   await page.goto(server.url);
-  const row = messageRows(page).filter({ hasText: SUBJECT });
-  await row.click({ button: "right" });
-  await page.getByRole("menu").getByRole("menuitem", { name: "Create rule from message" }).click();
-
-  const window = page.getByRole("dialog", { name: "Filter rules" });
-  const editor = window.getByRole("form", { name: "Rule" });
+  const editor = await ruleFromMessageRow(page, SUBJECT);
   const sender = editor
     .locator('[data-part="rules.condition"]')
     .filter({ has: page.getByRole("combobox", { name: "Field" }) })
     .first();
-  await expect(sender.getByRole("textbox", { name: "Text" })).toHaveValue(/@lists\.nail\.example$/);
+  await expect(sender.getByRole("combobox", { name: "Text" })).toHaveValue(
+    /@lists\.nail\.example$/,
+  );
 
   await sender.getByRole("button", { name: "Values from this mail" }).click();
   const menu = page.getByRole("menu", { name: "Values from this mail" });
@@ -37,7 +34,7 @@ test("a rule from a mail's row menu takes the sender domain from that mail", asy
     .first()
     .click();
   await expect(menu).toBeHidden();
-  await expect(sender.getByRole("textbox", { name: "Text" })).toHaveValue(`@${DOMAIN}`);
+  await expect(sender.getByRole("combobox", { name: "Text" })).toHaveValue(`@${DOMAIN}`);
   await expect(sender.getByRole("combobox", { name: "Comparison" })).toHaveValue("ends-with");
 
   await editor.getByRole("button", { name: "Test rule" }).click();

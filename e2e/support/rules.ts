@@ -85,3 +85,13 @@ export async function addFromMenu(scope: Locator, button: string, item: string):
 /** The toast of a rule run started from a menu. */
 export const rulesToast = (page: Page) =>
   page.locator('[data-part="mail-actions.toast"][data-source="rules"]');
+
+/**
+ * "Create rule from message" from the row menu of the message whose subject
+ * contains `subject`; returns the rules window's editor (its origin is that mail).
+ */
+export async function ruleFromMessageRow(page: Page, subject: string): Promise<Locator> {
+  await messageRows(page).filter({ hasText: subject }).click({ button: "right" });
+  await page.getByRole("menu").getByRole("menuitem", { name: "Create rule from message" }).click();
+  return page.getByRole("dialog", { name: "Filter rules" }).getByRole("form", { name: "Rule" });
+}

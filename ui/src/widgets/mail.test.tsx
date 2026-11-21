@@ -90,6 +90,26 @@ describe("search-bar", () => {
     expect(hintList()).toBeNull();
   });
 
+  it("offers the values of a field (folder:) and puts the picked one in", async () => {
+    const { user, input } = await focusedSearch();
+    const values = () => screen.queryByRole("list", { name: "Values for this search field" });
+    await user.type(input, "is:unread folder:Arch");
+    const list = await waitFor(() => must(values()));
+    await user.click(within(list).getByRole("button", { name: /^Archive/ }));
+    expect(input).toHaveValue("is:unread folder:Archive ");
+    expect(input).toHaveFocus();
+    // The value is complete: the popup closes.
+    expect(values()).toBeNull();
+    // Escape hides the values and keeps the text.
+    await user.type(input, "{Backspace}{Backspace}{Backspace}");
+    await waitFor(() => {
+      expect(values()).not.toBeNull();
+    });
+    await user.keyboard("{Escape}");
+    expect(values()).toBeNull();
+    expect(input).toHaveValue("is:unread folder:Archi");
+  });
+
   it("shows where a query is wrong while typing", async () => {
     const user = userEvent.setup();
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });

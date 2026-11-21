@@ -19,7 +19,7 @@
  *   scrolling sideways); its last button row stays at the bottom of the
  *   window while the body scrolls (`DIALOG_BUTTON_ROWS`).
  * - Form rows, fieldsets, hints and button rows wrap.
- * - Two-pane widgets (a list beside its editor: accounts, rules) stack when
+ * - Two-pane widgets (a list beside its editor: accounts) stack when
  *   the card or window that holds them is narrow (`TWO_PANES_NARROW`).
  */
 import { p, ps } from "./selectors";
@@ -105,7 +105,6 @@ ${p("account-setup.steps")} {
 const FIELD_MIN = "8rem";
 
 export const FIELD_ROWS = [
-  "rules.add",
   "rules.condition",
   "rules.action",
   "toolbar-editor.add",
@@ -149,18 +148,18 @@ ${p("settings-page.card")} :is(${inlineRows}) > ${p("form.check")} { padding: 0;
  * Waiting / History, the rule editor's Editor / Text, a message source's
  * Original / Decoded) look like the shared segmented control.
  */
-const SWITCHERS = `:is(${ps("confirmation-center.views", "rules.views", "message-source.views")}) {
+const SWITCHERS = `:is(${ps("confirmation-center.views", "message-source.views")}) {
   display: inline-flex; align-self: flex-start; gap: ${T.xxs}; padding: ${T.xxs};
   border: 1px solid ${T.border}; border-radius: var(--nail-radius-md); background-color: var(--nail-color-bg-subtle);
 }
-:is(${ps("confirmation-center.view", "rules.view", "message-source.view")}) {
+:is(${ps("confirmation-center.view", "message-source.view")}) {
   display: inline-flex; align-items: center; min-height: calc(${T.control} - ${T.sm}); padding: 0 ${T.md};
   border: none; border-radius: var(--nail-radius-sm); font-size: var(--nail-font-size-small);
   color: var(--nail-color-fg-muted); background-color: transparent;
 }
-:is(${ps("confirmation-center.view", "rules.view", "message-source.view")}):hover { color: var(--nail-color-fg); }
-:is(${ps("confirmation-center.view", "rules.view", "message-source.view")}):focus-visible { outline: 2px solid var(--nail-color-focus-ring); outline-offset: 1px; }
-:is(${ps("confirmation-center.view", "rules.view", "message-source.view")})[aria-pressed="true"] {
+:is(${ps("confirmation-center.view", "message-source.view")}):hover { color: var(--nail-color-fg); }
+:is(${ps("confirmation-center.view", "message-source.view")}):focus-visible { outline: 2px solid var(--nail-color-focus-ring); outline-offset: 1px; }
+:is(${ps("confirmation-center.view", "message-source.view")})[aria-pressed="true"] {
   opacity: 1; color: var(--nail-color-fg); background-color: ${T.bg};
   font-weight: var(--nail-font-weight-semibold); box-shadow: var(--nail-shadow-raised);
 }`;
@@ -252,17 +251,14 @@ ${p("security-key.value")} { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 /** Below this width of their card or window, a list and its editor stack. */
 export const TWO_PANES_NARROW = "36rem";
 
-const TWO_PANES = `${p("window.body")} ${p("rules")}, ${p("settings-page.card")} ${p("rules")} {
-  grid-template-columns: minmax(10rem, 17.5rem) minmax(0, 1fr);
-}
-@container ${FIELDS_CONTAINER} (max-width: ${TWO_PANES_NARROW}) {
-  ${p("window.body")} :is(${ps("account-settings", "rules")}), ${p("settings-page.card")} :is(${ps("account-settings", "rules")}) {
+// The rules window stacks on its own (`features/rules/skin.ts`, R2).
+const TWO_PANES = `@container ${FIELDS_CONTAINER} (max-width: ${TWO_PANES_NARROW}) {
+  ${p("window.body")} ${p("account-settings")}, ${p("settings-page.card")} ${p("account-settings")} {
     grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
   }
   ${p("settings-page.card")} ${p("account-settings.sidebar")} { border-right: none; border-bottom: 1px solid ${T.border}; overflow: visible; }
   ${p("settings-page.card")} ${p("account-settings.list")} { flex-direction: row; flex-wrap: wrap; list-style: none; }
   ${p("settings-page.card")} ${p("account-settings.account")} { width: auto; }
-  ${p("window.body")} ${p("rules.list")} { overflow: visible; }
 }`;
 
 export const RESPONSIVE_SKIN_CSS = [

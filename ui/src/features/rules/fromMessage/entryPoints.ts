@@ -47,6 +47,8 @@ export function addToRuleEntries(rules: readonly Rule[]): ResolvedMenuEntry[] {
 export const fromMessageMenuSources: MenuSourceRegistry = {
   [ADD_TO_RULE_ACTION]: {
     load: async (ctx) => addToRuleEntries(await ctx.queryClient.query(rulesQuery(ctx.client))),
+    // Without saved rules the item opens the window with the mail as origin.
+    runsWhenEmpty: true,
   },
 };
 

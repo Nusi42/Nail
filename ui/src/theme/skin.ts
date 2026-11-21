@@ -226,7 +226,7 @@ const WIDTHS = Object.entries(CONTROL_WIDTHS)
   )
   .join("\n");
 
-const INPUTS = `${ps("form.input", "form.select", "form.textarea")} {
+const INPUTS = `${ps("form.input", "form.select", "form.textarea", "picker.input")} {
   width: var(${CONTROL_WIDTH_VAR}, 100%); flex-basis: content; min-width: 0; max-width: 100%;
   min-height: ${T.control}; padding: 0 ${T.sm};
   border: ${T.controlBorder}; border-radius: ${T.rSm};
@@ -234,9 +234,9 @@ const INPUTS = `${ps("form.input", "form.select", "form.textarea")} {
   transition: border-color ${T.fast} ${T.ease};
 }
 ${p("form.textarea")} { min-height: calc(3 * ${T.control}); padding: ${T.sm}; line-height: ${T.normal}; }
-${pss(":hover", "form.input", "form.select", "form.textarea")} { border-color: color-mix(in srgb, ${T.fg} 30%, ${T.border}); }
-${pss(":focus-visible", "form.input", "form.select", "form.textarea")} { outline: 2px solid ${T.focus}; outline-offset: 0; border-color: ${T.accent}; }
-${pss(":disabled", "form.input", "form.select", "form.textarea")} { opacity: ${T.disabled}; }
+${pss(":hover", "form.input", "form.select", "form.textarea", "picker.input")} { border-color: color-mix(in srgb, ${T.fg} 30%, ${T.border}); }
+${pss(":focus-visible", "form.input", "form.select", "form.textarea", "picker.input")} { outline: 2px solid ${T.focus}; outline-offset: 0; border-color: ${T.accent}; }
+${pss(":disabled", "form.input", "form.select", "form.textarea", "picker.input")} { opacity: ${T.disabled}; }
 ${p("form.field")} { display: grid; gap: ${T.xs}; }
 ${p("form.label")} { font-size: ${T.small}; font-weight: ${T.medium}; color: ${T.fg}; }
 ${p("form.hint")} { font-size: ${T.small}; color: ${T.muted}; }

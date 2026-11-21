@@ -13,6 +13,7 @@ import { optionBool, optionString, type WidgetProps } from "../layout/widgetRegi
 import { useCheckQuery } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { Icon } from "./Icon";
+import { SearchValues, useSearchValues } from "./pickers";
 import { ProblemIndicator } from "./ProblemIndicator";
 import { useDebounced } from "../state/debounce";
 import { useLiveSearch } from "../features/search/liveSearch";
@@ -211,6 +212,8 @@ export function SearchForm({
   // The hints popup: asked for, and the hint picked with the arrow keys (-1: none).
   const [hintsOpen, setHintsOpen] = useState(false);
   const [activeHint, setActiveHint] = useState(-1);
+  // The values after `from:`, `folder:`, … (R2, ADR 0224); Escape hides them for that text.
+  const [valuesHiddenFor, setValuesHiddenFor] = useState<string | null>(null);
 
   const searchScope = useMemo(
     () => ({
@@ -242,6 +245,8 @@ export function SearchForm({
   const hints = showHints && focused && hintsOpen ? hintsFor(text) : [];
   const expanded = hints.length > 0;
   const picked = activeHint >= 0 && activeHint < hints.length ? activeHint : -1;
+  const values = useSearchValues(text, showHints && focused && valuesHiddenFor !== text);
+  const popup = expanded || values !== null;
 
   const closeHints = () => {
     setHintsOpen(false);
@@ -250,7 +255,7 @@ export function SearchForm({
 
   // A click outside the form closes the hints (they float over the list).
   useEffect(() => {
-    if (!expanded) return;
+    if (!popup) return;
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Node && formRef.current?.contains(event.target)) return;
       setHintsOpen(false);
@@ -260,7 +265,7 @@ export function SearchForm({
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [expanded]);
+  }, [popup]);
 
   const takeHint = (hint: string) => {
     const next = applyHint(text, hint);
@@ -296,10 +301,11 @@ export function SearchForm({
       }
       case "Escape":
         // Closes the hints only; with them closed, Escape clears the search.
-        if (expanded) {
+        if (popup) {
           event.preventDefault();
           event.stopPropagation();
           closeHints();
+          setValuesHiddenFor(text);
         }
         break;
       case "Tab":
@@ -312,6 +318,7 @@ export function SearchForm({
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
     closeHints();
+    setValuesHiddenFor(text);
     live.flush();
   };
 
@@ -380,7 +387,7 @@ export function SearchForm({
           <ProblemIndicator
             severity="error"
             kind={error.kind}
-            open={(focused || hovered) && !expanded}
+            open={(focused || hovered) && !popup}
             detailsId={errorId}
           >
             <ErrorView
@@ -423,7 +430,7 @@ export function SearchForm({
           </button>
         )}
       </div>
-      {expanded && (
+      {popup && (
         // Floats under the field (the skin); the focus stays in the input.
         <div
           data-part="search-bar.hints"
@@ -432,36 +439,49 @@ export function SearchForm({
             event.preventDefault();
           }}
         >
-          <div
-            data-part="search-bar.hints.list"
-            id={hintsId}
-            role="listbox"
-            aria-label={t("search-bar-hints")}
-          >
-            {hints.map((hint, index) => (
-              <div
-                key={hint}
-                id={optionId(index)}
-                data-part="search-bar.hint"
-                role="option"
-                aria-selected={index === picked}
-                tabIndex={-1}
-                onMouseDown={(event) => {
-                  // Keep the focus in the field.
-                  event.preventDefault();
-                  takeHint(hint);
-                }}
-              >
+          {values !== null && (
+            <SearchValues
+              text={text}
+              found={values}
+              onApply={(next) => {
+                setText(next);
+                closeHints();
+                inputRef.current?.focus();
+              }}
+            />
+          )}
+          {expanded && (
+            <div
+              data-part="search-bar.hints.list"
+              id={hintsId}
+              role="listbox"
+              aria-label={t("search-bar-hints")}
+            >
+              {hints.map((hint, index) => (
                 <div
-                  data-part="search-bar.hint.button"
-                  data-state={index === picked ? "active" : undefined}
+                  key={hint}
+                  id={optionId(index)}
+                  data-part="search-bar.hint"
+                  role="option"
+                  aria-selected={index === picked}
+                  tabIndex={-1}
+                  onMouseDown={(event) => {
+                    // Keep the focus in the field.
+                    event.preventDefault();
+                    takeHint(hint);
+                  }}
                 >
-                  <code data-part="search-bar.hint.syntax">{hint}</code>
-                  <span data-part="search-bar.hint.description">{t(hintMessageId(hint))}</span>
+                  <div
+                    data-part="search-bar.hint.button"
+                    data-state={index === picked ? "active" : undefined}
+                  >
+                    <code data-part="search-bar.hint.syntax">{hint}</code>
+                    <span data-part="search-bar.hint.description">{t(hintMessageId(hint))}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           <div data-part="search-bar.hint" data-state="info">
             <span data-part="search-bar.hint.description">{t("search-hint-operators")}</span>
           </div>

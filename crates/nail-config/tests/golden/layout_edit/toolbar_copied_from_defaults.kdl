@@ -26,6 +26,7 @@ layout "custom" extends="default" {
             item "calendar.event-from-message"
             item "tasks.from-message"
             item "rules.create-from-message"
+            item "rules.add-to-rule"
         }
     }
 }

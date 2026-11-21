@@ -1029,6 +1029,12 @@
       "alias_of": null,
       "args": []
     },
+    "rules.add-to-rule": {
+      "label": "@rules-from-message.add-to-rule",
+      "icon": "list-plus",
+      "alias_of": null,
+      "args": []
+    },
     "mcp.indicator.dismiss": {
       "label": "@mcp.indicator.dismiss",
       "icon": "x",
@@ -2360,6 +2366,13 @@
             "args": [],
             "label": null,
             "icon": null
+          },
+          {
+            "type": "action",
+            "action": "rules.add-to-rule",
+            "args": [],
+            "label": null,
+            "icon": null
           }
         ]
       }
@@ -2647,6 +2660,13 @@
       },
       {
         "type": "action",
+        "action": "rules.add-to-rule",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
         "action": "rules.run-menu",
         "args": [],
         "label": null,
@@ -2916,6 +2936,13 @@
       {
         "type": "action",
         "action": "rules.create-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "rules.add-to-rule",
         "args": [],
         "label": null,
         "icon": null
@@ -3950,8 +3977,8 @@
         "height": 420
       },
       "size": {
-        "width": 900,
-        "height": 640
+        "width": 1100,
+        "height": 760
       },
       "pop_out": true,
       "instances": null

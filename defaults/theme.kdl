@@ -952,18 +952,11 @@ theme "default" mode="system" {
         flex-grow 1
         min-width 0
     }
+    // The field looks like every form input (the shared skin's INPUTS).
     part "picker.input" {
         flex-grow 1
         min-width 0
-        min-height "$size.control"
-        padding 0 "$space.sm"
-        border "$border.control"
-        border-radius "$radius.sm"
-        font-size "$font-size.body"
-        color "$color.fg"
-        background-color "$color.bg-subtle"
     }
-    part "picker.input:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset 0; }
     part "picker.browse" {
         display "inline-flex"
         align-items "center"
@@ -1305,9 +1298,16 @@ theme "default" mode="system" {
         flex-grow 1
     }
     part "rules.add" { display "inline-flex"; }
+    // "Values from this mail" beside a value field: the shared menu button.
+    part "rules.from-message" {
+        display "inline-flex"
+        align-items "center"
+        min-height "$size.control"
+    }
     part "rules.add.button" {
         display "inline-flex"
         align-items "center"
+        gap "$space.xxs"
         padding "$space.xxs" "$space.xs"
         border "1px dashed $color.border"
         border-radius "$radius.sm"

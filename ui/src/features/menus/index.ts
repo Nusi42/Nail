@@ -13,7 +13,7 @@
  * - ADR 0184: a right-click never shows the browser's menu — Nail's menu
  *   of the place, or nothing; text fields, editors, selectable text and
  *   mail documents get the text menu (`./editing.ts`).
- * - R2 (ADR 0222, 0223-wr6): an item whose action has a menu source
+ * - R2 (ADR 0222, 0226): an item whose action has a menu source
  *   (`./sources.ts`, `Feature.menuSources`) is a hover / arrow-key submenu
  *   of the source's entries; the app provides the sources as
  *   `MenuSourcesContext`. Labels that are user data go through

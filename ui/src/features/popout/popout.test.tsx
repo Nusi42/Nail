@@ -384,7 +384,7 @@ describe("the router", () => {
       type: "PopOutWindow",
       window: "rules",
       title: "Filter rules",
-      size: { width: 900, height: 640 },
+      size: { width: 1100, height: 760 },
       min_size: { width: 600, height: 420 },
     });
     expect(await popOuts(env)).toMatchObject([{ window: "rules" }]);

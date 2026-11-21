@@ -37,6 +37,8 @@ describe("rule manager", () => {
       "rules.create-from-message",
       "rules.run-menu",
       "rules.run",
+      "rules.add-to-rule",
+      "rules.add-to-rule.pick",
     ]);
   });
 
@@ -97,6 +99,10 @@ describe("rule manager", () => {
     );
 
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Invoices");
+    // "+ Add condition" shows its name as text (no hover-only label).
+    const add = within(editor).getAllByRole("button", { name: "Add condition" })[0];
+    expect(add).toHaveTextContent("Add condition");
+    expect(add).not.toHaveAttribute("title");
     // A subject condition …
     await addFromMenu(user, editor, "Add condition", "Subject");
     await user.selectOptions(field(container, "c-0-op"), "regex");
@@ -321,7 +327,7 @@ describe("create rule from message", () => {
     expect(editor.querySelectorAll('[data-part="rules.condition"]')).toHaveLength(2);
     // The user picks an action and saves.
     await addFromMenu(user, editor, "Add action", "Move to folder");
-    await user.type(within(editor).getByRole("textbox", { name: "Folder path" }), "Lists");
+    await user.type(within(editor).getByRole("combobox", { name: "Folder path" }), "Lists");
     await user.click(within(editor).getByRole("button", { name: "Save rule" }));
     await within(editor).findByText("Saved");
     expect(env.transport.data.features.rules.rules.map((r) => r.id)).toContain("rust-announce");

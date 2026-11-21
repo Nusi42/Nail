@@ -60,6 +60,7 @@ export function ContextMenuHost() {
         const entries = (await menuSourceFor(sourceRegistry, action)?.load(ctx)) ?? [];
         return withoutDisabled(entries, isEnabled);
       },
+      runsWhenEmpty: (action) => menuSourceFor(sourceRegistry, action)?.runsWhenEmpty === true,
     };
   }, [sourceRegistry, client, ui, queryClient, layout, t, locale, isEnabled]);
 

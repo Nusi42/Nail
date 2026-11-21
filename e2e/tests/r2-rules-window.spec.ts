@@ -8,10 +8,17 @@ import {
   newRuleFromText,
   openRulesWindow,
   openWorkInbox,
+  ruleFromMessageRow,
   rulesFooter,
   saveRule,
 } from "../support/rules";
-import { openSettings } from "../support/views";
+import {
+  accountSectionNamed,
+  openSettings,
+  openSettingsTab,
+  sectionInbox,
+  showView,
+} from "../support/views";
 
 /**
  * R2 (ADR 0222): the redesigned rules window against the `demo-multi`
@@ -20,7 +27,8 @@ import { openSettings } from "../support/views";
  * opening the Preview tab with the focus on its summary, "Apply to these
  * N", the Run on targets, Delete… asking first, unsaved changes asking on
  * Escape, Editor ↔ Text on an unfinished new rule, and the list going over
- * the editor in a narrow window. Screenshots in `<build dir>/screens/r2-rules/`.
+ * the editor in a narrow window, and a rule from a mail in a dark theme.
+ * Screenshots in `<build dir>/screens/r2-rules/`.
  */
 
 const server = nailPerTest({ seed: "demo-multi" });
@@ -188,3 +196,29 @@ test("Settings shows the rules with the window's look", async ({ page }) => {
   await row.scrollIntoViewIfNeeded();
   await page.screenshot({ path: screenshotFile("r2-rules", "settings-1024") });
 });
+
+for (const size of SIZES) {
+  test(`a rule from a mail in a dark theme at ${String(size.width)}×${String(size.height)}`, async ({
+    page,
+  }) => {
+    await openWorkInbox(page, server, size);
+    const appearance = await openSettingsTab(page, "Appearance");
+    await appearance
+      .getByRole("radiogroup", { name: "Themes" })
+      .getByRole("radio", { name: /Nocturne/ })
+      .click();
+    await showView(page, "Mail");
+    await sectionInbox(accountSectionNamed(page, "Work")).click();
+    const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const editor = await ruleFromMessageRow(page, RELEASE);
+    // The pickers, the values of this mail and the footer, in the dark theme.
+    await expect(
+      editor.getByRole("button", { name: "Values from this mail" }).first(),
+    ).toBeVisible();
+    await expect(rulesFooter(editor).getByRole("button", { name: "Save rule" })).toBeInViewport();
+    expect(await background()).not.toBe("rgb(255, 255, 255)");
+    await page.screenshot({
+      path: screenshotFile("r2-rules", `dark-${String(size.width)}`),
+    });
+  });
+}

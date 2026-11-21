@@ -21,10 +21,12 @@ export {
   SEARCH_VALUES_SHOWN,
   SearchValues,
   applySearchValue,
+  useSearchValues,
   searchValueContext,
   searchValueOf,
   searchValueText,
   type SearchValueContext,
+  type SearchValuesFound,
   type SearchValuesProps,
 } from "./searchValues";
 export {

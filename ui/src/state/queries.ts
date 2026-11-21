@@ -107,15 +107,20 @@ export function useAccounts() {
   });
 }
 
-export function useFolders(accountId: AccountId | null) {
-  const client = useClient();
-  return useQuery({
+/** The folder list of one account (`useFolders`, the pickers' folder trees). */
+export function foldersQueryOptions(client: NailClient, accountId: AccountId | null) {
+  return {
     queryKey: queryKeys.folders(accountId),
     queryFn: async () =>
       (await client.request({ type: "ListFolders", account_id: accountId ?? "" }, "Folders"))
         .folders,
     enabled: accountId !== null,
-  });
+  };
+}
+
+export function useFolders(accountId: AccountId | null) {
+  const client = useClient();
+  return useQuery(foldersQueryOptions(client, accountId));
 }
 
 export function useMessages(folderId: FolderId | null, pageSize: number) {

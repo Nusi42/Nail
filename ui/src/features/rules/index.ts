@@ -11,6 +11,12 @@ import type { ActionContext } from "../../actions/registry";
 import { findSummary } from "../../state/mailOps";
 import type { Feature } from "../types";
 import { onRulesEvent } from "./api";
+import {
+  fromMessageActionInfo,
+  fromMessageActions,
+  fromMessageMenuSources,
+  selectedOrigin,
+} from "./fromMessage";
 import { ruleFromMessage } from "./model";
 import { RuleManager, RulesDialog } from "./RuleManager";
 import {
@@ -33,8 +39,8 @@ export const widgets: Feature["widgets"] = {
 };
 
 function selectedSummary(ctx: ActionContext) {
-  const id = ctx.store.getState().selectedMessageId;
-  return id === null ? undefined : findSummary(ctx.queryClient, id);
+  const origin = selectedOrigin(ctx);
+  return origin === null ? undefined : findSummary(ctx.queryClient, origin.messageId);
 }
 
 /** Action ids → handlers. */
@@ -52,22 +58,26 @@ export const actions: Feature["actions"] = {
    */
   "rules.create-from-message": {
     run: (ctx) => {
+      const origin = selectedOrigin(ctx);
       const message = selectedSummary(ctx);
-      if (!message) return;
+      if (!origin || !message) return;
       const rules = rulesStore(ctx.client).getState();
-      rules.setOrigin({ messageId: message.id, folderId: message.folder_id });
+      rules.setOrigin(origin);
       rules.startNew(ruleFromMessage(message));
       ctx.store.getState().openWindow(RULES_WINDOW);
     },
-    enabled: (ctx) => selectedSummary(ctx) !== undefined,
+    enabled: (ctx) => selectedOrigin(ctx) !== null,
   },
   /** "Run rule" (menus) and running one rule, or every rule that is on, from it. */
   ...runMenuActions,
+  /** "Add to rule…" (message menus) and its rules: the window with the mail as origin. */
+  ...fromMessageActions(RULES_WINDOW),
 };
 
-/** "Run rule": a submenu of the saved rules (R2, ADR 0222). */
+/** "Run rule" and "Add to rule…": submenus of the saved rules (R2, ADR 0222). */
 export const menuSources: NonNullable<Feature["menuSources"]> = {
   [RUN_MENU_ACTION]: runMenuSource,
+  ...fromMessageMenuSources,
 };
 
 /**
@@ -77,6 +87,7 @@ export const menuSources: NonNullable<Feature["menuSources"]> = {
 export const actionInfo: NonNullable<Feature["actionInfo"]> = {
   [RUN_MENU_ACTION]: { title: "rules-action-run-menu", hidden: true, icon: "list-checks" },
   [RUN_ACTION]: { title: "rules-action-run-menu", hidden: true, icon: "list-checks" },
+  ...fromMessageActionInfo,
 };
 
 /**

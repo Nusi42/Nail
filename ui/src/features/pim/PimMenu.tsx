@@ -52,9 +52,18 @@ export interface PimMenuProps {
   field?: string;
   /** Part of the button (default `pim.menu-button`). */
   part?: string;
+  /** Show `label` beside the icon (`<part>.label`) instead of only as the name and hover text. */
+  showLabel?: boolean;
 }
 
-export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" }: PimMenuProps) {
+export function PimMenu({
+  label,
+  icon,
+  entries,
+  field,
+  part = "pim.menu-button",
+  showLabel = false,
+}: PimMenuProps) {
   const id = useId();
   const geom = `pim-menu-${id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -164,8 +173,8 @@ export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" 
         data-part={part}
         data-field={field}
         data-state={open !== null ? "open" : undefined}
-        aria-label={label}
-        title={label}
+        aria-label={showLabel ? undefined : label}
+        title={showLabel ? undefined : label}
         aria-haspopup="menu"
         aria-expanded={open !== null}
         aria-controls={open !== null ? `${id}-menu` : undefined}
@@ -176,6 +185,7 @@ export function PimMenu({ label, icon, entries, field, part = "pim.menu-button" 
         onKeyDown={onButtonKeyDown}
       >
         <Icon name={icon} part={`${part}.icon`} />
+        {showLabel && <span data-part={`${part}.label`}>{label}</span>}
       </button>
       {open !== null && (
         <div
