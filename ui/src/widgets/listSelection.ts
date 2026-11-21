@@ -6,6 +6,9 @@
  *
  * - Click: only that item. Ctrl+click (⌘ on macOS): adds or removes it.
  *   Shift+click, Shift+Up / Down: the items from the anchor to it.
+ * - Ctrl+Up / Down (the keyboard's way to Ctrl+click): moves the focus
+ *   and leaves the selection as it is (`focus`); Space then adds or removes
+ *   the focused item, so non-adjacent items can be selected too.
  * - Ctrl+A: every listed item (`pickAll`).
  */
 
@@ -19,8 +22,12 @@ export interface ListSelection {
   focus: string;
 }
 
-/** How a pick changes the selection. */
-export type SelectGesture = "single" | "toggle" | "range";
+/**
+ * How a pick changes the selection: only that item, add or remove it,
+ * the range from the anchor to it, or `focus`: move the focus to it and
+ * keep the selection.
+ */
+export type SelectGesture = "single" | "toggle" | "range" | "focus";
 
 /** The gesture of a click or key press: Shift extends, Ctrl / ⌘ toggles. */
 export function gestureOf(event: {
@@ -65,6 +72,8 @@ export function pick(
     }
     case "single":
       return { selected: [id], anchor: id, focus: id };
+    case "focus":
+      return { selected: [...current.selected], anchor: current.anchor, focus: id };
   }
 }
 

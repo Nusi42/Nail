@@ -2,6 +2,7 @@
 // from ListThemes, skips with reasons, filters.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { BUILTIN_THEMES } from "../../../ui/src/api/generated/constants.ts";
 import {
   DENSITIES,
   EXPECTED_THEMES,
@@ -32,10 +33,15 @@ function appearance(themes: ThemeInfoLike[]): AppearanceLike {
 }
 
 const builtin = (id: string, kind = "light"): ThemeInfoLike => ({ id, kind, source: "builtin" });
-const allBuiltins = (): ThemeInfoLike[] =>
-  EXPECTED_THEMES.map((id) =>
-    builtin(id, id === "graphite" || id === "nocturne" ? "dark" : "light"),
+const allBuiltins = (): ThemeInfoLike[] => BUILTIN_THEMES.map(([id, kind]) => builtin(id, kind));
+
+test("the expected themes are the core's built-in themes, in its order", () => {
+  assert.deepEqual(
+    [...EXPECTED_THEMES],
+    BUILTIN_THEMES.map(([id]) => id),
   );
+  assert.ok(EXPECTED_THEMES.includes("paper"));
+});
 
 test("the core's not-ready answer skips every expected variant with the reason", () => {
   const probe = probeFromAnswer({

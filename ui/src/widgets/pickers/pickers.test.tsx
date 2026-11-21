@@ -6,16 +6,22 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import type { Account, Folder } from "../../api/generated";
+import type { Account, Address, Folder } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
+import { compileTheme } from "../../theme/compile";
 import { rankValues } from "../../api/mockValues";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
 import { must } from "../../test/must";
 import { requestsOf } from "../../test/env";
 import { chipsOf } from "./testing";
 import {
+  AccountChoiceField,
+  NullablePickerField,
   accountOptions,
   addressOptions,
+  identityAddresses,
+  ownAddressOptions,
+  valueChanges,
   applySearchValue,
   chipLabel,
   folderAccounts,
@@ -582,12 +588,14 @@ function MultiControlled(props: {
   kind: PickerKind;
   initial: string[];
   folderValue?: "id" | undefined;
+  ownAddresses?: readonly Address[] | undefined;
 }) {
   const [values, setValues] = useState<string[]>(props.initial);
   return (
     <PickerListField
       kind={props.kind}
       folderValue={props.folderValue}
+      ownAddresses={props.ownAddresses}
       labelId="vacation-addresses"
       name="multi"
       values={values}
@@ -602,10 +610,20 @@ function MultiControlled(props: {
 let chosen: string[][] = [];
 const MULTI = "Also my addresses";
 
-function renderMulti(kind: PickerKind, initial: string[] = [], folderValue?: "id") {
+function renderMulti(
+  kind: PickerKind,
+  initial: string[] = [],
+  folderValue?: "id",
+  ownAddresses?: readonly Address[],
+) {
   chosen = [];
   renderWithProviders(
-    <MultiControlled kind={kind} initial={initial} folderValue={folderValue} />,
+    <MultiControlled
+      kind={kind}
+      initial={initial}
+      folderValue={folderValue}
+      ownAddresses={ownAddresses}
+    />,
     createEnv(),
   );
   return screen.getByRole("combobox", { name: MULTI });
@@ -779,5 +797,161 @@ describe("search field values", () => {
     expect(row).toHaveAttribute("aria-selected", "true");
     await user.click(row);
     expect(applied).toEqual(["is:unread folder:Inbox/Receipts "]);
+  });
+});
+
+const OWN: readonly Address[] = [
+  { name: "Ada Lovelace", email: "ada@example.org" },
+  { name: null, email: "ada.l@example.net" },
+];
+
+describe("Picker: the user's own addresses", () => {
+  it("filters own addresses by name or address, each once", () => {
+    const own = [...OWN, { name: "Ada", email: "ADA@example.org" }];
+    expect(ownAddressOptions(own, "").map((o) => o.value)).toEqual([
+      "ada@example.org",
+      "ada.l@example.net",
+    ]);
+    expect(ownAddressOptions(own, "LOVE").map((o) => o.value)).toEqual(["ada@example.org"]);
+    expect(ownAddressOptions(own, ".net").map((o) => o.value)).toEqual(["ada.l@example.net"]);
+    expect(identityAddresses([{ name: "Ada", email: "ada@example.org" }])).toEqual([
+      { name: "Ada", email: "ada@example.org" },
+    ]);
+  });
+
+  it("offers only the own addresses, never the most-used correspondents", async () => {
+    const user = userEvent.setup();
+    const { env, input } = renderPicker("address", { ownAddresses: OWN });
+    await user.click(screen.getByRole("button", { name: `Show choices for ${LABEL}` }));
+    const list = await screen.findByRole("listbox");
+    expect(
+      within(list)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Ada Lovelaceada@example.org", "ada.l@example.net"]);
+    await user.type(input, "grace");
+    await typingPause();
+    expect(screen.queryByRole("option", { name: /Grace Hopper/ })).toBeNull();
+    expect(requestsOf(env, "SuggestAddresses")).toEqual([]);
+  });
+
+  it("lists only own addresses after a comma in a multi-value own-address field", async () => {
+    const user = userEvent.setup();
+    const input = renderMulti("address", [], undefined, OWN);
+    await user.type(input, "alias@example.com,");
+    expect(chipsOf(document.body, MULTI)).toEqual(["alias@example.com"]);
+    const list = await screen.findByRole("listbox");
+    expect(within(list).getAllByRole("option")).toHaveLength(2);
+    expect(within(list).queryByRole("option", { name: /Grace/ })).toBeNull();
+  });
+});
+
+describe("Picker: multi-value accessibility", () => {
+  it("describes the field by what is chosen and announces additions and removals", async () => {
+    const user = userEvent.setup();
+    const input = renderMulti("address", ["a@example.org"]);
+    expect(input).toHaveAccessibleDescription(/Chosen: a@example.org/);
+    const status = must(document.querySelector('[data-part="picker.status"]'));
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveTextContent("");
+    await user.type(input, "b@example.org,");
+    expect(status).toHaveTextContent("Added b@example.org");
+    expect(input).toHaveAccessibleDescription(/2 chosen: a@example.org, b@example.org/);
+    await user.keyboard("{Escape}");
+    await user.keyboard("{Backspace}");
+    expect(status).toHaveTextContent("Removed b@example.org");
+    await user.click(screen.getByRole("button", { name: "Remove a@example.org" }));
+    expect(status).toHaveTextContent("Removed a@example.org");
+    expect(input).toHaveAccessibleDescription(/Nothing chosen yet/);
+  });
+
+  it("announces an id value by its name and marks chosen options with a check", async () => {
+    const user = userEvent.setup();
+    const input = renderMulti("account");
+    input.focus();
+    await user.keyboard("{ArrowDown}");
+    const list = await screen.findByRole("listbox");
+    const work = await within(list).findByRole("option", { name: /Work/ });
+    expect(work.querySelector('[data-part="picker.option.check.icon"]')).toBeNull();
+    await user.click(work);
+    expect(document.querySelector('[data-part="picker.status"]')).toHaveTextContent("Added Work");
+    const chosenWork = within(list).getByRole("option", { name: /Work/, selected: true });
+    expect(
+      chosenWork.querySelector(
+        '[data-part="picker.option.check"] [data-part="picker.option.check.icon"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it("tells what a change added and removed", () => {
+    expect(valueChanges(["a", "b"], ["B", "c"])).toEqual({ added: ["c"], removed: ["a"] });
+  });
+
+  it("styles a chosen option with more than its weight", () => {
+    const { css } = compileTheme(defaultTheme());
+    const at = css.indexOf('[data-part="picker.option"][data-selected~="true"] {');
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(css.slice(at, css.indexOf("}", at))).toContain("background-color");
+  });
+});
+
+let nullable: (string | null)[] = [];
+
+/** A nullable picker field (or the account choice) that records its values. */
+function NullableControlled({ account = false }: { account?: boolean }) {
+  const [value, setValue] = useState<string | null>(account ? "acc-work" : null);
+  const record = (next: string | null) => {
+    nullable.push(next);
+    setValue(next);
+  };
+  return account ? (
+    <AccountChoiceField
+      labelId="common-account"
+      name="account"
+      accounts={[{ id: "acc-work" }]}
+      value={value}
+      onChange={record}
+    />
+  ) : (
+    <NullablePickerField
+      kind="address"
+      labelId="vacation-from"
+      name="from"
+      value={value}
+      onChange={record}
+    />
+  );
+}
+
+describe("nullable picker fields", () => {
+  it("maps an empty text to null and back", async () => {
+    nullable = [];
+    const user = userEvent.setup();
+    renderWithProviders(<NullableControlled />, createEnv());
+    const input = screen.getByRole("combobox", { name: "Reply from" });
+    expect(input).toHaveValue("");
+    await user.type(input, "x");
+    expect(nullable.at(-1)).toBe("x");
+    await user.clear(input);
+    expect(nullable.at(-1)).toBeNull();
+  });
+
+  it("offers only the given accounts, strictly, and empties to null", async () => {
+    nullable = [];
+    const user = userEvent.setup();
+    renderWithProviders(<NullableControlled account />, createEnv());
+    const input = screen.getByRole("combobox", { name: "Account" });
+    await waitFor(() => {
+      expect(input).toHaveValue("Work");
+    });
+    await user.click(screen.getByRole("button", { name: "Show choices for Account" }));
+    const list = await screen.findByRole("listbox");
+    await within(list).findByRole("option", { name: /Work/ });
+    expect(within(list).queryByRole("option", { name: /Personal/ })).toBeNull();
+    await user.keyboard("{Escape}");
+    await user.type(input, "zz");
+    expect(nullable).toEqual([]);
+    await user.clear(input);
+    expect(nullable.at(-1)).toBeNull();
   });
 });

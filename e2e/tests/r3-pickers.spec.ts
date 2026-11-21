@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { createMcpClient } from "../support/mcp";
 import { nailPerTest } from "../support/nail";
-import { expectChips, pickOption } from "../support/pickers";
+import { expectChips, openChoices, pickOption } from "../support/pickers";
 import { expectResponsive } from "../support/responsive";
 import { openSettingsTab } from "../support/views";
 
@@ -9,8 +9,8 @@ import { openSettingsTab } from "../support/views";
  * R3 pickers everywhere (ADR 0227) on the real core (`demo-multi`) at
  * 1024×700: the settings fields that name an account, a folder or an
  * address are shared pickers; "Also my addresses" and the other lists are
- * multi-value pickers (chips plus the input); an empty address picker
- * lists the most-used addresses.
+ * multi-value pickers (chips plus the input); the vacation reply's address
+ * pickers offer only the account's own addresses.
  */
 
 const server = nailPerTest({ seed: "demo-multi" });
@@ -26,24 +26,25 @@ async function vacationEditor(page: Page): Promise<Locator> {
   return settings.locator('[data-part="vacation-editor"]');
 }
 
-test("an empty address picker lists the most-used addresses; typing filters", async ({ page }) => {
+test("the vacation address pickers offer only the account's own addresses", async ({ page }) => {
   const vacation = await vacationEditor(page);
+  for (const label of ["Reply from", "Also my addresses"]) {
+    await expect(vacation.getByRole("combobox", { name: label })).toHaveValue("");
+    const { list } = await openChoices(vacation, label);
+    // The Work account's one identity, and none of the most-used correspondents.
+    await expect(list.getByRole("option")).toHaveCount(1);
+    await expect(list.getByRole("option")).toContainText("ada@work.example");
+    await page.keyboard.press("Escape");
+    await expect(list).toBeHidden();
+  }
+  // Typing filters the own addresses; Enter takes the one left.
   const from = vacation.getByRole("combobox", { name: "Reply from" });
-  await expect(from).toHaveValue("");
-  await vacation.getByRole("button", { name: "Show choices for Reply from" }).click();
-  const list = vacation.getByRole("listbox", { name: "Choices for Reply from" });
-  const options = list.getByRole("option");
-  await expect(options.first()).toBeVisible();
-  // The user's own addresses are not offered.
-  await expect(list.getByRole("option", { name: /ada@work\.example/ })).toHaveCount(0);
-  const first = (await options.first().textContent()) ?? "";
-  expect(first).not.toBe("");
-  // Typing filters as before: every option left matches the text.
-  await from.pressSequentially(first.slice(0, 2), { delay: 10 });
-  await expect(options.first()).toBeVisible();
+  await from.pressSequentially("ada", { delay: 10 });
+  await expect(
+    vacation.getByRole("listbox", { name: "Choices for Reply from" }).getByRole("option"),
+  ).toHaveCount(1);
   await page.keyboard.press("Enter");
-  await expect(list).toBeHidden();
-  await expect(from).not.toHaveValue("");
+  await expect(from).toHaveValue("ada@work.example");
 });
 
 test("'Also my addresses' takes several addresses as chips and saves them", async ({ page }) => {
@@ -55,8 +56,7 @@ test("'Also my addresses' takes several addresses as chips and saves them", asyn
   await expectChips(vacation, label, ["alias@example.org", "other@example.net"]);
   await expect(field).toHaveValue("");
   // A picked suggestion becomes a chip too; the list stays open for the next one.
-  await vacation.getByRole("button", { name: `Show choices for ${label}` }).click();
-  const list = vacation.getByRole("listbox", { name: `Choices for ${label}` });
+  const { list } = await openChoices(vacation, label);
   await expect(list).toHaveAttribute("aria-multiselectable", "true");
   await list.getByRole("option").first().click();
   await expect(list).toBeVisible();

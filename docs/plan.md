@@ -1195,6 +1195,14 @@ an MCP account that is no longer granted shows its id as the chip; the README me
 the old rule list (`npm run readme:media` with review). Next: the maintainer's human gate on the 0.8.8 installer,
 then release.
 
+*Status (review fixes):* done. The vacation reply's "Reply from" and "Also my addresses" offer only the account's
+own addresses (`ownAddresses`, never the most-used correspondents); `NullablePickerField` / `AccountChoiceField`
+replace the hosts' own empty-text-to-null mapping; multi-value pickers describe what they hold and announce
+additions and removals, and mark chosen options with a check and a background; Ctrl+Up / Down move the rule list's
+focus without selecting (Space then toggles); Escape first hides a focused row's badge popover; High contrast keeps
+a selected rule row readable (inherited colours, a `selection-fg` bar for the focused rule); the visual matrix and
+the theme e2e take the built-in themes from the generated `BUILTIN_THEMES`.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

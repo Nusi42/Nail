@@ -46,11 +46,13 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 ### Changed — rules window decisions (ADRs 0227, 0229)
 
 - Select several rules in the rules window (Ctrl+click, Shift+click,
-  Shift+arrows, Ctrl+A); Run runs them all in list order with one Undo,
+  Shift+arrows, Ctrl+arrows then Space, Ctrl+A); Run runs them all in list order with one Undo,
   Test previews each rule, grouped by rule.
 - One Exchange badge per rule: the number sums the reasons over all
   Exchange accounts; hover, or the row with the keyboard focus, lists each
-  account.
+  account (Escape hides that list).
+- High contrast: a selected rule row keeps its handle, triggers, badge and
+  On mark readable, and the rule the editor shows is marked among several.
 - "Values from this mail" sits right after a condition's value, before
   "Match upper and lower case".
 - The Run on choice stays while you pick other rules.
@@ -63,7 +65,10 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   everywhere (junk, server rules and vacation account, Also my addresses,
   searchable decrypted mail, MCP accounts and hidden folders, import and
   export, key lookup, automatic replies). Multi-value fields show chips.
-- An empty address field lists your most-used addresses.
+- An empty address field lists your most-used addresses; the vacation
+  reply's "Reply from" and "Also my addresses" offer only your own.
+- Multi-value fields tell screen readers what they hold and announce each
+  change; chosen options show a check mark.
 
 ### Added — Paper theme
 

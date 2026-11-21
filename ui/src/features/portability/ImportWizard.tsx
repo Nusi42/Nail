@@ -51,7 +51,7 @@ import { PathField } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars, useImportSources } from "./queries";
 import { useBusyAction } from "../../state/busyAction";
 import { CloseButton } from "../../widgets/CloseButton";
-import { PickerField } from "../../widgets/pickers";
+import { AccountChoiceField, NullablePickerField } from "../../widgets/pickers";
 
 type Step = "source" | "options" | "job";
 
@@ -180,15 +180,13 @@ function TargetFields({
   return (
     <fieldset data-part="form.section" data-field="mail-target">
       <legend data-part="form.section.title">{t("portability-import-target")}</legend>
-      <PickerField
-        kind="account"
-        strict
+      <AccountChoiceField
         labelId="common-account"
         name="target-account"
         placeholder={t("portability-import-target-local")}
-        value={target ?? ""}
+        value={target}
         onChange={(id) => {
-          setTarget(id === "" ? null : id);
+          setTarget(id);
           setParentId(null);
         }}
       />
@@ -200,7 +198,7 @@ function TargetFields({
         )}
       </p>
       {target !== null && (
-        <PickerField
+        <NullablePickerField
           kind="folder"
           folderValue="id"
           strict
@@ -208,9 +206,9 @@ function TargetFields({
           labelId="portability-import-target-parent"
           name="target-parent"
           placeholder={t("portability-import-target-inbox")}
-          value={parentId ?? ""}
+          value={parentId}
           onChange={(id) => {
-            setParentId(id === "" ? null : id);
+            setParentId(id);
           }}
         />
       )}

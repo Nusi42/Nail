@@ -15,6 +15,7 @@ import { errorMessageId, errorMessageOf } from "../../api/client";
 import {
   VACATION_ISSUE_MESSAGE_IDS,
   type AccountConfig,
+  type Address,
   type LocalizedMessage,
   type ManageSieveConfig,
   type SieveAccountStatus,
@@ -24,7 +25,12 @@ import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccountsConfig, useClient } from "../../state/queries";
 import { CheckField, NumberField, TextAreaField, TextField, SaveRow } from "../../widgets/forms";
-import { PickerField, PickerListField } from "../../widgets/pickers";
+import {
+  AccountChoiceField,
+  NullablePickerField,
+  PickerListField,
+  identityAddresses,
+} from "../../widgets/pickers";
 import { manageSieveIssues, vacationIssues } from "./model";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
 import { PlacementTable } from "../rules/PlacementTable";
@@ -323,10 +329,11 @@ export function SieveStatusWidget({ node }: WidgetProps) {
         <p data-part="sieve-status.empty">{t("sieve-no-imap")}</p>
       ) : (
         <>
-          <ImapAccountField
+          <AccountChoiceField
             labelId="sieve-account"
+            name="account"
             accounts={imap}
-            value={account?.id ?? ""}
+            value={account?.id ?? null}
             onChange={setChosen}
           />
           {account && (
@@ -345,7 +352,16 @@ export function SieveStatusWidget({ node }: WidgetProps) {
   );
 }
 
-function VacationForm({ accountId, saved }: { accountId: string; saved: VacationSettings }) {
+function VacationForm({
+  accountId,
+  own,
+  saved,
+}: {
+  accountId: string;
+  /** The account's own addresses: the only ones "Reply from" and "Also my addresses" offer. */
+  own: readonly Address[];
+  saved: VacationSettings;
+}) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -445,19 +461,21 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
         labelId="vacation-addresses"
         hintId="vacation-addresses-hint"
         name="vacation-addresses"
+        ownAddresses={own}
         values={draft.addresses}
         onChange={(addresses) => {
           change({ addresses });
         }}
       />
-      <PickerField
+      <NullablePickerField
         kind="address"
         labelId="vacation-from"
         hintId="vacation-from-hint"
         name="vacation-from"
-        value={draft.from ?? ""}
+        ownAddresses={own}
+        value={draft.from}
         onChange={(from) => {
-          change({ from: from === "" ? null : from });
+          change({ from });
         }}
       />
       <CheckField
@@ -498,7 +516,12 @@ function Vacation({ account }: { account: AccountConfig }) {
       ) : account.sieve === undefined || account.sieve.enabled === false ? (
         <p data-part="vacation-editor.hint">{t("vacation-needs-sieve")}</p>
       ) : null}
-      <VacationForm key={account.id} accountId={account.id} saved={vacation.data} />
+      <VacationForm
+        key={account.id}
+        accountId={account.id}
+        own={identityAddresses(account.identities)}
+        saved={vacation.data}
+      />
     </>
   );
 }
@@ -525,42 +548,16 @@ export function VacationEditorWidget({ node }: WidgetProps) {
         <p data-part="vacation-editor.empty">{t("sieve-no-imap")}</p>
       ) : (
         <>
-          <ImapAccountField
+          <AccountChoiceField
             labelId="vacation-account"
+            name="account"
             accounts={imap}
-            value={account?.id ?? ""}
+            value={account?.id ?? null}
             onChange={setChosen}
           />
           {account && <Vacation key={account.id} account={account} />}
         </>
       )}
     </section>
-  );
-}
-
-/** The IMAP account a Sieve setting is for (an empty text keeps the first one). */
-function ImapAccountField({
-  labelId,
-  accounts,
-  value,
-  onChange,
-}: {
-  labelId: string;
-  accounts: readonly AccountConfig[];
-  value: string;
-  onChange: (id: string | null) => void;
-}) {
-  return (
-    <PickerField
-      kind="account"
-      strict
-      labelId={labelId}
-      name="account"
-      accounts={accounts.map((a) => a.id)}
-      value={value}
-      onChange={(id) => {
-        onChange(id === "" ? null : id);
-      }}
-    />
   );
 }

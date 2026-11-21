@@ -1,3 +1,4 @@
+import { must } from "../../test/must";
 import { p } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
 import { SETTINGS_BODY_END, SETTINGS_SKIN_CSS } from "../settings/skin";
@@ -80,6 +81,21 @@ describe("the rules skin (R2)", () => {
     expect(RULES_SKIN_CSS).not.toMatch(/rule-badge\.reasons"\][^{]*\{[^}]*display: none/);
     expect(BADGE_OPEN).toContain(`${p("exchange.rule-badge")}:hover`);
     expect(BADGE_OPEN).toContain(`${p("rules.list.item")}:focus-visible`);
+    // Escape hides it on the focused row (WCAG 1.4.13).
+    expect(BADGE_OPEN).toContain(':focus-visible:not([data-popover="hidden"])');
+    const row = document.createElement("li");
+    row.setAttribute("data-part", "rules.list.item");
+    row.innerHTML = '<div data-part="exchange.rule-badge"></div>';
+    document.body.append(row);
+    const badge = must(row.firstElementChild);
+    const focusRule = BADGE_OPEN.replace(":focus-visible", "").replace(
+      `${p("exchange.rule-badge")}:hover, `,
+      "",
+    );
+    expect(badge.matches(focusRule)).toBe(true);
+    row.setAttribute("data-popover", "hidden");
+    expect(badge.matches(focusRule)).toBe(false);
+    row.remove();
     // Open: over the list (absolute, from the hidden state), so nothing moves.
     const open = RULES_SKIN_CSS.split(`${BADGE_OPEN} > ${p("exchange.rule-badge.reasons")} {`)[1];
     expect(open?.slice(0, open.indexOf("}"))).toMatch(/inset-inline: 0; top: 100%;/);

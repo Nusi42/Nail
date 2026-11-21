@@ -110,7 +110,12 @@ test("the rule list's keyboard model", async ({ page }) => {
   await expect(footer.getByRole("button", { name: "Run 2 rules" })).toBeVisible();
   // The listbox with two rules selected passes axe.
   expect(await axeViolations(page, '[data-part="rules"]'), "rule list, two selected").toEqual([]);
-  // Escape goes back to the focused rule, and the window stays open.
+  // The first Escape only hides the focused row's Exchange badge popover
+  // (it covers the rows below; WCAG 1.4.13); the selection stays.
+  await page.keyboard.press("Escape");
+  await expect(ruleInList(window, "Flag releases")).toHaveAttribute("data-popover", "hidden");
+  await selected(window, "Flag welcome");
+  // The next Escape goes back to the focused rule, and the window stays open.
   await page.keyboard.press("Escape");
   await notSelected(window, "Flag welcome");
   await selected(window, "Flag releases");
@@ -123,6 +128,13 @@ test("the rule list's keyboard model", async ({ page }) => {
   await notSelected(window, "Flag releases");
   await selected(window, "Flag welcome");
   await expect(ruleInList(window, "Flag welcome")).toBeFocused();
+  // Ctrl+Up moves without selecting; Space then adds the rule moved to.
+  await page.keyboard.press("Control+ArrowUp");
+  await expect(ruleInList(window, "Flag releases")).toBeFocused();
+  await notSelected(window, "Flag releases");
+  await page.keyboard.press("Space");
+  await selected(window, "Flag releases");
+  await selected(window, "Flag welcome");
 });
 
 test("Values from this mail sits right after the condition's value", async ({ page }) => {

@@ -19,8 +19,12 @@ export {
   showsLabel,
 } from "./Picker";
 export {
+  AccountChoiceField,
+  NullablePickerField,
   PickerField,
   PickerListField,
+  type AccountChoiceFieldProps,
+  type NullablePickerFieldProps,
   type PickerFieldProps,
   type PickerListFieldProps,
 } from "./PickerField";
@@ -46,6 +50,8 @@ export {
   folderAccounts,
   offeredAccounts,
   addressOptions,
+  ownAddressOptions,
+  identityAddresses,
   folderTreeOptions,
   optionKey,
   suggestKindOf,
@@ -71,6 +77,7 @@ export {
   hasValue,
   splitTyped,
   toggledValue,
+  valueChanges,
   withValues,
   withoutValue,
 } from "./multiple";

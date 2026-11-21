@@ -1,6 +1,7 @@
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { BUILTIN_THEMES } from "../../ui/src/api/generated/constants";
 import { nailPerTest, control } from "../support/nail";
 import { openSettingsTab, showView, viewRegion, messageRows, openMail } from "../support/views";
 
@@ -17,7 +18,10 @@ import { openSettingsTab, showView, viewRegion, messageRows, openMail } from "..
 
 const server = nailPerTest({ seed: "demo-multi" });
 
-/** Accent colours of the built-in themes (defaults/themes/*.kdl). */
+/** A built-in theme's id (`nail_api::appearance::BUILTIN_THEMES`, generated). */
+type BuiltinTheme = (typeof BUILTIN_THEMES)[number][0];
+
+/** Accent colours of the built-in themes (defaults/themes/*.kdl); one per generated id. */
 const ACCENT = {
   frost: "#3b5bdb",
   sage: "#2c7153",
@@ -25,7 +29,19 @@ const ACCENT = {
   graphite: "#7c9cff",
   nocturne: "#45c9bb",
   "high-contrast": "#ffff00",
-} as const;
+} as const satisfies Record<BuiltinTheme, string>;
+
+/** The names the gallery shows for the built-in themes; one per generated id. */
+const THEME_NAME = {
+  frost: /Frost/,
+  sage: /Sage/,
+  paper: /Paper/,
+  graphite: /Graphite/,
+  nocturne: /Nocturne/,
+  "high-contrast": /High contrast/,
+} as const satisfies Record<BuiltinTheme, RegExp>;
+
+const BUILTIN_IDS: readonly string[] = BUILTIN_THEMES.map(([id]) => id);
 
 const open = (page: Page) => openMail(page, server.url);
 
@@ -68,14 +84,10 @@ test("themes are picked in Settings → Appearance and kept in theme.kdl", async
 
   const appearance = await openAppearance(page);
   const gallery = appearance.getByRole("radiogroup", { name: "Themes" });
-  await expect(gallery.getByRole("radio")).toHaveText([
-    /Frost/,
-    /Sage/,
-    /Paper/,
-    /Graphite/,
-    /Nocturne/,
-    /High contrast/,
-  ]);
+  // The test tables name every built-in theme the core has, no more.
+  expect(Object.keys(ACCENT).toSorted()).toEqual(BUILTIN_IDS.toSorted());
+  expect(Object.keys(THEME_NAME).toSorted()).toEqual(BUILTIN_IDS.toSorted());
+  await expect(gallery.getByRole("radio")).toHaveText(BUILTIN_THEMES.map(([id]) => THEME_NAME[id]));
   const follow = appearance.getByRole("switch", { name: "Follow Windows" });
   await expect(follow).toHaveAttribute("aria-checked", "true");
 
@@ -213,7 +225,7 @@ test("a theme file added to themes/ is listed at once and can be used", async ({
   await open(page);
   const appearance = await openAppearance(page);
   const gallery = appearance.getByRole("radiogroup", { name: "Themes" });
-  await expect(gallery.getByRole("radio")).toHaveCount(Object.keys(ACCENT).length);
+  await expect(gallery.getByRole("radio")).toHaveCount(BUILTIN_THEMES.length);
   mkdirSync(path.join(server.configDir, "themes"), { recursive: true });
   writeFileSync(
     path.join(server.configDir, "themes", "ocean.kdl"),

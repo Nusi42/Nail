@@ -1124,3 +1124,72 @@ fn the_watcher_hot_reloads_user_themes() {
     );
     assert_eq!(manager.appearance().active, "frost");
 }
+
+/// The declaration `property` of the high-contrast rule for `part` inside a
+/// row of the rule list with all of `conditions` (`key`, `value`), if any.
+fn rule_list_declaration(
+    theme: &ResolvedTheme,
+    part: &str,
+    conditions: &[(&str, &str)],
+    property: &str,
+) -> Option<String> {
+    let has = |list: &[nail_api::PartCondition]| {
+        list.len() == conditions.len()
+            && conditions.iter().all(|(k, v)| {
+                list.iter()
+                    .any(|c| c.key == *k && c.value.as_deref() == Some(*v))
+            })
+    };
+    theme
+        .parts
+        .iter()
+        .filter(|rule| rule.selector == part)
+        .filter(|rule| {
+            if part == "rules.list.item" {
+                rule.ancestors.is_empty() && has(&rule.conditions)
+            } else {
+                rule.ancestors
+                    .iter()
+                    .any(|a| a.selector == "rules.list.item" && has(&a.conditions))
+            }
+        })
+        .find_map(|rule| rule.declarations.get(property).cloned())
+}
+
+#[test]
+fn high_contrast_keeps_a_selected_rule_row_readable() {
+    // On the yellow highlight, the row's parts take its text colour, and the
+    // focused rule's marker is drawn in that colour, not in the (yellow) accent.
+    let hc = builtin("high-contrast");
+    let selected = [("selected", "true")];
+    for part in [
+        "rules.list.handle",
+        "rules.list.triggers",
+        "rules.list.enabled",
+        "exchange.rule-badge",
+    ] {
+        assert_eq!(
+            rule_list_declaration(&hc, part, &selected, "color").as_deref(),
+            Some("inherit"),
+            "{part}"
+        );
+    }
+    let marker = rule_list_declaration(
+        &hc,
+        "rules.list.item",
+        &[("selected", "true"), ("current", "true")],
+        "box-shadow",
+    )
+    .unwrap();
+    assert!(marker.contains("selection-fg"), "{marker}");
+    // The light themes keep their accent marker.
+    assert_eq!(
+        rule_list_declaration(
+            &builtin("frost"),
+            "rules.list.item",
+            &[("selected", "true"), ("current", "true")],
+            "box-shadow"
+        ),
+        None
+    );
+}

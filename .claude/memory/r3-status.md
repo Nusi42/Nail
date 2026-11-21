@@ -22,6 +22,15 @@ metadata:
 - Paper theme: `defaults/themes/paper.kdl` (light), registered in `nail-config` `themes.rs` and
   `nail_api::appearance::BUILTIN_THEMES`; theme counts in tests derive from `BUILTIN_THEMES`.
 
+**Review fixes:** own-address pickers (`ownAddresses`; vacation From / aliases), `NullablePickerField` /
+`AccountChoiceField` (the only empty-text-to-null mapping), multi-value a11y (`picker.summary`, `picker.status`
+live region without a `status` role — a second `status` broke form tests that query `getByRole("status")`),
+check mark for chosen options, `focus` gesture (Ctrl+arrows), Escape hides the badge popover first, High contrast
+rules for selected rule rows (in `defaults/themes/high-contrast.kdl`; the mock core ignores theme files' part
+rules, so that is tested in `nail-config` `appearance.rs`). Theme-file changes to `defaults/theme.kdl` need
+`NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test integration default_theme` (fixture
+`default-theme.json`, which the UI tests use).
+
 **Pitfalls:**
 
 - Theme KDL accepts only the supported CSS subset: `list-style` is not in it. Plain lists go into the list in

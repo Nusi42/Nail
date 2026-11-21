@@ -26,7 +26,9 @@
  * added or, when it is chosen already, removed. Typed text becomes a value
  * on Enter, a comma or a semicolon and when the field loses the focus (an
  * id kind only takes text that names an option); Backspace in the empty
- * field removes the last value. Rules in `./multiple.ts`.
+ * field removes the last value. Rules in `./multiple.ts`. For screen
+ * readers the input is described by a summary of the chosen values, and a
+ * polite live region announces each value added or removed.
  *
  * Parts (`PICKER_PARTS`, looks in `defaults/theme.kdl`): `picker`
  * (`data-kind`, `data-state="open"`; the host may name another root part
@@ -37,7 +39,8 @@
  * (`data-expanded`), `picker.option.icon`, `picker.option.label`,
  * `picker.option.detail`, `picker.empty`, in multi-value mode (`data-multiple`
  * on the root) `picker.chips`, `picker.chip` (`data-value`),
- * `picker.chip.label`, `picker.chip.remove` (`picker.chip.remove.icon`); the
+ * `picker.chip.label`, `picker.chip.remove` (`picker.chip.remove.icon`), `picker.summary` and `picker.status` (both
+ * visually hidden), `picker.option.check` (the mark of a chosen option); the
  * search field's values (`./searchValues.tsx`) render `picker.option.button`
  * rows.
  */
@@ -45,7 +48,14 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { useT } from "../../i18n/I18nProvider";
 import { useGeometry } from "../../theme/ThemeProvider";
 import { folderIcon, Icon } from "../Icon";
-import { hasValue, splitTyped, toggledValue, withValues, withoutValue } from "./multiple";
+import {
+  hasValue,
+  splitTyped,
+  toggledValue,
+  valueChanges,
+  withValues,
+  withoutValue,
+} from "./multiple";
 import { optionKey, usePickerOptions } from "./sources";
 import {
   initialActive,
@@ -78,6 +88,9 @@ export const PICKER_PARTS = [
   "picker.chip.label",
   "picker.chip.remove",
   "picker.chip.remove.icon",
+  "picker.summary",
+  "picker.status",
+  "picker.option.check",
 ] as const;
 
 /**
@@ -179,6 +192,7 @@ export function Picker({
   folderValue = "path",
   virtualAccounts = false,
   accounts,
+  ownAddresses,
   multiple,
   strict = false,
   id,
@@ -191,6 +205,7 @@ export function Picker({
   const t = useT();
   const ids = useId();
   const listId = `${ids}-list`;
+  const summaryId = `${ids}-chosen`;
   const rootRef = useRef<HTMLSpanElement>(null);
   const fieldRef = useRef<HTMLSpanElement>(null);
   const popupRef = useRef<HTMLSpanElement>(null);
@@ -202,13 +217,15 @@ export function Picker({
   const [filtering, setFiltering] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /** Multi-value mode: what the status last announced (a value added or removed). */
+  const [announced, setAnnounced] = useState("");
   const [place, setPlace] = useState<ReturnType<typeof popupGeometry>>({
     placement: "below",
     declarations: {},
   });
   const geom = `picker-${ids.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
   useGeometry(geom, place.declarations);
-  const scope = { accountId, folderValue, virtualAccounts, accounts };
+  const scope = { accountId, folderValue, virtualAccounts, accounts, ownAddresses };
   const named = showsLabel(kind, folderValue);
   const values = multiple?.values ?? [];
   // Every option: the list while browsing, and the name of an id value (or of typed text or a chip).
@@ -247,6 +264,25 @@ export function Picker({
     setActive(null);
   };
 
+  /** The name a chosen value shows (a chip, an announcement). */
+  const valueName = (chosen: string) => (named ? chipLabel(all.options, chosen) : chosen);
+
+  /** Multi-value mode: sets the values and announces what was added or removed. */
+  const setValues = (next: string[]) => {
+    if (!multiple) return;
+    const { added, removed } = valueChanges(values, next);
+    const lines = [
+      ...(added.length > 0
+        ? [t("pickers-added", { values: added.map(valueName).join(", ") })]
+        : []),
+      ...(removed.length > 0
+        ? [t("pickers-removed", { values: removed.map(valueName).join(", ") })]
+        : []),
+    ];
+    if (lines.length > 0) setAnnounced(lines.join(" "));
+    multiple.onChange(next);
+  };
+
   /**
    * Multi-value mode: typed `text` becomes a value (an id kind's only when
    * it names an option) and the field empties; `false` when nothing was added.
@@ -256,7 +292,7 @@ export function Picker({
     if (!multiple || typedText === "") return false;
     const added = named ? optionNamed(all.options, typedText)?.value : typedText;
     if (added === undefined) return false;
-    multiple.onChange(withValues(values, [added]));
+    setValues(withValues(values, [added]));
     setTyped(null);
     onChange("", null);
     // Nothing is left to filter by: the list closes (Down or ▾ opens it again).
@@ -283,7 +319,7 @@ export function Picker({
     }
     if (multiple) {
       // Added or removed; the list stays open for the next one.
-      multiple.onChange(toggledValue(values, option.value));
+      setValues(toggledValue(values, option.value));
       setTyped(null);
       if (value !== "") onChange("", null);
       setFiltering(false);
@@ -353,7 +389,7 @@ export function Picker({
       const last = values.at(-1);
       if (event.key === "Backspace" && (typed ?? value) === "" && last !== undefined) {
         event.preventDefault();
-        multiple.onChange(withoutValue(values, last));
+        setValues(withoutValue(values, last));
         return;
       }
       if (event.key === "Enter" && text !== "") {
@@ -414,7 +450,7 @@ export function Picker({
 
   const empty = listed.loading
     ? "pickers-loading"
-    : kind === "address" && (typed ?? "").trim() === ""
+    : kind === "address" && ownAddresses === undefined && (typed ?? "").trim() === ""
       ? "pickers-type-to-search"
       : "pickers-no-match";
 
@@ -429,7 +465,7 @@ export function Picker({
       {multiple && values.length > 0 && (
         <ul data-part="picker.chips" aria-label={t("pickers-chosen", { field: label })}>
           {values.map((chosen) => {
-            const name = named ? chipLabel(all.options, chosen) : chosen;
+            const name = valueName(chosen);
             const remove = t("pickers-remove", { value: name });
             return (
               <li key={chosen} data-part="picker.chip" data-value={chosen}>
@@ -441,7 +477,7 @@ export function Picker({
                   aria-label={remove}
                   title={remove}
                   onClick={() => {
-                    multiple.onChange(withoutValue(values, chosen));
+                    setValues(withoutValue(values, chosen));
                     inputRef.current?.focus();
                   }}
                 >
@@ -451,6 +487,22 @@ export function Picker({
             );
           })}
         </ul>
+      )}
+      {multiple && (
+        <>
+          <span id={summaryId} data-part="picker.summary">
+            {values.length === 0
+              ? t("pickers-chosen-none")
+              : t("pickers-chosen-summary", {
+                  count: values.length,
+                  values: values.map(valueName).join(", "),
+                })}
+          </span>
+          {/* A polite live region, not a `status` role: the form around keeps its own status. */}
+          <span data-part="picker.status" aria-live="polite" aria-atomic="true">
+            {announced}
+          </span>
+        </>
       )}
       <span ref={fieldRef} data-part="picker.field">
         <input
@@ -464,7 +516,9 @@ export function Picker({
           placeholder={placeholder}
           disabled={disabled}
           aria-invalid={invalid === true ? true : undefined}
-          aria-describedby={describedBy}
+          aria-describedby={
+            [describedBy, multiple ? summaryId : undefined].filter(Boolean).join(" ") || undefined
+          }
           aria-autocomplete="list"
           aria-haspopup={tree ? "tree" : "listbox"}
           aria-expanded={open}
@@ -483,7 +537,7 @@ export function Picker({
               // A comma or semicolon (also in pasted text) ends a value.
               const { done, rest } = splitTyped(text);
               if (done.length > 0) {
-                multiple.onChange(withValues(values, done));
+                setValues(withValues(values, done));
                 text = rest;
               }
             }
@@ -569,6 +623,11 @@ export function Picker({
                       }
                     }}
                   >
+                    {multiple && (
+                      <span data-part="picker.option.check" aria-hidden="true">
+                        {selected && <Icon name="check" part="picker.option.check.icon" />}
+                      </span>
+                    )}
                     {tree && (
                       <span
                         data-part="picker.option.toggle"

@@ -251,6 +251,7 @@ ${p("search-bar.field")}[data-state~="invalid"] { border-color: ${T.danger}; }
 ${p("search-bar")} { position: relative; }
 ${p("search-bar.error.note")} { color: ${T.muted}; }
 ${p("search-bar.status")} { ${VISUALLY_HIDDEN} }
+${ps("picker.summary", "picker.status")} { ${VISUALLY_HIDDEN} }
 ${p("search-bar.hints")} { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; box-shadow: ${T.overlay}; }
 ${p("search-bar.hint")}[role="option"] { cursor: default; }
 ${p("search-bar.hint.button")}[data-state~="active"] { background-color: ${T.raised}; outline: 2px solid transparent; outline-offset: -2px; }

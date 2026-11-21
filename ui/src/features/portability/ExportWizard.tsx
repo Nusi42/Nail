@@ -31,7 +31,7 @@ import { PathField, useSavePath } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars } from "./queries";
 import { useBusyAction } from "../../state/busyAction";
 import { CloseButton } from "../../widgets/CloseButton";
-import { PickerField, PickerListField } from "../../widgets/pickers";
+import { AccountChoiceField, PickerListField } from "../../widgets/pickers";
 
 type SourceKind = ExportSource["type"];
 const SOURCE_KINDS: readonly SourceKind[] = EXPORT_SOURCE_KINDS;
@@ -144,15 +144,11 @@ export function ExportWizard({ close }: { close: () => void }) {
         />
         {kind === "folders" && (
           <>
-            <PickerField
-              kind="account"
-              strict
+            <AccountChoiceField
               labelId="common-account"
               name="account"
-              value={account ?? ""}
-              onChange={(id) => {
-                setAccountId(id === "" ? null : id);
-              }}
+              value={account}
+              onChange={setAccountId}
             />
             <PickerListField
               kind="folder"

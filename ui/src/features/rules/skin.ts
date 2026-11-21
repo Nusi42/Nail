@@ -26,7 +26,7 @@
  *   shared problem indicator's details.
  * - **Exchange badge** (R3): one ⓘ per rule; its popover lists each
  *   account's line on hover and while the rule's row has the keyboard
- *   focus. Otherwise the lines stay visually hidden (not removed), so the
+ *   focus, until Escape hides it (`data-popover="hidden"` on the row). Otherwise the lines stay visually hidden (not removed), so the
  *   row's description still reads them; the popover lies over the list
  *   under its row, as wide as the row, so it moves nothing and the list's
  *   edge never clips it.
@@ -101,7 +101,7 @@ ${inRules("rules.text.source")}::selection { color: transparent; background-colo
 ${inRules("rules.text.gutter")} { font-size: ${T.body}; line-height: ${T.normal}; }`;
 
 /** Where the badge's popover shows: the ⓘ under the pointer, or its row with the keyboard focus. */
-export const BADGE_OPEN = `:is(${p("exchange.rule-badge")}:hover, ${p("rules.list.item")}:focus-visible ${p("exchange.rule-badge")})`;
+export const BADGE_OPEN = `:is(${p("exchange.rule-badge")}:hover, ${p("rules.list.item")}:focus-visible:not([data-popover="hidden"]) ${p("exchange.rule-badge")})`;
 
 /* The popover spans its row (the list's width), so the list never clips it. */
 const BADGES = `${p("rules.list.item")} { position: relative; }

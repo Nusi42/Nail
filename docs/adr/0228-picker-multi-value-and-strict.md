@@ -59,3 +59,23 @@ form is for, where free text means nothing.
 - Hosts keep a list in their own state and pass it as `values`; no host
   parses comma-separated text any more (the sieve feature's own address
   list parser is removed).
+
+## Review fixes (R3)
+
+- **Own addresses.** An address picker can be limited to the user's own
+  addresses (`ownAddresses`, a `PickerScope` field): it lists only those,
+  filtered by the typed text, and never asks `SuggestAddresses` (whose
+  empty-prefix answer, ADR 0227, holds other people's addresses). The
+  vacation reply's "Reply from" and "Also my addresses" pass the account's
+  identities (`identityAddresses`).
+- **Nullable fields.** `NullablePickerField` is the one place where an empty
+  text means "none" (`null`); `AccountChoiceField` is the strict account
+  field a setting is for (junk, server rules, vacation, automatic replies,
+  export, import). Hosts no longer map `""` to `null` themselves.
+- **Screen readers.** A multi-value input is described by a visually hidden
+  summary of its values (`picker.summary`), and a polite live region
+  (`picker.status`, `aria-live`, not a `status` role so a form's own status
+  stays the only one) announces each value added or removed.
+- **Chosen options.** A chosen option has a soft accent background, and in
+  multi-value lists a check mark (`picker.option.check`), since picking it
+  again removes it.

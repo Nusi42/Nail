@@ -31,9 +31,13 @@ The list on the left shows your rules in the order they run:
 - Click a rule to open it in the editor. To select several rules, hold
   **Ctrl** and click each one, or click the first and **Shift**+click the
   last. With the keyboard: the **Up** and **Down** arrow keys move between
-  rules, **Shift+Up** / **Shift+Down** add the next rule, **Space** adds or
-  removes the rule you are on, **Ctrl+A** selects every rule in the list
-  and **Escape** goes back to just the rule you are on. The editor always
+  rules, **Shift+Up** / **Shift+Down** add the next rule, **Ctrl+Up** /
+  **Ctrl+Down** move without changing the selection, **Space** adds or
+  removes the rule you are on (so rules that are not next to each other can
+  be selected too), **Ctrl+A** selects every rule in the list and **Escape**
+  goes back to just the rule you are on. While a rule with an Exchange
+  badge has the keyboard focus, the badge shows each account's line below
+  the rule; the first **Escape** hides it. The editor always
   shows the rule you clicked or moved to last; **Run** and **Test rule**
   then act on all selected rules (see [The footer](#the-footer)).
 - To change the order, drag a rule by its handle (the dots on the left), or

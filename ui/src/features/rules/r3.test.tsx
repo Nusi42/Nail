@@ -5,6 +5,7 @@
  * a condition's value field.
  */
 import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { Rule } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { renderWithProviders } from "../../test/harness";
@@ -63,6 +64,12 @@ describe("the list selection", () => {
       focus: "d",
     });
     expect(pick(ORDER, one, "a", "range").selected).toEqual(["a", "b"]);
+    // Moving only the focus keeps the selection and its anchor.
+    expect(pick(ORDER, two, "a", "focus")).toEqual({
+      selected: ["b", "d"],
+      anchor: "d",
+      focus: "a",
+    });
     // No anchor (or one no longer listed): the range starts at the pick.
     expect(pick(ORDER, { selected: [], anchor: "gone" }, "c", "range")).toEqual({
       selected: ["c"],
@@ -100,6 +107,17 @@ describe("the list selection", () => {
       "d",
     ]);
     expect(selectionForKey(key("Home"), ORDER, one, "b")?.focus).toBe("a");
+    // Ctrl / ⌘ with an arrow, Home or End moves only the focus.
+    expect(selectionForKey(key("ArrowDown", { ctrlKey: true }), ORDER, one, "b")).toEqual({
+      selected: ["b"],
+      anchor: "b",
+      focus: "c",
+    });
+    expect(selectionForKey(key("End", { metaKey: true }), ORDER, one, "b")).toEqual({
+      selected: ["b"],
+      anchor: "b",
+      focus: "d",
+    });
     expect(selectionForKey(key(" "), ORDER, one, "b")?.selected).toEqual([]);
     expect(selectionForKey(key("a", { ctrlKey: true }), ORDER, one, "b")?.selected).toEqual(ORDER);
     expect(selectionForKey(key("A", { metaKey: true }), ORDER, one, "b")?.selected).toEqual(ORDER);
@@ -245,6 +263,37 @@ describe("several rules in the rules window", () => {
     expect(listState()).toEqual({ "Rust announcements": true, "Tag all": true });
   });
 
+  it("selects rules that are not next to each other with the keyboard alone", async () => {
+    const env = setup();
+    addTagAllRule(env);
+    addArchiveAllRule(env);
+    const { user } = await openEditor(env, "Rust announcements");
+    const first = screen.getByRole("option", { name: ruleOption("Rust announcements") });
+    first.focus();
+    // Ctrl+Down twice moves past the middle rule without selecting anything.
+    await user.keyboard("{Control>}{ArrowDown}{ArrowDown}{/Control}");
+    const last = screen.getByRole("option", { name: ruleOption("Archive all") });
+    await waitFor(() => {
+      expect(last).toHaveFocus();
+    });
+    expect(first).toHaveAttribute("aria-selected", "true");
+    expect(last).toHaveAttribute("aria-selected", "false");
+    // Space adds the focused rule: the first and the third are selected.
+    await user.keyboard(" ");
+    const list = screen.getByRole("listbox", { name: "Rules, in the order they run" });
+    expect(
+      within(list)
+        .getAllByRole("option", { selected: true })
+        .map((o) => o.getAttribute("data-rule")),
+    ).toEqual(["rust-announcements", "archive-all"]);
+    expect(screen.getByRole("option", { name: ruleOption("Tag all") })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    // The hint names the keys.
+    expect(screen.getByText(/Ctrl\+Up or Ctrl\+Down moves without selecting/)).toBeInTheDocument();
+  });
+
   it("runs the selected rules in file order with one RunRules, and undoes them together", async () => {
     const env = setup(IN_INBOX);
     addTagAllRule(env);
@@ -341,6 +390,39 @@ describe("several rules in the rules window", () => {
     // One badge per row, inside the option and not a control of its own.
     expect(option.querySelectorAll('[data-part="exchange.rule-badge"]')).toHaveLength(1);
     expect(within(option).queryByRole("button")).toBeNull();
+  });
+
+  it("hides the focused row's badge popover with Escape before anything else", async () => {
+    const env = exchangeSetup();
+    const closed: string[] = [];
+    renderWithProviders(
+      // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- records an Escape the list lets through (the window would close).
+      <div
+        onKeyDown={(event) => {
+          if (event.key === "Escape") closed.push("window");
+        }}
+      >
+        <RuleManagerView />
+      </div>,
+      env,
+    );
+    const option = await screen.findByRole("option", { name: ruleOption("Rust announcements") });
+    await waitFor(() => {
+      expect(option.querySelector('[data-part="exchange.rule-badge"]')).not.toBeNull();
+    });
+    const user = userEvent.setup();
+    await user.click(option);
+    await user.keyboard("{Escape}");
+    expect(option).toHaveAttribute("data-popover", "hidden");
+    expect(closed).toEqual([]);
+    // The next key shows it again; the next Escape does what Escape does.
+    await user.keyboard("{Shift}");
+    expect(option).not.toHaveAttribute("data-popover");
+    await user.keyboard("{Escape}");
+    expect(closed).toEqual([]);
+    // Hidden already, with this rule alone selected: Escape goes on to the window.
+    await user.keyboard("{Escape}");
+    expect(closed).toEqual(["window"]);
   });
 
   it("describes a rule that is off", async () => {

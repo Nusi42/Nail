@@ -30,7 +30,7 @@ import {
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { CheckField, NumberField, SelectField, TextField, type Choice } from "../../widgets/forms";
-import type { PickerKind } from "../../widgets/pickers";
+import { NullablePickerField, type PickerKind } from "../../widgets/pickers";
 import { AddMenu } from "./AddMenu";
 import { ValuesFromMessage } from "./fromMessage";
 import {
@@ -163,6 +163,7 @@ export function FolderRefFields({
   value: FolderRef;
   onChange: (value: FolderRef) => void;
 } & Marked) {
+  const t = useT();
   const account_id = value.account_id;
   return (
     <>
@@ -208,14 +209,14 @@ export function FolderRefFields({
           }}
         />
       )}
-      <PickerField
+      <NullablePickerField
         kind="account"
         labelId="rules-folder-account"
         name={`${name}-account`}
-        value={account_id ?? ""}
-        placeholderId="rules-folder-account-own"
+        value={account_id}
+        placeholder={t("rules-folder-account-own")}
         onChange={(id) => {
-          onChange({ ...value, account_id: id === "" ? null : id });
+          onChange({ ...value, account_id: id });
         }}
       />
     </>

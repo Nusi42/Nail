@@ -108,3 +108,19 @@ folder conditions. Action rows are unchanged.
   `rules-list-toggle`; new `rules-run-many`, `rules-save-and-run-many`,
   `rules-confirm-run-many`, `rules-test-summary-many`,
   `rules-test-separately`, `rules-select-many-hint`.
+
+## Review fixes (R3)
+
+- **Keyboard without adjacency.** `pick` has a fourth gesture, `focus`:
+  Ctrl+Up / Down (⌘ on macOS), Ctrl+Home / End move the focus and keep the
+  selection, then Space toggles the focused rule, as in the WAI-ARIA
+  multi-select listbox pattern. The list's hint names the keys.
+- **Badge popover (WCAG 1.4.13).** The popover shown while a row has the
+  keyboard focus can be dismissed without moving the focus: the first
+  Escape on such a row hides it (`data-popover="hidden"` on the row, which
+  `BADGE_OPEN` excludes) and does nothing else; any other key or a click
+  shows it again.
+- **High contrast.** In the High contrast theme the parts of a selected row
+  (handle, triggers, badge, On mark) take the highlight's text colour, and
+  the focused rule among several selected ones has a thick bar in that
+  colour instead of the accent (yellow on yellow).

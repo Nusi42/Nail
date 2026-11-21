@@ -46,3 +46,14 @@ export function splitTyped(text: string): { done: string[]; rest: string } {
   const rest = parts.pop() ?? "";
   return { done: parts.map((p) => p.trim()).filter((p) => p !== ""), rest };
 }
+
+/** What a change of the chosen values added and removed (what a screen reader is told). */
+export function valueChanges(
+  before: readonly string[],
+  after: readonly string[],
+): { added: string[]; removed: string[] } {
+  return {
+    added: after.filter((v) => !hasValue(before, v)),
+    removed: before.filter((v) => !hasValue(after, v)),
+  };
+}

@@ -63,6 +63,12 @@ export interface PickerScope {
   virtualAccounts?: boolean;
   /** Account and folder pickers: offer only these accounts (default: every one the kind offers). */
   accounts?: readonly AccountId[] | undefined;
+  /**
+   * Address pickers for the user's own addresses (a vacation reply's From,
+   * its aliases): offer only these, filtered by the typed text, and never
+   * the most-used or suggested addresses (those are other people's).
+   */
+  ownAddresses?: readonly Address[] | undefined;
 }
 
 /** The options of one picker for the text typed so far. */
@@ -111,6 +117,8 @@ export interface PickerProps {
   virtualAccounts?: boolean | undefined;
   /** Account and folder pickers: offer only these accounts (default: every one the kind offers). */
   accounts?: readonly AccountId[] | undefined;
+  /** Address pickers: offer only these (the user's own) addresses; see `PickerScope`. */
+  ownAddresses?: readonly Address[] | undefined;
   /** The input's id (a host's `<label htmlFor>`). */
   id?: string | undefined;
   /** Localized placeholder. */

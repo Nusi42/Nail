@@ -2385,6 +2385,47 @@
     },
     {
       "selector": "picker.option",
+      "states": [],
+      "conditions": [
+        {
+          "key": "selected",
+          "value": "true"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-semibold)",
+        "background-color": "var(--nail-color-accent-soft)"
+      },
+      "source": null
+    },
+    {
+      "selector": "picker.option.check",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "flex-shrink": "0",
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)",
+        "color": "inherit"
+      },
+      "source": null
+    },
+    {
+      "selector": "picker.option.check.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)"
+      },
+      "source": null
+    },
+    {
+      "selector": "picker.option",
       "states": [
         "highlighted"
       ],
@@ -2395,21 +2436,6 @@
         "background-color": "var(--nail-color-selection)",
         "outline": "2px solid transparent",
         "outline-offset": "-2px"
-      },
-      "source": null
-    },
-    {
-      "selector": "picker.option",
-      "states": [],
-      "conditions": [
-        {
-          "key": "selected",
-          "value": "true"
-        }
-      ],
-      "ancestors": [],
-      "declarations": {
-        "font-weight": "var(--nail-font-weight-semibold)"
       },
       "source": null
     },

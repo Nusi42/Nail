@@ -71,12 +71,13 @@ skips mailing lists, bulk mail and automatic messages.
 
 **Also my addresses** lists further addresses of yours (aliases) the reply
 should count as yours: type an address and press **Enter** or a comma, or
-pick one from the list; each address becomes a chip with **×** to remove
+pick one of the account's own addresses from the list (it never offers other
+people's addresses); each address becomes a chip with **×** to remove
 it ([several values](settings.md#choosing-a-folder-an-account-or-an-address)).
 
-**Reply from** sets the sender of the reply; opened empty, its list shows
-the addresses you use most, typing searches your contacts and the people
-you write with, and any address you type yourself is fine, too.
+**Reply from** sets the sender of the reply; its list offers the account's
+own addresses (its identities), typing filters them, and any address you
+type yourself is fine, too.
 
 The **Account** field at the top chooses whose reply (or server rules) you
 edit; its list offers only the accounts that have them.

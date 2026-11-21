@@ -114,6 +114,31 @@ describe("vacation-editor", () => {
     });
   });
 
+  it("offers only the account's own addresses for Reply from and Also my addresses", async () => {
+    const user = userEvent.setup();
+    const env = withSieve();
+    const work = env.transport.data.accountsConfig.accounts.find((a) => a.id === "acc-work");
+    const own = (work?.identities ?? []).map((i) => i.email);
+    expect(own.length).toBeGreaterThan(0);
+    renderWithProviders(<NodeView node={widget("vacation-editor")} path="t" />, env);
+    const section = await screen.findByRole("region", { name: "Vacation reply" });
+    await pickOption(user, section, "Account", /^Work/);
+    for (const field of ["Reply from", "Also my addresses"]) {
+      await user.click(
+        await within(section).findByRole("button", { name: `Show choices for ${field}` }),
+      );
+      const list = await within(section).findByRole("listbox", { name: `Choices for ${field}` });
+      const offered = within(list)
+        .getAllByRole("option")
+        .map((o) => o.textContent);
+      expect(offered).toHaveLength(own.length);
+      for (const [i, email] of own.entries()) expect(offered[i]).toContain(email);
+      await user.keyboard("{Escape}");
+    }
+    // Other people's addresses are never asked for.
+    expect(requestsOf(env, "SuggestAddresses")).toEqual([]);
+  });
+
   it("asks to turn server rules on when the account has none", async () => {
     const env = createEnv();
     renderWithProviders(<NodeView node={widget("vacation-editor")} path="t" />, env);

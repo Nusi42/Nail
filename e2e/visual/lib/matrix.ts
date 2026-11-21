@@ -4,7 +4,7 @@
  *
  * The theme list is data-driven: the core's `ListThemes` answer (probed
  * once by the runner, checked again by every worker) decides which themes
- * exist. The built-in themes (the five of the M5 proposal and Paper) are
+ * exist. The built-in themes (the core's generated list) are
  * always part of the matrix, so a theme the core does not list (yet)
  * shows up as a skipped variant with its reason instead of silently
  * disappearing; any further built-in theme the core lists is added after
@@ -13,18 +13,14 @@
  * Pure and dependency-free (only erasable TypeScript), so `node --test`
  * runs its tests directly (`matrix.test.ts`).
  */
-import { DENSITY_VALUES } from "../../../ui/src/api/generated/constants.ts";
+import { BUILTIN_THEMES, DENSITY_VALUES } from "../../../ui/src/api/generated/constants.ts";
 import type { Density } from "../../../ui/src/api/generated/Density.ts";
 
-/** The built-in themes (the M5 proposal's five and Paper), in gallery order. */
-export const EXPECTED_THEMES = [
-  "frost",
-  "sage",
-  "paper",
-  "graphite",
-  "nocturne",
-  "high-contrast",
-] as const;
+/**
+ * The built-in themes in gallery order: `nail_api::appearance::BUILTIN_THEMES`
+ * (generated), so a new built-in theme joins the matrix by itself.
+ */
+export const EXPECTED_THEMES = BUILTIN_THEMES.map(([id]) => id);
 
 /**
  * A pseudo theme: whatever the server starts in, not switched. Only on

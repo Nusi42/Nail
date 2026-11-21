@@ -92,7 +92,9 @@ Folders are a tree: each account with its folders (Inbox, Sent, Archive and
 the other special folders first, with their purpose beside a folder whose
 name differs); addresses come from your contacts and the people you write
 with, found by name or address — opened while the field is empty, the list
-shows the addresses you use most (your own addresses are left out); tags
+shows the addresses you use most (your own addresses are left out), except
+in fields for your own addresses (a vacation reply's sender and aliases),
+which offer only the account's own addresses; tags
 offer the ones in use and **Create tag "…"** for a new one.
 
 You can still type any value yourself; the list only helps to find one.
@@ -104,11 +106,13 @@ account from its list.
 **Several values.** Some fields hold a list (several addresses, accounts or
 folders). Each value is shown as a chip before the field, with **×** to
 remove it. Picking a choice adds it, and the list stays open for the next
-one; picking a choice that is already there removes it. Typed text becomes
+one; a chosen choice is marked with a check and a soft background, and
+picking it again removes it. Typed text becomes
 a value with **Enter**, a comma or a semicolon, or when you leave the field
 (for accounts and folders only a name that matches a choice); pasting
 several addresses separated by commas adds them all. **Backspace** in the
-empty field removes the last value.
+empty field removes the last value. Screen readers hear what the field
+holds when they reach it, and each value added or removed is announced.
 
 Keyboard: **Down** / **Up** move through the list, **Home** / **End** jump
 to its ends while it shows every choice, **Right** opens a folder with

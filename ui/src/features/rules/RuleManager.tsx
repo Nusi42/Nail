@@ -11,10 +11,15 @@
  *
  * - Selecting (`widgets/listSelection.ts`): Click selects one rule, Ctrl+click adds
  *   or removes one, Shift+click and Shift+Up / Down extend from the anchor,
- *   Space adds or removes the focused rule, Ctrl+A selects every listed
+ *   Ctrl+Up / Down move the focus without changing the selection and
+ *   Space adds or removes the focused rule (so the keyboard selects rules
+ *   that are not next to each other), Ctrl+A selects every listed
  *   rule, Escape goes back to the focused rule alone. The editor shows the
  *   focused rule; Run and Test act on every selected rule.
  * - Reordering: drag a row by its handle, or Alt+Up / Alt+Down on a row.
+ * - The Exchange badge's popover, shown while its row has the keyboard
+ *   focus, is hidden by Escape (before Escape does anything else) until
+ *   the next key, so it never has to cover the rows below (WCAG 1.4.13).
  * - An option's content is not interactive (ARIA: its children are
  *   presentational), so the handle and the On mark are pointer targets;
  *   the keyboard reorders with Alt+arrows and switches a rule on or off in
@@ -28,7 +33,7 @@
  * 760 px the list goes over the editor), `rules.panes`, `rules.list`,
  * `rules.list.tools`, `rules.list.filter`, `rules.list.items`,
  * `rules.list.item` (`data-selected`, `data-current`, `data-enabled`,
- * `data-drop`), `rules.list.handle`, `rules.list.main`, `rules.list.name`,
+ * `data-drop`, `data-popover="hidden"`), `rules.list.handle`, `rules.list.main`, `rules.list.name`,
  * `rules.list.triggers`, `rules.list.about`, `rules.list.off`,
  * `rules.list.enabled` (`data-enabled`), `rules.empty`,
  * `rules.empty.starters`, `rules.empty.starter`.
@@ -94,7 +99,8 @@ const FOCUS_STEPS: Readonly<Record<string, "first" | "last" | -1 | 1>> = {
 /**
  * The selection a key asks for in the list (`order`: the listed ids), or
  * `null` when the key does not select: arrows / Home / End move the focus
- * (Shift extends the range), Space adds or removes the focused rule,
+ * (Shift extends the range; Ctrl / ⌘ moves only the focus and keeps the
+ * selection), Space adds or removes the focused rule,
  * Ctrl+A (⌘A) selects every listed rule, Escape keeps only the focused
  * rule (nothing to do when it is the only one).
  */
@@ -114,7 +120,8 @@ export function selectionForKey(
           ? order[order.length - 1]
           : stepFrom(order, focus, step);
     if (next === undefined) return null;
-    return pick(order, current, next, event.shiftKey ? "range" : "single");
+    const gesture = event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "focus" : "single";
+    return pick(order, current, next, gesture);
   }
   if (focus === null || !order.includes(focus)) return null;
   if (event.key === " ") return pick(order, current, focus, "toggle");
@@ -143,11 +150,21 @@ export function selectedRules(shown: readonly Rule[], selected: readonly RuleId[
   return rules.length > 1 ? rules : [];
 }
 
+/** Whether the row of rule `id` in `list` shows an Exchange badge (with its popover). */
+export function hasBadge(list: HTMLElement | null, id: RuleId): boolean {
+  const badge = list
+    ?.querySelector(`[data-part="rules.list.item"][data-rule="${CSS.escape(id)}"]`)
+    ?.querySelector('[data-part="exchange.rule-badge"]');
+  return badge !== null && badge !== undefined;
+}
+
 interface RowProps {
   rule: Rule;
   index: number;
   selected: boolean;
   current: boolean;
+  /** Escape hid the badge's popover of the focused row. */
+  popoverHidden: boolean;
   /** The row takes the Tab stop of the list (roving tabindex). */
   tabStop: boolean;
   /** Reordering is off while the list is filtered. */
@@ -166,6 +183,7 @@ function RuleRow({
   index,
   selected,
   current,
+  popoverHidden,
   tabStop,
   filtered,
   drop,
@@ -187,6 +205,7 @@ function RuleRow({
       data-current={current}
       data-enabled={rule.enabled}
       data-drop={drop ? "target" : undefined}
+      data-popover={popoverHidden ? "hidden" : undefined}
       aria-selected={selected}
       aria-labelledby={`${id}-name ${id}-triggers`}
       aria-describedby={`${id}-about`}
@@ -280,6 +299,8 @@ function RuleList({
   const startNew = useRulesUi((s) => s.startNew);
   const [dragged, setDragged] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
+  /** The row whose badge popover Escape hid (until the next key or pick). */
+  const [popoverHidden, setPopoverHidden] = useState<RuleId | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const focusNext = useRef(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: rulesKeys.rules });
@@ -321,6 +342,17 @@ function RuleList({
     });
   };
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") {
+      if (tabStop !== null && popoverHidden !== tabStop && hasBadge(listRef.current, tabStop)) {
+        // Escape first hides the popover; the next Escape does the rest.
+        event.preventDefault();
+        event.stopPropagation();
+        setPopoverHidden(tabStop);
+        return;
+      }
+    } else if (popoverHidden !== null) {
+      setPopoverHidden(null);
+    }
     const step = reorderStep(event);
     if (step !== 0) {
       if (filtered || tabStop === null) return;
@@ -392,10 +424,12 @@ function RuleList({
                 index={index}
                 selected={selected.has(rule.id)}
                 current={rule.id === focus}
+                popoverHidden={rule.id === popoverHidden}
                 tabStop={rule.id === tabStop}
                 filtered={filtered}
                 drop={over === index && dragged !== index}
                 onPick={(event, id) => {
+                  setPopoverHidden(null);
                   choose(pick(order, selection, id, gestureOf(event)));
                 }}
                 onEnabled={(r, enabled) => void act(() => saveRule(client, { ...r, enabled }))}

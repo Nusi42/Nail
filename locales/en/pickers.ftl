@@ -22,3 +22,15 @@ pickers-search-values = Values for this search field
 pickers-chosen = Chosen for { $field }
 # Button on a chosen value that removes it; $value is the value's name.
 pickers-remove = Remove { $value }
+# Multi-value fields, for screen readers: what the field holds; $count is how many values, $values their names.
+pickers-chosen-summary =
+    { $count ->
+        [one] Chosen: { $values }
+       *[other] { $count } chosen: { $values }
+    }
+# Multi-value fields, for screen readers: nothing is chosen yet.
+pickers-chosen-none = Nothing chosen yet
+# Multi-value fields, announced to screen readers when values are added; $values are their names.
+pickers-added = Added { $values }
+# Multi-value fields, announced to screen readers when values are removed; $values are their names.
+pickers-removed = Removed { $values }

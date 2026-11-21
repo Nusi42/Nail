@@ -3,13 +3,16 @@
  * rules editor): the shared `Picker` in the `form.field` frame of
  * `../forms.tsx` (label above, optional hint below). `PickerListField` is
  * its multi-value form (R3): chips plus the input, the typed text kept here.
+ * `NullablePickerField` is the form whose empty text means "none" (`null`),
+ * and `AccountChoiceField` the strict account field a setting is for.
  */
 import { useId, useState } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import type { MessageArgs } from "../../i18n/localizer";
 import { LabelledField } from "../forms";
 import { Picker } from "./Picker";
-import type { PickerProps } from "./types";
+import type { AccountId } from "../../api/generated";
+import type { PickerOption, PickerProps } from "./types";
 
 export interface PickerFieldProps extends Omit<PickerProps, "label" | "id"> {
   /** Fluent id of the label. */
@@ -67,6 +70,51 @@ export function PickerListField({ values, onChange, ...field }: PickerListFieldP
         setText(next);
       }}
       multiple={{ values, onChange }}
+    />
+  );
+}
+
+export interface NullablePickerFieldProps extends Omit<PickerFieldProps, "value" | "onChange"> {
+  /** The value, `null` for none (the field shows an empty text). */
+  value: string | null;
+  /** Called with the new value; an empty text becomes `null`. */
+  onChange: (value: string | null, option: PickerOption | null) => void;
+}
+
+/** A labelled picker whose empty text means "none" (`null`): an optional id or address. */
+export function NullablePickerField({ value, onChange, ...field }: NullablePickerFieldProps) {
+  return (
+    <PickerField
+      {...field}
+      value={value ?? ""}
+      onChange={(next, option) => {
+        onChange(next === "" ? null : next, option);
+      }}
+    />
+  );
+}
+
+export interface AccountChoiceFieldProps extends Omit<
+  NullablePickerFieldProps,
+  "kind" | "strict" | "accounts" | "onChange"
+> {
+  /** Offer only these accounts (default: every real account). */
+  accounts?: readonly { id: AccountId }[] | undefined;
+  /** Called with the chosen account's id, `null` when the field is emptied. */
+  onChange: (id: AccountId | null) => void;
+}
+
+/** The account a setting is for: only an offered account, or none (`null`). */
+export function AccountChoiceField({ accounts, onChange, ...field }: AccountChoiceFieldProps) {
+  return (
+    <NullablePickerField
+      {...field}
+      kind="account"
+      strict
+      accounts={accounts?.map((a) => a.id)}
+      onChange={(id) => {
+        onChange(id);
+      }}
     />
   );
 }

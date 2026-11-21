@@ -5,12 +5,14 @@ import { expect, type Locator } from "@playwright/test";
  * browse button and click an option, and the chips of a multi-value picker.
  */
 
-/** Opens the picker labelled `label` inside `scope` and clicks the option named `option`. */
-export async function pickOption(
+/**
+ * Opens the list of the picker labelled `label` inside `scope` by its
+ * browse button: the list, and the role of its rows (`treeitem` for folders).
+ */
+export async function openChoices(
   scope: Locator,
   label: string,
-  option: string | RegExp,
-): Promise<void> {
+): Promise<{ list: Locator; role: "option" | "treeitem" }> {
   const field = scope.getByRole("combobox", { name: label, exact: true });
   await scope.getByRole("button", { name: `Show choices for ${label}`, exact: true }).click();
   const role = (await field.getAttribute("aria-haspopup")) === "tree" ? "treeitem" : "option";
@@ -18,6 +20,16 @@ export async function pickOption(
     name: `Choices for ${label}`,
     exact: true,
   });
+  return { list, role };
+}
+
+/** Opens the picker labelled `label` inside `scope` and clicks the option named `option`. */
+export async function pickOption(
+  scope: Locator,
+  label: string,
+  option: string | RegExp,
+): Promise<void> {
+  const { list, role } = await openChoices(scope, label);
   await list.getByRole(role, { name: option }).first().click();
 }
 

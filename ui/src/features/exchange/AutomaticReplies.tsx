@@ -47,7 +47,7 @@ import { setAutomaticReplies, useAutomaticReplies, useExchangeAccounts } from ".
 import { exchangeStoreFor, useExchangeUi } from "./store";
 import { EmptyDialog } from "../../widgets/DialogStates";
 import { CloseButton } from "../../widgets/CloseButton";
-import { PickerField } from "../../widgets/pickers";
+import { AccountChoiceField } from "../../widgets/pickers";
 
 const STATUSES: readonly AutomaticRepliesStatus[] = AUTOMATIC_REPLIES_STATUS_VALUES;
 const AUDIENCES: readonly ExternalAudience[] = EXTERNAL_AUDIENCE_VALUES;
@@ -328,16 +328,12 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
     <div data-part="exchange.dialog" data-dialog="automatic-replies">
       <p data-part="exchange.intro">{t("exchange-oof-intro")}</p>
       {accounts.length > 1 && (
-        <PickerField
-          kind="account"
-          strict
+        <AccountChoiceField
           labelId="common-account"
           name="account"
-          accounts={accounts.map((a) => a.id)}
+          accounts={accounts}
           value={account.id}
-          onChange={(id) => {
-            setPicked(id === "" ? null : id);
-          }}
+          onChange={setPicked}
         />
       )}
       <AutomaticRepliesEditor key={account.id} accountId={account.id} />

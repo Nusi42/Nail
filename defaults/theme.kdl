@@ -1009,6 +1009,21 @@ theme "default" mode="system" {
         white-space "nowrap"
     }
     part "picker.option:hover" { background-color "$color.bg-subtle"; }
+    // A chosen option: a soft background (and, in multi-value lists, a check
+    // mark), not only the weight, so picking it again (which removes it) is
+    // never a surprise. Before the highlight, which wins.
+    part "picker.option[selected=\"true\"]" {
+        font-weight "$font-weight.semibold"
+        background-color "$color.accent-soft"
+    }
+    part "picker.option.check" {
+        display "inline-flex"
+        flex-shrink 0
+        width "$size.icon"
+        height "$size.icon"
+        color "inherit"
+    }
+    part "picker.option.check.icon" { width "$size.icon"; height "$size.icon"; }
     // The option Enter picks (the focus stays in the field). Windows contrast
     // themes (forced colours) replace both colours: the outline, invisible
     // elsewhere, is drawn in the system's text colour there.
@@ -1018,7 +1033,6 @@ theme "default" mode="system" {
         outline "2px solid transparent"
         outline-offset "-2px"
     }
-    part "picker.option[selected=\"true\"]" { font-weight "$font-weight.semibold"; }
     part "picker.option[variant=\"group\"]" { font-weight "$font-weight.semibold"; }
     part "picker.option[variant=\"create\"]" { font-style "italic"; }
     part "picker.option[depth=\"1\"]" { padding-left 28; }

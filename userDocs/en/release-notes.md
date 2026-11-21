@@ -30,7 +30,7 @@ you type, several rules run at once, and there is a new theme, Paper.
   query shows as a small badge with an explanation, and the list stays
   where it is.
 - **Several rules at once** — select rules in the rules window with
-  Ctrl+click, Shift+click, Shift+arrows or Ctrl+A. **Run** runs them all in
+  Ctrl+click, Shift+click, Shift+arrows, Ctrl+arrows and Space, or Ctrl+A. **Run** runs them all in
   list order, and one Undo takes the whole run back. **Test** previews each
   rule, grouped by rule.
 - **One Exchange badge per rule** — the number adds up the reasons over all
@@ -45,7 +45,8 @@ you type, several rules run at once, and there is a new theme, Paper.
   hidden folders, import and export, key lookup and automatic replies.
   Fields that take several values show them as chips.
 - **Your most-used addresses first** — an empty address field lists the
-  addresses you use most, before you type anything.
+  addresses you use most, before you type anything. The vacation reply's
+  "Reply from" and "Also my addresses" offer only your own addresses.
 - **New theme: Paper** — a warm light theme with paper tones and a blue
   accent, from Nail's sister project Bugaboo.
 

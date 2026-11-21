@@ -22,6 +22,7 @@ import type {
   AccountId,
   Address,
   Folder,
+  Identity,
   SuggestKind,
   ValueSuggestion,
 } from "../../api/generated";
@@ -193,6 +194,33 @@ export function addressOptions(addresses: readonly Address[]): PickerOption[] {
   }));
 }
 
+/** The addresses of an account's sending identities (a picker's `ownAddresses`). */
+export function identityAddresses(
+  identities: readonly Pick<Identity, "name" | "email">[],
+): Address[] {
+  return identities.map(({ name, email }) => ({ name, email }));
+}
+
+/**
+ * The user's own addresses whose name or address contains the typed text
+ * (case-insensitive), each address once, as options.
+ */
+export function ownAddressOptions(own: readonly Address[], query: string): PickerOption[] {
+  const needle = query.trim().toLowerCase();
+  const seen = new Set<string>();
+  const matching = own.filter((address) => {
+    const key = address.email.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return (
+      needle === "" ||
+      key.includes(needle) ||
+      (address.name?.toLowerCase().includes(needle) ?? false)
+    );
+  });
+  return addressOptions(matching);
+}
+
 /**
  * `SuggestValues` answers as options. Header names: the seen ones, then the
  * common ones not seen (both matching the query's start). Tags: a `create`
@@ -293,7 +321,8 @@ export function usePickerOptions(request: PickerQuery): PickerOptions {
         )
       ).addresses,
     // An empty text asks too: the core answers the most-used addresses.
-    enabled: enabled && kind === "address",
+    // A field for the user's own addresses never asks (those are other people's).
+    enabled: enabled && kind === "address" && scope.ownAddresses === undefined,
   });
   const values = useQuery({
     queryKey: ["pickers", "values", suggestKind, query],
@@ -329,7 +358,9 @@ export function usePickerOptions(request: PickerQuery): PickerOptions {
         loading: accounts.isLoading,
       };
     case "address":
-      return { options: addressOptions(addresses.data ?? []), loading: addresses.isLoading };
+      return scope.ownAddresses === undefined
+        ? { options: addressOptions(addresses.data ?? []), loading: addresses.isLoading }
+        : { options: ownAddressOptions(scope.ownAddresses, query), loading: false };
     case "tag":
     case "mailing-list":
     case "header-name":
