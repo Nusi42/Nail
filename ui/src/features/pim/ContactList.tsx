@@ -32,6 +32,7 @@ import {
   type WidgetProps,
 } from "../../layout/widgetRegistry";
 import { Icon } from "../../widgets/Icon";
+import { gestureOf, pick, stepFrom, type SelectGesture } from "../../widgets/listSelection";
 import { Problem, problemOf, useChangeContext, BookOptions } from "./common";
 import { CONTACT_DIALOG, GROUPS_DIALOG, MERGE_DIALOG } from "./names";
 import { PimMenu, type PimMenuEntry } from "./PimMenu";
@@ -102,25 +103,16 @@ export function ContactList({ node }: WidgetProps) {
       ?.focus();
   }, [active]);
 
-  const show = (id: string, mode: "single" | "toggle" | "range") => {
+  const show = (id: string, gesture: SelectGesture) => {
     const state = pim.getState();
-    if (mode === "toggle") {
-      const next = selection.includes(id) ? selection.filter((s) => s !== id) : [...selection, id];
-      state.setSelectedContacts(next);
-      anchorRef.current = id;
-    } else if (mode === "range" && anchorRef.current && order.includes(anchorRef.current)) {
-      const a = order.indexOf(anchorRef.current);
-      const b = order.indexOf(id);
-      state.setSelectedContacts(order.slice(Math.min(a, b), Math.max(a, b) + 1));
-    } else {
-      state.setSelectedContacts([id]);
-      anchorRef.current = id;
-    }
+    const next = pick(order, { selected: selection, anchor: anchorRef.current }, id, gesture);
+    state.setSelectedContacts([...next.selected]);
+    anchorRef.current = next.anchor;
     state.showContact(id);
   };
 
   const onClick = (event: MouseEvent, id: string) => {
-    show(id, event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle" : "single");
+    show(id, gestureOf(event));
   };
 
   const removeSelection = async () => {
@@ -138,14 +130,13 @@ export function ContactList({ node }: WidgetProps) {
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
     if (!active) return;
-    const index = order.indexOf(active);
     let next: string | undefined;
     switch (event.key) {
       case "ArrowDown":
-        next = order[Math.min(order.length - 1, index + 1)];
+        next = stepFrom(order, active, 1);
         break;
       case "ArrowUp":
-        next = order[Math.max(0, index - 1)];
+        next = stepFrom(order, active, -1);
         break;
       case "Home":
         next = order[0];

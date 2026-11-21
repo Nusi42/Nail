@@ -1,12 +1,12 @@
 /**
- * The rule list's multi-selection (R3, ADR 0227): which rules are selected,
- * which one has the focus (the editor shows it) and the anchor a range
- * extends from. Pure functions over ids in list order, so the keyboard and
- * the pointer share one model.
+ * The multi-selection of a list box (R3, ADR 0229): which items are
+ * selected, which one has the focus and the anchor a range extends from.
+ * Pure functions over ids in list order, so the keyboard and the pointer
+ * share one model. Used by the rule list and the contact list.
  *
- * - Click: only that rule. Ctrl+click (⌘ on macOS): adds or removes it.
- *   Shift+click, Shift+Up / Down: the rules from the anchor to it.
- * - Ctrl+A: every listed rule. Escape: back to the focused rule alone.
+ * - Click: only that item. Ctrl+click (⌘ on macOS): adds or removes it.
+ *   Shift+click, Shift+Up / Down: the items from the anchor to it.
+ * - Ctrl+A: every listed item (`pickAll`).
  */
 
 /** The selection of a list of ids. */
@@ -15,7 +15,7 @@ export interface ListSelection {
   selected: readonly string[];
   /** Where Shift extends a range from; `null` before the first pick. */
   anchor: string | null;
-  /** The id that has the focus (the editor shows it). */
+  /** The id that has the focus . */
   focus: string;
 }
 

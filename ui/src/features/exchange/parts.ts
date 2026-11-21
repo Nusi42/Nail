@@ -17,7 +17,6 @@ const PLAIN_LISTS = [
   "exchange.rooms.items",
   "exchange.room.features",
   "exchange.room.busy",
-  "exchange.rule-badges",
   "exchange-rules.server.items",
   "exchange.status.warnings",
   "exchange.colors",
@@ -26,7 +25,7 @@ const PLAIN_LISTS = [
 const sel = (parts: readonly string[]) => parts.map((p) => `[data-part="${p}"]`).join(", ");
 
 export const EXCHANGE_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; margin: 0; padding: 0; }
-[data-part="focused-tabs.list"], [data-part="exchange.categories"], [data-part="exchange.rule-badges"], [data-part="exchange.room.features"] { display: flex; flex-wrap: wrap; }
+[data-part="focused-tabs.list"], [data-part="exchange.categories"], [data-part="exchange.room.features"] { display: flex; flex-wrap: wrap; }
 [data-part="exchange.swatch"], [data-part="exchange.chip.swatch"] { display: inline-block; }
 [data-part="exchange.colors"] { display: flex; flex-wrap: wrap; margin: 0; min-width: 0; }
 `;

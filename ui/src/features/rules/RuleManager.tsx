@@ -9,7 +9,7 @@
  * handle, the name over its triggers, the Exchange badge (one ⓘ with the
  * summed reasons; its popover lists each account) and the On mark.
  *
- * - Selecting (`./selection.ts`): Click selects one rule, Ctrl+click adds
+ * - Selecting (`widgets/listSelection.ts`): Click selects one rule, Ctrl+click adds
  *   or removes one, Shift+click and Shift+Up / Down extend from the anchor,
  *   Space adds or removes the focused rule, Ctrl+A selects every listed
  *   rule, Escape goes back to the focused rule alone. The editor shows the
@@ -54,7 +54,14 @@ import { reorderRules, rulesKeys, saveRule, useRules } from "./api";
 import { Issues } from "./Issues";
 import { filterRules, moveItemTo, newRule } from "./model";
 import { RuleEditor } from "./RuleEditor";
-import { gestureOf, inListOrder, pick, pickAll, stepFrom, type ListSelection } from "./selection";
+import {
+  gestureOf,
+  inListOrder,
+  pick,
+  pickAll,
+  stepFrom,
+  type ListSelection,
+} from "../../widgets/listSelection";
 import { STARTER_IDS, starterRule } from "./starters";
 import { useRulesHandoff } from "./popOut";
 import { useRulesUi, type RuleSelection } from "./store";

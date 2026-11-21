@@ -21,7 +21,7 @@ import type { NailClient } from "../../api/client";
 import type { FolderId, MessageId, Rule, RuleId, RuleRun } from "../../api/generated";
 import { useClient } from "../../state/queries";
 import type { RunTargetKind } from "./runTargets";
-import type { ListSelection } from "./selection";
+import type { ListSelection } from "../../widgets/listSelection";
 
 /**
  * The rule being edited: a saved rule, or a new one. `key` identifies the

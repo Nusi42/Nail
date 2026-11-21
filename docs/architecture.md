@@ -644,7 +644,12 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        widgets/ProblemIndicator.tsx (the compact problem indicator of the search field and the rules
                        window, parts `problem*`, skin `PROBLEM`; ADR 0221), widgets/pickers/ (the shared `Picker` for
                        folders, accounts, tags, addresses, mailing lists and header names, ADRs 0222, 0224:
-                       Picker.tsx, tree.ts keyboard / tree model, sources.ts, PickerField.tsx labelled form picker,
+                       Picker.tsx (props `multiple` = chips, `strict` = only a picked option or empty, `accounts`
+                       = the offered accounts; ADR 0228), tree.ts keyboard / tree model, sources.ts, multiple.ts
+                       (the pure multi-value rules), PickerField.tsx labelled form picker + `PickerListField`
+                       (multi-value), testing.ts (unit-test helpers, not in the barrel),
+                       widgets/listSelection.ts (the list-box multi-selection model: `pick`, `gestureOf`, `stepFrom`,
+                       `pickAll`, `inListOrder`; rule list and contact list, ADR 0229),
                        searchValues.tsx the search field's values with `useSearchValues`), state/queryText.ts
                        (`searchValueText`, the query language's one quoting rule),
                        widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download; name /
@@ -1535,3 +1540,17 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   addresses by `usage_score`, the user's own addresses (`Service::own_addresses`) left out, contact names for
   contacts in autocomplete books; `CANDIDATE_ROWS` shared with `suggest_recipients`). Mock: `features/composer/mock.ts`
   `suggest`.
+- WR7 (ADR 0229): the rule list is a multi-select listbox over `widgets/listSelection.ts` (also used by
+  `features/pim/ContactList.tsx`); `RuleManager.tsx` `selectedRules` / `selectionForKey`; Run sends one `RunRules`
+  with the selected ids in file order, Test one `TestRule` per rule (Preview grouped by rule). Run on lives in the
+  rules store (`runOn`, reset by `setOrigin`). The combined Exchange badge in `features/exchange/Rules.tsx` sums the
+  reasons of every Exchange account through a renderless per-account probe on `useExchangeRules`; its lines are the
+  row's description. Row controls (drag handle, On mark) are pointer-only. Helpers: `e2e/support/rules.ts`
+  `ruleInList` / `rulesList`.
+- WR8 (ADR 0228): the shared `Picker` gained a multi-value mode (chips, `picker.chips` / `picker.chip*`, list-style
+  in `theme/compile.ts`), `strict` and `accounts`; converted fields: junk, server rules, vacation, Also my addresses,
+  search index, MCP grants (accounts + hidden folders), export, import target, key lookup, Exchange automatic
+  replies. Playwright helpers `e2e/support/pickers.ts`.
+- WR9: built-in theme Paper (`defaults/themes/paper.kdl`, mapped from the sister project's tokens in its header;
+  registered in `nail-config` `themes.rs` and `nail_api::appearance::BUILTIN_THEMES`); theme counts in tests derive
+  from `BUILTIN_THEMES`. A user theme may not use a built-in id, so the config tests' user theme is `parchment`.

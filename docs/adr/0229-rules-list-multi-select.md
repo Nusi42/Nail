@@ -1,4 +1,4 @@
-# 0228 — WR7: rule list multi-select, combined Exchange badge, values button
+# 0229 — Rule list multi-select, combined Exchange badge, values button
 
 Status: accepted (2026-11-21)
 
@@ -35,7 +35,7 @@ left open.
 
 ### Keyboard and pointer model
 
-`ui/src/features/rules/selection.ts` (pure, shared by keys and pointer):
+`ui/src/widgets/listSelection.ts` (pure, shared by keys and pointer):
 Click selects one rule; Ctrl+click (⌘) adds / removes one; Shift+click and
 Shift+Up / Down extend from the anchor; Up / Down / Home / End move the
 focus and select only that rule; Space adds / removes the focused rule;

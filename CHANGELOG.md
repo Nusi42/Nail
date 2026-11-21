@@ -43,6 +43,33 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   show as a small badge with hover text instead of moving the layout;
   search hints and values float above the list.
 
+### Changed — rules window decisions (ADRs 0227, 0229)
+
+- Select several rules in the rules window (Ctrl+click, Shift+click,
+  Shift+arrows, Ctrl+A); Run runs them all in list order with one Undo,
+  Test previews each rule, grouped by rule.
+- One Exchange badge per rule: the number sums the reasons over all
+  Exchange accounts; hover, or the row with the keyboard focus, lists each
+  account.
+- "Values from this mail" sits right after a condition's value, before
+  "Match upper and lower case".
+- The Run on choice stays while you pick other rules.
+- The rule list's drag handle and On mark are pointer-only; the keyboard
+  reorders with Alt+Up/Down and switches a rule in the editor's On switch.
+
+### Changed — pickers everywhere (ADRs 0227, 0228)
+
+- Account, folder and address fields in Settings use the shared picker
+  everywhere (junk, server rules and vacation account, Also my addresses,
+  searchable decrypted mail, MCP accounts and hidden folders, import and
+  export, key lookup, automatic replies). Multi-value fields show chips.
+- An empty address field lists your most-used addresses.
+
+### Added — Paper theme
+
+- New built-in light theme Paper: warm paper neutrals with a blue accent
+  (from the sister project Bugaboo).
+
 ## [0.8.6] — 2026-11-19
 
 ### Fixed — agents (MCP) and drafts (ADR 0217)

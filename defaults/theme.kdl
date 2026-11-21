@@ -1074,6 +1074,48 @@ theme "default" mode="system" {
         font-size "$font-size.sm"
         color "$color.fg-muted"
     }
+    // Multi-value mode (ADR 0228): the chosen values as chips before the input.
+    part "picker[multiple=\"true\"]" { flex-wrap "wrap"; }
+    part "picker.chips" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "picker.chip" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xxs"
+        min-width 0
+        padding 0 0 0 "$space.xs"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        background-color "$color.bg-subtle"
+        font-size "$font-size.sm"
+    }
+    part "picker.chip.label" {
+        overflow "hidden"
+        text-overflow "ellipsis"
+        white-space "nowrap"
+    }
+    part "picker.chip.remove" {
+        display "inline-flex"
+        align-items "center"
+        justify-content "center"
+        padding 0
+        border "none"
+        border-radius "$radius.sm"
+        color "$color.fg-muted"
+        background-color "transparent"
+        cursor "pointer"
+    }
+    part "picker.chip.remove:hover" { color "$color.fg"; background-color "$color.bg-raised"; }
+    part "picker.chip.remove:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "picker.chip.remove.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
 
     // ---- Filter rules (ADR 0024) ----
 
@@ -1766,12 +1808,6 @@ theme "default" mode="system" {
     part "mcp-grants.scope.hint" {
         font-size "$font-size.xs"
         color "$color.fg-muted"
-    }
-    part "mcp-grants.folders.list" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xxs"
-        padding-left "$space.lg"
     }
     part "mcp-grants.actions" {
         display "flex"

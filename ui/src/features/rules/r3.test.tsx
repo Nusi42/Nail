@@ -1,5 +1,5 @@
 /**
- * R3 (ADR 0227): the rule list as a multi-select listbox (`./selection.ts`,
+ * R3 (ADR 0227): the rule list as a multi-select listbox (`widgets/listSelection.ts`,
  * keys and pointer), Run and Test with several rules, the combined Exchange
  * badge as the row's description, and "Values from this mail" right after
  * a condition's value field.
@@ -15,7 +15,7 @@ import { setup as exchangeSetup } from "../exchange/testing";
 import { newRule } from "./model";
 import { RuleManagerView, selectedRules, selectionForKey } from "./RuleManager";
 import { runLabel } from "./RuleEditor";
-import { gestureOf, inListOrder, pick, pickAll, stepFrom } from "./selection";
+import { gestureOf, inListOrder, pick, pickAll, stepFrom } from "../../widgets/listSelection";
 import { rulesStore } from "./store";
 import {
   addArchiveAllRule,

@@ -219,6 +219,7 @@ ${[
   "rules.test.matches",
   "rules.test.actions",
   "rules.runs.items",
+  "picker.chips",
   "mcp-clients.list",
   "inspector.path",
   "inspector.states",

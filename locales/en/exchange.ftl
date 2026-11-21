@@ -141,7 +141,6 @@ exchange-oof-edit = Edit…
 
 ## Rules
 
-exchange-rule-badges-label = Where this rule runs on Exchange accounts
 exchange-placement-server = { $account }: on the server
 exchange-placement-client = { $account }: in Nail
 exchange-placement-not-expressible = { $account }: in Nail only

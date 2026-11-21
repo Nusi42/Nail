@@ -335,6 +335,20 @@ describe("contacts", () => {
     expect(pimStoreFor(env.store).getState().contactId).not.toBe("ct-ada");
     await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
     expect(pimStoreFor(env.store).getState().selectedContacts).toHaveLength(2);
+    // Pointer (the shared list selection): a click picks one, Ctrl+click
+    // adds one, Shift+click extends from the anchor.
+    const [first, second, , fourth] = within(list).getAllByRole("option");
+    await user.click(must(first));
+    expect(pimStoreFor(env.store).getState().selectedContacts).toHaveLength(1);
+    await user.keyboard("{Control>}");
+    await user.click(must(fourth));
+    await user.keyboard("{/Control}");
+    expect(pimStoreFor(env.store).getState().selectedContacts).toHaveLength(2);
+    await user.click(must(second));
+    await user.keyboard("{Shift>}");
+    await user.click(must(fourth));
+    await user.keyboard("{/Shift}");
+    expect(pimStoreFor(env.store).getState().selectedContacts).toHaveLength(3);
     await user.type(screen.getByLabelText("Search contacts"), "navy");
     await waitFor(() => {
       expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(2);

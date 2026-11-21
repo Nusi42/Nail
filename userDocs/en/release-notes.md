@@ -6,7 +6,8 @@ preview versions) are summarized in the project's `CHANGELOG.md`.
 ## Nail 0.8.8 (`0.8.8`)
 
 Run your rules on exactly the mail you choose, a redesigned rules window,
-and pickers instead of typing folder names. Search now runs while you type.
+and pickers instead of typing folder or account names. Search now runs while
+you type, several rules run at once, and there is a new theme, Paper.
 
 ### New in 0.8.8
 
@@ -28,6 +29,25 @@ and pickers instead of typing folder names. Search now runs while you type.
 - **Search while you type** — no need to press Enter. A mistake in the
   query shows as a small badge with an explanation, and the list stays
   where it is.
+- **Several rules at once** — select rules in the rules window with
+  Ctrl+click, Shift+click, Shift+arrows or Ctrl+A. **Run** runs them all in
+  list order, and one Undo takes the whole run back. **Test** previews each
+  rule, grouped by rule.
+- **One Exchange badge per rule** — the number adds up the reasons over all
+  your Exchange accounts. Hover it, or move the keyboard focus to the rule,
+  to see each account.
+- **Values button in the right place** — "Values from this mail" now sits
+  right after a condition's value, before "Match upper and lower case".
+- **Run on stays** — the Run on choice stays while you pick other rules.
+- **Pickers everywhere** — account, folder and address fields in Settings
+  use the same searchable picker: junk, server rules and vacation reply,
+  Also my addresses, searchable decrypted mail, agent (MCP) accounts and
+  hidden folders, import and export, key lookup and automatic replies.
+  Fields that take several values show them as chips.
+- **Your most-used addresses first** — an empty address field lists the
+  addresses you use most, before you type anything.
+- **New theme: Paper** — a warm light theme with paper tones and a blue
+  accent, from Nail's sister project Bugaboo.
 
 ## Nail 0.8.6 (`0.8.6`)
 
