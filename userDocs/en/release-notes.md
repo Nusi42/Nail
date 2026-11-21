@@ -3,6 +3,32 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.7 (`0.8.7`)
+
+Run your rules on exactly the mail you choose, a redesigned rules window,
+and pickers instead of typing folder names. Search now runs while you type.
+
+### New in 0.8.7
+
+- **Run rules where you want** — right-click messages or a folder and pick
+  **Run rule**, or choose **Run on** in the rules window: the selected
+  messages, the current folder, or where the rule applies. A new rule can
+  be saved and run in one step.
+- **A clearer rules window** — the buttons stay at the bottom, problems
+  show as a small badge you can hover, and **Test rule** shows its results
+  right under the rule, with **Apply to these**. **Recent runs** show when
+  and where each run happened, and Delete and closing with unsaved changes
+  ask first.
+- **Pick instead of type** — folders, accounts, tags, addresses, mailing
+  lists and header names have a searchable list (folders as a tree). You
+  can still type a value yourself.
+- **Rules from a message** — **Create rule from message** and **Add to
+  rule…** in the mail menu. Next to each condition, a button offers the
+  mail's sender, domain, recipients, subject, list and folder.
+- **Search while you type** — no need to press Enter. A mistake in the
+  query shows as a small badge with an explanation, and the list stays
+  where it is.
+
 ## Nail 0.8.6 (`0.8.6`)
 
 AI agents can work with all your drafts again, and they ask before sending

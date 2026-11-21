@@ -8,6 +8,41 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Added — rules on demand (ADRs 0219, 0221)
+
+- Run one rule, or all rules that are on, on the selected messages or a
+  folder: from the Run rule submenu in the message and folder menus, from
+  the rules window's Run on choice, and for agents through the MCP tool
+  `run_rules` (forwards and replies only on named messages, excluded
+  folders respected).
+
+### Changed — rules window (ADRs 0222, 0223)
+
+- Redesigned rules window: a footer that stays in view (Run on, Run, Test,
+  Save, Delete with confirmation), a problem badge instead of red error
+  blocks, Preview and Recent runs tabs (actions with their values, why a
+  message matched, Apply to these, run time and target), a compact
+  When / Where / If / Then form, rule search, drag and Alt+Up/Down
+  reordering, starter rules, and the same look in Settings. Asks before
+  closing with unsaved changes.
+- New rules switch between Editor and Text without errors; unsaved rules
+  no longer get an empty id.
+
+### Added — pickers and values from the mail (ADRs 0224, 0225)
+
+- Searchable pickers for folders (a tree), accounts, tags, addresses,
+  mailing lists and header names, with free text still allowed, in rules,
+  virtual folders, search and settings.
+- Create rule from message and Add to rule in the mail menus; condition
+  fields offer the mail's sender, domain, recipients, subject, list,
+  folder and tags.
+
+### Changed — search (ADRs 0220, 0226)
+
+- Search runs while typing (Enter still searches at once). Query mistakes
+  show as a small badge with hover text instead of moving the layout;
+  search hints and values float above the list.
+
 ## [0.8.6] — 2026-11-19
 
 ### Fixed — agents (MCP) and drafts (ADR 0217)
