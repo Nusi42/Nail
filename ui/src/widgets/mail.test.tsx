@@ -580,12 +580,25 @@ describe("account-switcher and status-bar", () => {
       "data-state",
       "auth-error",
     );
+    // Queued writes count until the core's summary arrives, which then
+    // decides alone.
     act(() => {
       env.store.getState().opQueued(["op-1", "op-2"]);
     });
     expect(within(status).getByText("Saving 2 changes…")).toBeInTheDocument();
     act(() => {
-      env.store.getState().opFinished("op-1", "network");
+      env.store.getState().setOpsSummary({
+        pending: 0,
+        in_flight: 1,
+        failed: 0,
+        accounts: [{ account_id: "acc-work", pending: 0, in_flight: 1, failed: 0 }],
+        newest_failure: null,
+      });
+    });
+    expect(within(status).getByText("Saving one change…")).toBeInTheDocument();
+    // A write the core refused to queue: shown until dismissed.
+    act(() => {
+      env.store.setState({ opError: "network" });
     });
     expect(
       within(status).getByText("A change could not be saved: The server could not be reached."),

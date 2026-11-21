@@ -39,6 +39,8 @@ export const queryKeys = {
     ["messages", folderId, pageSize] as const,
   allMessages: ["messages"] as const,
   message: (id: MessageId | null) => ["message", id] as const,
+  /** Every message the reader loaded (`message`). */
+  allMessageBodies: ["message"] as const,
   accountsConfig: ["accounts-config"] as const,
   identities: (accountId: AccountId | null) => ["identities", accountId] as const,
   /** Under "identities", so account changes refresh it too. */

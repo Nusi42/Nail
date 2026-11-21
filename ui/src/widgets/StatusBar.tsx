@@ -7,6 +7,8 @@ import { ShowDetailsButton, type ErrorReport } from "../features/connlog";
 import { useComposeContext } from "../state/hooks";
 import { useAccounts, useAccountStatuses, useClient, useFolders } from "../state/queries";
 import { sendPercent, useUi } from "../state/uiStore";
+import { waitingCount } from "../state/opsSummary";
+import type { OpFailure } from "../api/generated";
 import { DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** How long "Message sent" stays in the status bar. */
@@ -121,55 +123,79 @@ function AccountStatusItem() {
   );
 }
 
-/** Queued writes still being replayed, or the last one that failed. */
+/** The reason of a failed queued write, as the core reported it. */
+function failureReason(t: ReturnType<typeof useT>, failure: OpFailure): string {
+  return failure.localized
+    ? t(failure.localized.id, failure.localized.args)
+    : t(errorMessageId(failure.code));
+}
+
+/**
+ * Queued writes the core has not saved yet, or the ones it gave up on: the
+ * core's queue summary (ADR 0230), never a list the UI keeps.
+ */
 function OpsItem() {
   const t = useT();
-  const pending = useUi((s) => s.pendingOps.length);
-  const error = useUi((s) => s.opError);
-  const failedOp = useUi((s) => s.failedOp);
-  const dismiss = useUi((s) => s.dismissOpError);
-  const queued = useUi((s) => s.opQueued);
+  const waiting = useUi(waitingCount);
+  const summary = useUi((s) => s.opsSummary);
+  const requestError = useUi((s) => s.opError);
+  const dismissRequestError = useUi((s) => s.dismissOpError);
   const client = useClient();
-  const [retryError, setRetryError] = useState<string | null>(null);
-  const retry = (op: string) => {
-    setRetryError(null);
-    client
-      .request({ type: "RetryOp", op_id: op }, "Queued")
-      .then(({ op_ids }) => {
-        dismiss();
-        queued(op_ids);
-      })
-      .catch((e: unknown) => {
-        setRetryError(errorMessageIdOf(e));
-      });
+  const [actionError, setActionError] = useState<string | null>(null);
+  // The core follows a retry or dismissal with `OpsChanged`.
+  const send = (request: Promise<unknown>) => {
+    setActionError(null);
+    request.catch((error: unknown) => {
+      setActionError(errorMessageIdOf(error));
+    });
   };
-  if (error) {
+  const failure = summary !== null && summary.failed > 0 ? summary.newest_failure : null;
+  if (failure) {
+    const reason = actionError ? t(actionError) : failureReason(t, failure);
     return (
       <span data-part="status-bar.item" data-item="ops" data-state="error">
         <span data-part="status-bar.text">
-          {t("status-op-failed", { reason: t(retryError ?? errorMessageId(error)) })}
+          {summary !== null && summary.failed > 1
+            ? t("status-ops-failed-many", { count: summary.failed, reason })
+            : t("status-op-failed", { reason })}
         </span>
-        {failedOp !== null && (
-          <button
-            type="button"
-            data-part="status-bar.button"
-            onClick={() => {
-              retry(failedOp);
-            }}
-          >
-            {t("status-retry")}
-          </button>
-        )}
-        <button type="button" data-part="status-bar.button" onClick={dismiss}>
+        <button
+          type="button"
+          data-part="status-bar.button"
+          onClick={() => {
+            send(client.request({ type: "RetryFailedOps", account_id: null }, "Queued"));
+          }}
+        >
+          {t("status-retry")}
+        </button>
+        <button
+          type="button"
+          data-part="status-bar.button"
+          onClick={() => {
+            send(client.request({ type: "DismissFailedOps", account_id: null }, "Done"));
+          }}
+        >
           {t("common-dismiss")}
         </button>
       </span>
     );
   }
-  if (pending === 0) return null;
+  if (requestError) {
+    return (
+      <span data-part="status-bar.item" data-item="ops" data-state="error">
+        <span data-part="status-bar.text">
+          {t("status-op-failed", { reason: t(errorMessageId(requestError)) })}
+        </span>
+        <button type="button" data-part="status-bar.button" onClick={dismissRequestError}>
+          {t("common-dismiss")}
+        </button>
+      </span>
+    );
+  }
+  if (waiting === 0) return null;
   return (
-    <span data-part="status-bar.item" data-item="ops" data-state="pending">
-      {t("status-ops-pending", { count: pending })}
+    <span data-part="status-bar.item" data-item="ops" data-state="pending" data-count={waiting}>
+      {t("status-ops-pending", { count: waiting })}
     </span>
   );
 }

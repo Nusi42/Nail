@@ -327,7 +327,7 @@ describe("M1a flows", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows failed writes reported by OpStatus", async () => {
+  it("shows failed writes from the core's queue summary", async () => {
     const { env } = renderApp();
     const rows = await ready();
     env.transport.data.behaviour.opError = "auth_failed";
@@ -335,8 +335,8 @@ describe("M1a flows", () => {
     fireEvent.keyDown(must(rows[1]), { key: "u" });
     expect(
       await settleUntil(
-        () => screen.queryByText("A change could not be saved: The server rejected the login."),
-        "'A change could not be saved: The server rejected the login.'",
+        () => screen.queryByText(/could not be saved: The server rejected the login\.$/),
+        "'… could not be saved: The server rejected the login.'",
       ),
     ).toBeInTheDocument();
   });

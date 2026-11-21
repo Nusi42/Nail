@@ -17,6 +17,7 @@ import { comboFromEvent, normalizeCombo } from "../actions/keys";
 import { CONVERSATION_ACTIONS } from "../features/conversation-reader/actions";
 import {
   listSelectionFor,
+  refetchedSince,
   prunePicked,
   rangePick,
   togglePick,
@@ -868,6 +869,22 @@ export function MessageList({ node }: WidgetProps) {
   // Keep the selection visible (keyboard navigation).
   const selectedThreadId = useUi((s) => s.selectedThreadId);
   const selectedIndex = selectedIndexOf(rows, chosenKey, selectedId, selectedThreadId);
+
+  // After a resync (lost events, ADR 0230) the refetched rows decide: a
+  // selected message they no longer show is dropped (the picked rows are
+  // pruned with every refetch above).
+  const resyncAt = useUi((s) => s.resyncAt);
+  const checkedResync = useRef<number | null>(null);
+  const { dataUpdatedAt, isFetching } = query;
+  useEffect(() => {
+    if (checkedResync.current === resyncAt) return;
+    if (!refetchedSince(resyncAt, { dataUpdatedAt, isFetching })) return;
+    checkedResync.current = resyncAt;
+    if (selectedId !== null && selectedIndex < 0) {
+      selectMessage(null);
+      selectThread(null);
+    }
+  }, [resyncAt, dataUpdatedAt, isFetching, selectedId, selectedIndex, selectMessage, selectThread]);
   useEffect(() => {
     if (selectedIndex >= 0) virtualizer.scrollToIndex(selectedIndex, { align: "auto" });
   }, [selectedIndex, virtualizer]);

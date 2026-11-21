@@ -14,6 +14,7 @@ import {
   rowTarget,
   togglePick,
   type PickableRow,
+  refetchedSince,
 } from "./mailTargets";
 
 const INBOX = "acc/Inbox";
@@ -153,5 +154,16 @@ describe("mail action targets", () => {
       child: true,
     });
     expect(prunePicked(rangePick(rows, 0, 3), [{ key: "t2" }, { key: "t4" }])).toHaveLength(2);
+  });
+});
+
+describe("the selection after a resync (ADR 0230)", () => {
+  it("waits for data fetched after the resync and for nothing loading", () => {
+    expect(refetchedSince(null, { dataUpdatedAt: 5_000, isFetching: false })).toBe(false);
+    // Data from before the resync, or a refetch still running: not yet.
+    expect(refetchedSince(4_000, { dataUpdatedAt: 3_000, isFetching: false })).toBe(false);
+    expect(refetchedSince(4_000, { dataUpdatedAt: 5_000, isFetching: true })).toBe(false);
+    expect(refetchedSince(4_000, { dataUpdatedAt: 4_000, isFetching: false })).toBe(true);
+    expect(refetchedSince(4_000, { dataUpdatedAt: 6_000, isFetching: false })).toBe(true);
   });
 });

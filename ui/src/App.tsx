@@ -37,6 +37,7 @@ import {
   type AppConfig,
 } from "./state/queries";
 import { applyEditHistory } from "./state/editHistory";
+import { createOpsTracker } from "./state/opsSummary";
 import { applyUiStateChange } from "./state/uiState";
 import { applyPopOuts, applyWindowStateChange } from "./state/windowState";
 import { parsePopOutRoute } from "./state/windows";
@@ -261,6 +262,9 @@ function useCoreEvents(): void {
         queryKeys.allSearches,
       );
     };
+    // The status bar's queue comes from the core (ADR 0230); a failed write
+    // shows the core's state in the lists again.
+    const ops = createOpsTracker({ client, store, onFailuresGrew: refreshMail });
     const offEvents = client.subscribe((event) => {
       // Feature slots (src/features/*) handle their own events.
       for (const handler of appRegistry.events) {
@@ -328,11 +332,21 @@ function useCoreEvents(): void {
           refreshMail();
           break;
         case "OpStatus":
-          if (event.status.state === "done" || event.status.state === "failed") {
-            ui().opFinished(event.status.op_id, event.status.error);
-            // A failed write: show the core's state again.
-            if (event.status.state === "failed") refreshMail();
-          }
+          // Folder changes (ADR 0196); their dialogs wait for the outcome.
+          // A failed one: show the core's state again.
+          if (event.status.state === "failed") refreshMail();
+          break;
+        case "OpsChanged":
+          ops.pushed(event.summary);
+          break;
+        case "Resync":
+          // Events were lost (ADR 0230): read the queue again, refetch every
+          // list, conversation and reader; the lists then drop selections
+          // they no longer show.
+          ops.refresh();
+          refreshMail();
+          invalidate(queryKeys.allMessageBodies);
+          ui().resynced();
           break;
         case "SendProgress":
           ui().setSendProgress(event.outbox_id, {
@@ -378,16 +392,19 @@ function useCoreEvents(): void {
       }
     });
     ui().setConnection(client.status());
+    ops.refresh();
     const offStatus = client.onStatus((status) => {
       const previous = ui().connection;
       ui().setConnection(status);
       if (status === "connected" && previous === "reconnecting") {
         void queryClient.invalidateQueries();
+        ops.refresh();
       }
     });
     return () => {
       offEvents();
       offStatus();
+      ops.dispose();
     };
   }, [client, queryClient, store]);
 }

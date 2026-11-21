@@ -20,6 +20,7 @@ import type {
   IdentityId,
   MessageId,
   OpId,
+  OpsSummary,
   OutboxEntry,
   SearchError,
   ThemeMode,
@@ -146,12 +147,25 @@ export interface UiState {
   /** What is typed in the search bar (not yet necessarily searched). */
   searchInput: string;
   focusRequest: FocusRequest | null;
-  /** Queued writes not yet replayed. */
+  /**
+   * The core's queue of message writes (ADR 0230; `GetOpsSummary`,
+   * `OpsChanged`), `null` until the first summary came. The status bar's
+   * count and failure come from it (`./opsSummary.ts`).
+   */
+  opsSummary: OpsSummary | null;
+  /**
+   * Writes queued since the core's last summary (`opQueued`): they only add
+   * to the count until the next summary, which counts them itself and
+   * clears this list (ADR 0230). Never the source of the count on its own.
+   */
   pendingOps: OpId[];
-  /** The last failed write, until the next one succeeds or it is dismissed. */
+  /** A write the core refused to queue (the request failed), until dismissed. */
   opError: ErrorCode | null;
-  /** The operation behind `opError` (for "Retry", `RetryOp`). */
-  failedOp: OpId | null;
+  /**
+   * When the core last said events were lost (`Resync`, `Date.now()`);
+   * lists refetched after it drop selections they no longer show.
+   */
+  resyncAt: number | null;
   /** The last message handed to the outbox (undo-send countdown). */
   lastSend: OutboxEntry | null;
   /** Why `lastSend` failed, for "Show details" (ADR 0190). */
@@ -199,9 +213,13 @@ export interface UiState {
   setSearch: (search: SearchState | null) => void;
   setSearchInput: (text: string) => void;
   requestFocus: (target: string) => void;
+  /** Writes the core queued (`Queued` answer): counted until the next summary. */
   opQueued: (ids: OpId[]) => void;
-  opFinished: (id: OpId, error: ErrorCode | null) => void;
+  /** The core's queue summary (clears `pendingOps`, the summary counts them). */
+  setOpsSummary: (summary: OpsSummary) => void;
   dismissOpError: () => void;
+  /** The core said events were lost (`Resync`). */
+  resynced: () => void;
   setLastSend: (entry: OutboxEntry | null) => void;
   setLastSendDetails: (details: ErrorDetails | null) => void;
   setSendProgress: (outboxId: string, progress: SendProgressState | null) => void;
@@ -251,9 +269,10 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     search: null,
     searchInput: "",
     focusRequest: null,
+    opsSummary: null,
     pendingOps: [],
     opError: null,
-    failedOp: null,
+    resyncAt: null,
     lastSend: null,
     lastSendDetails: null,
     sendProgress: {},
@@ -396,18 +415,14 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     opQueued: (ids) => {
       set((s) => ({ pendingOps: [...s.pendingOps, ...ids] }));
     },
-    opFinished: (id, error) => {
-      set((s) => {
-        const cleared = s.pendingOps.includes(id);
-        return {
-          pendingOps: s.pendingOps.filter((p) => p !== id),
-          opError: error ?? (cleared ? null : s.opError),
-          failedOp: error !== null ? id : cleared ? null : s.failedOp,
-        };
-      });
+    setOpsSummary: (opsSummary) => {
+      set({ opsSummary, pendingOps: [] });
     },
     dismissOpError: () => {
-      set({ opError: null, failedOp: null });
+      set({ opError: null });
+    },
+    resynced: () => {
+      set({ resyncAt: Date.now() });
     },
     setLastSend: (lastSend) => {
       // Details belong to the entry they explain.

@@ -251,3 +251,19 @@ export function prunePicked(
   const keys = new Set(rows.map((r) => r.key));
   return picked.filter((p) => keys.has(p.key));
 }
+
+/** What a list query says about its data (TanStack Query). */
+export interface ListFetchState {
+  /** When the shown data arrived (`Date.now()`), 0 = never. */
+  dataUpdatedAt: number;
+  isFetching: boolean;
+}
+
+/**
+ * Whether the list's data was fetched again after the core said events were
+ * lost (`Resync` at `resyncAt`, ADR 0230) and nothing is still loading: the
+ * selection can then be checked against the rows.
+ */
+export function refetchedSince(resyncAt: number | null, list: ListFetchState): boolean {
+  return resyncAt !== null && !list.isFetching && list.dataUpdatedAt >= resyncAt;
+}

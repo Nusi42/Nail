@@ -11,6 +11,7 @@ import {
 import { flattenFolders } from "./FolderTree";
 import { compileRows, rowStates } from "./MessageList";
 import { must } from "../test/must";
+import { opsSummaryOf } from "../api/mockOps";
 import { INBOX } from "../test/mockIds";
 
 stubElementSizesEachTest();
@@ -375,29 +376,67 @@ describe("toolbar", () => {
 });
 
 describe("status-bar", () => {
-  it("retries a failed write with RetryOp", async () => {
+  it("names the failed writes and retries or dismisses them all", async () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });
-    env.transport.data.opQueue.set("op-9", {
-      accountId: "acc-personal",
-      state: "failed",
-      error: "unavailable",
-      failedAt: "2026-11-21T10:00:00Z",
-    });
+    for (const [opId, failedAt] of [
+      ["op-8", "2026-11-21T10:00:00Z"],
+      ["op-9", "2026-11-21T10:05:00Z"],
+    ] as const) {
+      env.transport.data.opQueue.set(opId, {
+        accountId: "acc-personal",
+        state: "failed",
+        error: "unavailable",
+        failedAt,
+      });
+    }
     renderNode(widget("status-bar", { options: { items: "ops" } }), env);
     act(() => {
-      env.store.getState().opQueued(["op-9"]);
-      env.store.getState().opFinished("op-9", "unavailable");
+      env.store.getState().setOpsSummary(opsSummaryOf(env.transport.data.opQueue));
     });
     const status = screen.getByRole("status", { name: "Status" });
-    expect(within(status).getByText(/A change could not be saved/)).toBeInTheDocument();
+    expect(within(status).getByText(/^2 changes could not be saved: /)).toBeInTheDocument();
     fireEvent.click(within(status).getByRole("button", { name: "Retry" }));
     await waitFor(() => {
-      expect(env.transport.requests).toContainEqual({ type: "RetryOp", op_id: "op-9" });
+      expect(env.transport.requests).toContainEqual({ type: "RetryFailedOps", account_id: null });
     });
+    fireEvent.click(within(status).getByRole("button", { name: "Dismiss" }));
     await waitFor(() => {
-      expect(env.store.getState().opError).toBeNull();
+      expect(env.transport.requests).toContainEqual({
+        type: "DismissFailedOps",
+        account_id: null,
+      });
+    });
+    // The core's next summary (here: the mock's queue after the dismissal)
+    // clears the notice.
+    act(() => {
+      env.store.getState().setOpsSummary(opsSummaryOf(env.transport.data.opQueue));
     });
     expect(within(status).queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("shows the core's localized reason of a single failed write", () => {
+    const env = createEnv();
+    renderNode(widget("status-bar", { options: { items: "ops" } }), env);
+    act(() => {
+      env.store.getState().setOpsSummary({
+        pending: 0,
+        in_flight: 0,
+        failed: 1,
+        accounts: [{ account_id: "acc-work", pending: 0, in_flight: 0, failed: 1 }],
+        newest_failure: {
+          op_id: "op-1",
+          account_id: "acc-work",
+          code: "internal",
+          localized: { id: "error-network", args: {} },
+          message: null,
+          failed_at: "2026-11-21T10:00:00Z",
+        },
+      });
+    });
+    const status = screen.getByRole("status", { name: "Status" });
+    expect(
+      within(status).getByText("A change could not be saved: The server could not be reached."),
+    ).toBeInTheDocument();
   });
 
   it("shows sync progress, folder counts and connection problems", async () => {
