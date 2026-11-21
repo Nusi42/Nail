@@ -5,7 +5,7 @@
  * supplies its options. Free text always stays allowed: the picker only
  * helps to find a value, it never forces one from its list.
  */
-import type { AccountId, Address, Folder } from "../../api/generated";
+import type { Account, AccountId, Address, Folder } from "../../api/generated";
 
 /** What a picker picks. */
 export const PICKER_KINDS = [
@@ -24,6 +24,11 @@ export type FolderValue = "path" | "id";
 
 /** One option of a picker's list. */
 export interface PickerOption {
+  /**
+   * The row's key when `value` is not unique in its list (a folder path in
+   * two accounts); `parent` refers to it. Defaults to `value`.
+   */
+  key?: string;
   /** The value the field takes when the option is picked. */
   value: string;
   /** What the list shows (already localized where it needs to be). */
@@ -32,12 +37,20 @@ export interface PickerOption {
   detail: string | null;
   /** Tree depth (folders; 0 = top level). */
   depth: number;
-  /** The option's parent in a tree (folders), else `null`. */
+  /** The key of the option's parent in a tree (folders), else `null`. */
   parent: string | null;
   /** The folder of a folder option. */
   folder?: Folder;
   /** The address of an address option. */
   address?: Address;
+  /** The account of an account option, or of a folder tree's account row. */
+  account?: Account;
+  /**
+   * `group`: a heading row of a tree (an account above its folders) that
+   * only opens or closes, never becomes the value; `create`: the row that
+   * takes the typed text as a new value ("Create tag …").
+   */
+  variant?: "group" | "create";
 }
 
 /** What a source needs besides the typed text. */
@@ -46,6 +59,8 @@ export interface PickerScope {
   accountId: AccountId | null;
   /** Folder pickers: what the value holds (default `path`). */
   folderValue: FolderValue;
+  /** Account pickers: offer virtual accounts too (default: real accounts only). */
+  virtualAccounts?: boolean;
 }
 
 /** The options of one picker for the text typed so far. */
@@ -67,6 +82,8 @@ export interface PickerProps {
   accountId?: AccountId | null | undefined;
   /** Folder pickers: what `value` holds (default `path`). */
   folderValue?: FolderValue | undefined;
+  /** Account pickers: offer virtual accounts too (default: real accounts only). */
+  virtualAccounts?: boolean | undefined;
   /** The input's id (a host's `<label htmlFor>`). */
   id?: string | undefined;
   /** Localized placeholder. */

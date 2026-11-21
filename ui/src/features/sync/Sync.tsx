@@ -21,6 +21,7 @@ import { useAccountsConfig, useClient, useFolders, useMessage } from "../../stat
 import { useUi } from "../../state/uiStore";
 import { flattenFolders } from "../../widgets/FolderTree";
 import { NumberField, SelectField, SaveRow } from "../../widgets/forms";
+import { PickerField } from "../../widgets/pickers";
 import { BODY_MODES, TRI_CHOICES, type Tri } from "./model";
 import { useSync } from "./store";
 
@@ -254,23 +255,26 @@ export function SyncPoliciesWidget({ node }: WidgetProps) {
         <p data-part="sync-folder-policies.empty">{t("common-no-accounts-yet")}</p>
       ) : (
         <>
-          <SelectField
+          {/* Pickers: only a picked account or folder changes what the editor shows. */}
+          <PickerField
+            kind="account"
             labelId="sync-account"
             name="account"
             value={accountId ?? ""}
-            choices={accounts.map((a) => ({ value: a.id, label: a.name, literal: true }))}
-            onChange={setAccount}
+            onChange={(id, option) => {
+              if (option) setAccount(id);
+            }}
           />
-          <SelectField
+          <PickerField
+            kind="folder"
             labelId="sync-folder"
             name="folder"
+            accountId={accountId}
+            folderValue="id"
             value={folderId ?? ""}
-            choices={rows.map(({ folder, depth }) => ({
-              value: folder.id,
-              label: `${" ".repeat(depth)}${folder.name}`,
-              literal: true,
-            }))}
-            onChange={setFolder}
+            onChange={(id, option) => {
+              if (option) setFolder(id);
+            }}
           />
           {folderId !== null && <FolderPolicyEditor key={folderId} folderId={folderId} />}
         </>

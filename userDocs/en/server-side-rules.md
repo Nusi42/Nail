@@ -69,6 +69,10 @@ identities plus the ones you add), so it does not answer mail you were only
 copied on through a list. With **Don't reply to mailing lists** on, it also
 skips mailing lists, bulk mail and automatic messages.
 
+**Reply from** sets the sender of the reply; the field suggests your
+contacts and the people you write with as you type, and any address you
+type yourself is fine, too.
+
 A start and end date are checked by the server when it supports dates.
 Otherwise Nail switches the reply on and off itself on those days, which
 needs Nail to be running (or started) on the start and end day.

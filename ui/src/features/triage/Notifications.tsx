@@ -24,6 +24,7 @@ import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccountsConfig, useClient, useFolders } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { CheckField, SelectField } from "../../widgets/forms";
+import { PickerField } from "../../widgets/pickers";
 import {
   WEEKDAYS,
   notificationIssues,
@@ -153,6 +154,7 @@ function AccountOverrides({
   settings: NotificationSettings;
   onChange: (settings: NotificationSettings) => void;
 }) {
+  const t = useT();
   const folders = useFolders(account.id);
   const choices = OVERRIDE_CHOICES.map((c) => ({
     value: c,
@@ -200,24 +202,25 @@ function AccountOverrides({
         />
       ))}
       {(folders.data ?? []).length > overridden.length && (
-        <SelectField
+        <PickerField
+          kind="folder"
           labelId="notification-override-add"
           args={{ account: account.name }}
           name={`add-${account.id}`}
+          accountId={account.id}
+          folderValue="id"
+          placeholder={t("notification-override-add-choose")}
           value={adding}
-          choices={[
-            { value: "", label: "notification-override-add-choose" },
-            ...(folders.data ?? [])
-              .filter((f) => !overridden.includes(f))
-              .map((f) => ({ value: f.id, label: f.name, literal: true })),
-          ]}
-          onChange={(folderId) => {
+          onChange={(folderId, option) => {
+            // Typing searches the account's folders; picking one adds its override.
+            if (!option?.folder) {
+              setAdding(folderId);
+              return;
+            }
             setAdding("");
-            if (folderId === "") return;
+            if (overridden.some((f) => f.id === folderId)) return;
             // A new folder override flips the folder away from what it does now.
-            const notifies =
-              settings.folders === "all" ||
-              folders.data?.find((f) => f.id === folderId)?.role === "inbox";
+            const notifies = settings.folders === "all" || option.folder.role === "inbox";
             onChange(
               withOverride(
                 settings,

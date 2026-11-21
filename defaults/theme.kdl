@@ -938,9 +938,18 @@ theme "default" mode="system" {
     // ---- Shared pickers (R2, ADR 0222): folder, account, tag, address,
     // mailing list and header-name fields with a list to choose from ----
     part "picker" {
-        display "inline-flex"
+        display "flex"
         align-items "center"
         gap "$space.xxs"
+        min-width 0
+    }
+    // The input, the browse button and the popup, which overlays the
+    // content below instead of pushing it down.
+    part "picker.field" {
+        position "relative"
+        display "flex"
+        align-items "stretch"
+        flex-grow 1
         min-width 0
     }
     part "picker.input" {
@@ -955,6 +964,120 @@ theme "default" mode="system" {
         background-color "$color.bg-subtle"
     }
     part "picker.input:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset 0; }
+    part "picker.browse" {
+        display "inline-flex"
+        align-items "center"
+        justify-content "center"
+        min-width "$size.control"
+        margin-left "$space.xxs"
+        padding 0
+        border "$border.control"
+        border-radius "$radius.sm"
+        color "$color.fg-muted"
+        background-color "$color.bg-subtle"
+        cursor "pointer"
+    }
+    part "picker.browse:hover" { color "$color.fg"; background-color "$color.bg-raised"; }
+    part "picker.browse.icon" { width "$size.icon"; height "$size.icon"; }
+    part "picker.popup" {
+        position "absolute"
+        top "100%"
+        left 0
+        z-index 20
+        display "flex"
+        flex-direction "column"
+        min-width "100%"
+        max-width "min(480px, 90vw)"
+        max-height "min(320px, 50vh)"
+        margin-top "$space.xxs"
+        overflow "auto"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    // Opened above the field when there is more room there.
+    part "picker.popup[placement=\"above\"]" {
+        top "auto"
+        bottom "100%"
+        margin-top 0
+        margin-bottom "$space.xxs"
+    }
+    part "picker.list" {
+        margin 0
+        padding "$space.xxs" 0
+    }
+    part "picker.option" {
+        display "flex"
+        align-items "center"
+        gap "$space.xs"
+        min-height "$size.control"
+        padding "$space.xxs" "$space.sm"
+        color "$color.fg"
+        cursor "pointer"
+        white-space "nowrap"
+    }
+    part "picker.option:hover" { background-color "$color.bg-subtle"; }
+    part "picker.option:highlighted" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "picker.option[selected=\"true\"]" { font-weight "$font-weight.semibold"; }
+    part "picker.option[variant=\"group\"]" { font-weight "$font-weight.semibold"; }
+    part "picker.option[variant=\"create\"]" { font-style "italic"; }
+    part "picker.option[depth=\"1\"]" { padding-left 28; }
+    part "picker.option[depth=\"2\"]" { padding-left 44; }
+    part "picker.option[depth=\"3\"]" { padding-left 60; }
+    part "picker.option[depth=\"4\"]" { padding-left 76; }
+    part "picker.option[depth=\"5\"]" { padding-left 92; }
+    part "picker.option[depth=\"6\"]" { padding-left 108; }
+    // A row of the search field's values (`searchValues.tsx`): a button.
+    part "picker.option.button" {
+        display "flex"
+        flex-grow 1
+        align-items "center"
+        gap "$space.xs"
+        min-width 0
+        padding 0
+        border "none"
+        font "inherit"
+        color "inherit"
+        text-align "start"
+        background-color "transparent"
+        cursor "pointer"
+    }
+    part "picker.option.button:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "picker.option.toggle" {
+        display "inline-flex"
+        flex-shrink 0
+        width "$size.icon"
+        height "$size.icon"
+        color "$color.fg-muted"
+    }
+    part "picker.option.toggle.icon" { width "$size.icon"; height "$size.icon"; }
+    part "picker.option.icon" {
+        flex-shrink 0
+        width "$size.icon"
+        height "$size.icon"
+        color "$color.fg-muted"
+    }
+    part "picker.option.label" {
+        min-width 0
+        overflow "hidden"
+        text-overflow "ellipsis"
+    }
+    part "picker.option.detail" {
+        min-width 0
+        overflow "hidden"
+        text-overflow "ellipsis"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "picker.empty" {
+        padding "$space.xs" "$space.sm"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
 
     // ---- Filter rules (ADR 0024) ----
 

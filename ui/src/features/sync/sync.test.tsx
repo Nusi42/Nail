@@ -45,8 +45,14 @@ describe("sync-folder-policies", () => {
     const env = createEnv();
     renderWithProviders(<NodeView node={widget("sync-folder-policies")} path="t" />, env);
     const section = await screen.findByRole("region", { name: "Synchronization per folder" });
-    await within(section).findByRole("option", { name: /Archive/ });
-    await user.selectOptions(within(section).getByLabelText("Folder"), "acc-personal/Archive");
+    // The folder is a folder picker: type to search the tree, Enter picks.
+    const folder = await within(section).findByRole("combobox", { name: "Folder" });
+    await within(section).findByDisplayValue("Inbox");
+    await user.clear(folder);
+    await user.type(folder, "Arch");
+    await within(section).findByRole("treeitem", { name: /Archive/ });
+    await user.keyboard("{Enter}");
+    expect(folder).toHaveValue("Archive");
     const status = await within(section).findByText(/Now: Full messages; synchronized\./);
     expect(status).toBeVisible();
     await user.selectOptions(within(section).getByLabelText("Download"), "recent");

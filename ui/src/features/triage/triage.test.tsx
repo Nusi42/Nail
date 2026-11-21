@@ -259,6 +259,12 @@ describe("triage widgets", () => {
     expect(from).toHaveValue("22:00");
     await user.click(screen.getByLabelText("Saturday"));
     await user.selectOptions(await screen.findByLabelText("Personal"), "off");
+    // A folder override starts from the folder picker: type, then Enter picks.
+    const add = screen.getByRole("combobox", { name: "Add a folder of Personal" });
+    await user.type(add, "Recei");
+    await screen.findByRole("treeitem", { name: /Receipts/ });
+    await user.keyboard("{Enter}");
+    expect(add).toHaveValue("");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Saved.");
     const [update] = requestsOf(env, "UpdateNotificationSettings");
@@ -267,6 +273,11 @@ describe("triage widgets", () => {
       scope: { type: "account", account_id: "acc-personal" },
       notify: false,
     });
+    expect(update?.settings.overrides).toContainEqual(
+      expect.objectContaining({
+        scope: { type: "folder", folder_id: "acc-personal/Inbox/Receipts" },
+      }),
+    );
     await user.click(screen.getByRole("button", { name: "Send a test notification" }));
     expect(await screen.findByText("A test notification is on its way.")).toBeVisible();
     // Invalid quiet hours are caught before sending.

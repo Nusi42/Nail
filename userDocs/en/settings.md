@@ -83,6 +83,34 @@ Keyboard: **Enter** opens the first result, **Down** moves into the
 results, **Escape** clears the search (a second **Escape** closes the
 window when Settings is one). The **×** button clears the search too.
 
+## Choosing a folder, an account or an address
+
+Fields that name a folder, an account, a tag, an address, a mailing list or
+a header name have a list to choose from: the **▾** button beside the field
+(or **Down** in the field) shows every choice, and typing searches them.
+Folders are a tree: each account with its folders (Inbox, Sent, Archive and
+the other special folders first, with their purpose beside a folder whose
+name differs); addresses come from your contacts and the people you write
+with, found by name or address; tags offer the ones in use and **Create
+tag "…"** for a new one.
+
+You can still type any value yourself; the list only helps to find one.
+For a field that holds an account or a folder, a typed name that matches
+exactly one choice is taken as that choice when you leave the field.
+
+Keyboard: **Down** / **Up** move through the list, **Home** / **End** jump
+to its ends while it shows every choice, **Right** opens a folder with
+subfolders (or moves into it), **Left** closes it (or moves to its parent),
+**Enter** picks the marked choice, **Escape** or **Tab** closes the list
+without changing the field. A click outside the list closes it, too.
+
+These fields use it: in **Accounts**, the folders of a merged folder of a
+virtual account and an identity's reply-to address; in **Mail & junk →
+Synchronization**, the account and folder whose synchronization you set; in
+**Notifications**, the folder you add an override for; in **Server rules &
+vacation**, the sender of the vacation reply. The rules editor uses the same
+lists ([Rules](rules.md)).
+
 ## Links to a section
 
 The action `settings.section "<id>"` opens the page at a section. You can

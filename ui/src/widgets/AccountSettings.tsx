@@ -15,6 +15,7 @@ import {
   exchangeSecretsFor,
 } from "../features/exchange";
 import { accountSignIn, secretsFor, SETUP_WINDOW } from "./AccountSetup";
+import { PickerField } from "./pickers";
 import {
   CheckField,
   IncomingFields,
@@ -85,10 +86,10 @@ function IdentityEditor({
           onChange({ ...identity, name: name === "" ? null : name });
         }}
       />
-      <TextField
+      <PickerField
+        kind="address"
         labelId="identity-reply-to"
         name={`identity-${String(index)}-reply-to`}
-        type="email"
         value={identity.reply_to ?? ""}
         onChange={(v) => {
           onChange({ ...identity, reply_to: v.trim() === "" ? null : v.trim() });

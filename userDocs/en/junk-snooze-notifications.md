@@ -79,6 +79,11 @@ shows a notification:
 7. **Default:** new mail in the Inbox notifies. If you choose "All folders",
    every folder notifies except Sent, Drafts, Trash and Junk.
 
+To give a folder its own setting, use **Add a folder of …** under the
+account in Settings → Notifications: type part of the folder's name or open
+the list with **▾** and pick it from the account's folder tree (see
+[choosing a folder](settings.md#choosing-a-folder-an-account-or-an-address)).
+
 **Quiet hours** use your computer's time zone. A range like 22:00–07:00
 crosses midnight. It belongs to the day it starts on: if you choose Friday
 only, Saturday 03:00 is quiet and Friday 03:00 is not. The end time is not

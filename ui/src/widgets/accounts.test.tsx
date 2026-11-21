@@ -464,9 +464,10 @@ describe("virtual-account-editor", () => {
     await user.click(screen.getByRole("button", { name: "Add merged folder" }));
     await user.type(screen.getByRole("textbox", { name: "Folder name" }), "Receipts");
     await user.click(screen.getByRole("button", { name: "Add folder" }));
-    const folder = screen.getByRole("combobox", { name: "Folder" });
-    await within(folder).findByRole("option", { name: "Inbox/Receipts" });
-    fireEvent.change(folder, { target: { value: "Inbox/Receipts" } });
+    // The source's folder is a folder picker: browse the account's tree and pick.
+    await user.click(screen.getByRole("button", { name: "Show choices for Folder" }));
+    await user.click(await screen.findByRole("treeitem", { name: /Receipts/ }));
+    expect(screen.getByRole("combobox", { name: "Folder" })).toHaveValue("Inbox/Receipts");
 
     fireEvent.change(screen.getByRole("combobox", { name: "Identity for new messages" }), {
       target: { value: "ada@work.example" },

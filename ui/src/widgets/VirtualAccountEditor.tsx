@@ -11,15 +11,10 @@ import type {
 } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { type WidgetProps } from "../layout/widgetRegistry";
-import {
-  queryKeys,
-  useAccountsConfig,
-  useClient,
-  useFolders,
-  useVirtualAccounts,
-} from "../state/queries";
+import { queryKeys, useAccountsConfig, useClient, useVirtualAccounts } from "../state/queries";
 import { NoticeView, useNoticeRun, type Notice } from "./AccountSettings";
 import { CheckField, Section, SelectField, TextField, type Choice } from "./forms";
+import { PickerField } from "./pickers";
 
 /** A new virtual account over all real accounts. */
 export function newVirtualAccount(members: readonly string[]): VirtualAccountConfig {
@@ -71,40 +66,37 @@ export function pruneToMembers(
 
 function SourceRow({
   source,
-  accounts,
   index,
   onChange,
   onRemove,
 }: {
   source: FolderSource;
-  accounts: readonly AccountConfig[];
   index: string;
   onChange: (source: FolderSource) => void;
   onRemove: () => void;
 }) {
   const t = useT();
-  const folders = useFolders(source.account_id || null);
-  const folderChoices: Choice[] = (folders.data ?? []).map((f) => ({
-    value: f.path,
-    label: f.path,
-    literal: true,
-  }));
   return (
     <li data-part="virtual-editor.source">
-      <SelectField
+      <PickerField
+        kind="account"
         labelId="virtual-source-account"
         name={`source-${index}-account`}
         value={source.account_id}
-        choices={accounts.map((a) => ({ value: a.id, label: a.name, literal: true }))}
-        onChange={(account_id) => {
-          onChange({ account_id, path: "" });
+        onChange={(account_id, option) => {
+          // A picked account (or a typed one) starts without a folder.
+          if (option !== null || account_id !== source.account_id)
+            onChange({ account_id, path: "" });
         }}
       />
-      <SelectField
+      <PickerField
+        kind="folder"
         labelId="virtual-source-folder"
         name={`source-${index}-folder`}
+        accountId={source.account_id || null}
+        folderValue="path"
+        placeholder={t("virtual-source-choose")}
         value={source.path}
-        choices={[{ value: "", label: "virtual-source-choose" }, ...folderChoices]}
         onChange={(path) => {
           onChange({ ...source, path });
         }}
@@ -147,7 +139,6 @@ function MappingEditor({
             key={i}
             index={`${String(index)}-${String(i)}`}
             source={source}
-            accounts={accounts}
             onChange={(next) => {
               onChange({
                 ...mapping,

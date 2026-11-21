@@ -123,7 +123,8 @@ Nail. Nothing changes on the server.
 
 An identity is an address you send from: the account's main address, an
 alias, a plus-address. Each identity has a sender name, an optional
-reply-to address and a signature. The first identity is the account's
+reply-to address (the field offers your contacts and the people you write
+with as you type) and a signature. The first identity is the account's
 default. When you reply, Nail sends from the identity the message was
 addressed to.
 
@@ -146,6 +147,9 @@ account**:
   (on by default) combines the folders with the same purpose.
 - **Add merged folder** combines other folders by hand, for example
   "Receipts" made of `Receipts` in one account and `Bills` in another.
+  For each folder you add, choose the account and then the folder from the
+  account's folder tree (type to search it, or type the folder's path); see
+  [choosing a folder](settings.md#choosing-a-folder-an-account-or-an-address).
   Folders you do not merge appear under a subfolder per account.
 - **Identity for new messages** — the sender of new messages written in
   this virtual account. Without one, the first account's default is used.

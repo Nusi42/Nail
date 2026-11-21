@@ -31,6 +31,7 @@ import {
   TextField,
   SaveRow,
 } from "../../widgets/forms";
+import { PickerField } from "../../widgets/pickers";
 import { manageSieveIssues, parseAddressList, vacationIssues } from "./model";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
 import { PlacementTable } from "../rules/PlacementTable";
@@ -457,11 +458,11 @@ function VacationForm({ accountId, saved }: { accountId: string; saved: Vacation
           setNotice(false);
         }}
       />
-      <TextField
+      <PickerField
+        kind="address"
         labelId="vacation-from"
         hintId="vacation-from-hint"
         name="vacation-from"
-        type="email"
         value={draft.from ?? ""}
         onChange={(from) => {
           change({ from: from === "" ? null : from });
