@@ -151,6 +151,26 @@ describe("DialogFooter (R6)", () => {
     );
   });
 
+  it("marks a button unavailable but focusable and names what explains it", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    renderOn(
+      "windows",
+      <>
+        <p id="why">Give the rule a name.</p>
+        <DialogFooter
+          primary={{ label: "Save", onClick, ariaDisabled: true, describedBy: "why" }}
+        />
+      </>,
+    );
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    expect(save).toHaveAttribute("aria-disabled", "true");
+    expect(save).toHaveAccessibleDescription("Give the rule a name.");
+    await user.click(save);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
   it("shows only Done when the task is finished", async () => {
     const user = userEvent.setup();
     const onDone = vi.fn();

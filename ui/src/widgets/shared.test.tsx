@@ -11,7 +11,7 @@ import { createEnv, renderWithProviders } from "../test/harness";
 import { must } from "../test/must";
 import { CloseButton } from "./CloseButton";
 import { EmptyDialog, LoadingDialog, useCloseNow } from "./DialogStates";
-import { LabelledField, SaveRow, withOptions } from "./forms";
+import { LabelledField, withOptions } from "./forms";
 import { RefreshButton } from "./RefreshButton";
 import { RemoveButton } from "./RemoveButton";
 import { HORIZONTAL, moveRovingFocus, VERTICAL } from "./rovingFocus";
@@ -114,19 +114,6 @@ describe("forms", () => {
       createEnv(),
     );
     expect(container.querySelector('[data-part="form.hint"]')).toBeNull();
-  });
-
-  it("saves from the primary Save button of its row", () => {
-    const onSave = vi.fn();
-    const { container } = renderWithProviders(
-      <SaveRow part="x.actions" onSave={onSave} />,
-      createEnv(),
-    );
-    const save = screen.getByRole("button", { name: "Save" });
-    expect(save).toHaveAttribute("data-variant", "primary");
-    expect(save.parentElement).toBe(container.querySelector('[data-part="x.actions"]'));
-    fireEvent.click(save);
-    expect(onSave).toHaveBeenCalledOnce();
   });
 
   it("patches a server's options and keeps the rest", () => {

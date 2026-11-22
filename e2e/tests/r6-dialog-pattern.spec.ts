@@ -3,8 +3,13 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { axeViolations } from "../support/axe";
 import { nailPerTest } from "../support/nail";
-import { messageRows, openMail, openSettings, selectInTrash, windowById } from "../support/views";
-import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/windowTour";
+import { messageRows, openSettings, selectInTrash, windowById } from "../support/views";
+import {
+  expectDialogFooter,
+  type ViewerOs,
+  unsavedPrompt,
+  openMailAs,
+} from "../support/windowTour";
 
 /**
  * One dialog pattern everywhere (R6, ADR 0239), on its two reference
@@ -25,10 +30,7 @@ const server = nailPerTest({ seed: "demo-multi" });
 const SUBJECT = "Welcome to Nail";
 
 /** The page as a viewer on `os`, with the mail view loaded. */
-async function openAs(page: Page, os: ViewerOs): Promise<void> {
-  await emulateViewerOs(page, os);
-  await openMail(page, server.url);
-}
+const openAs = (page: Page, os: ViewerOs) => openMailAs(page, server.url, os);
 
 /** Settings → Appearance → New theme as a viewer on `os`: the dialog. */
 async function openNewTheme(page: Page, os: ViewerOs): Promise<Locator> {
@@ -40,9 +42,6 @@ async function openNewTheme(page: Page, os: ViewerOs): Promise<Locator> {
     .click();
   return windowById(page, "theme-new");
 }
-
-const unsavedPrompt = (page: Page) =>
-  page.locator('[data-part="window"][data-window^="unsaved-changes:"]');
 
 for (const os of ["windows", "macos"] as const) {
   test(`Delete permanently: the destructive verb is never the default (${os})`, async ({

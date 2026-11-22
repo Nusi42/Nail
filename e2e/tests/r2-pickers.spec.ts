@@ -3,7 +3,7 @@ import { nailPerTest } from "../support/nail";
 import { expectResponsive } from "../support/responsive";
 import { openSettingsTab } from "../support/views";
 import { pickTheme } from "../support/appearance";
-import { discardSettings } from "../support/settings";
+import { discardSettings, saveSettings } from "../support/settings";
 
 /**
  * R2 shared pickers (ADR 0222) on the real core (`demo-multi`): fields that

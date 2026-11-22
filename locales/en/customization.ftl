@@ -81,7 +81,6 @@ merge-dialog-file-layout = Layout (layout.kdl)
 merge-dialog-load = Load a file
 merge-dialog-paste = Or paste its text
 # The wizard's steps (R6): Next compares, then the apply verb names the file.
-merge-dialog-next = Next
 merge-dialog-apply-theme = Apply theme
 merge-dialog-apply-layout = Apply layout
 merge-dialog-incoming-invalid =

@@ -115,7 +115,7 @@ plugin-manager-grants-save = Save permissions
 plugin-manager-grants-saved = Permissions saved.
 # Remove… in the manager asks first (a confirmation window).
 plugin-manager-remove = Remove plug-in…
-plugin-manager-uninstall-confirm = Remove “{ $name }”?
+plugin-manager-uninstall-confirm = { common-remove-question }
 plugin-manager-uninstall-note = Its settings, data and log are deleted. Items it added to your layout stay until you remove them.
 plugin-manager-uninstall = Remove plug-in
 

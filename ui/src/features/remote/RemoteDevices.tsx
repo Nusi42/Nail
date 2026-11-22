@@ -248,7 +248,7 @@ function PendingCode({ code, users }: { code: PairingCode; users: readonly Remot
           void run(() => client.request({ type: "CancelPairingCode", pairing_id: code.id }, "Done"))
         }
       >
-        {t("remote-pair-cancel-code")}
+        {t("remote-pair-revoke-code")}
       </button>
       <ErrorLine error={error} />
     </li>

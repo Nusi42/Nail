@@ -269,14 +269,15 @@ describe("Run on and Run in the footer", () => {
     const env = setup(inInbox);
     const { user, editor, footer } = await openEditor(env, null);
     const run = within(footer).getByRole("button", { name: "Save and run" });
-    expect(run).toBeDisabled();
+    expect(run).toHaveAttribute("aria-disabled", "true");
+    await user.click(run);
     await user.click(within(footer).getByRole("button", { name: "Save rule" }));
     expect(requestsOf(env, "RunRules")).toEqual([]);
     expect(requestsOf(env, "SaveRule")).toEqual([]);
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Fresh");
     await user.click(within(editor).getByRole("button", { name: "Add action" }));
     await user.click(within(editor).getByRole("menuitem", { name: "Archive" }));
-    expect(run).toBeEnabled();
+    expect(run).not.toHaveAttribute("aria-disabled");
   });
 });
 

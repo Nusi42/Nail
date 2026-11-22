@@ -15,6 +15,7 @@ import { ConfirmationNotices } from "./ConfirmationNotices";
 import { agentsStoreFor } from "./store";
 import { HISTORY_PAGE } from "./queries";
 import { must } from "../../test/must";
+import { discardSettings, renderSettings, saveSettingsDone } from "../settings/testing";
 
 const CLIENT = { kind: "mcp-client", client_id: "mcp-1" } as const;
 
@@ -241,10 +242,10 @@ describe("indicator and notices", () => {
 });
 
 describe("policy editor", () => {
-  it("switches a kind, resets to the default and locks destructive kinds", async () => {
+  it("switches a kind with Save, resets to the default and locks destructive kinds", async () => {
     const env = createEnv();
     const user = userEvent.setup();
-    renderWithProviders(<PolicyEditor actor={CLIENT} name="Claude Desktop" />, env);
+    renderSettings(env, <PolicyEditor actor={CLIENT} name="Claude Desktop" />);
     await settle(env);
     const send = document.querySelector<HTMLElement>(
       '[data-part="action-policies.item"][data-kind="send"]',
@@ -252,16 +253,25 @@ describe("policy editor", () => {
     if (!send) throw new Error("no send row");
     expect(send).toHaveAttribute("data-mode", "ask");
     await user.click(within(send).getByRole("radio", { name: "Without asking" }));
-    await waitFor(() => expect(send).toHaveAttribute("data-mode", "allow"));
-    expect(send).toHaveAttribute("data-customized", "");
+    expect(send).toHaveAttribute("data-mode", "allow");
+    // Nothing is written before the page's Save (R6).
+    expect(send).not.toHaveAttribute("data-customized");
+    expect(env.transport.data.features.agents.policies["mcp-client:mcp-1"] ?? {}).toEqual({});
+    await saveSettingsDone(user);
+    await waitFor(() => expect(send).toHaveAttribute("data-customized", ""));
     expect(env.transport.data.features.agents.policies["mcp-client:mcp-1"]).toEqual({
       send: "allow",
     });
     expect(screen.getByRole("status")).toHaveTextContent("Saved.");
     // Choosing the default again removes the stored mode.
     await user.click(within(send).getByRole("radio", { name: /Ask first/ }));
+    await saveSettingsDone(user);
     await waitFor(() => expect(send).not.toHaveAttribute("data-customized"));
     expect(env.transport.data.features.agents.policies["mcp-client:mcp-1"]).toEqual({});
+    // Discard puts the saved mode back.
+    await user.click(within(send).getByRole("radio", { name: "Without asking" }));
+    await discardSettings(user);
+    expect(send).toHaveAttribute("data-mode", "ask");
 
     const trash = document.querySelector<HTMLElement>(
       '[data-part="action-policies.item"][data-kind="trash"]',

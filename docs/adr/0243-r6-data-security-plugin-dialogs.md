@@ -1,4 +1,4 @@
-# 0240 — R6 WD4: data, security, plug-in and system dialogs
+# 0243 — R6 WD4: data, security, plug-in and system dialogs
 
 Status: accepted (2026-11-22)
 

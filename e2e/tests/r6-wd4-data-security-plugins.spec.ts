@@ -3,8 +3,8 @@ import { axeViolations } from "../support/axe";
 import { openWorkLog, workLogWindow } from "../support/connlog";
 import { nailPerTest } from "../support/nail";
 import { createUser } from "../support/remote";
-import { openMail, openSettings, windowById } from "../support/views";
-import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/windowTour";
+import { openSettings, windowById } from "../support/views";
+import { expectDialogFooter, type ViewerOs, openMailAs } from "../support/windowTour";
 
 /**
  * One dialog pattern everywhere (R6, ADR 0239) in the data, security,
@@ -25,10 +25,7 @@ import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/w
 const server = nailPerTest({ seed: "demo-multi" });
 
 /** The page as a viewer on `os`, with the mail view loaded. */
-async function openAs(page: Page, os: ViewerOs): Promise<void> {
-  await emulateViewerOs(page, os);
-  await openMail(page, server.url);
-}
+const openAs = (page: Page, os: ViewerOs) => openMailAs(page, server.url, os);
 
 /** Settings → `section`, then the button `button`: the window `name`. */
 async function openFromSettings(

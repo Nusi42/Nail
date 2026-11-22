@@ -36,7 +36,6 @@ portability-action-diagnostics-keywords = support logs bug report problem debug
 portability-step = Step { $step } of { $steps }
 portability-reading = Reading…
 # A wizard's step forward (the next step shows what follows).
-portability-wizard-next = Next
 portability-browse = Browse…
 portability-browse-folder = Choose folder…
 portability-path-hint = Type the full path or browse.
@@ -326,7 +325,7 @@ portability-diagnostics-redact = Replace mail addresses and remove subjects
 portability-diagnostics-redact-hint = In logs, settings and account states. Support can still follow what happened.
 portability-diagnostics-secrets = Passwords, sign-in tokens and keys are always removed.
 # The diagnostics wizard's first step: show exactly what the bundle holds.
-portability-diagnostics-preview = { portability-wizard-next }
+portability-diagnostics-preview = { common-next }
 portability-diagnostics-preview-title = The bundle will contain exactly these files
 portability-diagnostics-preview-summary = { $count ->
     [one] 1 file, { $size }

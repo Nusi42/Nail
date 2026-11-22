@@ -1612,8 +1612,8 @@ theme "default" mode="system" {
     part "rules.run.target" { color "$color.fg-muted"; }
     part "rules.run:failed" { color "$color.danger"; }
     part "rules.run:undone" { color "$color.fg-muted"; }
-    // The footer: status, then Delete… on the left and Run on / Run / Test /
-    // Save on the right.
+    // The footer: status, then the shared dialog footer (Delete… at the start,
+    // Run on / Run / Test, Save rule by role).
     part "rules.footer" {
         display "flex"
         flex-wrap "wrap"
@@ -1638,40 +1638,10 @@ theme "default" mode="system" {
         color "$color.fg-muted"
     }
     part "rules.footer.state:saved" { color "$color.success"; }
-    part "rules.footer.start" {
-        display "flex"
-        gap "$space.sm"
-        margin-right "auto"
-    }
-    part "rules.footer.end" {
-        display "flex"
-        flex-wrap "wrap"
-        align-items "center"
-        justify-content "flex-end"
-        gap "$space.sm"
-    }
     part "rules.footer.target" {
         display "inline-flex"
         align-items "center"
         gap "$space.xs"
-    }
-    // Questions asked over the window (delete, discard, run).
-    part "rules.confirm" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.md"
-        padding "$space.lg"
-        border "$border.thin"
-        border-radius "$radius.md"
-        background-color "$color.bg-raised"
-        box-shadow "$shadow.overlay"
-    }
-    part "rules.confirm.question" { margin 0; overflow-wrap "anywhere"; }
-    part "rules.confirm.actions" {
-        display "flex"
-        flex-wrap "wrap"
-        justify-content "flex-end"
-        gap "$space.sm"
     }
     // No rule open: create one from a message, or from a template.
     part "rules.empty" {
@@ -2096,11 +2066,6 @@ theme "default" mode="system" {
     part "merge-dialog.error" { color "$color.danger"; }
     part "merge-dialog.error-list" { color "$color.danger"; }
     part "merge-dialog.status" { color "$color.fg-muted"; }
-    part "merge-dialog.actions" {
-        display "flex"
-        flex-wrap "wrap"
-        gap "$space.sm"
-    }
     part "merge-dialog.backups" {
         display "flex"
         flex-direction "column"
@@ -2981,7 +2946,6 @@ theme "default" mode="system" {
     part "toolbar-editor.add" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
     part "column-editor.add" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
     part "toolbar-editor.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
-    part "column-editor.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "key-binding-editor.capture" {
         padding "$space.xs" "$space.sm"
         border "$border.control"
@@ -3429,7 +3393,6 @@ theme "default" mode="system" {
     part "pim.recurrence.summary" { margin 0; font-style "italic"; }
     part "pim.scope" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; min-width 320; }
     part "pim.scope.choices" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
-    part "pim.scope.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "pim.merge" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; min-width 400; }
     part "pim.merge.groups" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
     part "pim.merge.group" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
@@ -3553,12 +3516,10 @@ theme "default" mode="system" {
     part "scheduling.meeting.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "scheduling.dialog" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 360; max-width 720; padding "$space.md"; }
     part "scheduling.dialog.intro" { margin 0; }
-    part "scheduling.dialog.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "scheduling.cancel.scopes" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
     part "scheduling.cancel.people" { display "flex"; flex-direction "column"; gap "$space.xxs"; padding-left "$space.lg"; }
     part "scheduling.settings.switches" { display "flex"; flex-direction "column"; gap "$space.sm"; border 0; padding 0; }
     part "scheduling.find-time" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 480; padding "$space.md"; }
-    part "scheduling.find-time.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "scheduling.problem" { margin 0; color "$color.danger"; }
     part "scheduling.done" { margin 0; color "$color.success"; }
 
@@ -4093,7 +4054,6 @@ theme "default" mode="system" {
     part "wizard.title" { margin 0; font-size "$font-size.lg"; }
     part "wizard.intro" { margin 0; color "$color.fg-muted"; }
     part "wizard.step-body" { display "flex"; flex-direction "column"; gap "$space.md"; }
-    part "wizard.buttons" { display "flex"; flex-wrap "wrap"; justify-content "flex-end"; gap "$space.sm"; }
     part "path-field" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
     part "form.radio" { display "flex"; align-items "center"; gap "$space.xs"; }
     part "portability.choices" { display "flex"; flex-direction "column"; gap "$space.xs"; }

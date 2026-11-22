@@ -2,20 +2,16 @@
  * The confirmation policy of one MCP client or plug-in: per kind of write,
  * "ask first" or "run without asking". Deleting (Trash, permanent delete,
  * deleting events / contacts / tasks) always asks and cannot be changed.
- * Mounted by the MCP client settings and the plug-in manager.
+ * Mounted by the MCP client settings and the plug-in manager (both settings
+ * sections): nothing is written before the page's Save.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useId } from "react";
 import { errorMessageOf } from "../../api/client";
-import type {
-  ActionActor,
-  ActionKind,
-  ActionPolicy,
-  ActionPolicyMode,
-  LocalizedMessage,
-} from "../../api/generated";
+import type { ActionActor, ActionKind, ActionPolicy, ActionPolicyMode } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
+import { useFormNotice, useSettingsForm } from "../settings/draft";
 import { actorKey, defaultMode, isOutgoing, kindMessageId } from "./model";
 import { agentsKeys, useActionPolicies } from "./queries";
 
@@ -79,41 +75,57 @@ function PolicyRow({
   );
 }
 
-/** The policy table of `actor`; every change is saved at once. */
+/** The kinds' modes as shown: the core's, or what the user picked before Save. */
+type Modes = Partial<Record<ActionKind, ActionPolicyMode>>;
+
+function modesOf(policies: readonly ActionPolicy[] | undefined): Modes {
+  return Object.fromEntries((policies ?? []).map((p) => [p.kind, p.mode]));
+}
+
+/**
+ * The policy table of `actor`. A settings draft (R6, ADR 0239): a changed
+ * mode is written with the settings page's Save, one `SetActionPolicy` per
+ * changed kind (the default mode removes the stored one); Discard drops it.
+ */
 export function PolicyEditor({ actor, name, disabled = false }: Props) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const policies = useActionPolicies(actor);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  const change = async (kind: ActionKind, mode: ActionPolicyMode | null) => {
-    setBusy(true);
-    setProblem(null);
-    setSaved(false);
-    try {
-      const answer = await client.request(
-        { type: "SetActionPolicy", actor, kind, mode },
-        "ActionPolicies",
+  const { notice, outcome, clear, problems } = useFormNotice();
+  const form = useSettingsForm(modesOf(policies.data), {
+    save: async (modes) => {
+      const changed = (policies.data ?? []).filter(
+        (p) => modes[p.kind] !== undefined && modes[p.kind] !== p.mode,
       );
-      queryClient.setQueryData(agentsKeys.policies(actor), answer.policies);
-      setSaved(true);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-      void queryClient.invalidateQueries({ queryKey: agentsKeys.policies(actor) });
-    } finally {
-      setBusy(false);
-    }
-  };
+      try {
+        for (const policy of changed) {
+          const mode = modes[policy.kind] ?? policy.mode;
+          const answer = await client.request(
+            {
+              type: "SetActionPolicy",
+              actor,
+              kind: policy.kind,
+              mode: mode === defaultMode(policy.kind) ? null : mode,
+            },
+            "ActionPolicies",
+          );
+          queryClient.setQueryData(agentsKeys.policies(actor), answer.policies);
+        }
+      } catch (error) {
+        void queryClient.invalidateQueries({ queryKey: agentsKeys.policies(actor) });
+        throw error;
+      }
+    },
+    ...outcome("common-saved"),
+  });
+  const failure = problems([])[0];
 
   return (
     <section
       data-part="action-policies"
       data-actor={actorKey(actor)}
       aria-label={t("agents-policy-label", { name })}
-      aria-busy={busy}
     >
       <h4 data-part="action-policies.title">{t("agents-policy-title")}</h4>
       <p data-part="action-policies.intro">{t("agents-policy-intro", { name })}</p>
@@ -122,14 +134,14 @@ export function PolicyEditor({ actor, name, disabled = false }: Props) {
           {t(errorMessageOf(policies.error).id)}
         </p>
       )}
-      {problem && (
+      {failure && (
         <p data-part="action-policies.error" role="alert">
-          {t(problem.id, problem.args)}
+          {t(failure.id, failure.args)}
         </p>
       )}
-      {saved && (
+      {notice !== null && !form.dirty && (
         <p data-part="action-policies.status" role="status">
-          {t("common-saved")}
+          {t(notice)}
         </p>
       )}
       {policies.data && (
@@ -137,9 +149,12 @@ export function PolicyEditor({ actor, name, disabled = false }: Props) {
           {policies.data.map((policy) => (
             <PolicyRow
               key={policy.kind}
-              policy={policy}
-              disabled={disabled || busy}
-              onChange={(kind, mode) => void change(kind, mode)}
+              policy={{ ...policy, mode: form.value[policy.kind] ?? policy.mode }}
+              disabled={disabled}
+              onChange={(kind, mode) => {
+                clear();
+                form.set((modes) => ({ ...modes, [kind]: mode ?? defaultMode(kind) }));
+              }}
             />
           ))}
         </ul>

@@ -40,8 +40,9 @@ closing a window.
 - **Settings save when you say so** — a section with changes shows a bar
   with **Save** and **Discard**; leaving the section asks first. See
   [Settings](settings.md#saving-your-changes). This holds for every
-  setting, switches included, and for choosing another account, client or
-  key inside a section; the sections' own Save and Undo buttons are gone.
+  setting, switches and what an assistant or plug-in may do without asking
+  included, and for choosing another account, client or key inside a
+  section; the sections' own Save and Undo buttons are gone.
 - **Questions instead of inline "Are you sure"** — **Remove account…**,
   **Delete virtual account…**, **Reset the filter…**, **Revoke…**,
   **Delete key…** and the remote access actions ask in a window that names

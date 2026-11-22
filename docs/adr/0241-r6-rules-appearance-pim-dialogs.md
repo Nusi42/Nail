@@ -1,4 +1,4 @@
-# 0240 — R6 WD2: rules, appearance, customization and PIM dialogs
+# 0241 — R6 WD2: rules, appearance, customization and PIM dialogs
 
 Status: accepted (2026-11-22)
 
@@ -36,10 +36,10 @@ decision the contract leaves open.
   Close.
   The status line (problem badge, "Saved", the last run with Undo) stays
   above it in `rules.footer`.
-- `FooterButton` has no `aria-disabled`: Save rule stays enabled while the
-  rule has problems (pressing it saves nothing; the problem badge says
-  why), Run is disabled. Asked of the integrator: an `ariaDisabled` /
-  `describedBy` option, so Save can again be focusable but marked.
+- While the rule has problems, Save rule and Run stay focusable but marked
+  (`aria-disabled`, `FooterButton`'s `ariaDisabled` / `describedBy`, added
+  at integration) and name the problem badge; pressing them saves or runs
+  nothing.
 
 ### Appearance (a settings section)
 

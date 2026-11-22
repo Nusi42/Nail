@@ -509,7 +509,7 @@ export function MergeDialog({ close }: DialogProps) {
           <Backups file={file} client={client} />
           <DialogFooter
             primary={{
-              label: t("merge-dialog-next"),
+              label: t("common-next"),
               submit: true,
               action: "compare",
               disabled: incoming.trim() === "",

@@ -9,8 +9,8 @@ import {
   settingsQuestion,
   settingsSaveBar,
 } from "../support/settings";
-import { openMail, openSettings, runFromPalette, settingsNav, windowById } from "../support/views";
-import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/windowTour";
+import { openSettings, runFromPalette, settingsNav, windowById } from "../support/views";
+import { expectDialogFooter, unsavedPrompt, openMailAs } from "../support/windowTour";
 
 /**
  * Settings and accounts in the one dialog pattern (R6 WD3, ADR 0239)
@@ -28,15 +28,6 @@ import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/w
 
 const server = nailPerTest({ seed: "demo-multi" });
 
-const unsavedPrompt = (page: Page) =>
-  page.locator('[data-part="window"][data-window^="unsaved-changes:"]');
-
-/** The page as a viewer on `os`, with the mail view loaded. */
-async function openAs(page: Page, os: ViewerOs): Promise<void> {
-  await emulateViewerOs(page, os);
-  await openMail(page, server.url);
-}
-
 /** Whether the core's new-mail notifications are on. */
 async function notificationsEnabled(): Promise<boolean> {
   const answer = await rpcOk(server, { type: "GetNotificationSettings" }, "NotificationSettings");
@@ -47,7 +38,7 @@ for (const os of ["windows", "macos"] as const) {
   test(`a settings section saves only with the bar, and asks when left (${os})`, async ({
     page,
   }) => {
-    await openAs(page, os);
+    await openMailAs(page, server.url, os);
     const settings = await openSettings(page, "Notifications");
     const enabled = settings.getByRole("checkbox", { name: "Tell me about new mail" });
     const before = await enabled.isChecked();
@@ -94,7 +85,7 @@ for (const os of ["windows", "macos"] as const) {
   });
 
   test(`Remove account… asks, with Cancel as the default (${os})`, async ({ page }) => {
-    await openAs(page, os);
+    await openMailAs(page, server.url, os);
     const settings = await openSettings(page, "Accounts");
     const remove = settings.getByRole("button", { name: "Remove account…" });
     await remove.click();
@@ -116,7 +107,7 @@ for (const os of ["windows", "macos"] as const) {
   });
 
   test(`Add account: Cancel on every step, typed text asks (${os})`, async ({ page }) => {
-    await openAs(page, os);
+    await openMailAs(page, server.url, os);
     await runFromPalette(page, "add account", "Add account");
     const dialog = windowById(page, "account-setup");
     await expect(dialog).toBeVisible();
@@ -149,7 +140,7 @@ async function answerPrompt(page: Page, action: string): Promise<void> {
 }
 
 test("Reset the filter… asks before the junk filter forgets", async ({ page }) => {
-  await openAs(page, "windows");
+  await openMailAs(page, server.url, "windows");
   const settings = await openSettings(page, "Mail & junk");
   await settings.getByRole("button", { name: "Reset the filter…" }).click();
   const question = settingsQuestion(page);

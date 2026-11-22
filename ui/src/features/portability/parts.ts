@@ -28,7 +28,6 @@ export const PORTABILITY_PLAIN_LISTS = [
 
 /** Rows of buttons / chips that wrap. */
 export const PORTABILITY_ROWS = [
-  "wizard.buttons",
   "portability.buttons",
   "path-field",
   "portability.found.item",

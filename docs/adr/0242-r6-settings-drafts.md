@@ -1,4 +1,4 @@
-# 0240 — R6 WD3: settings drafts, settings questions and the Add account wizard
+# 0242 — R6 WD3: settings drafts, settings questions and the Add account wizard
 
 Status: accepted (2026-11-22)
 

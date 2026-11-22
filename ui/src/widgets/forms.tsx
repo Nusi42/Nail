@@ -283,18 +283,6 @@ export function CheckField({
   );
 }
 
-/** A row with the primary Save button (part `part`). */
-export function SaveRow({ part, onSave }: { part: string; onSave: () => void }) {
-  const t = useT();
-  return (
-    <div data-part={part}>
-      <button type="button" data-part="form.button" data-variant="primary" onClick={onSave}>
-        {t("common-save")}
-      </button>
-    </div>
-  );
-}
-
 /** A titled group of fields. */
 export function Section({ titleId, children }: { titleId: string; children: ReactNode }) {
   const t = useT();

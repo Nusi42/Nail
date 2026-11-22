@@ -404,7 +404,7 @@ ${p("mail-confirm.note")} { color: ${T.muted}; }
 ${p("mail-confirm.warning")} { margin: 0; padding-inline-start: ${T.sm}; border-inline-start: ${ACCENT_BAR} solid ${T.warning}; font-weight: ${T.medium}; overflow-wrap: anywhere; }
 ${p("mail-confirm.target")} { margin: 0; font-family: ${T.fontMono}; font-size: ${T.small}; color: ${T.muted}; overflow-wrap: anywhere; }
 ${p("mail-confirm.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
-${p("wizard.buttons")}, ${p("pim.editor.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }`;
+${p("pim.editor.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }`;
 
 const MESSAGE_LIST = `${p("message-list")} { background-color: ${T.bg}; }
 ${p("message-list.row")} {

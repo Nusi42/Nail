@@ -55,7 +55,7 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   closing Settings asks the same way.
 - "Delete permanently?" and New / Rename theme follow the pattern; New theme
   asks before a typed name is lost.
-- The mail dialogs follow the pattern: closing a composer with unsaved
+- The mail dialogs follow the pattern (ADR 0240): closing a composer with unsaved
   changes asks with the shared prompt (Save draft / Don't save / Cancel;
   the composer's own close confirmation is gone), Discard asks "Discard
   draft", `Enter` in Subject no longer sends (`Ctrl+Enter` does); folder,
@@ -67,7 +67,7 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   the picker on Esc; an Outbox draft's Discard asks first; the plug-in send
   veto's "Send anyway" is red and Cancel has the focus.
 - Rules, appearance, customization, calendars, contacts, tasks and
-  scheduling follow the pattern (ADR 0240): the rules window's unsaved rule
+  scheduling follow the pattern (ADR 0241): the rules window's unsaved rule
   asks with the shared prompt and its delete / run questions are modal
   confirmations; Settings → Appearance and the toolbar / column editors
   save with the section's bar (no Apply, no live sliders); the merge
@@ -78,7 +78,7 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   with "Keep meeting" focused; the recurring-event question names its verb
   ("Save changes" / "Delete events").
 
-### Changed — settings save with the bar (ADR 0240)
+### Changed — settings save with the bar (ADR 0242)
 
 - Every settings section applies nothing before the bar's Save, switches and
   choices included (Desktop app, Updates, key lookup and indexing, folder
@@ -95,7 +95,7 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   asks before typed details are thrown away; the folder synchronization
   dialog has Save / Cancel and asks when changed.
 
-### Changed — the data, security, plug-in and system dialogs (ADR 0239)
+### Changed — the data, security, plug-in and system dialogs (ADR 0243)
 
 - The import, export, backup, restore and diagnostics wizards, the recovery
   key wizards, Pair a device, the re-authentication, Autocrypt import and
@@ -118,6 +118,24 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   `plugin-install.actions`, `first-run.buttons`, `recovery-settings.confirm`,
   `plugin.dialog.buttons` and `plugin.dialog.button` are gone (the shared
   `dialog.footer` styles them); new: `recovery.tools`, `plugin.dialog.form`.
+
+### Changed — one dialog pattern, integration (ADRs 0239–0243)
+
+- The confirmation policy of an MCP client or plug-in (Settings → Agents
+  (MCP), Plug-ins) is a settings draft too: it is written with the bar's
+  Save.
+- `FooterButton` can be marked unavailable but stay focusable
+  (`ariaDisabled`, `describedBy`): the rule editor's Save rule and Run do
+  so again while the rule has problems, naming the problem badge.
+- The list of pending pairing codes says "Revoke code", like Pair a device.
+- Removed theme parts no component emits any more: `wizard.buttons`,
+  `rules.footer.start` / `.end`, `rules.confirm` (`.question`, `.actions`),
+  `merge-dialog.actions`, `column-editor.actions`, `pim.scope.actions`,
+  `scheduling.dialog.actions`, `scheduling.find-time.actions`; plus the
+  packages' own removals (`gmail.dialog.actions`, `snooze.actions`,
+  `plugin-veto.buttons`, `account-setup.actions`, `remote-confirm`, …).
+- The window sweeps check every window's ×, Esc and shared footer (order
+  for Windows, Linux and macOS, the focused button).
 
 ### Fixed — large selections (ADR 0235)
 

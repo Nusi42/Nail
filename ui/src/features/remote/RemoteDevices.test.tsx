@@ -111,7 +111,7 @@ describe("remote-devices", () => {
     renderNode(widget("remote-devices"), env);
     const codes = await screen.findByRole("list", { name: "Codes waiting to be used" });
     expect(within(codes).getByText(/Tablet for Ada Lovelace/)).toBeInTheDocument();
-    await user.click(within(codes).getByRole("button", { name: "Cancel code" }));
+    await user.click(within(codes).getByRole("button", { name: "Revoke code" }));
     await waitFor(() =>
       expect(
         screen.queryByRole("list", { name: "Codes waiting to be used" }),

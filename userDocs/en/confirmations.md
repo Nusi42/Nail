@@ -27,7 +27,7 @@ For changes that do not delete anything you can tick **From now on, let … do t
 
 ## Confirmation policies
 
-Each MCP client (Settings → Agents (MCP)) and each plug-in that may change data (Plug-ins → **Confirmations**) has a list of kinds of changes, each set to **Ask first** or **Without asking**. The defaults:
+Each MCP client (Settings → Agents (MCP)) and each plug-in that may change data (Plug-ins → **Confirmations**) has a list of kinds of changes, each set to **Ask first** or **Without asking**; a changed choice applies with the settings section's **Save**. The defaults:
 
 | Asks first | Runs without asking |
 | --- | --- |

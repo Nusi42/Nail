@@ -14,7 +14,12 @@ import {
   workFolderRow,
 } from "../support/views";
 import { WELCOME as SUBJECT } from "../support/rules";
-import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/windowTour";
+import {
+  emulateViewerOs,
+  expectDialogFooter,
+  type ViewerOs,
+  unsavedPrompt,
+} from "../support/windowTour";
 
 /**
  * R6 (ADR 0239) for the mail dialogs against `nail serve --seed demo-multi`:
@@ -39,9 +44,6 @@ import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/w
 const server = nailPerTest({ seed: "demo-multi" });
 
 test.describe.configure({ timeout: 120_000 });
-
-const unsavedPrompt = (page: Page) =>
-  page.locator('[data-part="window"][data-window^="unsaved-changes:"]');
 
 /** The page as a viewer on `os` (the composer's autosave lengthened), the mail view loaded. */
 async function openAs(page: Page, os: ViewerOs): Promise<void> {

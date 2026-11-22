@@ -309,8 +309,10 @@ change, whether the client has to *Ask first* or may act *Without asking*:
 | Create or change filter rules | Ask first | may be allowed |
 | Move mail to Trash, delete mail permanently, delete events, contacts or tasks | Always asks | cannot be changed |
 
-When you approve a request, **From now on, let … do this without asking**
-does the same for that kind of change. Revoking a client removes its
+Like every setting, a changed choice applies with the section's **Save**
+(**Discard** takes it back). When you approve a request, **From now on,
+let … do this without asking** does the same for that kind of change at
+once. Revoking a client removes its
 choices and cancels its waiting requests.
 
 ## Prompts

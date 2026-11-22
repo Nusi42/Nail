@@ -273,12 +273,3 @@ export function StepHeader({
     </header>
   );
 }
-
-/**
- * The old row of wizard buttons. The portability wizards use the shared
- * footer (`DialogFooter`, ADR 0239); this stays only for dialogs not yet
- * moved to it.
- */
-export function WizardButtons({ children }: { children: ReactNode }) {
-  return <div data-part="wizard.buttons">{children}</div>;
-}

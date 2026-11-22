@@ -42,6 +42,13 @@ export interface FooterButton {
   submit?: boolean;
   /** `data-action` (tests and themes tell the buttons apart by it). */
   action?: string;
+  /**
+   * Marked unavailable but still focusable (`aria-disabled`): pressing it
+   * does nothing useful, and `describedBy` says why (a problem badge).
+   */
+  ariaDisabled?: boolean;
+  /** `aria-describedby`: the id of what explains the button's state. */
+  describedBy?: string;
 }
 
 /** Cancel: the label defaults to "Cancel"; `onClick` is the dialog's close. */
@@ -89,6 +96,8 @@ function Button({
       data-variant={destructive ? "danger" : kind === "primary" ? "primary" : undefined}
       data-action={button.action}
       disabled={busy || button.disabled === true}
+      aria-disabled={button.ariaDisabled === true || undefined}
+      aria-describedby={button.describedBy}
       onClick={button.onClick}
     >
       {button.label}

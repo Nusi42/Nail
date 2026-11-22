@@ -96,7 +96,6 @@ remote-pair-qr-label = QR code for { $url }
 remote-pair-fingerprint-intro = The browser shows this certificate fingerprint. Pair only if it matches:
 remote-pair-no-fingerprint = Remote access runs without TLS, so there is no fingerprint to compare.
 remote-pair-once = This code is shown only now. Anyone who has it can pair a device until it is used or expires.
-remote-pair-cancel-code = Cancel code
 # The pairing dialog: the shown code stops working.
 remote-pair-revoke-code = Revoke code
 

@@ -370,6 +370,7 @@ const GROUPS: Record<string, Group> = {
       "mail-delete-permanently",
       "composer",
       "composer-discard",
+      "unsaved-changes",
       "outbox",
       "rules",
       "account-setup",

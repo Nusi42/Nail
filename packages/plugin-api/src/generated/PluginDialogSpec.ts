@@ -16,7 +16,12 @@ title: string,
  */
 body: Array<PluginUiNode>, 
 /**
- * The buttons that close the dialog (none: only the close button).
+ * The buttons that close the dialog (none: only the close button). Nail
+ * places them in its own footer, ordered for the viewer's system by
+ * role: the `primary` one is the main button, the others are secondary,
+ * and Nail adds a Cancel that answers `null`; a non-primary button with
+ * the id `cancel` takes that Cancel's place (its label, answering
+ * `"cancel"`).
  */
 buttons?: Array<PluginDialogButton>, 
 /**

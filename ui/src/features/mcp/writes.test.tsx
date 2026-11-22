@@ -4,7 +4,7 @@
  */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createEnv, renderNode, widget, type Env } from "../../test/harness";
+import { createEnv, type Env } from "../../test/harness";
 import { CENTER_DIALOG } from "../agents";
 import { seedAgentsDemo } from "../agents/mockSeed";
 import { DEFAULT_RATE_LIMITS, rateLimitIssues, WRITE_SCOPES } from "./queries";
@@ -83,7 +83,7 @@ describe("MCP client settings (M4a)", () => {
     const env = createEnv();
     seedAgentsDemo(env.transport);
     const user = userEvent.setup();
-    renderNode(widget("mcp-clients"), env);
+    renderSettings(env, "mcp-clients");
     await settle(env);
     const note = screen
       .getAllByRole("note")
@@ -98,6 +98,11 @@ describe("MCP client settings (M4a)", () => {
     const draft = policy.querySelector<HTMLElement>('[data-kind="draft"]');
     if (!draft) throw new Error("no draft row");
     await user.click(within(draft).getByRole("radio", { name: /Ask first/ }));
+    // R6: the policy is a settings draft, written with the page's Save.
+    expect(env.transport.data.features.agents.policies["mcp-client:mcp-1"]).not.toEqual({
+      draft: "ask",
+    });
+    await saveSettingsDone(user);
     await waitFor(() => {
       expect(env.transport.data.features.agents.policies["mcp-client:mcp-1"]).toEqual({
         draft: "ask",

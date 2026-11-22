@@ -180,6 +180,7 @@ function ClientDetail({ client }: { client: McpClient }) {
       <GrantEditor key={`${client.id}:${client.revoked_at ?? ""}`} client={client} />
       <RateLimitsEditor key={`rate:${client.id}:${client.revoked_at ?? ""}`} client={client} />
       <PolicyEditor
+        key={`policy:${client.id}`}
         actor={{ kind: "mcp-client", client_id: client.id }}
         name={client.name}
         disabled={revoked}

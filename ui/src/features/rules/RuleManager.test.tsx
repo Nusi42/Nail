@@ -99,9 +99,11 @@ describe("rule manager", () => {
     await user.click(await screen.findByRole("button", { name: "New rule" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
     const save = within(editor).getByRole("button", { name: "Save rule" });
-    // What is missing: a badge in the footer; Save saves nothing meanwhile.
+    // What is missing: a badge in the footer that Save names; Save saves nothing meanwhile.
+    expect(save).toHaveAttribute("aria-disabled", "true");
     const badge = within(footerOf(editor)).getByRole("button", { name: "2 things to fix" });
     expect(badge).toHaveAccessibleDescription(/Give the rule a name\.\s*Add at least one action\./);
+    expect(save.getAttribute("aria-describedby")).toBe(badge.getAttribute("aria-describedby"));
     await user.click(save);
     expect(env.transport.data.features.rules.rules).toHaveLength(1);
     expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveAttribute(

@@ -138,7 +138,12 @@ pub struct PluginDialogSpec {
     pub title: String,
     /// The content.
     pub body: Vec<PluginUiNode>,
-    /// The buttons that close the dialog (none: only the close button).
+    /// The buttons that close the dialog (none: only the close button). Nail
+    /// places them in its own footer, ordered for the viewer's system by
+    /// role: the `primary` one is the main button, the others are secondary,
+    /// and Nail adds a Cancel that answers `null`; a non-primary button with
+    /// the id `cancel` takes that Cancel's place (its label, answering
+    /// `"cancel"`).
     #[serde(default)]
     #[ts(optional, as = "Option<Vec<PluginDialogButton>>")]
     pub buttons: Vec<PluginDialogButton>,
@@ -165,7 +170,8 @@ pub struct PluginDialogButton {
     pub id: String,
     /// The label.
     pub label: String,
-    /// The default button (Enter); it needs every `required` value.
+    /// The main button of the footer (Enter runs it); it needs every
+    /// `required` value. Every other button is secondary.
     #[serde(default)]
     #[ts(optional, as = "Option<bool>")]
     pub primary: bool,

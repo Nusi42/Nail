@@ -1,9 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { saveSettings } from "../support/settings";
 import { openCalendar } from "../support/calendar";
 import { nailPerTest } from "../support/nail";
-import { openMail, openSettings, showView, viewRegion, windowById } from "../support/views";
-import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/windowTour";
+import { openSettings, showView, viewRegion, windowById } from "../support/views";
+import { expectDialogFooter, unsavedPrompt, openMailAs } from "../support/windowTour";
 
 /**
  * R6 (ADR 0239) for calendars, tasks, appearance and customization against
@@ -21,17 +21,9 @@ import { emulateViewerOs, expectDialogFooter, type ViewerOs } from "../support/w
 
 const server = nailPerTest({ seed: "demo-multi" });
 
-const unsavedPrompt = (page: Page) =>
-  page.locator('[data-part="window"][data-window^="unsaved-changes:"]');
-
-async function openAs(page: Page, os: ViewerOs): Promise<void> {
-  await emulateViewerOs(page, os);
-  await openMail(page, server.url);
-}
-
 for (const os of ["windows", "macos"] as const) {
   test(`event editor: one footer, unsaved changes ask (${os})`, async ({ page }) => {
-    await openAs(page, os);
+    await openMailAs(page, server.url, os);
     const calendar = await openCalendar(page, { agenda: true });
     await calendar.getByRole("button", { name: "New event" }).click();
     const editor = windowById(page, "pim-event-editor");
@@ -57,7 +49,7 @@ for (const os of ["windows", "macos"] as const) {
   });
 
   test(`task editor: Delete… at the start asks first (${os})`, async ({ page }) => {
-    await openAs(page, os);
+    await openMailAs(page, server.url, os);
     await showView(page, "Tasks");
     const tasks = viewRegion(page, "Tasks");
     const tree = tasks.getByRole("tree", { name: "Tasks" });
@@ -90,7 +82,7 @@ for (const os of ["windows", "macos"] as const) {
 }
 
 test("Delete theme is a destructive confirmation", async ({ page }) => {
-  await openAs(page, "windows");
+  await openMailAs(page, server.url, "windows");
   const settings = await openSettings(page, "Appearance");
   await settings
     .getByRole("region", { name: "Appearance" })
@@ -116,7 +108,7 @@ test("Delete theme is a destructive confirmation", async ({ page }) => {
 });
 
 test("Settings → Appearance applies a picked theme only on Save", async ({ page }) => {
-  await openAs(page, "windows");
+  await openMailAs(page, server.url, "windows");
   const settings = await openSettings(page, "Appearance");
   const appearance = settings.getByRole("region", { name: "Appearance" });
   const accent = () =>

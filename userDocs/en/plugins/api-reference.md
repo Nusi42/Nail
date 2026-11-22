@@ -1297,7 +1297,7 @@ A dialog as a plug-in asks for it (`nail.ui.showDialog(spec)`).
 | --- | --- | --- |
 | `title` | `string` | The title. |
 | `body` | `Array<PluginUiNode>` | The content. |
-| `buttons?` | `Array<PluginDialogButton>` | The buttons that close the dialog (none: only the close button). |
+| `buttons?` | `Array<PluginDialogButton>` | The buttons that close the dialog (none: only the close button). Nail places them in its own footer, ordered for the viewer's system by role: the `primary` one is the main button, the others are secondary, and Nail adds a Cancel that answers `null`; a non-primary button with the id `cancel` takes that Cancel's place (its label, answering `"cancel"`). |
 | `modal?` | `boolean` | Whether the rest of the UI is blocked while it is open (default `true`); a non-modal dialog is a floating window. |
 | `size?` | `PluginDialogSize` | Its size. |
 
@@ -1309,7 +1309,7 @@ A dialog button.
 | --- | --- | --- |
 | `id` | `string` | Reported as `button`. |
 | `label` | `string` | The label. |
-| `primary?` | `boolean` | The default button (Enter); it needs every `required` value. |
+| `primary?` | `boolean` | The main button of the footer (Enter runs it); it needs every `required` value. Every other button is secondary. |
 
 ### `PluginDialogSize`
 

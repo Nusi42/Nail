@@ -291,6 +291,7 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
           {open === "permissions" && <GrantsEditor plugin={plugin} />}
           {open === "confirmations" && (
             <PolicyEditor
+              key={plugin.id}
               actor={{ kind: "plugin", plugin_id: plugin.id }}
               name={plugin.manifest.name}
             />

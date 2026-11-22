@@ -19,6 +19,7 @@ import { allowAllFolders, openWorkLog, otherMailbox, showRefusedFolderDetails } 
 import { control, repoRoot, type NailServer } from "./nail";
 import {
   messageRows,
+  openMail,
   openSettings,
   READER_SUBJECT,
   runFromPalette,
@@ -88,6 +89,8 @@ export const FEATURE_DIALOGS = [
   "connection-log",
   "error-details",
   "application-log",
+  // R6 (ADR 0239): the shared unsaved-changes prompt (over the composer).
+  "unsaved-changes",
 ] as const;
 
 /** An Autocrypt Setup Message (the test corpus's). */
@@ -149,8 +152,15 @@ export async function deletePermanentlyStep(tour: WindowTour, subject: string): 
   await showAllInboxes(tour.page);
 }
 
-/** Discards the open composer (with changes): its modal confirmation. */
+/**
+ * The open composer (with changes): closing it asks with the shared
+ * unsaved-changes prompt (R6, cancelled here), then Discard asks in its
+ * modal confirmation and discards.
+ */
 export async function discardComposerStep(tour: WindowTour): Promise<void> {
+  await tour.window("composer").locator('[data-part="window.close"]').click();
+  await tour.visitAndClose("unsaved-changes");
+  await expect(tour.window("composer")).toBeVisible();
   await tour.window("composer").getByRole("button", { name: "Discard" }).click();
   await tour.visit("composer-discard");
   await tour.window("composer-discard").getByRole("button", { name: "Discard draft" }).click();
@@ -403,6 +413,16 @@ export async function emulateViewerOs(page: Page, os: ViewerOs): Promise<void> {
   }, PLATFORM_OF[os]);
 }
 
+/** The page as a viewer on `os` (`emulateViewerOs`), with the mail view of `url` loaded. */
+export async function openMailAs(page: Page, url: string, os: ViewerOs): Promise<void> {
+  await emulateViewerOs(page, os);
+  await openMail(page, url);
+}
+
+/** The shared unsaved-changes prompt (the window `unsaved-changes:<key>`, ADR 0239). */
+export const unsavedPrompt = (page: Page): Locator =>
+  page.locator('[data-part="window"][data-window^="unsaved-changes:"]');
+
 /** What a dialog's shared footer must show. */
 export interface FooterExpectation {
   /** The system the page reports (`emulateViewerOs`). */
@@ -443,4 +463,59 @@ export async function expectDialogFooter(
   if (expected.focused !== undefined) {
     await expect(footer.locator(`button[data-role="${expected.focused}"]`)).toBeFocused();
   }
+}
+
+/**
+ * The footers of the tour's windows as they open (R6, ADR 0239): the roles
+ * of the end group, the focused button (where the dialog sets it) and an
+ * editor's start button. A window with a footer that is not listed is
+ * still checked for the order of the viewer's system.
+ */
+export const TOUR_FOOTERS: Readonly<Record<string, Omit<FooterExpectation, "os">>> = {
+  "mail-delete-permanently": { roles: ["primary", "cancel"], focused: "cancel" },
+  "composer-discard": { roles: ["primary", "cancel"], focused: "cancel" },
+  "unsaved-changes": { roles: ["primary", "secondary", "cancel"], focused: "primary" },
+  "gmail-label-delete": { roles: ["primary", "cancel"], focused: "cancel" },
+  "scheduling-cancel-meeting": { roles: ["primary", "cancel"], focused: "cancel" },
+  "theme-delete": { roles: ["primary", "cancel"], focused: "cancel" },
+  print: { roles: ["primary", "secondary", "cancel"] },
+};
+
+/**
+ * The shared dialog pattern of window `name` (R6, ADR 0239), opened on a
+ * page that reports `os`: a dialog window has its × (a view's window in
+ * the view host has none); a shared footer follows `os` with its buttons in
+ * that system's order by role (and {@link TOUR_FOOTERS}' roles and focus);
+ * a destructive button never has the focus.
+ */
+export async function expectDialogPattern(
+  window: Locator,
+  name: string,
+  os: ViewerOs,
+): Promise<void> {
+  const isDialog = await window.evaluate((el) => el.getAttribute("data-part") === "window");
+  if (isDialog) {
+    await expect(window.locator('[data-part="window.close"]').first(), `${name}: ×`).toBeVisible();
+  }
+  await expect(
+    window.locator('button[data-variant="danger"]:focus'),
+    `${name}: a destructive button has the focus`,
+  ).toHaveCount(0);
+  const known = TOUR_FOOTERS[name];
+  if (known !== undefined) {
+    await expectDialogFooter(window, { os, ...known });
+    return;
+  }
+  const footers = window.locator('[data-part="dialog.footer"]');
+  if ((await footers.count()) === 0) return;
+  const footer = footers.last();
+  if (!(await footer.isVisible())) return;
+  await expect(footer, `${name}: footer system`).toHaveAttribute("data-os", os);
+  const roles = await footer
+    .locator('[data-part="dialog.footer.end"] > button')
+    .evaluateAll((buttons) => buttons.map((b) => b.getAttribute("data-role") as FooterRole));
+  const expected = roles.includes("done")
+    ? ["done"]
+    : footerOrder(os).filter((role) => roles.includes(role));
+  expect(roles, `${name}: footer order on ${os}`).toEqual(expected);
 }

@@ -25,9 +25,12 @@ import {
   messageDialogsStep,
   paletteWindowStep,
   connlogStep,
+  emulateViewerOs,
+  expectDialogPattern,
   settingsDialogsStep,
   settingsSectionNames,
   WindowTour,
+  type ViewerOs,
   calendarActions,
   PIM_ACTION_WINDOWS,
   SCHEDULING_ACTION_WINDOWS,
@@ -44,13 +47,18 @@ import {
  * listed in {@link FEATURE_DIALOGS} and every section of the settings page
  * must have been scanned, so a new window or section fails here until it
  * is reachable and clean.
+ *
+ * R6 (ADR 0239): each mode reports another system (Windows, Linux, macOS),
+ * and every window also follows the shared dialog pattern
+ * (`expectDialogPattern`: its ×, its footer in that system's order, the
+ * focused button) and closes with Esc.
  */
 
 const MODES = [
-  { name: "default theme", query: "" },
-  { name: "high-contrast theme", query: "?mode=high-contrast" },
-  { name: "dark mode", query: "?mode=dark" },
-] as const;
+  { name: "default theme", query: "", os: "windows" },
+  { name: "high-contrast theme", query: "?mode=high-contrast", os: "linux" },
+  { name: "dark mode", query: "?mode=dark", os: "macos" },
+] as const satisfies readonly { name: string; query: string; os: ViewerOs }[];
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
 interface LayoutNode {
@@ -65,6 +73,7 @@ class Sweep extends WindowTour {
   constructor(
     page: Page,
     readonly mode: string,
+    readonly os: ViewerOs,
   ) {
     super(page);
   }
@@ -79,11 +88,19 @@ class Sweep extends WindowTour {
     await this.scan(what);
   }
 
-  /** Waits for window `name`, scans it and records it. */
+  /** Waits for window `name`, scans it, checks the dialog pattern and records it. */
   async visit(name: string, what = name) {
     await expect(this.window(name)).toBeVisible();
     await this.scan(what);
+    await expectDialogPattern(this.window(name), name, this.os);
     this.windows.add(name);
+  }
+
+  /** × = Esc (R6): closes window `name` with Esc; its × is there (`visit`). */
+  async close(name: string) {
+    await this.window(name).focus();
+    await this.page.keyboard.press("Escape");
+    await expect(this.window(name), `${name}: Esc closes it`).toBeHidden();
   }
 
   /** Scans every section of the settings page (M5b: it holds every former tab). */
@@ -113,7 +130,8 @@ for (const mode of MODES) {
         windows: Record<string, { root: LayoutNode }[]>;
         settings: { sections: unknown[] }[];
       };
-      const sweep = new Sweep(page, mode.name);
+      const sweep = new Sweep(page, mode.name, mode.os);
+      await emulateViewerOs(page, mode.os);
 
       await page.goto(new URL(mode.query, server.url).toString());
       const rows = messageRows(page);

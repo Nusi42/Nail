@@ -13,6 +13,7 @@ id: string,
  */
 label: string, 
 /**
- * The default button (Enter); it needs every `required` value.
+ * The main button of the footer (Enter runs it); it needs every
+ * `required` value. Every other button is secondary.
  */
 primary?: boolean, };

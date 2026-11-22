@@ -21,12 +21,10 @@ import {
   showView,
   windowById,
 } from "../support/views";
-import { expectDialogFooter } from "../support/windowTour";
+import { expectDialogFooter, unsavedPrompt } from "../support/windowTour";
 import { pickTheme } from "../support/appearance";
 
 /** The shared unsaved-changes prompt (R6). */
-const unsavedPrompt = (page: Page) =>
-  page.locator('[data-part="window"][data-window^="unsaved-changes:"]');
 
 /**
  * R2 (ADR 0222): the redesigned rules window against the `demo-multi`

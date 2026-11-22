@@ -1482,10 +1482,27 @@ mirrored order with `emulateViewerOs(page, "macos")`; no "OK", "Yes", "No" or "A
 editor with changes ask with the shared prompt; every settings section applies nothing before Save and asks when
 left; the maintainer's human gate on the 0.8.10 installer, then release.
 
-*Status (WD3):* done (ADR 0240): every settings section of the package saves with the bar
+*Status (integrated):* WD1–WD4 done and integrated: WD1 mail and composer (ADR 0240), WD2 rules, appearance,
+customization, PIM and scheduling (ADR 0241), WD3 settings drafts, questions and the Add account wizard (ADR 0242),
+WD4 data, security, plug-in and system dialogs (ADR 0243). Integration: the theme parts no component emits any more
+removed (`wizard.buttons` with `WizardButtons`, the rules footer slots and inline question, `merge-dialog.actions`,
+`column-editor.actions`, `pim.scope.actions`, the scheduling rows; `DIALOG_BUTTON_ROWS` keeps `dialog.footer`,
+`mail-confirm.actions`, `confirmation.buttons`), `FooterButton` `ariaDisabled` / `describedBy` (Save rule and Run
+focusable but marked), the agents feature's confirmation policy as a settings draft, `common-next` /
+`common-remove-question`, "Revoke code" in the pending codes, `SaveRow` removed, the plug-in dialog docs of
+`PluginDialogSpec` regenerated; the a11y window sweep checks every window's ×, Esc, footer order on Windows, Linux
+and macOS and the focused button (`expectDialogPattern`, `TOUR_FOOTERS`), and visits the shared unsaved-changes
+prompt. Follow-ups / deferred: the layout card's presets (Settings → Layout & toolbars) still apply at once with
+Undo, as a tool action like the theme editor; `DialogFooter` takes one secondary (a plug-in dialog's further
+buttons sit between the groups); e2e for Automatic replies, the mailbox editor, the classify dialog, the Exchange
+category / mailbox deletes and the Outbox discard question (unit tests only); several unsaved composers open one
+prompt each when the view changes; Appearance has no live preview before Save; the maintainer's human gate on the
+0.8.10 installer.
+
+*Status (WD3):* done (ADR 0242): every settings section of the package saves with the bar
 (`useSettingsForm`), the sections' questions are `ConfirmDialog` windows (`askSettingsQuestion`), the Add account
-wizard and the folder sync dialog follow the pattern; e2e `r6-wd3-settings.spec.ts`. Open: the agents feature's
-confirmation policy in the MCP clients section and the layout card's presets still apply at once.
+wizard and the folder sync dialog follow the pattern; e2e `r6-wd3-settings.spec.ts`. The agents feature's
+confirmation policy moved to `useSettingsForm` at integration.
 
 *Status (contract):* done (ADR 0239). Shared pieces in `ui/src/widgets/dialog/` and `ui/src/layout/closeGuard.ts`,
 the settings page's save bar and guard, `dialog.ftl`, the `dialog.*` theme rules, e2e helpers, reference

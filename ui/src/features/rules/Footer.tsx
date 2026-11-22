@@ -12,7 +12,8 @@
  *   run" while the rule has unsaved changes; "Run 3 rules" with several
  *   rules selected in the list, R3) and Test rule in the middle, so a
  *   changing Run label never moves Save; Save rule (the primary, the form's
- *   submit button) at the end. The rules
+ *   submit button) at the end. While something is missing, Save and Run
+ *   stay focusable but marked (`aria-disabled`) and name the problem badge. The rules
  *   window is a tool window: Save rule keeps it open and there is no
  *   footer Close (× is enough).
  *
@@ -69,6 +70,9 @@ export function Footer({
   const t = useT();
   const targetId = useId();
   const runChoice = runOn.choices.find((c) => c.kind === runOn.kind);
+  // What keeps the rule from being saved: Save stays focusable, marked, and
+  // names the problem badge.
+  const blocked = problems.length > 0;
   return (
     <footer data-part="rules.footer">
       <div data-part="rules.footer.status">
@@ -100,7 +104,14 @@ export function Footer({
                 onClick: onDelete,
               },
             })}
-        primary={{ label: t("rules-save"), submit: true, action: "save-rule", disabled: busy }}
+        primary={{
+          label: t("rules-save"),
+          submit: true,
+          action: "save-rule",
+          disabled: busy,
+          ariaDisabled: blocked,
+          ...(blocked ? { describedBy: detailsId } : {}),
+        }}
       >
         <div data-part="rules.footer.tools">
           <span data-part="rules.footer.target">
@@ -134,7 +145,9 @@ export function Footer({
             type="button"
             data-part="form.button"
             data-action="run-rules"
-            disabled={busy || runBlocked}
+            disabled={busy}
+            aria-disabled={runBlocked || undefined}
+            aria-describedby={runBlocked ? detailsId : undefined}
             onClick={onRun}
           >
             {runText}
