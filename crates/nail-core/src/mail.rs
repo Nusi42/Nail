@@ -361,49 +361,23 @@ impl Service {
             }
             _ => None,
         };
+        // One lookup per account, not per message (R5: actions on whole
+        // lists move tens of thousands of messages).
+        let mut targets: HashMap<AccountId, FolderId> = HashMap::new();
         let mut operations = Vec::new();
         for id in messages {
             let summary = by_id
                 .get(&id)
                 .ok_or_else(|| ApiError::not_found(format!("message {id}")))?;
             let account = summary.account_id.clone();
-            let target_folder = match (target, &virtual_sources) {
-                (MoveTarget::FolderId(_), Some(sources)) => {
-                    let sources = sources.clone();
-                    let account = account.clone();
-                    self.inner
-                        .store
-                        .call(move |s| {
-                            for source in &sources {
-                                if s.get_folder(source)?.account_id == account {
-                                    return Ok(Some(source.clone()));
-                                }
-                            }
-                            Ok(sources.first().cloned())
-                        })
-                        .await?
-                        .ok_or_else(|| {
-                            ApiError::invalid_request("the target folder has no real folder")
-                        })?
-                }
-                (MoveTarget::FolderId(folder), None) => folder.clone(),
-                (MoveTarget::Role(role), _) => {
-                    let role = *role;
-                    let lookup = account.clone();
-                    self.inner
-                        .store
-                        .call(move |s| s.folder_with_role(&lookup, role))
-                        .await?
-                        .ok_or_else(|| {
-                            ApiError::not_found(format!(
-                                "account {account} has no {} folder",
-                                serde_json::to_value(role)
-                                    .ok()
-                                    .and_then(|v| v.as_str().map(str::to_owned))
-                                    .unwrap_or_default()
-                            ))
-                        })?
-                }
+            let target_folder = if let Some(folder) = targets.get(&account) {
+                folder.clone()
+            } else {
+                let folder = self
+                    .move_target_of(&account, target, virtual_sources.as_deref())
+                    .await?;
+                targets.insert(account, folder.clone());
+                folder
             };
             if target_folder == summary.folder_id {
                 continue;
@@ -415,6 +389,54 @@ impl Service {
             });
         }
         Ok(operations)
+    }
+
+    /// The real folder of `account` a move to `target` goes to
+    /// (`virtual_sources` = the member folders of a virtual target).
+    async fn move_target_of(
+        &self,
+        account: &AccountId,
+        target: &MoveTarget,
+        virtual_sources: Option<&[FolderId]>,
+    ) -> Result<FolderId> {
+        Ok(match (target, virtual_sources) {
+            (MoveTarget::FolderId(_), Some(sources)) => {
+                let sources = sources.to_vec();
+                let account = account.clone();
+                self.inner
+                    .store
+                    .call(move |s| {
+                        for source in &sources {
+                            if s.get_folder(source)?.account_id == account {
+                                return Ok(Some(source.clone()));
+                            }
+                        }
+                        Ok(sources.first().cloned())
+                    })
+                    .await?
+                    .ok_or_else(|| {
+                        ApiError::invalid_request("the target folder has no real folder")
+                    })?
+            }
+            (MoveTarget::FolderId(folder), None) => folder.clone(),
+            (MoveTarget::Role(role), _) => {
+                let role = *role;
+                let lookup = account.clone();
+                self.inner
+                    .store
+                    .call(move |s| s.folder_with_role(&lookup, role))
+                    .await?
+                    .ok_or_else(|| {
+                        ApiError::not_found(format!(
+                            "account {account} has no {} folder",
+                            serde_json::to_value(role)
+                                .ok()
+                                .and_then(|v| v.as_str().map(str::to_owned))
+                                .unwrap_or_default()
+                        ))
+                    })?
+            }
+        })
     }
 
     /// `DeleteMessages`: to the account's Trash, or for good.

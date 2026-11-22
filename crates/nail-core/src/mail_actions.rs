@@ -11,29 +11,39 @@
 //!   the conversation it sees and is never refused for hidden messages.
 //! * **One batch**: the planned per-message operations are applied
 //!   locally, queued and recorded with their inverses in one store
-//!   transaction (`Store::apply_mail_batch`); the queue groups them again
-//!   for the engines (one `UID MOVE` per folder, a Gmail `batchModify`, an
-//!   EWS multi-item request).
+//!   transaction (`Store::apply_mail_batch_part`); the queue groups them
+//!   again for the engines (one `UID MOVE` per folder, a Gmail
+//!   `batchModify`, an EWS multi-item request). An action on more than
+//!   `MAIL_ACTION_PART_MESSAGES` messages runs in parts of that size, one
+//!   transaction and one `MailChanged` / `OpsChanged` each, all in the
+//!   same batch (R5, ADR 0235).
+//! * **Lists** (R5): a list target stands for the rows of its list
+//!   (`mail_lists.rs`), resolved [`ROWS_PER_STORE_CALL`] rows per store
+//!   call. `ResolveMailTargets` answers a list with the count and an
+//!   `as_of` mark (the store's message mark); an apply with the mark
+//!   leaves out messages stored after it.
 //! * **Undo** queues the inverses of the actor's own batch (newest first)
 //!   and marks it undone; a snooze also cancels its wake timer, a junk
 //!   verdict its training.
 //! * **Actors**: `user` (the UI), `remote:<session>`, `mcp:<client>`,
 //!   `plugin:<id>` — only the actor of a batch can undo it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::Arc;
 
 use nail_api::agents::ActionActor;
 use nail_api::mail_actions::{
-    MAIL_UNDO_SECS, MAX_MAIL_ACTION_TARGETS, MailActionIssue, MailActionKind, MailActionResult,
-    MailTargetResolution, explicit_target_count, has_list, has_nested_list,
+    MAIL_ACTION_PART_MESSAGES, MAIL_UNDO_SECS, MAX_MAIL_ACTION_TARGETS, MailActionIssue,
+    MailActionKind, MailActionResult, MailTargetResolution, explicit_target_count, has_list,
+    has_nested_list,
 };
 use nail_api::{
-    AccountId, ApiError, ErrorCode, Event, FolderRole, LocalizedMessage, MailAction, MailBatchId,
-    MessageId, MessageTarget, MoveTarget, OpId,
+    AccountId, ApiError, ErrorCode, Event, FolderId, FolderRole, LocalizedMessage, MailAction,
+    MailBatchId, MessageId, MessageTarget, MoveTarget, OpId,
 };
 use nail_store::{
-    MailBatchPlan, MailBatchUndo, Operation, OwnAddresses, TargetMessage, mail_batch_id,
-    parse_mail_batch_id,
+    ConversationFolders, MailBatchApplied, MailBatchPlan, MailBatchUndo, Operation, OwnAddresses,
+    TargetMessage, mail_batch_id, parse_mail_batch_id,
 };
 
 use crate::conversations::{FolderFilter, as_keep};
@@ -44,6 +54,28 @@ use crate::service::Service;
 /// How many of a Sent folder's newest messages tell which addresses the
 /// user writes from (restoring from Trash).
 const SENT_SAMPLE: u32 = 200;
+
+/// How many rows one store call resolves (a list of tens of thousands of
+/// rows takes a few dozen calls, and other requests get the store between
+/// them).
+const ROWS_PER_STORE_CALL: usize = 500;
+
+/// The prefix of an `as_of` mark (ADR 0235; opaque to clients): the
+/// store's message mark ([`nail_store::Store::message_mark`]) as text.
+const MARK_PREFIX: &str = "mark-";
+
+/// An `as_of` mark as the API carries it.
+fn mark_text(mark: i64) -> String {
+    format!("{MARK_PREFIX}{mark}")
+}
+
+/// The store's mark in an `as_of` mark.
+fn parse_mark(text: &str) -> Result<i64> {
+    text.strip_prefix(MARK_PREFIX)
+        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| ApiError::invalid_request(format!("invalid as_of mark {text:?}")).into())
+}
 
 /// The UI's own actor.
 pub(crate) const USER_ACTOR: &str = "user";
@@ -78,35 +110,19 @@ fn issue(issue: MailActionIssue, detail: &str) -> ApiError {
 }
 
 impl Service {
-    /// One message target as a [`TargetMessage`].
-    async fn message_target(&self, id: &MessageId) -> Result<TargetMessage> {
-        let id = id.clone();
-        Ok(self
-            .inner
-            .store
-            .call(move |s| {
-                let summary = s.get_message(&id)?.summary;
-                let role = s.get_folder(&summary.folder_id)?.role;
-                Ok(TargetMessage {
-                    id: summary.id,
-                    account_id: summary.account_id,
-                    folder_id: summary.folder_id,
-                    role: role.as_str().to_owned(),
-                })
-            })
-            .await?)
-    }
-
     /// Resolves `targets` for `action` within `filter` (a remote session's
     /// grant; `None` = everything). A list target (R5, ADR 0235) stands for
     /// its rows, each resolved like the target it stands for, minus the
-    /// messages its exceptions resolve to. No limit on the messages: large
-    /// actions run in parts (`nail_api::mail_actions::MAIL_ACTION_PART_MESSAGES`).
+    /// messages its exceptions resolve to, and — with an `as_of` mark, or
+    /// `fresh` for a list without one — minus the messages stored after the
+    /// mark. No limit on the messages: large actions run in parts
+    /// ([`MAIL_ACTION_PART_MESSAGES`]).
     async fn resolve_targets(
         &self,
         targets: &[MessageTarget],
         action: &MailAction,
         filter: Option<&FolderFilter>,
+        fresh: Option<i64>,
     ) -> Result<Resolved> {
         if targets.is_empty() {
             return Err(issue(MailActionIssue::NoTargets, "no targets").into());
@@ -133,7 +149,7 @@ impl Service {
             messages: Vec::new(),
             conversations: 0,
         };
-        let mut seen = BTreeSet::new();
+        let mut seen = HashSet::new();
         let mut push = |out: &mut Resolved, picked: Vec<TargetMessage>| {
             for message in picked {
                 if seen.insert(message.id.clone()) {
@@ -141,37 +157,49 @@ impl Service {
                 }
             }
         };
+        let rows: Vec<MessageTarget> = targets
+            .iter()
+            .filter(|t| !matches!(t, MessageTarget::List(_)))
+            .cloned()
+            .collect();
+        for (picked, reached) in self.resolve_rows(&rows, action, filter, &own).await? {
+            if reached {
+                out.conversations += 1;
+            }
+            push(&mut out, picked);
+        }
         for target in targets {
-            match target {
-                MessageTarget::List(list) => {
-                    let mut except = BTreeSet::new();
-                    for row in &list.except {
-                        let (picked, _) = self.resolve_row(row, action, filter, &own).await?;
-                        except.extend(picked.into_iter().map(|m| m.id));
-                    }
-                    for row in self.mail_list_rows(&list.list, filter).await? {
-                        let (mut picked, _) = self.resolve_row(&row, action, filter, &own).await?;
-                        picked.retain(|m| {
-                            !except.contains(&m.id) && within(filter, &m.folder_id, &m.account_id)
-                        });
-                        if matches!(row, MessageTarget::Conversation(_)) && !picked.is_empty() {
-                            out.conversations += 1;
-                        }
-                        push(&mut out, picked);
-                    }
+            let MessageTarget::List(list) = target else {
+                continue;
+            };
+            let mark = match &list.as_of {
+                Some(text) => Some(parse_mark(text)?),
+                None => fresh,
+            };
+            let except: HashSet<MessageId> = self
+                .resolve_rows(&list.except, action, filter, &own)
+                .await?
+                .into_iter()
+                .flat_map(|(picked, _)| picked.into_iter().map(|m| m.id))
+                .collect();
+            let rows = self.mail_list_rows(&list.list, filter).await?;
+            let resolved = self.resolve_rows(&rows, action, filter, &own).await?;
+            for (row, (mut picked, _)) in rows.iter().zip(resolved) {
+                picked.retain(|m| {
+                    !except.contains(&m.id)
+                        && mark.is_none_or(|mark| m.row <= mark)
+                        && within(filter, &m.folder_id, &m.account_id)
+                });
+                if matches!(row, MessageTarget::Conversation(_)) && !picked.is_empty() {
+                    out.conversations += 1;
                 }
-                MessageTarget::Message { .. } | MessageTarget::Conversation(_) => {
-                    let (picked, reached) = self.resolve_row(target, action, filter, &own).await?;
-                    if reached {
-                        out.conversations += 1;
-                    }
-                    push(&mut out, picked);
-                }
+                push(&mut out, picked);
             }
         }
         // Grouped by account and folder (stable), so the queue hands each
         // folder's operations to the engine together (one `UID MOVE` per
-        // folder, not one per alternating Inbox / Sent message).
+        // folder, not one per alternating Inbox / Sent message), and each
+        // part of a large action holds whole folders where it can.
         out.messages
             .sort_by(|a, b| (&a.account_id, &a.folder_id).cmp(&(&b.account_id, &b.folder_id)));
         if matches!(action, MailAction::DeletePermanently)
@@ -189,83 +217,124 @@ impl Service {
         Ok(out)
     }
 
-    /// The messages one row target (a message or a conversation) reaches,
-    /// and whether it is a conversation that reached one. Trash never
-    /// deletes for good: for Trash, messages already in Trash are left out
-    /// (Delete permanently has its own scope and question).
-    async fn resolve_row(
+    /// The messages each row target (a message or a conversation) reaches,
+    /// in order, and whether it is a conversation that reached one. Trash
+    /// never deletes for good: for Trash, messages already in Trash are
+    /// left out (Delete permanently has its own scope and question). The
+    /// rows are read [`ROWS_PER_STORE_CALL`] at a time, so a list of tens
+    /// of thousands of rows costs a few dozen store calls, and other
+    /// requests get the store in between.
+    async fn resolve_rows(
         &self,
-        target: &MessageTarget,
+        rows: &[MessageTarget],
         action: &MailAction,
         filter: Option<&FolderFilter>,
         own: &OwnAddresses,
-    ) -> Result<(Vec<TargetMessage>, bool)> {
-        let (mut picked, conversation) = match target {
-            MessageTarget::Message { message_id } => {
-                (vec![self.message_target(message_id).await?], false)
+    ) -> Result<Vec<(Vec<TargetMessage>, bool)>> {
+        let mut scopes: HashMap<FolderId, ConversationFolders> = HashMap::new();
+        for row in rows {
+            match row {
+                MessageTarget::Conversation(c) => {
+                    if let Some(folder) = &c.folder_id
+                        && !scopes.contains_key(folder)
+                    {
+                        let scope = self.conversation_scope(folder, filter).await?;
+                        scopes.insert(folder.clone(), scope);
+                    }
+                }
+                MessageTarget::Message { .. } => {}
+                MessageTarget::List(_) => {
+                    return Err(issue(MailActionIssue::NestedList, "a list is not a row").into());
+                }
             }
-            MessageTarget::Conversation(conversation) => {
-                let scope = match &conversation.folder_id {
-                    Some(folder) => Some(self.conversation_scope(folder, filter).await?),
-                    None => None,
-                };
-                let (thread, own, keep, reach) = (
-                    conversation.thread_id.clone(),
-                    own.clone(),
-                    filter.cloned(),
-                    action.reach(),
-                );
-                let picked = self
-                    .inner
-                    .store
-                    .call(move |s| {
-                        s.conversation_targets(
-                            &thread,
-                            scope.as_ref(),
-                            &own,
-                            as_keep(keep.as_ref()),
-                            reach,
-                        )
-                    })
-                    .await?;
-                (picked, true)
-            }
-            MessageTarget::List(_) => {
-                return Err(issue(MailActionIssue::NestedList, "a list is not a row").into());
-            }
-        };
-        if matches!(action, MailAction::Trash) {
-            picked.retain(|m| m.role != "trash");
         }
-        let reached = conversation && !picked.is_empty();
-        Ok((picked, reached))
+        let scopes = Arc::new(scopes);
+        let reach = action.reach();
+        let trash = matches!(action, MailAction::Trash);
+        let mut out = Vec::with_capacity(rows.len());
+        for chunk in rows.chunks(ROWS_PER_STORE_CALL) {
+            let (chunk, scopes, own, keep) =
+                (chunk.to_vec(), scopes.clone(), own.clone(), filter.cloned());
+            let part = self
+                .inner
+                .store
+                .call(move |s| {
+                    let mut out = Vec::with_capacity(chunk.len());
+                    for row in &chunk {
+                        let (mut picked, conversation) = match row {
+                            MessageTarget::Conversation(c) => {
+                                let scope = c.folder_id.as_ref().and_then(|f| scopes.get(f));
+                                let picked = s.conversation_targets(
+                                    &c.thread_id,
+                                    scope,
+                                    &own,
+                                    as_keep(keep.as_ref()),
+                                    reach,
+                                )?;
+                                (picked, true)
+                            }
+                            MessageTarget::Message { message_id } => {
+                                (s.target_messages(std::slice::from_ref(message_id))?, false)
+                            }
+                            MessageTarget::List(_) => (Vec::new(), false),
+                        };
+                        if trash {
+                            picked.retain(|m| m.role != "trash");
+                        }
+                        let reached = conversation && !picked.is_empty();
+                        out.push((picked, reached));
+                    }
+                    Ok(out)
+                })
+                .await?;
+            out.extend(part);
+        }
+        Ok(out)
     }
 
-    /// `ResolveMailTargets`.
+    /// `ResolveMailTargets`. With a list among the targets the answer
+    /// carries the count only and an `as_of` mark: the list's own mark, or
+    /// the store's mark now (the count leaves out what came later, so the
+    /// apply with that mark acts on exactly what was counted).
     pub(crate) async fn resolve_mail_targets(
         &self,
         targets: &[MessageTarget],
         action: &MailAction,
         filter: Option<&FolderFilter>,
     ) -> Result<MailTargetResolution> {
-        let resolved = self.resolve_targets(targets, action, filter).await?;
+        let list = has_list(targets);
+        let fresh = if list {
+            Some(
+                self.inner
+                    .store
+                    .call(nail_store::Store::message_mark)
+                    .await?,
+            )
+        } else {
+            None
+        };
+        let resolved = self.resolve_targets(targets, action, filter, fresh).await?;
         let accounts: BTreeSet<AccountId> = resolved
             .messages
             .iter()
             .map(|m| m.account_id.clone())
             .collect();
-        let list = has_list(targets);
+        let given = targets.iter().find_map(|t| match t {
+            MessageTarget::List(l) => l.as_of.clone(),
+            _ => None,
+        });
         Ok(MailTargetResolution {
             // A list's ids can be many: the count only (ADR 0235).
             message_ids: if list { Vec::new() } else { resolved.ids() },
             messages: u32::try_from(resolved.messages.len()).unwrap_or(u32::MAX),
             account_ids: accounts.into_iter().collect(),
             conversations: resolved.conversations,
-            // The `as_of` mark comes with the core's R5 package.
-            as_of: None,
+            as_of: given.or_else(|| fresh.map(mark_text)),
         })
     }
+}
 
+impl Service {
     /// The per-message operations of `action` on `messages`.
     async fn plan_mail_action(
         &self,
@@ -418,7 +487,14 @@ impl Service {
             .map_err(Into::into)
     }
 
-    /// `ApplyMailAction` as `actor` within `filter`.
+    /// `ApplyMailAction` as `actor` within `filter`. An action on more than
+    /// [`MAIL_ACTION_PART_MESSAGES`] messages runs in parts (R5, ADR 0235):
+    /// each part is planned, applied locally, queued and recorded in its own
+    /// store transaction (so the store stays free for the UI in between)
+    /// and joins the first part's batch, so one undo reverses the whole
+    /// action. Each part sends one `MailChanged` and one `OpsChanged`,
+    /// never one event per message. When a later part fails, the parts
+    /// done stay applied and undoable: the answer names what was done.
     pub(crate) async fn apply_mail_action(
         &self,
         targets: &[MessageTarget],
@@ -426,65 +502,76 @@ impl Service {
         filter: Option<&FolderFilter>,
         actor: &str,
     ) -> Result<MailActionResult> {
-        let resolved = self.resolve_targets(targets, &action, filter).await?;
+        let resolved = self.resolve_targets(targets, &action, filter, None).await?;
         if resolved.messages.is_empty() {
             return Err(issue(MailActionIssue::NoMessages, "no messages to act on").into());
         }
-        let operations = self.plan_mail_action(&resolved.messages, &action).await?;
-        let snooze = matches!(action, MailAction::Snooze { .. });
-        if operations.is_empty() {
-            if snooze {
-                drop(self.forget_snoozes(resolved.ids()).await);
-            }
-            return Err(issue(MailActionIssue::NoMessages, "no messages to act on").into());
-        }
-        let mut message_ids: Vec<MessageId> = Vec::new();
-        for op in &operations {
-            if !message_ids.contains(op.message_id()) {
-                message_ids.push(op.message_id().clone());
-            }
-        }
         let kind = action.kind();
         let now = self.triage_now();
-        let (actor_name, conversations, undoable) =
-            (actor.to_owned(), resolved.conversations, action.undoable());
-        let applied = self
-            .inner
-            .store
-            .call(move |s| {
-                s.apply_mail_batch(
-                    &MailBatchPlan {
-                        actor: &actor_name,
-                        kind: kind.as_str(),
-                        conversations,
-                        undoable,
-                        now,
-                    },
-                    &operations,
+        let snooze = matches!(action, MailAction::Snooze { .. });
+        let mut batch: Option<i64> = None;
+        let mut undoable = action.undoable();
+        let mut op_ids = Vec::new();
+        let mut message_ids: Vec<MessageId> = Vec::new();
+        let mut named: HashSet<MessageId> = HashSet::new();
+        let mut done: Vec<&TargetMessage> = Vec::new();
+        for (n, part) in resolved
+            .messages
+            .chunks(MAIL_ACTION_PART_MESSAGES)
+            .enumerate()
+        {
+            let part_ids = || part.iter().map(|m| m.id.clone()).collect::<Vec<_>>();
+            let applied = match self
+                .apply_part(
+                    part,
+                    &action,
+                    now,
+                    (actor, resolved.conversations, undoable),
+                    batch,
                 )
-            })
-            .await;
-        let applied = match applied {
-            Ok(applied) => applied,
-            Err(err) => {
-                if snooze {
-                    drop(self.forget_snoozes(resolved.ids()).await);
+                .await
+            {
+                Ok(applied) => applied,
+                Err(err) => {
+                    if snooze {
+                        drop(self.forget_snoozes(part_ids()).await);
+                    }
+                    if n == 0 {
+                        return Err(err);
+                    }
+                    tracing::warn!(%err, part = n, "a later part of a mail action failed; the parts done stay");
+                    break;
                 }
-                return Err(err.into());
+            };
+            let Some((operations, applied)) = applied else {
+                if snooze {
+                    drop(self.forget_snoozes(part_ids()).await);
+                }
+                continue;
+            };
+            if !applied.undoable || !undoable {
+                undoable = false;
             }
-        };
-        let op_ids = self.announce_enqueued(&applied.queued);
+            batch = applied.batch;
+            for op in &operations {
+                if named.insert(op.message_id().clone()) {
+                    message_ids.push(op.message_id().clone());
+                }
+            }
+            done.extend(part);
+            op_ids.extend(self.announce_enqueued(&applied.queued));
+        }
+        if message_ids.is_empty() {
+            return Err(issue(MailActionIssue::NoMessages, "no messages to act on").into());
+        }
         match &action {
             MailAction::Snooze { .. } => {
                 self.inner.snooze.wake.notify_one();
                 self.broadcast(Event::SnoozeChanged);
             }
             MailAction::Junk { .. } => {
-                let accounts: BTreeSet<AccountId> = resolved
-                    .messages
-                    .iter()
-                    .map(|m| m.account_id.clone())
-                    .collect();
+                let accounts: BTreeSet<AccountId> =
+                    done.iter().map(|m| m.account_id.clone()).collect();
                 for account_id in accounts {
                     self.broadcast(Event::JunkStatusChanged { account_id });
                 }
@@ -493,18 +580,58 @@ impl Service {
         }
         let undo_secs = i64::try_from(MAIL_UNDO_SECS).unwrap_or(i64::MAX);
         Ok(MailActionResult {
-            batch_id: applied.batch.map(|n| MailBatchId(mail_batch_id(n))),
+            batch_id: batch.map(|n| MailBatchId(mail_batch_id(n))),
             op_ids,
             kind,
             message_ids,
             conversations: resolved.conversations,
-            undo_until: applied
-                .batch
-                .map(|_| nail_util::time::rfc3339_utc(now.saturating_add(undo_secs))),
+            undo_until: batch.map(|_| nail_util::time::rfc3339_utc(now.saturating_add(undo_secs))),
         })
     }
 
-    /// `UndoMailAction` as `actor`: the actor's own batch only.
+    /// Plans and applies one part of a mail action in one store
+    /// transaction, joining `into` (the batch of the parts before).
+    /// `None` when the part plans no operation. `who` = the actor, the
+    /// action's conversations and whether it is still undoable.
+    async fn apply_part(
+        &self,
+        part: &[TargetMessage],
+        action: &MailAction,
+        now: i64,
+        who: (&str, u32, bool),
+        into: Option<i64>,
+    ) -> Result<Option<(Vec<Operation>, MailBatchApplied)>> {
+        let operations = self.plan_mail_action(part, action).await?;
+        if operations.is_empty() {
+            return Ok(None);
+        }
+        let (actor, conversations, undoable) = (who.0.to_owned(), who.1, who.2);
+        let kind = action.kind();
+        let planned = operations.clone();
+        let applied = self
+            .inner
+            .store
+            .call(move |s| {
+                s.apply_mail_batch_part(
+                    &MailBatchPlan {
+                        actor: &actor,
+                        kind: kind.as_str(),
+                        conversations,
+                        undoable,
+                        now,
+                    },
+                    into,
+                    &planned,
+                )
+            })
+            .await?;
+        Ok(Some((operations, applied)))
+    }
+
+    /// `UndoMailAction` as `actor`: the actor's own batch only. A large
+    /// batch is undone in parts of [`MAIL_ACTION_PART_MESSAGES`] inverses,
+    /// each in its own store transaction with one `MailChanged` and one
+    /// `OpsChanged`.
     pub(crate) async fn undo_mail_action(
         &self,
         batch: &MailBatchId,
@@ -520,23 +647,19 @@ impl Service {
         let Some(n) = parse_mail_batch_id(batch.as_str()) else {
             return Err(expired());
         };
-        let (actor, now) = (actor.to_owned(), self.triage_now());
+        let (who, now) = (actor.to_owned(), self.triage_now());
         let undone = self
             .inner
             .store
-            .call(move |s| s.undo_mail_batch(n, &actor, now))
+            .call(move |s| s.undo_mail_batch_part(n, &who, now, MAIL_ACTION_PART_MESSAGES))
             .await?;
-        let (record, queued) = match undone {
+        let (record, queued, mut skipped, mut rest) = match undone {
             MailBatchUndo::Undone {
                 record,
                 queued,
                 skipped,
-            } => {
-                if skipped > 0 {
-                    tracing::info!(%batch, skipped, "undo skipped messages that moved on since");
-                }
-                (record, queued)
-            }
+                rest,
+            } => (record, queued, skipped, rest),
             MailBatchUndo::Expired => return Err(expired()),
             MailBatchUndo::UndoneAlready => {
                 return Err(ApiError::new(
@@ -549,7 +672,30 @@ impl Service {
                 .into());
             }
         };
-        let op_ids = self.announce_enqueued(&queued);
+        let mut op_ids = self.announce_enqueued(&queued);
+        while let Some(below) = rest {
+            let who = actor.to_owned();
+            match self
+                .inner
+                .store
+                .call(move |s| s.undo_mail_batch_rest(n, &who, below, MAIL_ACTION_PART_MESSAGES))
+                .await
+            {
+                Ok(Some(part)) => {
+                    skipped += part.skipped;
+                    rest = part.rest;
+                    op_ids.extend(self.announce_enqueued(&part.queued));
+                }
+                Ok(None) => break,
+                Err(err) => {
+                    tracing::warn!(%batch, %err, "a later part of an undo failed; the parts done stay");
+                    break;
+                }
+            }
+        }
+        if skipped > 0 {
+            tracing::info!(%batch, skipped, "undo skipped messages that moved on since");
+        }
         let kind = MailActionKind::ALL
             .iter()
             .copied()

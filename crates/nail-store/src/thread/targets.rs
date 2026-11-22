@@ -27,10 +27,10 @@
 
 use nail_api::mail_actions::ConversationReach;
 use nail_api::{AccountId, FolderId, MessageId, ThreadId};
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use super::conversation::{ConversationFolders, OwnAddresses, SINGLE_PREFIX, ScopeFolder};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::store::Store;
 
 /// One stored message an action reaches.
@@ -44,20 +44,64 @@ pub struct TargetMessage {
     pub folder_id: FolderId,
     /// Its folder's role (wire name: `inbox`, `sent`, `trash`, …).
     pub role: String,
+    /// When it was stored, as an order: its row number, which grows with
+    /// every message stored ([`Store::message_mark`]).
+    pub row: i64,
 }
 
 /// Every stored copy of a thread's messages, oldest first.
-const THREAD_ROWS_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role
+const THREAD_ROWS_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role, m.rowid
        FROM messages m JOIN folders f ON f.id = m.folder_id
       WHERE m.thread_id = ?1
       ORDER BY m.date_sort, m.id";
 
 /// One message (a `single-<id>` row).
-const SINGLE_ROW_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role
+const SINGLE_ROW_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role, m.rowid
        FROM messages m JOIN folders f ON f.id = m.folder_id
       WHERE m.id = ?1";
 
+/// A row of [`THREAD_ROWS_SQL`] / [`SINGLE_ROW_SQL`].
+fn target_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TargetMessage> {
+    Ok(TargetMessage {
+        id: MessageId(r.get(0)?),
+        account_id: AccountId(r.get(1)?),
+        folder_id: FolderId(r.get(2)?),
+        role: r.get(3)?,
+        row: r.get(4)?,
+    })
+}
+
 impl Store {
+    /// The mark of the messages stored so far (R5, ADR 0235): every
+    /// message stored later has a greater [`TargetMessage::row`].
+    pub fn message_mark(&self) -> Result<i64> {
+        self.with_conn(|conn| {
+            Ok(
+                conn.query_row("SELECT COALESCE(MAX(rowid), 0) FROM messages", [], |r| {
+                    r.get(0)
+                })?,
+            )
+        })
+    }
+
+    /// Message targets named by id, in order; fails with `not_found` for
+    /// an unknown message.
+    pub fn target_messages(&self, ids: &[MessageId]) -> Result<Vec<TargetMessage>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(SINGLE_ROW_SQL)?;
+            ids.iter()
+                .map(|id| {
+                    stmt.query_row(params![id.as_str()], target_row)
+                        .optional()?
+                        .ok_or_else(|| Error::NotFound {
+                            kind: "message",
+                            id: id.as_str().to_owned(),
+                        })
+                })
+                .collect()
+        })
+    }
+
     /// The stored messages a conversation target reaches (see the module
     /// docs), oldest first. `folders` = the listed folders as
     /// [`Store::conversation_folders`] answers them (already narrowed to a
@@ -78,14 +122,7 @@ impl Store {
         let mut rows: Vec<TargetMessage> = self.with_conn(|conn| {
             let mut stmt = conn.prepare_cached(sql)?;
             let rows = stmt
-                .query_map(params![key], |r| {
-                    Ok(TargetMessage {
-                        id: MessageId(r.get(0)?),
-                        account_id: AccountId(r.get(1)?),
-                        folder_id: FolderId(r.get(2)?),
-                        role: r.get(3)?,
-                    })
-                })?
+                .query_map(params![key], target_row)?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             Ok(rows)
         })?;
@@ -380,5 +417,23 @@ mod tests {
             )
             .unwrap();
         assert_eq!(ids(&found), ["d5"]);
+    }
+
+    #[test]
+    fn the_mark_orders_messages_by_when_they_were_stored() {
+        let (store, _) = fixture();
+        let mark = store.message_mark().unwrap();
+        let named = [MessageId("i1".into()), MessageId("s4".into())];
+        let found = store.target_messages(&named).unwrap();
+        assert_eq!(ids(&found), ["i1", "s4"]);
+        assert_eq!(found[1].role, "sent");
+        assert!(found.iter().all(|m| m.row <= mark));
+        assert!(found[0].row < found[1].row, "stored in that order");
+        put(&store, "i9", "INBOX", 9, "9@x", "ann@example.org");
+        let later = store.target_messages(&[MessageId("i9".into())]).unwrap();
+        assert!(later[0].row > mark, "stored after the mark");
+        assert!(store.message_mark().unwrap() >= later[0].row);
+        let unknown = store.target_messages(&[MessageId("nope".into())]);
+        assert!(unknown.is_err_and(|e| e.is_not_found()));
     }
 }

@@ -786,6 +786,83 @@ fn server_count(f: &Fixture, mailbox: &str, needle: &str) -> usize {
         .count()
 }
 
+/// The mock server with a Trash and `n` messages "Bulk <i>" in its INBOX,
+/// synced.
+async fn bulk_fixture(n: usize) -> Fixture {
+    let f = setup("secret").await;
+    assert!(f.server.store().add_mailbox("Trash", FolderRole::Trash));
+    append_bulk(&f, n);
+    f.service.sync_account(&f.account).await.unwrap();
+    f
+}
+
+/// Appends `n` messages "Bulk <i>" to the server's INBOX.
+fn append_bulk(f: &Fixture, n: usize) {
+    for i in 0..n {
+        let raw = format!(
+            "From: sender@example.com\r\nTo: reader@example.org\r\nSubject: Bulk {i}\r\n\
+             Message-ID: <bulk-{i}@example.com>\r\nDate: Mon, 2 Nov 2026 10:00:00 +0000\r\n\r\n\
+             Body {i}\r\n"
+        );
+        f.server
+            .store()
+            .append::<&str>("INBOX", raw.as_bytes(), &[])
+            .unwrap();
+    }
+}
+
+/// Waits (up to `limit`) until no write waits any more, then returns the
+/// events sent meanwhile; fails when the channel overflowed.
+async fn drain_queue(
+    f: &Fixture,
+    events: &mut broadcast::Receiver<Event>,
+    limit: std::time::Duration,
+) -> Vec<Event> {
+    tokio::time::timeout(limit, async {
+        while f.service.ops_summary().await.unwrap().waiting() > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("the queue drains");
+    let mut sent = Vec::new();
+    loop {
+        match tokio::time::timeout(std::time::Duration::from_millis(500), events.recv()).await {
+            Ok(Ok(event)) => sent.push(event),
+            Ok(Err(broadcast::error::RecvError::Lagged(missed))) => {
+                panic!("the event channel overflowed ({missed} events lost)")
+            }
+            _ => break,
+        }
+    }
+    sent
+}
+
+/// A bulk write sent fewer than `max` events, never one per operation,
+/// and the last queue summary has nothing waiting (ADR 0230).
+fn assert_few_events(sent: &[Event], max: usize) {
+    let kinds: Vec<String> = sent
+        .iter()
+        .map(|e| {
+            format!("{e:?}")
+                .split([' ', '{'])
+                .next()
+                .unwrap_or("?")
+                .to_owned()
+        })
+        .collect();
+    assert!(
+        !sent.iter().any(|e| matches!(e, Event::OpStatus { .. })),
+        "no event per operation: {kinds:?}"
+    );
+    assert!(sent.len() < max, "{} events: {kinds:?}", sent.len());
+    let last = sent.iter().rev().find_map(|e| match e {
+        Event::OpsChanged { summary } => Some(summary),
+        _ => None,
+    });
+    assert_eq!(last, Some(&nail_api::OpsSummary::default()), "{kinds:?}");
+}
+
 /// ADR 0230 (maintainer report: a bulk move left "Saving 14 changes"):
 /// moving and deleting 2,000 messages sends a handful of queue summaries,
 /// never an event per operation, so the 256-event channel cannot overflow;
@@ -793,20 +870,7 @@ fn server_count(f: &Fixture, mailbox: &str, needle: &str) -> usize {
 #[tokio::test]
 async fn a_bulk_move_and_delete_sends_a_few_events() {
     const BULK: usize = 2_000;
-    let f = setup("secret").await;
-    assert!(f.server.store().add_mailbox("Trash", FolderRole::Trash));
-    for n in 0..BULK {
-        let raw = format!(
-            "From: sender@example.com\r\nTo: reader@example.org\r\nSubject: Bulk {n}\r\n\
-             Message-ID: <bulk-{n}@example.com>\r\nDate: Mon, 2 Nov 2026 10:00:00 +0000\r\n\r\n\
-             Body {n}\r\n"
-        );
-        f.server
-            .store()
-            .append::<&str>("INBOX", raw.as_bytes(), &[])
-            .unwrap();
-    }
-    f.service.sync_account(&f.account).await.unwrap();
+    let f = bulk_fixture(BULK).await;
     let ids: Vec<nail_api::MessageId> = local_messages(&f, FolderRole::Inbox)
         .into_iter()
         .filter(|m| m.subject.starts_with("Bulk "))
@@ -831,50 +895,107 @@ async fn a_bulk_move_and_delete_sends_a_few_events() {
             other => panic!("unexpected {other:?}"),
         }
     }
-    tokio::time::timeout(std::time::Duration::from_secs(120), async {
-        while f.service.ops_summary().await.unwrap().waiting() > 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
-    })
-    .await
-    .expect("the queue drains");
-    let mut sent = Vec::new();
-    loop {
-        match tokio::time::timeout(std::time::Duration::from_millis(500), events.recv()).await {
-            Ok(Ok(event)) => sent.push(event),
-            Ok(Err(broadcast::error::RecvError::Lagged(missed))) => {
-                panic!("the event channel overflowed ({missed} events lost)")
-            }
-            _ => break,
-        }
-    }
-    let kinds: Vec<String> = sent
-        .iter()
-        .map(|e| {
-            format!("{e:?}")
-                .split([' ', '{'])
-                .next()
-                .unwrap_or("?")
-                .to_owned()
-        })
-        .collect();
-    assert!(
-        !sent.iter().any(|e| matches!(e, Event::OpStatus { .. })),
-        "no event per operation: {kinds:?}"
-    );
-    assert!(
-        sent.len() < nail_core::EVENT_CAPACITY / 8,
-        "{} events: {kinds:?}",
-        sent.len()
-    );
-    let last = sent.iter().rev().find_map(|e| match e {
-        Event::OpsChanged { summary } => Some(summary),
-        _ => None,
-    });
-    assert_eq!(last, Some(&nail_api::OpsSummary::default()), "{kinds:?}");
+    let sent = drain_queue(&f, &mut events, std::time::Duration::from_secs(120)).await;
+    assert_few_events(&sent, nail_core::EVENT_CAPACITY / 8);
     assert_eq!(server_count(&f, "INBOX", "Subject: Bulk "), 0);
     assert_eq!(server_count(&f, "Archive", "Subject: Bulk "), BULK / 2);
     assert_eq!(server_count(&f, "Trash", "Subject: Bulk "), BULK / 2);
+}
+
+/// R5 (ADR 0235): "select all" on an Inbox of 25,000 messages, then
+/// Archive and Delete, each as one list target: the core runs each action
+/// in parts of `MAIL_ACTION_PART_MESSAGES` as one batch, the server gets
+/// every move, one undo brings every message back, the events stay a
+/// handful and the queue summary ends at zero.
+#[tokio::test]
+async fn a_list_of_25000_messages_is_archived_and_deleted_with_one_undo_each() {
+    const BULK: usize = common::BULK_ACTION_MESSAGES;
+    const DRAIN: std::time::Duration = std::time::Duration::from_secs(600);
+    let f = bulk_fixture(BULK).await;
+    let inbox = f
+        .service
+        .store()
+        .folder_with_role(&f.account, FolderRole::Inbox)
+        .unwrap()
+        .unwrap();
+    let inbox_total = || {
+        let total = f.service.store().list_messages(&inbox, 0, 1).unwrap().total;
+        usize::try_from(total).unwrap()
+    };
+    let in_inbox = inbox_total();
+    // One summary per part, and while the moves replay at most one per
+    // replayed group (throttled): far below the channel's capacity, never
+    // one per message.
+    let max_events = nail_core::EVENT_CAPACITY / 2;
+    let start = |mailbox: &str| server_count(&f, mailbox, "Subject: Bulk ");
+    assert_eq!(start("INBOX"), BULK);
+    let list = vec![nail_api::MessageTarget::list(
+        nail_api::mail_actions::MailList::Messages {
+            folder_id: inbox.clone(),
+        },
+        vec![],
+    )];
+
+    for (action, to) in [
+        (nail_api::MailAction::Archive, "Archive"),
+        (nail_api::MailAction::Trash, "Trash"),
+    ] {
+        let counted = match f
+            .service
+            .handle(Request::ResolveMailTargets {
+                targets: list.clone(),
+                action: action.clone(),
+            })
+            .await
+        {
+            Response::MailTargets { resolution } => resolution,
+            other => panic!("unexpected {other:?}"),
+        };
+        assert!(usize::try_from(counted.messages).unwrap() >= BULK);
+        let mut targets = list.clone();
+        if let nail_api::MessageTarget::List(l) = &mut targets[0] {
+            l.as_of = counted.as_of;
+        }
+        let mut events = f.service.subscribe();
+        let started = std::time::Instant::now();
+        let result = match f
+            .service
+            .handle(Request::ApplyMailAction { targets, action })
+            .await
+        {
+            Response::MailActionQueued { result } => result,
+            other => panic!("unexpected {other:?}"),
+        };
+        let applied_in = started.elapsed();
+        assert_eq!(result.message_ids.len(), in_inbox);
+        let sent = drain_queue(&f, &mut events, DRAIN).await;
+        let replayed_in = started.elapsed();
+        assert_few_events(&sent, max_events);
+        assert_eq!(start("INBOX"), 0);
+        assert_eq!(start(to), BULK);
+
+        let started = std::time::Instant::now();
+        match f
+            .service
+            .handle(Request::UndoMailAction {
+                batch_id: result.batch_id.expect("one batch"),
+            })
+            .await
+        {
+            Response::Queued { op_ids } => assert_eq!(op_ids.len(), in_inbox),
+            other => panic!("unexpected {other:?}"),
+        }
+        let undone_in = started.elapsed();
+        let sent = drain_queue(&f, &mut events, DRAIN).await;
+        assert_few_events(&sent, max_events);
+        assert_eq!(start("INBOX"), BULK, "one undo brings every message back");
+        assert_eq!(start(to), 0);
+        assert_eq!(inbox_total(), in_inbox);
+        eprintln!(
+            "{to}: {BULK} messages applied in {applied_in:?} (on the server after \
+             {replayed_in:?}), undo queued in {undone_in:?}"
+        );
+    }
 }
 
 /// ADR 0230 (maintainer report: moved messages showed in two folders until

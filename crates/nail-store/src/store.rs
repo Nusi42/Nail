@@ -65,6 +65,11 @@ impl std::fmt::Debug for Store {
     }
 }
 
+/// Prepared statements kept per connection: the statements of one bulk
+/// write (a mail action applies, queues and records tens of thousands of
+/// messages, R5) stay prepared ([`rusqlite`]'s default keeps 16).
+const STATEMENT_CACHE: usize = 64;
+
 impl Store {
     /// Opens (creating if needed) the database at `path`, switches it to WAL
     /// mode, applies pending migrations and recovers the operation queues
@@ -167,6 +172,7 @@ impl Store {
     /// SQL functions and `secure_delete` while a data cipher is installed.
     pub(crate) fn prepare_connection(&self, conn: Connection) -> Result<Connection> {
         conn.busy_timeout(BUSY_TIMEOUT)?;
+        conn.set_prepared_statement_cache_capacity(STATEMENT_CACHE);
         conn.pragma_update(None, "foreign_keys", true)?;
         crate::seal::register_functions(&conn, &self.inner.cipher)?;
         if self.inner.cipher.is_installed() {

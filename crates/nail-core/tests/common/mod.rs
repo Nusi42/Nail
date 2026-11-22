@@ -29,6 +29,10 @@ use tokio::sync::broadcast;
 /// The subject of the demo conversation the conversation tests act on.
 pub(crate) const NIGHTINGALE: &str = "Project Nightingale kickoff";
 
+/// Messages of the R5 large-action tests (ADR 0235): more than two parts
+/// of `MAIL_ACTION_PART_MESSAGES`.
+pub(crate) const BULK_ACTION_MESSAGES: usize = 25_000;
+
 /// How long a test waits for the core (sync passes, replays, events).
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(30);
 

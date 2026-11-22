@@ -9,7 +9,9 @@
 
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
-use common::{NIGHTINGALE as SUBJECT, demo_folder, eventually, remote_session};
+use common::{
+    BULK_ACTION_MESSAGES as BULK, NIGHTINGALE as SUBJECT, demo_folder, eventually, remote_session,
+};
 use nail_core::testing::{TempService, error_of};
 
 use nail_api::agents::{ActionActor, ActionAttribution};
@@ -24,6 +26,7 @@ use nail_api::{
 use nail_core::demo::{DEMO_ACCOUNT_ID, DemoMail, MULTI_WORK_ID, start_demo_multi_with};
 use nail_core::{McpCore, Service, ServiceOptions};
 use nail_mcp::CoreAccess;
+use nail_remote_auth::RemoteSessionCtx;
 
 type Fixture = TempService;
 
@@ -461,15 +464,20 @@ async fn an_agents_batch_is_its_own_to_undo() {
     assert!(matches!(response, Response::Queued { .. }), "{response:?}");
 }
 
+/// The Sent folder and a remote session whose grant leaves it out.
+async fn session_without_sent(f: &Fixture, name: &str) -> (Folder, RemoteSessionCtx) {
+    let sent = demo_folder(&f.service, FolderRole::Sent);
+    let mut grant = RemoteAccessPreset::NoSend.grant();
+    grant.mail.excluded_folders = vec![sent.id.clone()];
+    let ctx = remote_session(&f.service, name, grant).await;
+    (sent, ctx)
+}
+
 #[tokio::test]
 async fn a_remote_session_acts_on_what_its_grant_shows_and_undoes_its_own() {
     let f = setup();
     let (inbox, row) = inbox_nightingale(&f).await;
-    let sent = demo_folder(&f.service, FolderRole::Sent);
-
-    let mut grant = RemoteAccessPreset::NoSend.grant();
-    grant.mail.excluded_folders = vec![sent.id.clone()];
-    let ctx = remote_session(&f.service, "no-sent", grant).await;
+    let (sent, ctx) = session_without_sent(&f, "no-sent").await;
     let target = whole(&row, &inbox);
     // Delete reaches the replies in Sent — but not for this session, and it
     // is not refused for them either.
@@ -845,6 +853,15 @@ async fn resolve(
     }
 }
 
+/// Every conversation row of `folder` as the target it stands for.
+async fn row_targets(f: &Fixture, folder: &Folder) -> Vec<MessageTarget> {
+    rows_of(f, folder)
+        .await
+        .into_iter()
+        .map(|t| MessageTarget::conversation(t.id, Some(folder.id.clone())))
+        .collect()
+}
+
 /// Every conversation row of `folder`.
 async fn rows_of(f: &Fixture, folder: &Folder) -> Vec<ThreadSummary> {
     match f
@@ -866,11 +883,7 @@ async fn a_list_target_is_every_row_but_the_deselected_ones() {
     let f = setup();
     let (inbox, row) = inbox_nightingale(&f).await;
     let read = MailAction::MarkRead { read: false };
-    let rows: Vec<MessageTarget> = rows_of(&f, &inbox)
-        .await
-        .into_iter()
-        .map(|t| MessageTarget::conversation(t.id, Some(inbox.id.clone())))
-        .collect();
+    let rows = row_targets(&f, &inbox).await;
     let one_by_one = resolve(&f, rows.clone(), read.clone()).await;
     let conversations = MailList::Conversations {
         folder_id: inbox.id.clone(),
@@ -928,14 +941,9 @@ fn inbox_total(f: &Fixture, inbox: &Folder) -> u32 {
         .total
 }
 
-#[tokio::test]
-async fn a_search_list_is_every_local_hit() {
-    let f = setup();
-    f.service.rebuild_search_index().unwrap();
-    let inbox = demo_folder(&f.service, FolderRole::Inbox);
-    let mut query = SearchQuery::new("subject:Nightingale", 1000);
-    query.folder_id = Some(inbox.id.clone());
-    let hits = match f
+/// The hits of `query`.
+async fn hits_of(f: &Fixture, query: &SearchQuery) -> Vec<nail_api::SearchHit> {
+    match f
         .service
         .handle(Request::Search {
             query: query.clone(),
@@ -944,7 +952,17 @@ async fn a_search_list_is_every_local_hit() {
     {
         Response::SearchResults { hits, .. } => hits,
         other => panic!("{other:?}"),
-    };
+    }
+}
+
+#[tokio::test]
+async fn a_search_list_is_every_local_hit() {
+    let f = setup();
+    f.service.rebuild_search_index().unwrap();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let mut query = SearchQuery::new("subject:Nightingale", 1000);
+    query.folder_id = Some(inbox.id.clone());
+    let hits = hits_of(&f, &query).await;
     assert!(hits.len() > 1, "{hits:?}");
     // The list's own page size does not matter: every hit is a row.
     query.limit = 1;
@@ -1044,4 +1062,428 @@ async fn archiving_a_whole_list_is_one_batch_with_one_undo() {
     assert_eq!(u32::try_from(result.message_ids.len()).unwrap(), before - 4);
     undo(&f, result.batch_id.unwrap()).await;
     assert_eq!(inbox_total(&f, &inbox), before);
+}
+
+// ---------------------------------------------------------------------------
+// R5 core (ADR 0235): the as_of mark, every list kind, parts with one undo
+
+/// A list target of `list` cut at `as_of`.
+fn list_at(list: MailList, except: Vec<MessageTarget>, as_of: Option<String>) -> MessageTarget {
+    let MessageTarget::List(mut target) = MessageTarget::list(list, except) else {
+        unreachable!()
+    };
+    target.as_of = as_of;
+    MessageTarget::List(target)
+}
+
+/// Stores `n` plain messages `<prefix>-<i>` in `folder` of the demo account.
+fn store_messages(f: &Fixture, folder: &FolderId, prefix: &str, n: usize) -> Vec<MessageId> {
+    let messages: Vec<nail_store::StoredMessage> = (0..n)
+        .map(|i| {
+            nail_store::StoredMessage::new(nail_api::MessageSummary {
+                date: format!("2026-10-{:02}T10:00:00Z", 1 + i % 28),
+                ..nail_api::testing::summary(
+                    &format!("{prefix}-{i}"),
+                    DEMO_ACCOUNT_ID,
+                    folder.as_str(),
+                )
+            })
+        })
+        .collect();
+    f.service.store().upsert_messages(&messages).unwrap();
+    messages.into_iter().map(|m| m.summary.id).collect()
+}
+
+fn folder_total(f: &Fixture, folder: &FolderId) -> u32 {
+    f.service.store().list_messages(folder, 0, 1).unwrap().total
+}
+
+#[tokio::test]
+async fn the_as_of_mark_keeps_mail_that_arrived_after_the_count_out() {
+    let f = setup();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let before = folder_total(&f, &inbox.id);
+    for (round, list) in [
+        MailList::Messages {
+            folder_id: inbox.id.clone(),
+        },
+        MailList::Conversations {
+            folder_id: inbox.id.clone(),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let counted = resolve(
+            &f,
+            vec![list_at(list.clone(), vec![], None)],
+            MailAction::Trash,
+        )
+        .await;
+        let mark = counted.as_of.clone().expect("a list answers with a mark");
+        // Delete on conversations also takes the user's replies in Sent.
+        let reached = counted.messages;
+        assert!(reached >= before, "{reached} < {before}");
+        // Mail that arrives after the confirmation is not counted with the
+        // mark, and not acted on with it.
+        let late = store_messages(&f, &inbox.id, &format!("late-{round}"), 1);
+        let again = resolve(
+            &f,
+            vec![list_at(list.clone(), vec![], Some(mark.clone()))],
+            MailAction::Trash,
+        )
+        .await;
+        assert_eq!(again.messages, reached);
+        assert_eq!(again.as_of.as_ref(), Some(&mark), "the list's own mark");
+        let fresh = resolve(
+            &f,
+            vec![list_at(list.clone(), vec![], None)],
+            MailAction::Trash,
+        )
+        .await;
+        assert_eq!(fresh.messages, reached + 1, "without the mark it counts");
+        let result = apply(
+            &f,
+            vec![list_at(list, vec![], Some(mark))],
+            MailAction::Trash,
+        )
+        .await;
+        assert_eq!(u32::try_from(result.message_ids.len()).unwrap(), reached);
+        assert!(!result.message_ids.contains(&late[0]));
+        assert_eq!(folder_total(&f, &inbox.id), 1, "only the late message");
+        undo(&f, result.batch_id.unwrap()).await;
+        assert_eq!(folder_total(&f, &inbox.id), before + 1);
+        // The late message leaves again for the next round.
+        let gone = apply(
+            &f,
+            vec![MessageTarget::message(late[0].clone())],
+            MailAction::Trash,
+        )
+        .await;
+        assert_eq!(gone.message_ids, late);
+        assert_eq!(folder_total(&f, &inbox.id), before);
+    }
+    // A mark the core never made is refused.
+    let bad = f
+        .service
+        .handle(Request::ApplyMailAction {
+            targets: vec![list_at(
+                MailList::Messages {
+                    folder_id: inbox.id.clone(),
+                },
+                vec![],
+                Some("yesterday".into()),
+            )],
+            action: MailAction::Archive,
+        })
+        .await;
+    assert_eq!(error_of(&bad).0, ErrorCode::InvalidRequest);
+    // Without a list there are ids and no mark.
+    let rows = row_targets(&f, &inbox).await;
+    let named = resolve(&f, rows, MailAction::Trash).await;
+    assert_eq!(named.as_of, None);
+    assert_eq!(
+        usize::try_from(named.messages).unwrap(),
+        named.message_ids.len()
+    );
+}
+
+#[tokio::test]
+async fn the_unified_inbox_and_a_message_list_resolve_like_their_rows() {
+    let f = setup();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let read = MailAction::MarkRead { read: false };
+    let in_folder = resolve(
+        &f,
+        vec![MessageTarget::list(
+            MailList::Conversations {
+                folder_id: inbox.id.clone(),
+            },
+            vec![],
+        )],
+        read.clone(),
+    )
+    .await;
+    let unified = FolderId::new("all/inbox");
+    let rows: Vec<MessageTarget> = match f
+        .service
+        .handle(Request::ListThreads {
+            folder_id: unified.clone(),
+            offset: 0,
+            limit: 1000,
+        })
+        .await
+    {
+        Response::Threads { threads, .. } => threads
+            .into_iter()
+            .map(|t| MessageTarget::conversation(t.id, Some(unified.clone())))
+            .collect(),
+        other => panic!("{other:?}"),
+    };
+    let one_by_one = resolve(&f, rows.clone(), read.clone()).await;
+    let all = resolve(
+        &f,
+        vec![MessageTarget::list(
+            MailList::Conversations {
+                folder_id: unified.clone(),
+            },
+            vec![],
+        )],
+        read.clone(),
+    )
+    .await;
+    assert_eq!(
+        (all.messages, all.conversations),
+        (one_by_one.messages, one_by_one.conversations)
+    );
+    assert_eq!(
+        (all.messages, all.conversations),
+        (in_folder.messages, in_folder.conversations),
+        "the demo has one account"
+    );
+    // Deselected rows of the unified inbox are left out.
+    let but_two = resolve(
+        &f,
+        vec![MessageTarget::list(
+            MailList::Conversations { folder_id: unified },
+            rows[..2].to_vec(),
+        )],
+        read,
+    )
+    .await;
+    assert_eq!(but_two.conversations, all.conversations - 2);
+
+    // A message list: one row per message, deselected messages left out.
+    let messages = f.service.store().list_messages(&inbox.id, 0, 3).unwrap();
+    let except: Vec<MessageTarget> = messages
+        .messages
+        .iter()
+        .map(|m| MessageTarget::message(m.id.clone()))
+        .collect();
+    let list = resolve(
+        &f,
+        vec![MessageTarget::list(
+            MailList::Messages {
+                folder_id: inbox.id.clone(),
+            },
+            except,
+        )],
+        MailAction::Flag { flagged: true },
+    )
+    .await;
+    assert_eq!(list.messages, messages.total - 3);
+    assert_eq!(list.conversations, 0);
+}
+
+#[tokio::test]
+async fn a_filter_chip_list_is_its_search_minus_the_deselected_hits() {
+    let f = setup();
+    f.service.rebuild_search_index().unwrap();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    // The "Unread" chip on the Inbox: its term within the folder.
+    let mut query = SearchQuery::new("is:unread", 1000);
+    query.folder_id = Some(inbox.id.clone());
+    let hits = hits_of(&f, &query).await;
+    assert!(hits.len() > 2, "{hits:?}");
+    let chip = |conversations, except| {
+        vec![MessageTarget::list(
+            MailList::Search {
+                query: SearchQuery {
+                    limit: 50,
+                    ..query.clone()
+                },
+                conversations,
+            },
+            except,
+        )]
+    };
+    let archive = MailAction::Archive;
+    let all = resolve(&f, chip(false, vec![]), archive.clone()).await;
+    assert_eq!(usize::try_from(all.messages).unwrap(), hits.len());
+    let first = MessageTarget::message(hits[0].message.id.clone());
+    let but_one = resolve(&f, chip(false, vec![first]), archive.clone()).await;
+    assert_eq!(but_one.messages, all.messages - 1);
+    // As conversations (a list with conversations): each hit stands for
+    // its conversation without a folder; a deselected conversation row
+    // leaves out all of its messages.
+    let rows: Vec<MessageTarget> = hits
+        .iter()
+        .map(|h| MessageTarget::conversation(h.message.thread_id.clone().unwrap(), None))
+        .collect();
+    let one_by_one = resolve(&f, rows.clone(), archive.clone()).await;
+    let threads = resolve(&f, chip(true, vec![]), archive.clone()).await;
+    assert_eq!(
+        (threads.messages, threads.conversations),
+        (one_by_one.messages, one_by_one.conversations)
+    );
+    let first_row = resolve(&f, vec![rows[0].clone()], archive.clone()).await;
+    let without_first = resolve(&f, chip(true, vec![rows[0].clone()]), archive).await;
+    assert_eq!(
+        without_first.messages,
+        threads.messages - first_row.messages
+    );
+}
+
+#[tokio::test]
+async fn a_remote_sessions_list_stays_within_its_grant() {
+    let f = setup();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let (sent, ctx) = session_without_sent(&f, "list").await;
+    let list = |folder: &Folder| {
+        vec![MessageTarget::list(
+            MailList::Conversations {
+                folder_id: folder.id.clone(),
+            },
+            vec![],
+        )]
+    };
+    let ask = |targets: Vec<MessageTarget>| {
+        f.service.handle_remote(
+            &ctx,
+            Request::ResolveMailTargets {
+                targets,
+                action: MailAction::Trash,
+            },
+        )
+    };
+    let session = match ask(list(&inbox)).await {
+        Response::MailTargets { resolution } => resolution,
+        other => panic!("{other:?}"),
+    };
+    let user = resolve(&f, list(&inbox), MailAction::Trash).await;
+    assert!(
+        session.messages < user.messages,
+        "Delete takes the replies in Sent, but not the session's: {} vs {}",
+        session.messages,
+        user.messages
+    );
+    assert_eq!(
+        session.messages,
+        folder_total(&f, &inbox.id),
+        "the Inbox only"
+    );
+    assert_eq!(error_of(&ask(list(&sent)).await).0, ErrorCode::Forbidden);
+    let sent_before = folder_total(&f, &sent.id);
+    let result = match f
+        .service
+        .handle_remote(
+            &ctx,
+            Request::ApplyMailAction {
+                targets: list(&inbox),
+                action: MailAction::Trash,
+            },
+        )
+        .await
+    {
+        Response::MailActionQueued { result } => result,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        u32::try_from(result.message_ids.len()).unwrap(),
+        session.messages
+    );
+    assert_eq!(folder_total(&f, &inbox.id), 0);
+    assert_eq!(
+        folder_total(&f, &sent.id),
+        sent_before,
+        "the hidden replies stay"
+    );
+}
+
+/// How many events of each kind arrived, and whether the receiver fell
+/// behind.
+fn count_events(
+    rx: &mut tokio::sync::broadcast::Receiver<nail_api::Event>,
+) -> (std::collections::BTreeMap<String, usize>, bool) {
+    let mut kinds = std::collections::BTreeMap::new();
+    let mut lagged = false;
+    loop {
+        match rx.try_recv() {
+            Ok(event) => {
+                let kind = serde_json::to_value(&event).unwrap()["type"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+                *kinds.entry(kind).or_insert(0) += 1;
+            }
+            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => lagged = true,
+            Err(_) => return (kinds, lagged),
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_list_of_25000_messages_moves_in_parts_with_one_undo() {
+    let f = setup();
+    let bulk = FolderId::new("demo-Bulk");
+    let trash = demo_folder(&f.service, FolderRole::Trash);
+    f.service
+        .store()
+        .upsert_folder(&Folder {
+            id: bulk.clone(),
+            account_id: AccountId::new(DEMO_ACCOUNT_ID),
+            parent_id: None,
+            name: "Bulk".into(),
+            path: "Bulk".into(),
+            role: FolderRole::Other,
+            unread: 0,
+            total: 0,
+        })
+        .unwrap();
+    store_messages(&f, &bulk, "bulk", BULK);
+    let list = vec![MessageTarget::list(
+        MailList::Messages {
+            folder_id: bulk.clone(),
+        },
+        vec![],
+    )];
+    let started = std::time::Instant::now();
+    let counted = resolve(&f, list.clone(), MailAction::Trash).await;
+    let resolved_in = started.elapsed();
+    assert_eq!(usize::try_from(counted.messages).unwrap(), BULK);
+    assert_eq!(counted.message_ids, Vec::<MessageId>::new());
+
+    let mut events = f.service.subscribe();
+    let started = std::time::Instant::now();
+    let moved = apply(&f, list, MailAction::Trash).await;
+    let applied_in = started.elapsed();
+    assert_eq!(moved.message_ids.len(), BULK);
+    assert_eq!(moved.op_ids.len(), BULK);
+    assert_eq!(folder_total(&f, &bulk), 0);
+    assert_eq!(folder_total(&f, &trash.id), u32::try_from(BULK).unwrap());
+    let (kinds, lagged) = count_events(&mut events);
+    assert!(!lagged, "{kinds:?}");
+    let parts = BULK.div_ceil(nail_api::mail_actions::MAIL_ACTION_PART_MESSAGES);
+    assert_eq!(
+        kinds.get("MailChanged"),
+        Some(&parts),
+        "one per part: {kinds:?}"
+    );
+    assert!(
+        kinds.values().sum::<usize>() < nail_core::EVENT_CAPACITY / 8,
+        "far below the channel's capacity: {kinds:?}"
+    );
+    // One batch: one undo brings every message back.
+    let batch = moved.batch_id.unwrap();
+    let record = f
+        .service
+        .store()
+        .mail_batch(nail_store::parse_mail_batch_id(batch.as_str()).unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(record.message_ids.len(), BULK);
+    let started = std::time::Instant::now();
+    undo(&f, batch).await;
+    let undone_in = started.elapsed();
+    assert_eq!(folder_total(&f, &bulk), u32::try_from(BULK).unwrap());
+    assert_eq!(folder_total(&f, &trash.id), 0);
+    let (kinds, lagged) = count_events(&mut events);
+    assert!(!lagged, "{kinds:?}");
+    assert!(
+        kinds.values().sum::<usize>() < nail_core::EVENT_CAPACITY / 8,
+        "{kinds:?}"
+    );
+    eprintln!(
+        "{BULK} messages: resolved in {resolved_in:?}, moved in {applied_in:?}, undone in {undone_in:?}"
+    );
 }

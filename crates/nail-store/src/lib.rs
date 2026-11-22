@@ -149,8 +149,8 @@ pub use mail::{
     SyncedMessage, UidFlags, normalize_msgid,
 };
 pub use mail_batches::{
-    MailBatchApplied, MailBatchPlan, MailBatchRecord, MailBatchUndo, mail_batch_id,
-    parse_mail_batch_id,
+    MailBatchApplied, MailBatchPlan, MailBatchRecord, MailBatchUndo, MailBatchUndoRest,
+    mail_batch_id, parse_mail_batch_id,
 };
 pub use mcp::{McpAuditRecord, hash_mcp_token};
 pub use plugin_activity::{MAX_ACTIVITY_ERROR, PluginJobState};

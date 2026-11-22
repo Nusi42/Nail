@@ -347,12 +347,12 @@ pub(crate) fn collapse_duplicates(
 }
 
 pub(crate) fn message_in_tx(tx: &Transaction<'_>, id: &MessageId) -> Result<StoredMessage> {
+    // Cached: bulk actions read tens of thousands of messages (R5).
     let mut message = tx
-        .query_row(
-            &format!("SELECT {MESSAGE_COLS} FROM messages m WHERE m.id = ?1"),
-            [id.as_str()],
-            message_from_row,
-        )
+        .prepare_cached(&format!(
+            "SELECT {MESSAGE_COLS} FROM messages m WHERE m.id = ?1"
+        ))?
+        .query_row([id.as_str()], message_from_row)
         .optional()?
         .ok_or_else(|| Error::not_found("message", id))?;
     message.summary.tags = tags_in_tx(tx, id)?;

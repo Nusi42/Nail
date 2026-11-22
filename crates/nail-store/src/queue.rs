@@ -434,26 +434,22 @@ fn source_in_tx(tx: &Transaction<'_>, id: &MessageId) -> Result<MessageSource> {
     let stored = message_in_tx(tx, id)?;
     let uid_validity = match stored.uid {
         Some(_) => tx
-            .query_row(
-                "SELECT uidvalidity FROM folders WHERE id = ?1",
-                [stored.summary.folder_id.as_str()],
-                |r| r.get::<_, Option<u32>>(0),
-            )
+            .prepare_cached("SELECT uidvalidity FROM folders WHERE id = ?1")?
+            .query_row([stored.summary.folder_id.as_str()], |r| {
+                r.get::<_, Option<u32>>(0)
+            })
             .optional()?
             .flatten(),
         None => None,
     };
     let (header_message_id, remote_id) = tx
-        .query_row(
-            "SELECT message_id, remote_id FROM messages WHERE id = ?1",
-            [id.as_str()],
-            |r| {
-                Ok((
-                    r.get::<_, Option<String>>(0)?,
-                    r.get::<_, Option<String>>(1)?,
-                ))
-            },
-        )
+        .prepare_cached("SELECT message_id, remote_id FROM messages WHERE id = ?1")?
+        .query_row([id.as_str()], |r| {
+            Ok((
+                r.get::<_, Option<String>>(0)?,
+                r.get::<_, Option<String>>(1)?,
+            ))
+        })
         .optional()?
         .unwrap_or_default();
     Ok(MessageSource {
@@ -474,10 +470,10 @@ fn move_row(
     account: &AccountId,
     folder: &FolderId,
 ) -> Result<()> {
-    tx.execute(
+    tx.prepare_cached(
         "UPDATE messages SET account_id = ?2, folder_id = ?3, uid = NULL WHERE id = ?1",
-        params![id.as_str(), account.as_str(), folder.as_str()],
-    )?;
+    )?
+    .execute(params![id.as_str(), account.as_str(), folder.as_str()])?;
     Ok(())
 }
 
@@ -492,11 +488,10 @@ pub(crate) fn role_folder_in_tx(
         other => return Err(Error::InvalidData(format!("folder role {other}"))),
     };
     Ok(tx
-        .query_row(
+        .prepare_cached(
             "SELECT id FROM folders WHERE account_id = ?1 AND role = ?2 ORDER BY path LIMIT 1",
-            params![account.as_str(), role],
-            |r| r.get::<_, String>(0),
-        )
+        )?
+        .query_row(params![account.as_str(), role], |r| r.get::<_, String>(0))
         .optional()?
         .map(FolderId))
 }
@@ -842,15 +837,15 @@ pub(crate) fn enqueue_if_applies(tx: &Transaction<'_>, op: &Operation) -> Result
 
 pub(crate) fn enqueue_in_tx(tx: &Transaction<'_>, operation: &Operation) -> Result<Enqueued> {
     let (account_id, changed_folders, stored) = operation.apply_local(tx)?;
-    tx.execute(
+    tx.prepare_cached(
         "INSERT INTO op_queue (account_id, kind, payload, message_id) VALUES (?1, ?2, ?3, ?4)",
-        params![
-            account_id.as_str(),
-            stored.kind(),
-            serde_json::to_string(&stored)?,
-            stored.message_id().as_str()
-        ],
-    )?;
+    )?
+    .execute(params![
+        account_id.as_str(),
+        stored.kind(),
+        serde_json::to_string(&stored)?,
+        stored.message_id().as_str()
+    ])?;
     let op = op_in_tx(tx, OpId(tx.last_insert_rowid()))?;
     tracing::debug!(id = %op.id, kind = stored.kind(), "operation enqueued");
     Ok(Enqueued {
@@ -860,13 +855,10 @@ pub(crate) fn enqueue_in_tx(tx: &Transaction<'_>, operation: &Operation) -> Resu
 }
 
 fn op_in_tx(tx: &Transaction<'_>, id: OpId) -> Result<QueuedOp> {
-    tx.query_row(
-        &format!("SELECT {OP_COLS} FROM op_queue WHERE id = ?1"),
-        [id.0],
-        op_from_row,
-    )
-    .optional()?
-    .ok_or_else(|| Error::not_found("operation", id))
+    tx.prepare_cached(&format!("SELECT {OP_COLS} FROM op_queue WHERE id = ?1"))?
+        .query_row([id.0], op_from_row)
+        .optional()?
+        .ok_or_else(|| Error::not_found("operation", id))
 }
 
 use crate::util::SQL_NOW as NOW;
