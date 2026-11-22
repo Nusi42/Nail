@@ -10,3 +10,10 @@ message-list-all-selected =
         [one] The only row is selected
        *[other] All { $count } selected
     }
+
+## Command palette and the row's menu
+
+message-list-action-select-all = { edit-action-select-all }
+message-list-action-select-all-keywords = select all every whole list conversations messages ctrl+a
+message-list-action-clear-selection = Clear selection
+message-list-action-clear-selection-keywords = deselect unselect none escape

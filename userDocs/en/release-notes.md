@@ -15,6 +15,12 @@ Select a whole message list and act on it at once, however large it is.
   not loaded yet. The list shows how many are selected. `Ctrl`+click or
   `Shift`+click leaves single rows out again, and `Esc` clears the
   selection.
+- **One question before acting on the whole list** — every action on a
+  whole list (archive, move, delete, read, flag, labels, snooze, junk) asks
+  once how many conversations and messages it affects, and its button names
+  the action ("Archive all"). It then runs as one change with one **Undo**;
+  mail that arrives while the question is open is left alone. **Select
+  all** is also in the command palette.
 
 ### Corrected in 0.8.10
 

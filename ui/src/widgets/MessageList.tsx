@@ -16,11 +16,16 @@ import { useActions } from "../actions/ActionsProvider";
 import { comboFromEvent, normalizeCombo } from "../actions/keys";
 import { CONVERSATION_ACTIONS } from "../features/conversation-reader/actions";
 import {
+  inAll,
   listSelectionFor,
+  listTargetOf,
+  mailListOf,
   refetchedSince,
   prunePicked,
+  rangeExcept,
   rangePick,
   togglePick,
+  toggleExcept,
   useListSelection,
 } from "../actions/mailTargets";
 import { errorMessageIdOf } from "../api/client";
@@ -47,6 +52,7 @@ import {
   queryKeys,
   useAccounts,
   useClient,
+  useListCount,
   useMessages,
   useSearch,
   useThreads,
@@ -535,6 +541,21 @@ function useRows(node: WidgetNode, pageSize: number) {
 
   const searchError = hits.data?.pages.find((p) => p.error !== null)?.error ?? null;
   const total = searching ? (hits.data?.pages[0]?.total ?? 0) : null;
+  // The list's rows in all, loaded or not (what "select all" selects).
+  const pages = searching
+    ? hits.data?.pages
+    : threadRows
+      ? threads.data?.pages
+      : messages.data?.pages;
+  const listTotal = pages?.[pages.length - 1]?.total ?? null;
+  // The list query "select all" names (R5, ADR 0235).
+  const list = mailListOf({
+    search: searching,
+    folderId,
+    threadRows,
+    conversations: threadMode,
+    pageSize,
+  });
   const filtered = filterSearch !== null;
   // Design B: conversation rows open into their messages (not while
   // searching: hits are messages).
@@ -549,7 +570,33 @@ function useRows(node: WidgetNode, pageSize: number) {
     listFilter,
     expandable,
     conversations: threadMode,
+    list,
+    listTotal,
   };
+}
+
+/**
+ * "All N selected" (R5, ADR 0235): the true count of a selected whole list
+ * from the core (`ResolveMailTargets`), the rows of the list minus the ones
+ * left out until it answers. Announced politely when it changes.
+ */
+function AllSelectedSummary({ total }: { total: number | null }) {
+  const t = useT();
+  const all = useListSelection((s) => s.all);
+  const scope = useListSelection((s) => s.scope);
+  const target = all === null ? null : listTargetOf(all, scope);
+  const counted = useListCount(target, total).data;
+  if (all === null) return null;
+  const rows =
+    all.list.source === "messages" || (all.list.source === "search" && !all.list.conversations)
+      ? counted?.messages
+      : counted?.conversations;
+  const count = rows ?? Math.max(0, (total ?? 0) - all.except.length);
+  return (
+    <div data-part="message-list.selection-summary" aria-live="polite" aria-atomic="true">
+      {t("message-list-all-selected", { count })}
+    </div>
+  );
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -760,6 +807,8 @@ export function MessageList({ node }: WidgetProps) {
     listFilter,
     expandable,
     conversations,
+    list,
+    listTotal,
   } = useRows(node, pageSize);
   const { expanded, setExpanded, children, loading } = useExpansion(
     node.id ?? "message-list",
@@ -813,6 +862,12 @@ export function MessageList({ node }: WidgetProps) {
   useEffect(() => {
     selection.getState().setScope({ conversations, folderId: listedFolder });
   }, [selection, conversations, listedFolder]);
+  // The list "select all" selects; another list ends it (the store
+  // compares the queries, so a new object of the same list changes nothing).
+  useEffect(() => {
+    selection.getState().setList(list);
+  }, [selection, list]);
+  const all = useListSelection((s) => s.all);
   const picked = useListSelection((s) => s.picked);
   const pickedKeys = useMemo(() => new Set(picked.map((p) => p.key)), [picked]);
   useEffect(() => {
@@ -972,7 +1027,18 @@ export function MessageList({ node }: WidgetProps) {
     event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean },
   ) => {
     const state = selection.getState();
-    if (event.ctrlKey || event.metaKey) {
+    if (state.all !== null && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+      // "Select all": Ctrl + click leaves a row out or takes it back,
+      // Shift + click the rows from the last clicked one to it.
+      const anchor = rows.findIndex((r) => r.key === anchorKey.current);
+      state.setExcept(
+        event.shiftKey
+          ? rangeExcept(state.all.except, rows, anchor >= 0 ? anchor : index, index)
+          : toggleExcept(state.all.except, row),
+      );
+      if (!event.shiftKey) anchorKey.current = row.key;
+      setChosenKey(row.key);
+    } else if (event.ctrlKey || event.metaKey) {
       const next = togglePick(state.picked, rows[selectedIndex], row);
       state.setPicked(next);
       if (next.some((p) => p.key === row.key)) choose(row);
@@ -1066,6 +1132,7 @@ export function MessageList({ node }: WidgetProps) {
           {t("message-list-search-results", { count: total, query: activeSearch.text })}
         </div>
       )}
+      <AllSelectedSummary total={listTotal} />
       {status}
       {columns.length > 0 && (
         <div data-part="message-list.header" aria-hidden="true">
@@ -1080,7 +1147,10 @@ export function MessageList({ node }: WidgetProps) {
       {items.map((item) => {
         const row = rows[item.index];
         if (!row) return null;
-        const selected = item.index === selectedIndex || pickedKeys.has(row.key);
+        const selected =
+          all !== null
+            ? inAll(all, row.key)
+            : item.index === selectedIndex || pickedKeys.has(row.key);
         const ctx = { locale, now, unread: row.unread, me: t("conversations-me") };
         if (row.child) {
           const position = siblingPosition(rows, item.index);

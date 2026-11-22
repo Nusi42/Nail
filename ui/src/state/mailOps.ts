@@ -321,6 +321,7 @@ export function refreshAfterAction(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.allMessages });
   void queryClient.invalidateQueries({ queryKey: queryKeys.allSearches });
   void queryClient.invalidateQueries({ queryKey: queryKeys.allThreadDetails });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.allListCounts });
 }
 
 /** A folder the app has loaded (folder lists are cached per account), else `undefined`. */

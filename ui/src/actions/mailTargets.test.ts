@@ -5,9 +5,19 @@
 import { createUiStore } from "../state/uiStore";
 import { menuStoreFor } from "../features/menus";
 import type { ContextTarget } from "../features/menus";
+import type { MailList } from "../api/generated";
 import {
   currentTargets,
+  hasListTarget,
+  inAll,
   listSelectionFor,
+  listTargetOf,
+  loadedRowTargets,
+  mailListOf,
+  rangeExcept,
+  sameList,
+  toggleExcept,
+  withAsOf,
   pickedOf,
   prunePicked,
   rangePick,
@@ -165,5 +175,121 @@ describe("the selection after a resync (ADR 0230)", () => {
     expect(refetchedSince(4_000, { dataUpdatedAt: 5_000, isFetching: true })).toBe(false);
     expect(refetchedSince(4_000, { dataUpdatedAt: 4_000, isFetching: false })).toBe(true);
     expect(refetchedSince(4_000, { dataUpdatedAt: 6_000, isFetching: false })).toBe(true);
+  });
+});
+
+describe("select all (R5, ADR 0235)", () => {
+  const LIST: MailList = { source: "conversations", folder_id: INBOX };
+  const SCOPE = { conversations: true, folderId: INBOX };
+
+  it("names the list the message list pages: a folder's conversations or messages, or its search", () => {
+    const base = {
+      search: null,
+      folderId: INBOX,
+      threadRows: true,
+      conversations: true,
+      pageSize: 50,
+    };
+    expect(mailListOf(base)).toEqual(LIST);
+    expect(mailListOf({ ...base, threadRows: false, conversations: false })).toEqual({
+      source: "messages",
+      folder_id: INBOX,
+    });
+    expect(mailListOf({ ...base, folderId: null })).toBeNull();
+    const search = { text: "from:ada is:unread", accountId: "acc", folderId: INBOX };
+    expect(mailListOf({ ...base, search })).toEqual({
+      source: "search",
+      query: {
+        text: "from:ada is:unread",
+        account_id: "acc",
+        folder_id: INBOX,
+        offset: 0,
+        limit: 50,
+        sort: "date",
+      },
+      conversations: true,
+    });
+  });
+
+  it("Ctrl+A selects the whole list; actions get one list target; Esc and another list end it", () => {
+    const store = createUiStore();
+    const selection = listSelectionFor(store);
+    selection.getState().setScope(SCOPE);
+    // No list shown yet: nothing to select.
+    selection.getState().selectAll();
+    expect(selection.getState().all).toBeNull();
+    selection.getState().setList(LIST);
+    selection.getState().setPicked([pickedOf(row(1)), pickedOf(row(2))]);
+    selection.getState().selectAll();
+    expect(selection.getState().picked).toEqual([]);
+    expect(currentTargets(store)).toEqual({
+      targets: [{ kind: "list", list: LIST, except: [], as_of: null }],
+      source: "list",
+    });
+    // Left out rows travel as the targets they stand for.
+    selection.getState().setExcept([pickedOf(row(2)), pickedOf(row(3, "child"))]);
+    expect(currentTargets(store).targets).toEqual([
+      {
+        kind: "list",
+        list: LIST,
+        except: [
+          { kind: "conversation", thread_id: "t2", folder_id: INBOX },
+          { kind: "message", message_id: "m3" },
+        ],
+        as_of: null,
+      },
+    ]);
+    // A selected row's menu acts on the selection, a left-out row's on itself.
+    menuOn(store, { messageId: "m1", threadId: "t1" });
+    expect(hasListTarget(currentTargets(store).targets)).toBe(true);
+    menuOn(store, { messageId: "m2", threadId: "t2" });
+    expect(currentTargets(store).targets).toEqual([
+      { kind: "conversation", thread_id: "t2", folder_id: INBOX },
+    ]);
+    menuStoreFor(store).getState().close(false);
+    // The same list again (a new object) keeps it; another list ends it.
+    selection.getState().setList({ ...LIST });
+    expect(selection.getState().all).not.toBeNull();
+    selection.getState().setList({ source: "conversations", folder_id: "acc/Archive" });
+    expect(selection.getState().all).toBeNull();
+    // Esc.
+    selection.getState().setList(LIST);
+    selection.getState().selectAll();
+    selection.getState().clear();
+    expect(selection.getState().all).toBeNull();
+    // A plain click (an explicit selection) ends it too.
+    selection.getState().selectAll();
+    selection.getState().setPicked([]);
+    expect(selection.getState().all).toBeNull();
+    expect(sameList(LIST, { ...LIST })).toBe(true);
+  });
+
+  it("Ctrl / Shift + click leave rows out and take them back", () => {
+    const rows = [row(1), row(2), row(3), row(4), row(5)];
+    const one = toggleExcept([], row(2));
+    expect(one.map((p) => p.key)).toEqual(["t2"]);
+    expect(toggleExcept(one, row(2))).toEqual([]);
+    const all = { list: LIST, except: one };
+    expect(inAll(all, "t1")).toBe(true);
+    expect(inAll(all, "t2")).toBe(false);
+    // Shift + click on a selected row leaves the range out ...
+    const range = rangeExcept(one, rows, 2, 4);
+    expect(range.map((p) => p.key).sort()).toEqual(["t2", "t3", "t4", "t5"]);
+    // ... on a left-out row takes it back.
+    expect(rangeExcept(range, rows, 4, 2).map((p) => p.key)).toEqual(["t2"]);
+  });
+
+  it("updates the loaded rows of a list target at once, and sends the confirmation's mark", () => {
+    const target = listTargetOf({ list: LIST, except: [pickedOf(row(2))] }, SCOPE);
+    const order = ["m1", "m2", "m3"];
+    const threads = { m1: "t1", m2: "t2", m3: "t3" };
+    expect(loadedRowTargets(target, order, threads, SCOPE)).toEqual([
+      { kind: "conversation", thread_id: "t1", folder_id: INBOX },
+      { kind: "conversation", thread_id: "t3", folder_id: INBOX },
+    ]);
+    const message = { kind: "message", message_id: "m9" } as const;
+    expect(loadedRowTargets(message, order, threads, SCOPE)).toEqual([message]);
+    expect(withAsOf([target, message], "mark")).toEqual([{ ...target, as_of: "mark" }, message]);
+    expect(hasListTarget([message])).toBe(false);
   });
 });

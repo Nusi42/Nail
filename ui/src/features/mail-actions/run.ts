@@ -3,6 +3,11 @@
  * the list and the reader updated at once, the selection moved on like
  * Gmail (to the next conversation after Archive / Delete, to the next card
  * after a card's own Delete), and the undo toast.
+ *
+ * R5 (ADR 0235): always one request, whatever the size — the core runs a
+ * large action in parts as one batch with one undo. A whole list ("select
+ * all") is one list target; it asks first with the true count
+ * (`./bulk.ts`), and the list updates its loaded rows at once.
  */
 import { NailError, errorMessageOf } from "../../api/client";
 import type {
@@ -17,13 +22,16 @@ import type {
   Response,
   ThreadId,
 } from "../../api/generated";
-import { MAX_MAIL_ACTION_TARGETS } from "../../api/generated/constants";
 import {
+  hasListTarget,
   listSelectionFor,
+  loadedRowTargets,
   messageIdsOf,
   messageTarget,
   threadIdsOf,
+  withAsOf,
   type ActionTargets,
+  type ListScope,
 } from "../../actions/mailTargets";
 import {
   cachedFolder,
@@ -37,6 +45,7 @@ import {
 } from "../../state/mailOps";
 import { queryKeys } from "../../state/queries";
 import type { UiStore } from "../../state/uiStore";
+import { confirmBulk } from "./bulk";
 import { mailActionsStoreFor, type SelectionBefore, type TagToast } from "./store";
 
 type ConversationResponse = Extract<Response, { type: "Conversation" }>;
@@ -231,47 +240,15 @@ function showError(ctx: WriteContext, error: unknown): void {
   if (!(error instanceof NailError)) console.error("nail: mail action failed", error);
 }
 
-/** Applies `action` to `apply`, at most `MAX_MAIL_ACTION_TARGETS` targets per request. */
-async function applyInChunks(
-  ctx: WriteContext,
-  apply: readonly MessageTarget[],
-  action: MailAction,
-): Promise<MailActionResult> {
-  const results: MailActionResult[] = [];
-  for (let start = 0; start < apply.length; start += MAX_MAIL_ACTION_TARGETS) {
-    const { result } = await ctx.client.request(
-      {
-        type: "ApplyMailAction",
-        targets: apply.slice(start, start + MAX_MAIL_ACTION_TARGETS),
-        action,
-      },
-      "MailActionQueued",
-    );
-    results.push(result);
-  }
-  const [first, ...rest] = results;
-  if (first === undefined) throw new Error("nothing to apply");
-  if (rest.length === 0) return first;
-  return {
-    ...first,
-    // Several requests are several batches: no single undo.
-    batch_id: null,
-    undo_until: null,
-    op_ids: results.flatMap((r) => r.op_ids),
-    message_ids: results.flatMap((r) => r.message_ids),
-  };
-}
-
 /** Options of {@link runMailAction}. */
 export interface RunOptions {
   /**
-   * What the core acts on instead of `targets` (the list and the reader
-   * still update for `targets`): the exact messages a confirmation counted,
-   * so nothing that arrived meanwhile is acted on unasked.
+   * The confirmation that counted the targets (`ResolveMailTargets`): the
+   * core acts on exactly what it counted — its messages, or a list target
+   * with its `as_of` mark — so nothing that arrived meanwhile is acted on
+   * unasked. A whole list without one asks first (`./bulk.ts`).
    */
-  apply?: readonly MessageTarget[];
-  /** The conversations the confirmation named (the toast's count). */
-  conversations?: number;
+  resolution?: MailTargetResolution;
   /** What a tag change calls its tags in the toast (Gmail labels, Exchange categories). */
   tagNoun?: TagNoun;
 }
@@ -282,10 +259,51 @@ export interface RunOptions {
  * Junk).
  */
 export function runOptionsOf(resolution: MailTargetResolution): RunOptions {
-  return {
-    apply: resolution.message_ids.map(messageTarget),
-    conversations: resolution.conversations,
-  };
+  return { resolution };
+}
+
+/**
+ * What the core acts on after a confirmation: a whole list with the
+ * confirmation's mark, else exactly the messages it counted.
+ */
+export function confirmedTargets(
+  targets: readonly MessageTarget[],
+  resolution: MailTargetResolution,
+): MessageTarget[] {
+  return hasListTarget(targets)
+    ? withAsOf(targets, resolution.as_of)
+    : resolution.message_ids.map(messageTarget);
+}
+
+/** The targets with each list target replaced by its loaded rows (the list's own update). */
+function loadedTargets(
+  ui: UiStore,
+  targets: readonly MessageTarget[],
+  scope: ListScope,
+): MessageTarget[] {
+  if (!hasListTarget(targets)) return [...targets];
+  const { messageOrder, messageThreads } = ui.getState();
+  return targets.flatMap((t) => loadedRowTargets(t, messageOrder, messageThreads, scope));
+}
+
+/** Resolves a whole list and asks before acting on it; `null` = do not act. */
+async function confirmList(
+  ctx: WriteContext,
+  targets: readonly MessageTarget[],
+  action: MailAction,
+): Promise<MailTargetResolution | null> {
+  let resolution: MailTargetResolution;
+  try {
+    ({ resolution } = await ctx.client.request(
+      { type: "ResolveMailTargets", targets: [...targets], action },
+      "MailTargets",
+    ));
+  } catch (error) {
+    showError(ctx, error);
+    return null;
+  }
+  if (resolution.messages === 0) return null;
+  return (await confirmBulk(ctx.store, action, resolution)) ? resolution : null;
 }
 
 /** What the toast calls the tags of a `tags` action. */
@@ -303,29 +321,35 @@ export async function runMailAction(
   options: RunOptions = {},
 ): Promise<MailActionResult | null> {
   if (targets.length === 0) return null;
+  let resolution = options.resolution;
+  if (resolution === undefined && hasListTarget(targets)) {
+    const confirmed = await confirmList(ctx, targets, action);
+    if (confirmed === null) return null;
+    resolution = confirmed;
+  }
   const ui = ctx.store.getState();
   const scope = listSelectionFor(ctx.store).getState().scope;
+  // The list updates the rows it has loaded; the core acts on the whole list.
+  const shown = loadedTargets(ctx.store, targets, scope);
   const searching = ui.search !== null;
   const listed = scope.folderId ?? (searching ? null : ui.activeFolderId);
   const selection = selectionBefore(ctx.store);
   if (removesRows(action, folderRole(ctx, listed), searching)) {
-    if (source === "card") removeCards(ctx, messageIdsOf(targets));
-    else removeRows(ctx, targets);
+    if (source === "card") removeCards(ctx, messageIdsOf(shown));
+    else removeRows(ctx, shown);
   } else {
-    patchFlags(ctx, targets, action);
+    patchFlags(ctx, shown, action);
   }
   let result: MailActionResult;
   try {
-    if (options.apply === undefined) {
-      ({ result } = await ctx.client.request(
-        { type: "ApplyMailAction", targets: [...targets], action },
-        "MailActionQueued",
-      ));
-    } else {
-      result = await applyInChunks(ctx, options.apply, action);
-      if (options.conversations !== undefined) {
-        result = { ...result, conversations: options.conversations };
-      }
+    const apply = resolution === undefined ? [...targets] : confirmedTargets(targets, resolution);
+    ({ result } = await ctx.client.request(
+      { type: "ApplyMailAction", targets: apply, action },
+      "MailActionQueued",
+    ));
+    // The toast names the conversations the confirmation named.
+    if (resolution !== undefined && !hasListTarget(targets)) {
+      result = { ...result, conversations: resolution.conversations };
     }
   } catch (error) {
     showError(ctx, error);
@@ -405,34 +429,55 @@ export async function undoLast(ctx: WriteContext, batchId?: MailBatchId): Promis
   }
 }
 
-/** Whether any of the targets has unread mail (toggle read = mark read then). */
+/** A whole list's folder has unread mail; `null` = unknown (a search, a folder not cached). */
+function listFolderUnread(ctx: WriteContext, target: MessageTarget): boolean | null {
+  if (target.kind !== "list" || target.list.source === "search") return null;
+  const folder = cachedFolder(ctx.queryClient, target.list.folder_id);
+  return folder === undefined ? null : folder.unread > 0;
+}
+
+/** The targets with a whole list replaced by its loaded rows (what the UI knows of it). */
+function knownTargets(ctx: WriteContext, targets: readonly MessageTarget[]): MessageTarget[] {
+  return loadedTargets(ctx.store, targets, listSelectionFor(ctx.store).getState().scope);
+}
+
+/**
+ * Whether any of the targets has unread mail (toggle read = mark read
+ * then). A whole list asks its folder's unread count, else its loaded rows.
+ */
 export function anyUnread(ctx: WriteContext, targets: readonly MessageTarget[]): boolean {
-  return targets.some((target) => {
-    // A whole list (ADR 0235) is not known row by row: unknown counts as unread.
-    if (target.kind === "list") return true;
+  const lists = targets.map((t) => listFolderUnread(ctx, t));
+  if (lists.includes(true)) return true;
+  return knownTargets(ctx, targets).some((target) => {
     if (target.kind === "conversation") {
       const thread = findThread(ctx.queryClient, target.thread_id);
       if (thread) return thread.unread_count > 0;
       const selected = ctx.store.getState().selectedMessageId;
       return selected !== null && findSummary(ctx.queryClient, selected)?.flags.seen === false;
     }
-    return findSummary(ctx.queryClient, target.message_id)?.flags.seen === false;
+    return (
+      target.kind === "message" &&
+      findSummary(ctx.queryClient, target.message_id)?.flags.seen === false
+    );
   });
 }
 
-/** Whether every target is flagged (toggle flag = unflag then). */
+/** Whether every target is flagged (toggle flag = unflag then); a whole list by its loaded rows. */
 export function allFlagged(ctx: WriteContext, targets: readonly MessageTarget[]): boolean {
+  const known = knownTargets(ctx, targets);
   return (
-    targets.length > 0 &&
-    targets.every((target) => {
-      if (target.kind === "list") return false;
+    known.length > 0 &&
+    known.every((target) => {
       if (target.kind === "conversation") {
         const thread = findThread(ctx.queryClient, target.thread_id);
         if (thread) return thread.flagged;
         const selected = ctx.store.getState().selectedMessageId;
         return selected !== null && findSummary(ctx.queryClient, selected)?.flags.flagged === true;
       }
-      return findSummary(ctx.queryClient, target.message_id)?.flags.flagged === true;
+      return (
+        target.kind === "message" &&
+        findSummary(ctx.queryClient, target.message_id)?.flags.flagged === true
+      );
     })
   );
 }
@@ -440,11 +485,13 @@ export function allFlagged(ctx: WriteContext, targets: readonly MessageTarget[])
 /**
  * Whether marking the targets read (`read`) or unread would change
  * anything: some target is unread (or read). Unknown targets count as
- * changeable, so the action stays offered.
+ * changeable, so the action stays offered: a whole list asks its folder's
+ * unread count when marking read, and is changeable otherwise (rows not
+ * loaded are not known).
  */
 export function canMark(ctx: WriteContext, targets: readonly MessageTarget[], read: boolean) {
   return targets.some((target) => {
-    if (target.kind === "list") return true;
+    if (target.kind === "list") return read ? (listFolderUnread(ctx, target) ?? true) : true;
     if (target.kind === "conversation") {
       const thread = findThread(ctx.queryClient, target.thread_id);
       if (!thread) return true;

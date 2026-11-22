@@ -192,3 +192,43 @@ mail-actions-move-note-junk = Messages in Junk are treated as spam.
 
 mail-actions-action-move-out-of-drafts = Move out of Drafts
 mail-actions-action-move-out-of-drafts-keywords = inbox restore not a draft received drafts
+
+## The question before an action on a whole list ("select all"): the true
+## number the core counted, and the action on the button.
+
+window-mail-bulk-confirm = Apply to the whole list?
+mail-bulk-question-conversations = { $conversations ->
+    [one] This affects 1 conversation ({ $messages ->
+        [one] 1 message
+       *[other] { $messages } messages
+    }).
+   *[other] This affects all { $conversations } selected conversations ({ $messages ->
+        [one] 1 message
+       *[other] { $messages } messages
+    }).
+}
+mail-bulk-question-messages = { $messages ->
+    [one] This affects 1 message.
+   *[other] This affects all { $messages } selected messages.
+}
+mail-bulk-confirm = { $action ->
+    [archive] Archive all
+    [trash] Move all to Trash
+    [delete-permanently] Delete all permanently
+    [move] Move all
+    [mark-read] { $on ->
+        [yes] Mark all as read
+       *[no] Mark all as unread
+    }
+    [flag] { $on ->
+        [yes] Flag all
+       *[no] Unflag all
+    }
+    [tags] Change tags of all
+    [snooze] Snooze all
+    [junk] { $on ->
+        [yes] Mark all as junk
+       *[no] Mark all as not junk
+    }
+   *[other] Apply to all
+}

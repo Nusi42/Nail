@@ -18,21 +18,51 @@
  * reader offers it for such messages, which open in the reader rather than
  * the composer. The move window asks before Drafts, Trash and Junk
  * (`./move.ts`, `../../widgets/FolderPicker.tsx`).
+ * R5 (ADR 0235): `list.select-all` (Ctrl+A / Cmd+A in the list, the palette,
+ * the row's menu) selects the whole list, rows not loaded yet included;
+ * `list.clear-selection` (Esc) ends it. Every action on it sends one list
+ * target and asks once with the true count (`./bulk.ts`,
+ * `./BulkConfirm.tsx`); texts in `locales/{en,de}/list-selection.ftl`.
  * Texts: `locales/{en,de}/mail-actions.ftl` (labels of what was done:
  * `mail-action-kind-*` in `core-mail-actions.ftl`). The mock core answers
  * the requests (`../../api/mockMailActions.ts`).
  */
-import { messageTarget } from "../../actions/mailTargets";
+import { listSelectionFor, messageTarget } from "../../actions/mailTargets";
 import { MAIL_AVAILABILITY as MAIL, type ActionInfo } from "../../actions/palette";
 import type { Feature } from "../types";
+import { BULK_CONFIRM_DIALOG } from "./bulk";
+import { BulkConfirmDialog } from "./BulkConfirm";
 import { isMisplacedInDrafts, runMailAction } from "./run";
 import { MailActionToast } from "./Toast";
+
+/** Selects the whole message list, rows not loaded yet included (R5). */
+export const SELECT_ALL_ACTION = "list.select-all";
+/** Ends "select all" and drops the picked rows (Esc in the list). */
+export const CLEAR_SELECTION_ACTION = "list.clear-selection";
 
 /** Moves a non-draft out of a Drafts folder into its account's Inbox. */
 export const MOVE_OUT_OF_DRAFTS_ACTION = "mail.move-out-of-drafts";
 
 export const widgets: Feature["widgets"] = {};
 export const actions: Feature["actions"] = {
+  [SELECT_ALL_ACTION]: {
+    run: (ctx) => {
+      listSelectionFor(ctx.store).getState().selectAll();
+    },
+    enabled: (ctx) => {
+      const { list } = listSelectionFor(ctx.store).getState();
+      return list !== null && ctx.store.getState().messageOrder.length > 0;
+    },
+  },
+  [CLEAR_SELECTION_ACTION]: {
+    run: (ctx) => {
+      listSelectionFor(ctx.store).getState().clear();
+    },
+    enabled: (ctx) => {
+      const { all, picked } = listSelectionFor(ctx.store).getState();
+      return all !== null || picked.length > 0;
+    },
+  },
   [MOVE_OUT_OF_DRAFTS_ACTION]: {
     // Only the selected message: the open menu's row, the picked rows or
     // its conversation may hold real drafts, which stay where they are.
@@ -51,6 +81,18 @@ export const actions: Feature["actions"] = {
 
 /** Command-palette descriptions of the actions P3 added. */
 export const actionInfo: Readonly<Record<string, ActionInfo>> = {
+  [SELECT_ALL_ACTION]: {
+    title: "message-list-action-select-all",
+    keywords: "message-list-action-select-all-keywords",
+    availability: ["list"],
+    icon: "list-checks",
+  },
+  [CLEAR_SELECTION_ACTION]: {
+    title: "message-list-action-clear-selection",
+    keywords: "message-list-action-clear-selection-keywords",
+    availability: ["list"],
+    icon: "square-check-big",
+  },
   "mail.mark-read": {
     title: "mail-actions-action-mark-read",
     keywords: "mail-actions-action-mark-read-keywords",
@@ -74,6 +116,14 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
     keywords: "mail-actions-action-undo-keywords",
     icon: "undo-2",
   },
+};
+
+/** The confirmation before an action on a whole list. */
+export const dialogs: NonNullable<Feature["dialogs"]> = {
+  [BULK_CONFIRM_DIALOG]: BulkConfirmDialog,
+};
+export const windows: NonNullable<Feature["windows"]> = {
+  [BULK_CONFIRM_DIALOG]: { confirmation: true },
 };
 
 /** The undo toast. */

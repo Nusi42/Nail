@@ -272,6 +272,27 @@ list without conversations (`threads="off"`) acts on messages anyway.
 **Shift+click** (or **Shift+↑** / **Shift+↓**) to pick a range; the next
 action acts on all of them.
 
+**The whole list.** **Ctrl+A** (**Cmd+A** on macOS) while the message list
+has the focus selects every row of the list — the whole folder, the unified
+inbox, the search or the filter you are looking at — also the rows further
+down that are not loaded yet; they show as selected when you scroll to
+them. **Select all** in the row's menu and in the command palette does the
+same. The top of the list says how many are selected ("All 1,200
+selected"), counted by Nail over the whole list. While everything is
+selected, **Ctrl+click** leaves a row out (and takes it back),
+**Shift+click** leaves out the rows from the last clicked one to it (or takes
+them back). **Esc**, a plain click on a row, another folder, another search
+or another filter ends the selection.
+
+Every action on the whole list (archive, move, delete, read / unread, flag,
+labels, snooze, junk) asks once, with the true number of
+conversations and messages it affects, and names the action on its button
+(for example **Archive all**); **Cancel** has the focus. The action then
+runs as one change, however many messages it affects — **Undo** puts all of
+them back — and the status bar shows its progress ("Saving N changes")
+until the server has every change. Mail that arrives while the question is
+open is not part of it.
+
 **Undo.** After each action a message at the bottom of the window says what
 happened ("Conversation archived", "3 conversations moved to Trash") with
 **Undo**. Undo — or `z` up to an hour later — puts every message back where
@@ -316,6 +337,8 @@ the messages that were counted.
 | `Delete`, `#` | Move to Trash (in Trash: delete for good, after a question) |
 | `Shift+Delete` | Delete for good (only in Trash or Junk; asks first: **Delete permanently?**) |
 | `z` | Undo the last action |
+| `Ctrl+A` (`Cmd+A` on macOS) | Select the whole list, rows not loaded yet included |
+| `Esc` | Clear the selection of the whole list (or of picked rows) |
 | `r`, `a`, `f` | Reply, reply all, forward (to the newest message, or the card you are on) |
 | `b` | Snooze (see below) |
 | `Shift+J`, `!` | Mark as junk |

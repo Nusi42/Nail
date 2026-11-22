@@ -9,11 +9,13 @@ import type {
   AccountStatus,
   FolderId,
   MessageId,
+  MessageTarget,
   PlatformInfo,
   ResolvedLayout,
   ResolvedTheme,
   SearchError,
   SearchHit,
+  SearchQuery,
   ThreadId,
 } from "../api/generated";
 import { normalizeLayout, normalizeTheme } from "../api/normalize";
@@ -55,6 +57,9 @@ export const queryKeys = {
   threads: (folderId: FolderId | null, pageSize: number) =>
     ["threads", folderId, pageSize] as const,
   allThreads: ["threads"] as const,
+  /** The true count of a selected whole list (`ResolveMailTargets`, ADR 0235). */
+  listCount: (target: string, total: number | null) => ["list-count", target, total] as const,
+  allListCounts: ["list-count"] as const,
   thread: (id: ThreadId | null) => ["thread", id] as const,
   /** P2: under the thread's key, so invalidating the thread refetches it. */
   conversation: (id: ThreadId | null, folderId: FolderId | null) =>
@@ -319,6 +324,54 @@ export function keepsSearchResults(
   return previous?.slice(2).every((part, i) => part === next[i + 2]) ?? false;
 }
 
+/**
+ * The core's query of a search scope: one page of the list's search, and
+ * the query a whole selected search names (`MailList::search`, ADR 0235;
+ * the core ignores the page there).
+ */
+export function searchQueryOf(
+  scope: SearchScope | null,
+  offset: number,
+  limit: number,
+): SearchQuery {
+  return {
+    text: scope?.text ?? "",
+    account_id: scope?.accountId ?? null,
+    folder_id: scope?.folderId ?? null,
+    offset,
+    limit,
+    sort: "date",
+  };
+}
+
+/**
+ * How many rows and messages a selected whole list holds (R5, ADR 0235):
+ * `ResolveMailTargets` of its list target with an action that reaches
+ * every message of a row (marking read changes nothing here). `total` is
+ * the list's own row count, so the count follows new and removed rows.
+ * `null` target = no list selected.
+ */
+export function useListCount(target: MessageTarget | null, total: number | null) {
+  const client = useClient();
+  const key = target === null ? "" : JSON.stringify(target);
+  return useQuery({
+    queryKey: queryKeys.listCount(key, total),
+    queryFn: async () =>
+      (
+        await client.request(
+          {
+            type: "ResolveMailTargets",
+            targets: target === null ? [] : [target],
+            action: { type: "mark-read", read: true },
+          },
+          "MailTargets",
+        )
+      ).resolution,
+    enabled: target !== null,
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useSearch(scope: SearchScope | null, pageSize: number) {
   const client = useClient();
   const key = queryKeys.search(
@@ -332,14 +385,7 @@ export function useSearch(scope: SearchScope | null, pageSize: number) {
     queryFn: async ({ pageParam }) => {
       const response = await client.call({
         type: "Search",
-        query: {
-          text: scope?.text ?? "",
-          account_id: scope?.accountId ?? null,
-          folder_id: scope?.folderId ?? null,
-          offset: pageParam,
-          limit: pageSize,
-          sort: "date",
-        },
+        query: searchQueryOf(scope, pageParam, pageSize),
       });
       if (response.type === "Error") throw new NailError(response.code, response.message);
       if (response.type === "InvalidQuery") {

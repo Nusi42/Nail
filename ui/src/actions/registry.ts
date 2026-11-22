@@ -33,7 +33,13 @@ import {
 } from "../features/mail-actions/run";
 import { setPendingMove } from "../features/mail-actions/move";
 import { contextTarget } from "../features/menus";
-import { currentTargets, hasTargets, listSelectionFor } from "./mailTargets";
+import {
+  currentTargets,
+  hasListTarget,
+  hasTargets,
+  listSelectionFor,
+  type ActionTargets,
+} from "./mailTargets";
 import type { UiStore } from "../state/uiStore";
 import { FOLDER_ROLES } from "../api/contract";
 
@@ -70,6 +76,19 @@ function selected(ctx: ActionContext): string[] {
 
 /** Whether a mail action has a target (the selection, a menu's row or card). */
 const hasSelection = (ctx: ActionContext) => hasTargets(ctx.store);
+
+/**
+ * Delete permanently asks first: a whole list ("select all", ADR 0235)
+ * through the confirmation of every action on a whole list (one question
+ * with the true count), anything else through "Delete permanently?".
+ */
+async function deletePermanently(ctx: ActionContext, targets: ActionTargets): Promise<void> {
+  if (hasListTarget(targets.targets)) {
+    await runMailAction(ctx, targets, { type: "delete-permanently" });
+    return;
+  }
+  await askDeletePermanently(ctx, targets);
+}
 
 /** The role of the folder the list shows (`null` while searching or unknown). */
 function listedRole(ctx: ActionContext): FolderRole | null {
@@ -161,7 +180,7 @@ export const builtinActions: Record<string, ActionHandler> = {
       const targets = currentTargets(ctx.store);
       // In Trash, Delete deletes for good: ask first, with the count.
       if (listedRole(ctx) === "trash") {
-        await askDeletePermanently(ctx, targets);
+        await deletePermanently(ctx, targets);
         return;
       }
       await runMailAction(ctx, targets, { type: "trash" });
@@ -170,7 +189,7 @@ export const builtinActions: Record<string, ActionHandler> = {
   },
   "mail.delete-permanently": {
     // Asks first (a modal confirmation with the message count).
-    run: (ctx) => askDeletePermanently(ctx, currentTargets(ctx.store)),
+    run: (ctx) => deletePermanently(ctx, currentTargets(ctx.store)),
     enabled: hasSelection,
   },
   "mail.toggle-read": {

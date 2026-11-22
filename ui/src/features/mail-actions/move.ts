@@ -6,7 +6,8 @@
  * R4 (ADR 0230): the window leaves out the folder the targets are already
  * in, and moving into Drafts, Trash or Junk asks first with the number of
  * messages the core resolved the targets to (`ResolveMailTargets`);
- * confirming moves exactly those messages.
+ * confirming moves exactly those messages. A whole list ("select all",
+ * ADR 0235) asks once with the true count (`./bulk.ts`).
  */
 import { currentTargets, listFolderOf, type ActionTargets } from "../../actions/mailTargets";
 import type {
@@ -115,7 +116,7 @@ export async function moveToFolder(
   const targets = pendingMove(ctx.store);
   pending.delete(ctx.store);
   const options: RunOptions =
-    resolution === undefined || resolution.message_ids.length === 0 ? {} : runOptionsOf(resolution);
+    resolution === undefined || resolution.messages === 0 ? {} : runOptionsOf(resolution);
   const result = await runMailAction(ctx, targets, moveAction(folderId), options);
   return result !== null;
 }
