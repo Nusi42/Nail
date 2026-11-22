@@ -531,6 +531,7 @@ impl McpData for FakeData {
                             .collect(),
                         conversations: 0,
                         undo_until: None,
+                        left_out: 0,
                     },
                 },
                 Request::UploadAttachment {

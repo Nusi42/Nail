@@ -6,6 +6,7 @@ import { createUiStore } from "../state/uiStore";
 import { menuStoreFor } from "../features/menus";
 import type { ContextTarget } from "../features/menus";
 import type { MailList } from "../api/generated";
+import { rowFolderOf } from "./rowTargets";
 import {
   currentTargets,
   hasListTarget,
@@ -185,6 +186,7 @@ describe("select all (R5, ADR 0235)", () => {
   it("names the list the message list pages: a folder's conversations or messages, or its search", () => {
     const base = {
       search: null,
+      typedSearch: false,
       folderId: INBOX,
       threadRows: true,
       conversations: true,
@@ -197,18 +199,29 @@ describe("select all (R5, ADR 0235)", () => {
     });
     expect(mailListOf({ ...base, folderId: null })).toBeNull();
     const search = { text: "from:ada is:unread", accountId: "acc", folderId: INBOX };
-    expect(mailListOf({ ...base, search })).toEqual({
+    const query = {
+      text: "from:ada is:unread",
+      account_id: "acc",
+      folder_id: INBOX,
+      offset: 0,
+      limit: 50,
+      sort: "date",
+    };
+    // A typed search: its conversation rows have no folder.
+    const typed = mailListOf({ ...base, search, typedSearch: true });
+    expect(typed).toEqual({
       source: "search",
-      query: {
-        text: "from:ada is:unread",
-        account_id: "acc",
-        folder_id: INBOX,
-        offset: 0,
-        limit: 50,
-        sort: "date",
-      },
+      query,
       conversations: true,
+      listed_folder_id: null,
     });
+    expect(rowFolderOf(typed)).toBeNull();
+    // A filter chip without a typed search: the folder's rows, filtered.
+    const chip = mailListOf({ ...base, search });
+    expect(chip).toEqual({ source: "search", query, conversations: true, listed_folder_id: INBOX });
+    expect(rowFolderOf(chip)).toBe(INBOX);
+    expect(rowFolderOf(LIST)).toBe(INBOX);
+    expect(rowFolderOf(null)).toBeNull();
   });
 
   it("Ctrl+A selects the whole list; actions get one list target; Esc and another list end it", () => {

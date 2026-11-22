@@ -20,6 +20,12 @@ export function toastMessage(toast: MailToast): {
 } {
   switch (toast.kind) {
     case "done":
+      if (toast.leftOut !== undefined && toast.leftOut > 0) {
+        return {
+          id: "mail-actions-done-partial",
+          args: { messages: toast.messages, left: toast.leftOut },
+        };
+      }
       if (toast.tags !== undefined) {
         return {
           id: `mail-actions-done-tags-${toast.tags.change}`,

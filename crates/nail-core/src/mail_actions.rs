@@ -93,6 +93,15 @@ pub(crate) fn agent_actor(actor: &ActionActor) -> String {
     }
 }
 
+/// What resolving a message row that is no longer stored does.
+#[derive(Debug, Clone, Copy)]
+enum Gone {
+    /// Fail with `not_found` (a message named one by one).
+    Fail,
+    /// Reach nothing (a whole list's rows and exceptions).
+    Skip,
+}
+
 /// The messages a set of targets resolves to.
 struct Resolved {
     messages: Vec<TargetMessage>,
@@ -162,7 +171,10 @@ impl Service {
             .filter(|t| !matches!(t, MessageTarget::List(_)))
             .cloned()
             .collect();
-        for (picked, reached) in self.resolve_rows(&rows, action, filter, &own).await? {
+        for (picked, reached) in self
+            .resolve_rows(&rows, action, filter, &own, Gone::Fail)
+            .await?
+        {
             if reached {
                 out.conversations += 1;
             }
@@ -177,17 +189,19 @@ impl Service {
                 None => fresh,
             };
             let except: HashSet<MessageId> = self
-                .resolve_rows(&list.except, action, filter, &own)
+                .resolve_rows(&list.except, action, filter, &own, Gone::Skip)
                 .await?
                 .into_iter()
                 .flat_map(|(picked, _)| picked.into_iter().map(|m| m.id))
                 .collect();
             let rows = self.mail_list_rows(&list.list, filter).await?;
-            let resolved = self.resolve_rows(&rows, action, filter, &own).await?;
+            let resolved = self
+                .resolve_rows(&rows, action, filter, &own, Gone::Skip)
+                .await?;
             for (row, (mut picked, _)) in rows.iter().zip(resolved) {
                 picked.retain(|m| {
                     !except.contains(&m.id)
-                        && mark.is_none_or(|mark| m.row <= mark)
+                        && mark.is_none_or(|mark| m.listed_seq <= mark)
                         && within(filter, &m.folder_id, &m.account_id)
                 });
                 if matches!(row, MessageTarget::Conversation(_)) && !picked.is_empty() {
@@ -218,7 +232,10 @@ impl Service {
     }
 
     /// The messages each row target (a message or a conversation) reaches,
-    /// in order, and whether it is a conversation that reached one. Trash
+    /// in order, and whether it is a conversation that reached one. A
+    /// message row no longer stored fails with `not_found`, or reaches
+    /// nothing with [`Gone::Skip`] (a whole list's rows and exceptions: a
+    /// message removed meanwhile is simply gone). Trash
     /// never deletes for good: for Trash, messages already in Trash are
     /// left out (Delete permanently has its own scope and question). The
     /// rows are read [`ROWS_PER_STORE_CALL`] at a time, so a list of tens
@@ -230,6 +247,7 @@ impl Service {
         action: &MailAction,
         filter: Option<&FolderFilter>,
         own: &OwnAddresses,
+        gone: Gone,
     ) -> Result<Vec<(Vec<TargetMessage>, bool)>> {
         let mut scopes: HashMap<FolderId, ConversationFolders> = HashMap::new();
         for row in rows {
@@ -274,7 +292,12 @@ impl Service {
                                 (picked, true)
                             }
                             MessageTarget::Message { message_id } => {
-                                (s.target_messages(std::slice::from_ref(message_id))?, false)
+                                let id = std::slice::from_ref(message_id);
+                                let picked = match gone {
+                                    Gone::Fail => s.target_messages(id)?,
+                                    Gone::Skip => s.stored_target_messages(id)?,
+                                };
+                                (picked, false)
                             }
                             MessageTarget::List(_) => (Vec::new(), false),
                         };
@@ -503,6 +526,19 @@ impl Service {
         actor: &str,
     ) -> Result<MailActionResult> {
         let resolved = self.resolve_targets(targets, &action, filter, None).await?;
+        self.apply_resolved(&resolved, action, actor, MAIL_ACTION_PART_MESSAGES)
+            .await
+    }
+
+    /// Applies resolved messages in parts of `part_size` (see
+    /// [`Self::apply_mail_action`]).
+    async fn apply_resolved(
+        &self,
+        resolved: &Resolved,
+        action: MailAction,
+        actor: &str,
+        part_size: usize,
+    ) -> Result<MailActionResult> {
         if resolved.messages.is_empty() {
             return Err(issue(MailActionIssue::NoMessages, "no messages to act on").into());
         }
@@ -515,22 +551,12 @@ impl Service {
         let mut message_ids: Vec<MessageId> = Vec::new();
         let mut named: HashSet<MessageId> = HashSet::new();
         let mut done: Vec<&TargetMessage> = Vec::new();
-        for (n, part) in resolved
-            .messages
-            .chunks(MAIL_ACTION_PART_MESSAGES)
-            .enumerate()
-        {
+        let mut left_out = 0_usize;
+        let parts: Vec<&[TargetMessage]> = resolved.messages.chunks(part_size.max(1)).collect();
+        for (n, part) in parts.iter().copied().enumerate() {
             let part_ids = || part.iter().map(|m| m.id.clone()).collect::<Vec<_>>();
-            let applied = match self
-                .apply_part(
-                    part,
-                    &action,
-                    now,
-                    (actor, resolved.conversations, undoable),
-                    batch,
-                )
-                .await
-            {
+            let who = (actor, resolved.conversations, undoable);
+            let applied = match self.apply_part(part, &action, now, who, batch).await {
                 Ok(applied) => applied,
                 Err(err) => {
                     if snooze {
@@ -539,7 +565,10 @@ impl Service {
                     if n == 0 {
                         return Err(err);
                     }
-                    tracing::warn!(%err, part = n, "a later part of a mail action failed; the parts done stay");
+                    // The parts done stay applied and undoable; the answer
+                    // says how many messages were left as they were.
+                    left_out = parts[n..].iter().map(|p| p.len()).sum();
+                    tracing::warn!(%err, part = n, left_out, "a later part of a mail action failed; the parts done stay");
                     break;
                 }
             };
@@ -586,13 +615,20 @@ impl Service {
             message_ids,
             conversations: resolved.conversations,
             undo_until: batch.map(|_| nail_util::time::rfc3339_utc(now.saturating_add(undo_secs))),
+            left_out: u32::try_from(left_out).unwrap_or(u32::MAX),
         })
     }
 
     /// Plans and applies one part of a mail action in one store
     /// transaction, joining `into` (the batch of the parts before).
     /// `None` when the part plans no operation. `who` = the actor, the
-    /// action's conversations and whether it is still undoable.
+    /// action's conversations and whether it is still undoable. Messages
+    /// removed since the action was resolved (deleted elsewhere, expunged
+    /// by the sync) are left out, not an error: before planning, and in
+    /// the transaction itself ([`Store::apply_mail_batch_part`]); a message
+    /// that vanishes while the part is planned makes it plan once more.
+    ///
+    /// [`Store::apply_mail_batch_part`]: nail_store::Store::apply_mail_batch_part
     async fn apply_part(
         &self,
         part: &[TargetMessage],
@@ -601,7 +637,49 @@ impl Service {
         who: (&str, u32, bool),
         into: Option<i64>,
     ) -> Result<Option<(Vec<Operation>, MailBatchApplied)>> {
-        let operations = self.plan_mail_action(part, action).await?;
+        let mut retried = false;
+        loop {
+            let stored = self.still_stored(part).await?;
+            if stored.is_empty() {
+                return Ok(None);
+            }
+            match self.plan_mail_action(&stored, action).await {
+                Ok(operations) => {
+                    return self.apply_planned(operations, action, now, who, into).await;
+                }
+                Err(err) if !retried && err.code() == ErrorCode::NotFound => retried = true,
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
+    /// The messages of `part` still stored (one store call).
+    async fn still_stored(&self, part: &[TargetMessage]) -> Result<Vec<TargetMessage>> {
+        let ids: Vec<MessageId> = part.iter().map(|m| m.id.clone()).collect();
+        let stored: HashSet<MessageId> = self
+            .inner
+            .store
+            .call(move |s| s.stored_target_messages(&ids))
+            .await?
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        Ok(part
+            .iter()
+            .filter(|m| stored.contains(&m.id))
+            .cloned()
+            .collect())
+    }
+
+    /// Applies a part's planned operations in one store transaction.
+    async fn apply_planned(
+        &self,
+        operations: Vec<Operation>,
+        action: &MailAction,
+        now: i64,
+        who: (&str, u32, bool),
+        into: Option<i64>,
+    ) -> Result<Option<(Vec<Operation>, MailBatchApplied)>> {
         if operations.is_empty() {
             return Ok(None);
         }
@@ -625,6 +703,12 @@ impl Service {
                 )
             })
             .await?;
+        // Operations on messages that vanished in the transaction were
+        // never queued: the answer names what was done.
+        let operations = operations
+            .into_iter()
+            .filter(|op| !applied.gone.contains(op.message_id()))
+            .collect();
         Ok(Some((operations, applied)))
     }
 
@@ -718,6 +802,120 @@ impl Service {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::TempService;
+    use nail_api::testing;
+
+    /// Plain messages `ids` in `folder` of `account`, as the action resolved
+    /// them.
+    fn stored(t: &TempService, account: &str, folder: &str, ids: &[&str]) -> Vec<TargetMessage> {
+        let store = t.service.store();
+        let messages: Vec<nail_store::StoredMessage> = ids
+            .iter()
+            .map(|id| nail_store::StoredMessage::new(testing::summary(id, account, folder)))
+            .collect();
+        store.upsert_messages(&messages).unwrap();
+        let ids: Vec<MessageId> = ids.iter().map(|id| MessageId::from(*id)).collect();
+        store.target_messages(&ids).unwrap()
+    }
+
+    fn resolved(messages: Vec<TargetMessage>) -> Resolved {
+        Resolved {
+            messages,
+            conversations: 0,
+        }
+    }
+
+    fn inbox(t: &TempService) -> FolderId {
+        t.service
+            .store()
+            .folder_with_role(&crate::demo::DEMO_ACCOUNT_ID.into(), FolderRole::Inbox)
+            .unwrap()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_message_of_a_later_part_that_vanished_is_left_out() {
+        let t = TempService::seeded();
+        let inbox = inbox(&t);
+        let messages = stored(
+            &t,
+            crate::demo::DEMO_ACCOUNT_ID,
+            inbox.as_str(),
+            &["g-1", "g-2", "g-3"],
+        );
+        // The sync expunges g-2 while the first part runs.
+        assert!(t.service.store().delete_message(&"g-2".into()).unwrap());
+        for part_size in [1, 2] {
+            let result = t
+                .service
+                .apply_resolved(
+                    &resolved(messages.clone()),
+                    MailAction::Flag {
+                        flagged: part_size == 1,
+                    },
+                    USER_ACTOR,
+                    part_size,
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                result.message_ids,
+                [MessageId::from("g-1"), MessageId::from("g-3")],
+                "parts of {part_size}"
+            );
+            assert_eq!(result.left_out, 0);
+            assert!(result.batch_id.is_some(), "one undoable batch");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_later_part_that_fails_is_reported_as_left_out() {
+        let t = TempService::seeded();
+        let store = t.service.store();
+        // A second account without an Archive folder: its part fails.
+        store
+            .upsert_account(&testing::account("other", nail_api::AccountKind::Local))
+            .unwrap();
+        store
+            .upsert_folder(&testing::folder(
+                "other-In",
+                "other",
+                "INBOX",
+                FolderRole::Inbox,
+            ))
+            .unwrap();
+        store
+            .upsert_folder(&testing::folder(
+                "demo-Arch",
+                crate::demo::DEMO_ACCOUNT_ID,
+                "Archived",
+                FolderRole::Archive,
+            ))
+            .unwrap();
+        let inbox = inbox(&t);
+        let mut messages = stored(&t, crate::demo::DEMO_ACCOUNT_ID, inbox.as_str(), &["p-1"]);
+        messages.extend(stored(&t, "other", "other-In", &["p-2", "p-3"]));
+        let result = t
+            .service
+            .apply_resolved(
+                &resolved(messages.clone()),
+                MailAction::Archive,
+                USER_ACTOR,
+                1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.message_ids, [MessageId::from("p-1")]);
+        assert_eq!(result.left_out, 2, "the failed part and the one after it");
+        assert!(result.batch_id.is_some(), "the part done stays undoable");
+        // A failure in the first part fails the action (nothing changed).
+        messages.reverse();
+        let first = t
+            .service
+            .apply_resolved(&resolved(messages), MailAction::Archive, USER_ACTOR, 1)
+            .await;
+        assert!(first.is_err());
+    }
 
     #[test]
     fn actors_are_named_by_kind() {

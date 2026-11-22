@@ -44,7 +44,11 @@ queue summary back at zero).
   without a mark is the list as it is when the request runs. A message the
   sync stores anew after the mark (for example under a new id) counts as
   later and is left out too: the mark only ever narrows an action.
-- Known limit: SQLite may hand the `rowid` of the newest message, when that
+- Amended by ADR 0238: the mark is now a monotonic number of when each
+  message entered its folder (schema v24, `listed_seq`), so a message moved
+  into the list after the count is left out too, and the limit below is
+  gone.
+- Known limit (before ADR 0238): SQLite may hand the `rowid` of the newest message, when that
   message is deleted, to the next one stored. Mail that arrives just after
   such a deletion can then share the mark's number and be included. This
   needs the newest message deleted between the confirmation and the apply,
@@ -67,7 +71,9 @@ queue summary back at zero).
 - A failure in the first part fails the action as before (nothing changed).
   A failure in a later part stops the action: the parts done stay applied,
   queued and undoable, the answer names exactly what was done
-  (`message_ids`, `op_ids`, the batch), and a WARN line is logged. The rows
+  (`message_ids`, `op_ids`, the batch), and a WARN line is logged. ADR 0238:
+  the answer also counts what was left (`left_out`), and a message that
+  vanished meanwhile is skipped instead of failing its part. The rows
   left over stay in the list, so the user sees them and can act again.
 - `UndoMailAction` undoes in parts of the same size:
   `Store::undo_mail_batch_part` queues the newest inverses and marks the

@@ -20,7 +20,9 @@
  * (`./move.ts`, `../../widgets/FolderPicker.tsx`).
  * R5 (ADR 0235): `list.select-all` (Ctrl+A / Cmd+A in the list, the palette,
  * the row's menu) selects the whole list, rows not loaded yet included;
- * `list.clear-selection` (Esc) ends it. Every action on it sends one list
+ * `list.clear-selection` (Esc) ends it; `list.toggle-row` (Ctrl+Space) leaves
+ * the selected row out or takes it back, the keyboard's Ctrl + click
+ * (`../../widgets/messageListControl.ts`). Every action on it sends one list
  * target and asks once with the true count (`./bulk.ts`,
  * `./BulkConfirm.tsx`); texts in `locales/{en,de}/list-selection.ftl`.
  * Texts: `locales/{en,de}/mail-actions.ftl` (labels of what was done:
@@ -29,6 +31,7 @@
  */
 import { listSelectionFor, messageTarget } from "../../actions/mailTargets";
 import { MAIL_AVAILABILITY as MAIL, type ActionInfo } from "../../actions/palette";
+import { currentListControl } from "../../widgets/messageListControl";
 import type { Feature } from "../types";
 import { BULK_CONFIRM_DIALOG } from "./bulk";
 import { BulkConfirmDialog } from "./BulkConfirm";
@@ -39,6 +42,9 @@ import { MailActionToast } from "./Toast";
 export const SELECT_ALL_ACTION = "list.select-all";
 /** Ends "select all" and drops the picked rows (Esc in the list). */
 export const CLEAR_SELECTION_ACTION = "list.clear-selection";
+
+/** Leaves the selected row out of "select all" or takes it back (Ctrl+Space). */
+export const TOGGLE_ROW_ACTION = "list.toggle-row";
 
 /** Moves a non-draft out of a Drafts folder into its account's Inbox. */
 export const MOVE_OUT_OF_DRAFTS_ACTION = "mail.move-out-of-drafts";
@@ -63,6 +69,12 @@ export const actions: Feature["actions"] = {
       return all !== null || picked.length > 0;
     },
   },
+  [TOGGLE_ROW_ACTION]: {
+    run: () => {
+      currentListControl()?.toggleRow();
+    },
+    enabled: () => currentListControl() !== null,
+  },
   [MOVE_OUT_OF_DRAFTS_ACTION]: {
     // Only the selected message: the open menu's row, the picked rows or
     // its conversation may hold real drafts, which stay where they are.
@@ -85,13 +97,16 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
     title: "message-list-action-select-all",
     keywords: "message-list-action-select-all-keywords",
     availability: ["list"],
-    icon: "list-checks",
   },
   [CLEAR_SELECTION_ACTION]: {
     title: "message-list-action-clear-selection",
     keywords: "message-list-action-clear-selection-keywords",
     availability: ["list"],
-    icon: "square-check-big",
+  },
+  [TOGGLE_ROW_ACTION]: {
+    title: "message-list-action-toggle-row",
+    keywords: "message-list-action-toggle-row-keywords",
+    availability: ["list"],
   },
   "mail.mark-read": {
     title: "mail-actions-action-mark-read",

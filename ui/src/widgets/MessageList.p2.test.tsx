@@ -306,10 +306,13 @@ describe("rows that open into their messages (Design B)", () => {
     await settleQueries(env);
   });
 
-  it("has no list control while the list does not expand", async () => {
+  it("offers no expand / collapse while the list does not expand", async () => {
     const env = setup("collapsed");
     await nightingale();
-    expect(currentListControl()).toBeNull();
+    const control = currentListControl();
+    expect(control?.toggleRow).toBeTypeOf("function");
+    expect(control?.expand).toBeUndefined();
+    expect(control?.collapse).toBeUndefined();
     await settleQueries(env);
   });
 });

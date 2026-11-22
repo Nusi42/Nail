@@ -15,7 +15,7 @@ import { must } from "../../test/must";
 import { INBOX } from "../../test/mockIds";
 import { listSelectionFor } from "../../actions/mailTargets";
 import { BULK_CONFIRM_DIALOG } from "./bulk";
-import { CLEAR_SELECTION_ACTION, SELECT_ALL_ACTION } from "./index";
+import { CLEAR_SELECTION_ACTION, SELECT_ALL_ACTION, TOGGLE_ROW_ACTION } from "./index";
 
 appWindowEachTest();
 
@@ -30,6 +30,7 @@ const SELECT_KEYS: KeyBinding[] = [
   { context: "list", key: "ctrl+a", action: SELECT_ALL_ACTION, args: [] },
   { context: "list", key: "meta+a", action: SELECT_ALL_ACTION, args: [] },
   { context: "list", key: "escape", action: CLEAR_SELECTION_ACTION, args: [] },
+  { context: "list", key: "ctrl+space", action: TOGGLE_ROW_ACTION, args: [] },
 ];
 
 function renderInbox(): Env {
@@ -47,6 +48,10 @@ const list = () => must(document.querySelector<HTMLElement>('[data-part="message
 const rows = () => [...document.querySelectorAll<HTMLElement>('[data-part="message-list.row"]')];
 const summary = () =>
   document.querySelector<HTMLElement>('[data-part="message-list.selection-summary"]');
+/** The polite live region beside the list box (screen readers). */
+const announcer = () =>
+  must(document.querySelector<HTMLElement>('[data-part="message-list.announcer"]'));
+const selectedCount = () => rows().filter((r) => r.getAttribute("aria-selected") === "true").length;
 const applies = (env: Env) =>
   env.transport.requests.filter(
     (r): r is Extract<Request, { type: "ApplyMailAction" }> => r.type === "ApplyMailAction",
@@ -91,11 +96,18 @@ describe("select all in the message list (R5)", () => {
     const total = conversationCount(env);
     expect(total).toBeGreaterThan(100);
 
+    // The live region is there (empty) before Ctrl+A, outside the list
+    // box, so the change is announced and the list box holds options only.
+    expect(announcer()).toHaveTextContent("");
+    expect(announcer()).toHaveAttribute("aria-live", "polite");
+    expect(listBox.contains(announcer())).toBe(false);
     fireEvent.keyDown(listBox, { key: "a", ctrlKey: true });
     await eventually(() => {
       expect(summary()).toHaveTextContent(`All ${String(total)} selected`);
     });
-    expect(summary()).toHaveAttribute("aria-live", "polite");
+    expect(announcer()).toHaveTextContent(`All ${String(total)} selected`);
+    expect(summary()).not.toHaveAttribute("aria-live");
+    expect(await violations(must(listBox.parentElement))).toEqual([]);
     expect(rows().every((r) => r.getAttribute("aria-selected") === "true")).toBe(true);
     // The count comes from the core.
     expect(env.transport.requests.some((r) => r.type === "ResolveMailTargets")).toBe(true);
@@ -146,6 +158,7 @@ describe("select all in the message list (R5)", () => {
     await eventually(() => {
       expect(summary()).toBeNull();
     });
+    expect(announcer()).toHaveTextContent("Selection cleared");
     expect(listSelectionFor(env.store).getState().all).toBeNull();
     expect(rows().filter((r) => r.getAttribute("aria-selected") === "true").length).toBeLessThan(2);
   });
@@ -172,5 +185,76 @@ describe("select all in the message list (R5)", () => {
       expect(summary()).toBeNull();
     });
     expect(listSelectionFor(env.store).getState().all).toBeNull();
+  });
+
+  it("Ctrl+Space leaves the selected row out and takes it back; Shift+Arrow keeps the whole list", async () => {
+    const env = renderInbox();
+    const listBox = await focusedList(env);
+    const total = conversationCount(env);
+    await pressSelectAll(listBox);
+    // The first row is the selected one: Ctrl+Space leaves it out.
+    const first = must(rows()[0]);
+    fireEvent.keyDown(listBox, { key: " ", code: "Space", ctrlKey: true });
+    await eventually(() => {
+      expect(first).toHaveAttribute("aria-selected", "false");
+    });
+    await eventually(() => {
+      expect(summary()).toHaveTextContent(`All ${String(total - 1)} selected`);
+    });
+    fireEvent.keyDown(listBox, { key: " ", code: "Space", ctrlKey: true });
+    await eventually(() => {
+      expect(first).toHaveAttribute("aria-selected", "true");
+    });
+    // Shift+Arrow under "select all" works like Shift + click: the rows
+    // are left out, the whole list stays selected.
+    fireEvent.keyDown(listBox, { key: "ArrowDown", shiftKey: true });
+    await eventually(() => {
+      expect(must(rows()[1])).toHaveAttribute("aria-selected", "false");
+    });
+    expect(listSelectionFor(env.store).getState().all).not.toBeNull();
+    expect(summary()).not.toBeNull();
+    expect(selectedCount()).toBe(rows().length - 2);
+    await eventually(() => {
+      expect(summary()).toHaveTextContent(`All ${String(total - 2)} selected`);
+    });
+  });
+
+  it("the row's menu selects the whole list", async () => {
+    const env = renderInbox();
+    await focusedList(env);
+    const total = conversationCount(env);
+    fireEvent.contextMenu(must(rows()[2]), { clientX: 40, clientY: 50, button: 2 });
+    const menu = await screen.findByRole("menu", { name: "Message actions" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /Select all/ }));
+    await eventually(() => {
+      expect(summary()).toHaveTextContent(`All ${String(total)} selected`);
+    });
+    expect(selectedCount()).toBe(rows().length);
+  });
+
+  it("one row left of a list says how many are selected, not that the list has one row", async () => {
+    const env = renderInbox();
+    const listBox = await focusedList(env);
+    await pressSelectAll(listBox);
+    const selection = listSelectionFor(env.store).getState();
+    const all = must(selection.all);
+    // Leave out every conversation but one (the core counts them).
+    const threads = [...new Set(inboxMessages(env).map((m) => m.thread_id))];
+    act(() => {
+      listSelectionFor(env.store)
+        .getState()
+        .setExcept(
+          threads.slice(1).map((thread, n) => ({
+            key: `left-${String(n)}`,
+            messageId: must(inboxMessages(env).find((m) => m.thread_id === thread)).id,
+            threadId: thread,
+            child: false,
+          })),
+        );
+    });
+    expect(all.list).toEqual(must(listSelectionFor(env.store).getState().all).list);
+    await eventually(() => {
+      expect(summary()).toHaveTextContent(/^1 selected$/);
+    });
   });
 });

@@ -6,9 +6,10 @@ import type { MessageTarget } from "./MessageTarget";
  * A whole message list except some rows ([`MessageTarget::List`]).
  *
  * The core lists the rows exactly as the message list pages them and
- * treats each row as the target it stands for in the list: a conversation
- * row as [`MessageTarget::Conversation`] (with the listed folder; without
- * a folder in a search), a message row as [`MessageTarget::Message`]. The
+ * treats each row as the target it stands for in the list
+ * ([`MailList::row_target`], the same rule as the UI's `rowTarget`): a
+ * conversation row as [`MessageTarget::Conversation`] with
+ * [`MailList::row_folder_id`], a message row as [`MessageTarget::Message`]. The
  * action reaches the rows' messages minus the messages the `except`
  * targets resolve to; a conversation counts when one of its messages is
  * left.

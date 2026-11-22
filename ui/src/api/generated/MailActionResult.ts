@@ -35,4 +35,10 @@ conversations: number,
  * Until when the batch can be undone (RFC 3339); `null` with
  * `batch_id`.
  */
-undo_until: string | null, };
+undo_until: string | null, 
+/**
+ * Messages the action did not reach because a later part of a large
+ * action failed (R5): they stay as they were, and the UI says so.
+ * Messages that vanished meanwhile (deleted elsewhere) are not counted.
+ */
+left_out: number, };

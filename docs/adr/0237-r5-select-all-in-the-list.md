@@ -36,7 +36,8 @@ first ("destructive or above a threshold, decide and document").
   (the built-in mail actions, move, tags, snooze, junk) therefore sends the
   list target without changes of its own.
 - "All N selected" (`message-list-all-selected`) sits at the top of the
-  list (`message-list.selection-summary`, `aria-live="polite"`): the core's
+  list (`message-list.selection-summary`; ADR 0238 moved the live region
+  beside the list box: `message-list.announcer`): the core's
   count (`ResolveMailTargets` of the list target with `mark-read`, whose
   reach keeps every message of a row: `conversations` for a list of
   conversations, `messages` otherwise; `useListCount`, refetched after

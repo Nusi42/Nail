@@ -34,6 +34,11 @@ export type MailToast =
       batchId: MailBatchId | null;
       /** A tag change: what it did, to how many tags, and what they are called. */
       tags?: TagToast | undefined;
+      /**
+       * Messages a large action did not reach because a later part failed
+       * (`MailActionResult::left_out`); they stay as they were.
+       */
+      leftOut?: number | undefined;
     }
   | { kind: "undone"; seq: number }
   | { kind: "error"; seq: number; message: LocalizedMessage };

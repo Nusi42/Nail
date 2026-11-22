@@ -726,6 +726,32 @@ fn mail_actions_vectors() {
         let parsed: MailList = from(&list);
         v.case("listFolderOf", json!([list]), parsed.folder_id());
     }
+    // The target a row of a whole list stands for (`MailList::row_target`,
+    // the UI's `listRowTarget` / `rowTarget`): a filter chip's conversation
+    // rows keep their folder, a typed search's have none.
+    let chip = |listed: Option<&str>, conversations: bool| {
+        json!({ "source": "search", "query": search(Some("f3")), "conversations": conversations,
+                "listed_folder_id": listed })
+    };
+    for list in [
+        json!({ "source": "conversations", "folder_id": "f1" }),
+        json!({ "source": "messages", "folder_id": "f2" }),
+        chip(Some("f3"), true),
+        chip(None, true),
+        chip(Some("f3"), false),
+    ] {
+        let parsed: MailList = from(&list);
+        v.case("rowFolderOf", json!([list]), parsed.row_folder_id());
+        for thread in [Some("t1"), None] {
+            let message = nail_api::MessageId::from("m1");
+            let thread_id = thread.map(nail_api::ThreadId::from);
+            v.case(
+                "listRowTarget",
+                json!([list, { "messageId": "m1", "threadId": thread }]),
+                parsed.row_target(&message, thread_id.as_ref()),
+            );
+        }
+    }
     v.check("mail-actions");
 }
 

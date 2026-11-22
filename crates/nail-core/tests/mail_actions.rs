@@ -971,6 +971,7 @@ async fn a_search_list_is_every_local_hit() {
             MailList::Search {
                 query: query.clone(),
                 conversations,
+                listed_folder_id: None,
             },
             vec![],
         )]
@@ -1094,6 +1095,32 @@ fn store_messages(f: &Fixture, folder: &FolderId, prefix: &str, n: usize) -> Vec
     messages.into_iter().map(|m| m.summary.id).collect()
 }
 
+/// Counts `list` again with the confirmation's `mark` (expecting the
+/// `counted` messages and the same mark), then moves it to Trash with it.
+async fn trash_with_mark(
+    f: &Fixture,
+    list: MailList,
+    mark: String,
+    counted: u32,
+) -> MailActionResult {
+    let again = resolve(
+        f,
+        vec![list_at(list.clone(), vec![], Some(mark.clone()))],
+        MailAction::Trash,
+    )
+    .await;
+    assert_eq!(again.messages, counted, "not counted with the mark");
+    assert_eq!(again.as_of.as_ref(), Some(&mark), "the list's own mark");
+    let result = apply(
+        f,
+        vec![list_at(list, vec![], Some(mark))],
+        MailAction::Trash,
+    )
+    .await;
+    assert_eq!(u32::try_from(result.message_ids.len()).unwrap(), counted);
+    result
+}
+
 fn folder_total(f: &Fixture, folder: &FolderId) -> u32 {
     f.service.store().list_messages(folder, 0, 1).unwrap().total
 }
@@ -1127,14 +1154,6 @@ async fn the_as_of_mark_keeps_mail_that_arrived_after_the_count_out() {
         // Mail that arrives after the confirmation is not counted with the
         // mark, and not acted on with it.
         let late = store_messages(&f, &inbox.id, &format!("late-{round}"), 1);
-        let again = resolve(
-            &f,
-            vec![list_at(list.clone(), vec![], Some(mark.clone()))],
-            MailAction::Trash,
-        )
-        .await;
-        assert_eq!(again.messages, reached);
-        assert_eq!(again.as_of.as_ref(), Some(&mark), "the list's own mark");
         let fresh = resolve(
             &f,
             vec![list_at(list.clone(), vec![], None)],
@@ -1142,13 +1161,7 @@ async fn the_as_of_mark_keeps_mail_that_arrived_after_the_count_out() {
         )
         .await;
         assert_eq!(fresh.messages, reached + 1, "without the mark it counts");
-        let result = apply(
-            &f,
-            vec![list_at(list, vec![], Some(mark))],
-            MailAction::Trash,
-        )
-        .await;
-        assert_eq!(u32::try_from(result.message_ids.len()).unwrap(), reached);
+        let result = trash_with_mark(&f, list, mark, reached).await;
         assert!(!result.message_ids.contains(&late[0]));
         assert_eq!(folder_total(&f, &inbox.id), 1, "only the late message");
         undo(&f, result.batch_id.unwrap()).await;
@@ -1280,12 +1293,13 @@ async fn a_filter_chip_list_is_its_search_minus_the_deselected_hits() {
     let f = setup();
     f.service.rebuild_search_index().unwrap();
     let inbox = demo_folder(&f.service, FolderRole::Inbox);
-    // The "Unread" chip on the Inbox: its term within the folder.
+    // The "Unread" chip on the Inbox: its term within the folder; its rows
+    // are listed in the Inbox (the UI's `listed_folder_id`).
     let mut query = SearchQuery::new("is:unread", 1000);
     query.folder_id = Some(inbox.id.clone());
     let hits = hits_of(&f, &query).await;
     assert!(hits.len() > 2, "{hits:?}");
-    let chip = |conversations, except| {
+    let search = |conversations, listed: Option<FolderId>, except| {
         vec![MessageTarget::list(
             MailList::Search {
                 query: SearchQuery {
@@ -1293,10 +1307,12 @@ async fn a_filter_chip_list_is_its_search_minus_the_deselected_hits() {
                     ..query.clone()
                 },
                 conversations,
+                listed_folder_id: listed,
             },
             except,
         )]
     };
+    let chip = |conversations, except| search(conversations, Some(inbox.id.clone()), except);
     let archive = MailAction::Archive;
     let all = resolve(&f, chip(false, vec![]), archive.clone()).await;
     assert_eq!(usize::try_from(all.messages).unwrap(), hits.len());
@@ -1304,11 +1320,16 @@ async fn a_filter_chip_list_is_its_search_minus_the_deselected_hits() {
     let but_one = resolve(&f, chip(false, vec![first]), archive.clone()).await;
     assert_eq!(but_one.messages, all.messages - 1);
     // As conversations (a list with conversations): each hit stands for
-    // its conversation without a folder; a deselected conversation row
-    // leaves out all of its messages.
+    // its conversation in the Inbox, exactly as the UI sends the row picked
+    // alone; a deselected conversation row leaves out all of its messages.
     let rows: Vec<MessageTarget> = hits
         .iter()
-        .map(|h| MessageTarget::conversation(h.message.thread_id.clone().unwrap(), None))
+        .map(|h| {
+            MessageTarget::conversation(
+                h.message.thread_id.clone().unwrap(),
+                Some(inbox.id.clone()),
+            )
+        })
         .collect();
     let one_by_one = resolve(&f, rows.clone(), archive.clone()).await;
     let threads = resolve(&f, chip(true, vec![]), archive.clone()).await;
@@ -1317,11 +1338,149 @@ async fn a_filter_chip_list_is_its_search_minus_the_deselected_hits() {
         (one_by_one.messages, one_by_one.conversations)
     );
     let first_row = resolve(&f, vec![rows[0].clone()], archive.clone()).await;
-    let without_first = resolve(&f, chip(true, vec![rows[0].clone()]), archive).await;
+    let without_first = resolve(&f, chip(true, vec![rows[0].clone()]), archive.clone()).await;
     assert_eq!(
         without_first.messages,
         threads.messages - first_row.messages
     );
+
+    // A copy of the first conversation in another folder: the chip's rows
+    // reach only their Inbox messages, like the rows picked alone, and a
+    // typed search's rows (no folder) reach the copy too.
+    let projects = FolderId::new("demo-Projects");
+    f.service
+        .store()
+        .upsert_folder(&nail_api::testing::folder(
+            projects.as_str(),
+            DEMO_ACCOUNT_ID,
+            "Projects",
+            FolderRole::Other,
+        ))
+        .unwrap();
+    let parent = f
+        .service
+        .store()
+        .message_meta(&hits[0].message.id)
+        .unwrap()
+        .message_id
+        .unwrap();
+    f.service
+        .store()
+        .merge_messages(&[nail_store::SyncedMessage {
+            message: nail_store::StoredMessage::new(nail_api::testing::summary(
+                "projects-copy",
+                DEMO_ACCOUNT_ID,
+                projects.as_str(),
+            )),
+            meta: Some(nail_store::MessageMeta {
+                message_id: Some("projects-copy@example.org".into()),
+                in_reply_to: vec![parent],
+                references: Vec::new(),
+                size: None,
+                remote_thread_id: None,
+            }),
+        }])
+        .unwrap();
+    assert_eq!(
+        f.service
+            .store()
+            .thread_of(&MessageId::from("projects-copy"))
+            .unwrap(),
+        hits[0].message.thread_id.clone().unwrap(),
+        "the copy joined the first conversation"
+    );
+    let chip_after = resolve(&f, chip(true, vec![]), archive.clone()).await;
+    assert_eq!(chip_after.messages, threads.messages, "the copy stays out");
+    let row_after = resolve(&f, vec![rows[0].clone()], archive.clone()).await;
+    assert_eq!(row_after.messages, first_row.messages);
+    let typed = resolve(&f, search(true, None, vec![]), archive).await;
+    assert!(
+        typed.messages > threads.messages,
+        "without a folder the copy counts: {} vs {}",
+        typed.messages,
+        threads.messages
+    );
+}
+
+#[tokio::test]
+async fn the_as_of_mark_keeps_mail_moved_into_the_list_after_the_count_out() {
+    let f = setup();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let before = folder_total(&f, &inbox.id);
+    // A message elsewhere (snoozed, archived, in another folder) ...
+    let elsewhere = FolderId::new("demo-Elsewhere");
+    f.service
+        .store()
+        .upsert_folder(&nail_api::testing::folder(
+            elsewhere.as_str(),
+            DEMO_ACCOUNT_ID,
+            "Elsewhere",
+            FolderRole::Other,
+        ))
+        .unwrap();
+    let woken = store_messages(&f, &elsewhere, "woken", 1);
+    let list = MailList::Messages {
+        folder_id: inbox.id.clone(),
+    };
+    let counted = resolve(
+        &f,
+        vec![list_at(list.clone(), vec![], None)],
+        MailAction::Trash,
+    )
+    .await;
+    assert_eq!(counted.messages, before);
+    let mark = counted.as_of.clone().unwrap();
+    // ... comes into the Inbox while the question is open (a snooze waking
+    // up, an undo, a rule: a queued move).
+    let moved = f
+        .service
+        .handle(Request::MoveMessages {
+            message_ids: woken.clone(),
+            target: MoveTarget::FolderId(inbox.id.clone()),
+        })
+        .await;
+    assert!(matches!(moved, Response::Queued { .. }), "{moved:?}");
+    assert_eq!(folder_total(&f, &inbox.id), before + 1);
+    let result = trash_with_mark(&f, list, mark, before).await;
+    assert!(
+        !result.message_ids.contains(&woken[0]),
+        "never touched unasked"
+    );
+    assert_eq!(folder_total(&f, &inbox.id), 1, "only the message moved in");
+}
+
+#[tokio::test]
+async fn a_message_gone_from_a_list_or_its_exceptions_is_no_error() {
+    let f = setup();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let ids = store_messages(&f, &inbox.id, "gone", 2);
+    let total = folder_total(&f, &inbox.id);
+    let list = MailList::Messages {
+        folder_id: inbox.id.clone(),
+    };
+    // A message row left out, then deleted elsewhere and synced away.
+    let except = vec![MessageTarget::message(ids[0].clone())];
+    assert!(f.service.store().delete_message(&ids[0]).unwrap());
+    let read = MailAction::MarkRead { read: true };
+    let counted = resolve(
+        &f,
+        vec![list_at(list.clone(), except.clone(), None)],
+        read.clone(),
+    )
+    .await;
+    assert_eq!(counted.messages, total - 1);
+    let result = apply(&f, vec![list_at(list, except, None)], read).await;
+    assert_eq!(u32::try_from(result.message_ids.len()).unwrap(), total - 1);
+    assert_eq!(result.left_out, 0);
+    // A message named one by one is still not found.
+    let named = f
+        .service
+        .handle(Request::ApplyMailAction {
+            targets: vec![MessageTarget::message(ids[0].clone())],
+            action: MailAction::Archive,
+        })
+        .await;
+    assert_eq!(error_of(&named).0, ErrorCode::NotFound);
 }
 
 #[tokio::test]

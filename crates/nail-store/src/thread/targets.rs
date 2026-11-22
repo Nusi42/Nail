@@ -44,19 +44,47 @@ pub struct TargetMessage {
     pub folder_id: FolderId,
     /// Its folder's role (wire name: `inbox`, `sent`, `trash`, …).
     pub role: String,
-    /// When it was stored, as an order: its row number, which grows with
-    /// every message stored ([`Store::message_mark`]).
-    pub row: i64,
+    /// When it entered its folder, as an order: its `listed_seq`, which
+    /// grows with every message stored and every move into a folder
+    /// ([`Store::message_mark`], schema v24).
+    pub listed_seq: i64,
 }
 
+/// Schema v24 (R5 review, ADR 0236): when each message entered the folder
+/// it is in. `messages.listed_seq` takes the next number of the counter
+/// `message_listed_seq` when the message is stored and whenever its folder
+/// changes (triggers, so every path is covered: the sync, the queue, a
+/// snooze waking up, an undo, a rule). Messages stored before v24 keep 0.
+/// The `as_of` mark of a whole list is the counter's value: a message that
+/// entered a folder after the mark — new, or moved in — is left out.
+pub(crate) const V24: &str = "
+ALTER TABLE messages ADD COLUMN listed_seq INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE message_listed_seq (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    n  INTEGER NOT NULL
+);
+INSERT INTO message_listed_seq (id, n) VALUES (1, 0);
+CREATE TRIGGER messages_listed_insert AFTER INSERT ON messages BEGIN
+    UPDATE message_listed_seq SET n = n + 1 WHERE id = 1;
+    UPDATE messages SET listed_seq = (SELECT n FROM message_listed_seq WHERE id = 1)
+     WHERE rowid = NEW.rowid;
+END;
+CREATE TRIGGER messages_listed_move AFTER UPDATE OF folder_id ON messages
+WHEN OLD.folder_id IS NOT NEW.folder_id BEGIN
+    UPDATE message_listed_seq SET n = n + 1 WHERE id = 1;
+    UPDATE messages SET listed_seq = (SELECT n FROM message_listed_seq WHERE id = 1)
+     WHERE rowid = NEW.rowid;
+END;
+";
+
 /// Every stored copy of a thread's messages, oldest first.
-const THREAD_ROWS_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role, m.rowid
+const THREAD_ROWS_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role, m.listed_seq
        FROM messages m JOIN folders f ON f.id = m.folder_id
       WHERE m.thread_id = ?1
       ORDER BY m.date_sort, m.id";
 
 /// One message (a `single-<id>` row).
-const SINGLE_ROW_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role, m.rowid
+const SINGLE_ROW_SQL: &str = "SELECT m.id, m.account_id, m.folder_id, f.role, m.listed_seq
        FROM messages m JOIN folders f ON f.id = m.folder_id
       WHERE m.id = ?1";
 
@@ -67,39 +95,74 @@ fn target_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TargetMessage> {
         account_id: AccountId(r.get(1)?),
         folder_id: FolderId(r.get(2)?),
         role: r.get(3)?,
-        row: r.get(4)?,
+        listed_seq: r.get(4)?,
     })
 }
 
 impl Store {
-    /// The mark of the messages stored so far (R5, ADR 0235): every
-    /// message stored later has a greater [`TargetMessage::row`].
+    /// The mark of the messages in their folders so far (R5, ADR 0235):
+    /// every message stored or moved into a folder later has a greater
+    /// [`TargetMessage::listed_seq`].
     pub fn message_mark(&self) -> Result<i64> {
         self.with_conn(|conn| {
             Ok(
-                conn.query_row("SELECT COALESCE(MAX(rowid), 0) FROM messages", [], |r| {
+                conn.query_row("SELECT n FROM message_listed_seq WHERE id = 1", [], |r| {
                     r.get(0)
                 })?,
             )
         })
     }
 
+    /// The messages of `ids` still stored, in order, each with its thread
+    /// (the rows of a whole search list, R5): an id no longer stored is
+    /// left out.
+    pub fn message_threads(&self, ids: &[MessageId]) -> Result<Vec<(MessageId, Option<ThreadId>)>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached("SELECT thread_id FROM messages WHERE id = ?1")?;
+            let mut out = Vec::with_capacity(ids.len());
+            for id in ids {
+                if let Some(thread) = stmt
+                    .query_row(params![id.as_str()], |r| r.get::<_, Option<String>>(0))
+                    .optional()?
+                {
+                    out.push((id.clone(), thread.map(ThreadId)));
+                }
+            }
+            Ok(out)
+        })
+    }
+
+    /// The message targets of `ids` still stored, in order: an unknown
+    /// message is left out (a whole list's rows and exceptions, R5: a
+    /// message removed meanwhile is gone, not an error).
+    pub fn stored_target_messages(&self, ids: &[MessageId]) -> Result<Vec<TargetMessage>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(SINGLE_ROW_SQL)?;
+            let mut out = Vec::with_capacity(ids.len());
+            for id in ids {
+                if let Some(m) = stmt
+                    .query_row(params![id.as_str()], target_row)
+                    .optional()?
+                {
+                    out.push(m);
+                }
+            }
+            Ok(out)
+        })
+    }
+
     /// Message targets named by id, in order; fails with `not_found` for
     /// an unknown message.
     pub fn target_messages(&self, ids: &[MessageId]) -> Result<Vec<TargetMessage>> {
-        self.with_conn(|conn| {
-            let mut stmt = conn.prepare_cached(SINGLE_ROW_SQL)?;
-            ids.iter()
-                .map(|id| {
-                    stmt.query_row(params![id.as_str()], target_row)
-                        .optional()?
-                        .ok_or_else(|| Error::NotFound {
-                            kind: "message",
-                            id: id.as_str().to_owned(),
-                        })
-                })
-                .collect()
-        })
+        let found = self.stored_target_messages(ids)?;
+        let stored: std::collections::HashSet<&MessageId> = found.iter().map(|m| &m.id).collect();
+        if let Some(missing) = ids.iter().find(|id| !stored.contains(id)) {
+            return Err(Error::NotFound {
+                kind: "message",
+                id: missing.as_str().to_owned(),
+            });
+        }
+        Ok(found)
     }
 
     /// The stored messages a conversation target reaches (see the module
@@ -427,13 +490,60 @@ mod tests {
         let found = store.target_messages(&named).unwrap();
         assert_eq!(ids(&found), ["i1", "s4"]);
         assert_eq!(found[1].role, "sent");
-        assert!(found.iter().all(|m| m.row <= mark));
-        assert!(found[0].row < found[1].row, "stored in that order");
+        assert!(found.iter().all(|m| m.listed_seq <= mark));
+        assert!(
+            found[0].listed_seq < found[1].listed_seq,
+            "stored in that order"
+        );
         put(&store, "i9", "INBOX", 9, "9@x", "ann@example.org");
         let later = store.target_messages(&[MessageId("i9".into())]).unwrap();
-        assert!(later[0].row > mark, "stored after the mark");
-        assert!(store.message_mark().unwrap() >= later[0].row);
+        assert!(later[0].listed_seq > mark, "stored after the mark");
+        assert_eq!(store.message_mark().unwrap(), later[0].listed_seq);
         let unknown = store.target_messages(&[MessageId("nope".into())]);
         assert!(unknown.is_err_and(|e| e.is_not_found()));
+        // Unknown ids are left out where a list asks.
+        let stored = store
+            .stored_target_messages(&[MessageId("nope".into()), MessageId("i9".into())])
+            .unwrap();
+        assert_eq!(ids(&stored), ["i9"]);
+    }
+
+    #[test]
+    fn a_message_moved_into_a_folder_counts_as_after_the_mark() {
+        let (store, _) = fixture();
+        let mark = store.message_mark().unwrap();
+        let before = store.target_messages(&[MessageId("o3".into())]).unwrap();
+        assert!(before[0].listed_seq <= mark);
+        // Any change of folder (the queue, the sync, a snooze waking up).
+        store
+            .with_conn(|conn| {
+                conn.execute(
+                    "UPDATE messages SET folder_id = 'a/INBOX' WHERE id = 'o3'",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        let after = store.target_messages(&[MessageId("o3".into())]).unwrap();
+        assert!(after[0].listed_seq > mark, "moved in after the mark");
+        assert_eq!(store.message_mark().unwrap(), after[0].listed_seq);
+        // Another change (flags) keeps its place.
+        store
+            .with_conn(|conn| {
+                conn.execute("UPDATE messages SET date_sort = 1 WHERE id = 'o3'", [])?;
+                Ok(())
+            })
+            .unwrap();
+        let same = store.target_messages(&[MessageId("o3".into())]).unwrap();
+        assert_eq!(same[0].listed_seq, after[0].listed_seq);
+    }
+
+    #[test]
+    fn a_list_reads_each_row_with_its_thread_and_skips_gone_ones() {
+        let (store, t) = fixture();
+        let rows = store
+            .message_threads(&[MessageId("i1".into()), MessageId("nope".into())])
+            .unwrap();
+        assert_eq!(rows, vec![(MessageId("i1".into()), Some(t))]);
     }
 }

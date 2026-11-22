@@ -43,6 +43,7 @@ import {
   MAX_MAIL_ACTION_TARGETS,
 } from "./generated/constants";
 import type { MockData } from "./mockData";
+import { listRowTarget, type RowTarget } from "../actions/rowTargets";
 import { answerTriage } from "../features/triage/mock";
 
 /** The requests answered here. */
@@ -141,9 +142,6 @@ interface Resolved {
   conversations: number;
 }
 
-/** A target that is one row (`MessageTarget::List` aside). */
-type RowTarget = Exclude<MessageTarget, { kind: "list" }>;
-
 /** `nail_api::mail_actions::explicit_target_count`: rows named one by one. */
 export function explicitTargetCount(targets: readonly MessageTarget[]): number {
   return targets.reduce((n, t) => n + (t.kind === "list" ? explicitTargetCount(t.except) : 1), 0);
@@ -167,16 +165,14 @@ function listRows(d: MockData, list: MailList): RowTarget[] | Response {
     case "conversations": {
       const threads = listThreads(d, list.folder_id);
       if (!threads) return errorResponse("not_found", `folder ${list.folder_id} not found`);
-      return threads.map((t) => ({
-        kind: "conversation",
-        thread_id: t.id,
-        folder_id: list.folder_id,
-      }));
+      return threads.map((t) =>
+        listRowTarget(list, { messageId: t.latest_message_id, threadId: t.id }),
+      );
     }
     case "messages": {
       const messages = folderMessages(d, list.folder_id);
       if (!messages) return errorResponse("not_found", `folder ${list.folder_id} not found`);
-      return messages.map((m) => ({ kind: "message", message_id: m.id }));
+      return messages.map((m) => listRowTarget(list, { messageId: m.id, threadId: m.thread_id }));
     }
     case "search": {
       const answer = search(d, { ...list.query, offset: 0, limit: Number.MAX_SAFE_INTEGER });
@@ -186,10 +182,8 @@ function listRows(d: MockData, list: MailList): RowTarget[] | Response {
       if (answer.type !== "SearchResults") return answer;
       return answer.hits
         .filter((h) => h.from_server !== true)
-        .map((h): RowTarget =>
-          list.conversations && h.message.thread_id !== null
-            ? { kind: "conversation", thread_id: h.message.thread_id, folder_id: null }
-            : { kind: "message", message_id: h.message.id },
+        .map((h) =>
+          listRowTarget(list, { messageId: h.message.id, threadId: h.message.thread_id }),
         );
     }
   }
@@ -201,10 +195,20 @@ interface Row {
   reached: boolean;
 }
 
-/** The messages one row reaches (Trash's own messages left out for Trash). */
-function resolveRow(d: MockData, target: RowTarget, action: MailAction): Row | Response {
+/**
+ * The messages one row reaches (Trash's own messages left out for Trash).
+ * A message no longer stored is `not_found`, or reaches nothing for a
+ * whole list's rows and exceptions (`gone` = "skip", like the core).
+ */
+function resolveRow(
+  d: MockData,
+  target: RowTarget,
+  action: MailAction,
+  gone: "fail" | "skip" = "fail",
+): Row | Response {
   if (target.kind === "message") {
     const m = d.messages.find((x) => x.id === target.message_id);
+    if (!m && gone === "skip") return { messages: [], reached: false };
     if (!m) return errorResponse("not_found", `message ${target.message_id} not found`);
     const keep = action.type !== "trash" || roleOf(d, m.folder_id) !== "trash";
     return { messages: keep ? [m] : [], reached: false };
@@ -280,7 +284,7 @@ function resolve(
     const except = new Set<MessageId>();
     for (const e of target.except) {
       if (e.kind === "list") continue;
-      const row = resolveRow(d, e, action);
+      const row = resolveRow(d, e, action, "skip");
       if ("type" in row) return row;
       for (const m of row.messages) except.add(m.id);
     }
@@ -288,7 +292,7 @@ function resolve(
     const rows = listRows(d, target.list);
     if ("type" in rows) return rows;
     for (const r of rows) {
-      const row = resolveRow(d, r, action);
+      const row = resolveRow(d, r, action, "skip");
       if ("type" in row) return row;
       const left = row.messages.filter((m) => !except.has(m.id) && (known?.has(m.id) ?? true));
       if (r.kind === "conversation" && left.length > 0) conversations += 1;
@@ -450,6 +454,7 @@ function applyMailAction(core: MockCore, targets: MessageTarget[], action: MailA
     message_ids: ids,
     conversations: resolved.conversations,
     undo_until,
+    left_out: 0,
   };
   return { type: "MailActionQueued", result };
 }

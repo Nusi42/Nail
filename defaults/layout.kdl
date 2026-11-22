@@ -221,6 +221,7 @@ layout "default" {
         // R5: select the whole list ("All N selected") and end it.
         action "list.select-all"  label="@message-list.action.select-all" icon="list-checks"
         action "list.clear-selection" label="@message-list.action.clear-selection" icon="square-check-big"
+        action "list.toggle-row"  label="@message-list.action.toggle-row" icon="circle-check"
         // The reader's card feed (P2; keys context="reader").
         action "conversation.next-card" label="@thread-view.action.next-card" icon="chevron-down"
         action "conversation.previous-card" label="@thread-view.action.previous-card" icon="chevron-up"
@@ -515,6 +516,9 @@ layout "default" {
         bind "meta+a" "list.select-all"
         bind "ctrl+a" "list.select-all"
         bind "escape" "list.clear-selection"
+        // The keyboard's Ctrl + click: leave the selected row out of
+        // "select all" or take it back.
+        bind "ctrl+space" "list.toggle-row"
     }
 
     // The reader's card feed (P2): j / k move between the cards (and

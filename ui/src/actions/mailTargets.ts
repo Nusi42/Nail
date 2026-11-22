@@ -16,7 +16,8 @@
  *
  * The message list publishes how its rows map to targets (`ListScope`) and
  * the rows picked besides the selection (`picked`) in a small store per UI
- * store; the action handlers read it here.
+ * store; the action handlers read it here. Which target a row stands for
+ * is `./rowTargets.ts` (shared with the mock core).
  */
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
@@ -30,16 +31,18 @@ import type {
   ThreadId,
 } from "../api/generated";
 import { contextTarget, type ContextTarget } from "../features/menus";
+import { messageTarget, rowTarget, type ListScope } from "./rowTargets";
 import { searchQueryOf, type SearchScope } from "../state/queries";
 import { useUiStoreApi, type UiStore } from "../state/uiStore";
 
-/** How the list's rows map to targets. */
-export interface ListScope {
-  /** The rows are conversations (`threads` is not `off`). */
-  conversations: boolean;
-  /** The folder the rows are listed in; `null` while searching. */
-  folderId: FolderId | null;
-}
+export {
+  listRowTarget,
+  messageTarget,
+  rowFolderOf,
+  rowTarget,
+  type ListScope,
+  type RowTarget,
+} from "./rowTargets";
 
 /** A row picked for a multi-row action. */
 export interface PickedRow {
@@ -133,6 +136,11 @@ export function useListSelection<T>(selector: (state: ListSelectionState) => T):
 export interface ListView {
   /** The search the list runs (the typed one with the filter chips' terms). */
   search: SearchScope | null;
+  /**
+   * The user typed a search (else `search` is a filter chip's term within
+   * the folder): its conversation rows have no folder.
+   */
+  typedSearch: boolean;
   folderId: FolderId | null;
   /** The rows are conversations (`ListThreads`), else messages. */
   threadRows: boolean;
@@ -151,6 +159,9 @@ export function mailListOf(view: ListView): MailList | null {
       source: "search",
       query: searchQueryOf(view.search, 0, view.pageSize),
       conversations: view.conversations,
+      // A filter chip lists the folder's rows (filtered); a typed search's
+      // rows have no folder.
+      listed_folder_id: view.typedSearch ? null : view.folderId,
     };
   }
   if (view.folderId === null) return null;
@@ -170,23 +181,6 @@ export function sameList(a: MailList | null, b: MailList | null): boolean {
  */
 export function listFolderOf(list: MailList): FolderId | null {
   return list.source === "search" ? list.query.folder_id : list.folder_id;
-}
-
-/** The target that names one message. */
-export const messageTarget = (id: MessageId): MessageTarget => ({
-  kind: "message",
-  message_id: id,
-});
-
-/** The target a row stands for. */
-export function rowTarget(
-  row: { messageId: MessageId; threadId: ThreadId | null; child: boolean },
-  scope: ListScope,
-): MessageTarget {
-  if (!row.child && row.threadId !== null && scope.conversations) {
-    return { kind: "conversation", thread_id: row.threadId, folder_id: scope.folderId };
-  }
-  return messageTarget(row.messageId);
 }
 
 /** Where the targets of an action come from. */

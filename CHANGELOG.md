@@ -22,6 +22,11 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 - Every action on a whole selected list asks once with the true count and
   names the action ("Archive all"); Select all is in the command palette
   and the message list's right-click menu (ADR 0237).
+- Under select all, `Ctrl+Space` leaves the selected row out (or takes it
+  back) and `Shift+↑` / `Shift+↓` leave out a range; screen readers hear
+  "All N selected" and "Selection cleared" (ADR 0238).
+- `MailActionResult::left_out` says how many messages a very large action
+  could not change when a later part failed; the toast reports it.
 
 ### Changed — no limit on mail actions (ADR 0235)
 

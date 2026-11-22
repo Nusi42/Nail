@@ -26,15 +26,15 @@ export const widgets: Feature["widgets"] = {};
 export const actions: Feature["actions"] = {
   [LIST_EXPAND_ACTION]: {
     run: () => {
-      currentListControl()?.expand();
+      currentListControl()?.expand?.();
     },
-    enabled: () => currentListControl() !== null,
+    enabled: () => currentListControl()?.expand !== undefined,
   },
   [LIST_COLLAPSE_ACTION]: {
     run: () => {
-      currentListControl()?.collapse();
+      currentListControl()?.collapse?.();
     },
-    enabled: () => currentListControl() !== null,
+    enabled: () => currentListControl()?.collapse !== undefined,
   },
 };
 export const actionInfo: Readonly<Record<string, ActionInfo>> = {

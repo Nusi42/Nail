@@ -266,7 +266,10 @@ crates/nail-store      SQLite metadata (v19), blob store, per-account operation 
                        consecutive same-key operations to an engine at once; tests/integration/queue_groups.rs);
                        R5 (ADR 0236): apply_mail_batch_part (a later part joins the batch through `into`),
                        undo_mail_batch_part / undo_mail_batch_rest, message_mark + target_messages
-                       (thread/targets.rs, TargetMessage::row = rowid), STATEMENT_CACHE (64, store.rs)
+                       (thread/targets.rs), STATEMENT_CACHE (64, store.rs); v24 (ADR 0238,
+                       thread/targets.rs V24): messages.listed_seq + counter message_listed_seq, set by triggers
+                       on insert and folder change (TargetMessage::listed_seq, the `as_of` mark);
+                       stored_target_messages / message_threads skip gone messages; MailBatchApplied::gone
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -1631,6 +1634,13 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`Store::apply_mail_batch_part`; a later part joins the first part's batch through `into`) with one
   `MailChanged` and one `OpsChanged`; undo in parts (`undo_mail_batch_part` / `undo_mail_batch_rest`). The store
   keeps 64 prepared statements per connection (`STATEMENT_CACHE` in `store.rs`). MCP takes no list targets.
+- Review (ADR 0238): one row rule `MailList::row_target` (`listed_folder_id` of a chip list) = UI
+  `actions/rowTargets.ts` (`rowTarget`, `rowFolderOf`, `listRowTarget`; also used by the mock), pinned by the
+  `mail-actions` ts-vectors; `mail_list_rows` reads a list in one store read (`Service::local_hits` for a search);
+  list rows and exceptions skip vanished messages (`Gone::Skip`); `apply_resolved` / `apply_part` re-check each
+  part and report `MailActionResult::left_out`; the mark is `listed_seq` (schema v24). UI: live region
+  `message-list.announcer` beside the list box (visually hidden in `theme/skin.ts`), `list.toggle-row`
+  (`ctrl+space`, through `widgets/messageListControl.ts`), Shift + arrows under select all.
 - WT2 (ADR 0237): `list.select-all` (default `ctrl+a` / `meta+a` in the list, the palette, the row menu) and
   `list.clear-selection` (`escape`) in `features/mail-actions/index.ts`; the list selection's `all: { list, except }`
   and `mailListOf` / `withAsOf` / `inAll` / `toggleExcept` in `actions/mailTargets.ts` (`currentTargets` returns

@@ -9,6 +9,7 @@ import { addMockConversation, MOCK_CONVERSATION_ID } from "./mockConversations";
 import { createMockData } from "./mockData";
 import { explicitTargetCount, kindOf, reachOf } from "./mockMailActions";
 import { listFolderOf } from "../actions/mailTargets";
+import { listRowTarget, rowFolderOf } from "../actions/rowTargets";
 import type { MessageTarget } from "./generated";
 import { MAX_MAIL_ACTION_TARGETS } from "./generated/constants";
 import { must } from "../test/must";
@@ -143,6 +144,8 @@ describeVectors("mail actions", mailActionVectors, {
   kindOf,
   explicitTargetCount,
   listFolderOf,
+  rowFolderOf,
+  listRowTarget,
 });
 
 describe("whole lists in the mock core (R5, ADR 0235)", () => {
@@ -224,6 +227,7 @@ describe("whole lists in the mock core (R5, ADR 0235)", () => {
             sort: "date",
           },
           conversations: false,
+          listed_folder_id: INBOX,
         },
         except: [],
         as_of: null,

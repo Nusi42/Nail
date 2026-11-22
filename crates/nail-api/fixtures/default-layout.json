@@ -755,6 +755,12 @@
       "alias_of": null,
       "args": []
     },
+    "list.toggle-row": {
+      "label": "@message-list.action.toggle-row",
+      "icon": "circle-check",
+      "alias_of": null,
+      "args": []
+    },
     "conversation.next-card": {
       "label": "@thread-view.action.next-card",
       "icon": "chevron-down",
@@ -1705,6 +1711,12 @@
       "context": "list",
       "key": "escape",
       "action": "list.clear-selection",
+      "args": []
+    },
+    {
+      "context": "list",
+      "key": "ctrl+space",
+      "action": "list.toggle-row",
       "args": []
     },
     {

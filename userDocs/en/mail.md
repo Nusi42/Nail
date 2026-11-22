@@ -279,9 +279,9 @@ down that are not loaded yet; they show as selected when you scroll to
 them. **Select all** in the row's menu and in the command palette does the
 same. The top of the list says how many are selected ("All 1,200
 selected"), counted by Nail over the whole list. While everything is
-selected, **Ctrl+click** leaves a row out (and takes it back),
-**Shift+click** leaves out the rows from the last clicked one to it (or takes
-them back). **Esc**, a plain click on a row, another folder, another search
+selected, **Ctrl+click** (or **Ctrl+Space** on the selected row) leaves a
+row out (and takes it back), **Shift+click** (or **Shift+↑** / **Shift+↓**)
+leaves out the rows from the last clicked one to it (or takes them back). **Esc**, a plain click on a row, another folder, another search
 or another filter ends the selection.
 
 Every action on the whole list (archive, move, delete, read / unread, flag,
@@ -290,8 +290,10 @@ conversations and messages it affects, and names the action on its button
 (for example **Archive all**); **Cancel** has the focus. The action then
 runs as one change, however many messages it affects — **Undo** puts all of
 them back — and the status bar shows its progress ("Saving N changes")
-until the server has every change. Mail that arrives while the question is
-open is not part of it.
+until the server has every change. Mail that arrives or is moved into the
+list while the question is open is not part of it. If a very large action
+stops part-way, the message at the bottom says how many messages could not
+be changed; they stay where they were.
 
 **Undo.** After each action a message at the bottom of the window says what
 happened ("Conversation archived", "3 conversations moved to Trash") with

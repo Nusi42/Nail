@@ -1358,6 +1358,14 @@ selected Trash shows the true count; a core test archives 25 000 messages in par
 the maintainer's human gate on the 0.8.10 installer (select all in a large real IMAP folder, archive, undo), then
 release.
 
+*Status (review fixed, ADR 0238):* a filter chip's conversation rows keep their folder in the core too
+(`MailList::Search::listed_folder_id`, one row rule `MailList::row_target` / `rowTargets.ts` pinned by ts-vectors);
+the `as_of` mark is when a message entered its folder (schema v24 `listed_seq`, monotonic), so mail moved in after
+the count stays out; a list is read in one store read, vanished messages and exceptions are skipped, a failed later
+part is reported (`MailActionResult::left_out`, toast); the live region sits beside the list box and is announced
+("Selection cleared" too); Shift + arrows keep select all, `ctrl+space` (`list.toggle-row`) leaves a row out; "1
+selected"; the list actions' icons only in the layout.
+
 *Status (integrated):* WT1 done (ADR 0236: list targets resolved in bulk, the `as_of` mark `mark-<n>`, actions above
 10 000 messages in parts with one batch and one undo, cached statements; 25 000 messages apply in about 5 s and undo
 in about 5 s in release, the IMAP mock has every move after about 30 s); WT2 done (ADR 0237: `Ctrl+A` / `Cmd+A`,
@@ -1368,7 +1376,7 @@ and "Delete permanently?" count `MailTargetResolution::messages`, so whole lists
 not two). Follow-ups / deferred: tag states for a whole list in the label window; "run rules on selected" with a list
 target (`RunRules` has no list form); a smaller store transaction inside a part if the UI must stay snappier (each
 10 000-message part holds the store for about 1.6 s); profile the replay of 25 000 IMAP moves (about 1.2 ms per
-message); a monotonic mark column instead of the rowid (ADR 0236); a 1 200-row e2e variant of the gate; a note in ADR
+message); a 1 200-row e2e variant of the gate; a note in ADR
 0164 that ADRs 0235 / 0236 replace its limits; the maintainer's UX review of how dialogs confirm and close.
 
 *Status (contract):* done (ADR 0235). List targets resolved in the core and the mock, the true count in

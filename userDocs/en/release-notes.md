@@ -13,13 +13,18 @@ Select a whole message list and act on it at once, however large it is.
   macOS) selects the whole list: every conversation or message of the
   folder, the unified inbox, a search or a filter, including rows that are
   not loaded yet. The list shows how many are selected. `Ctrl`+click or
-  `Shift`+click leaves single rows out again, and `Esc` clears the
-  selection.
+  `Shift`+click leaves single rows out again (from the keyboard:
+  `Ctrl+Space` on the selected row, `Shift+↑` / `Shift+↓` for a range), and
+  `Esc` clears the selection. Screen readers announce the count and when the
+  selection ends.
 - **One question before acting on the whole list** — every action on a
   whole list (archive, move, delete, read, flag, labels, snooze, junk) asks
   once how many conversations and messages it affects, and its button names
   the action ("Archive all"). It then runs as one change with one **Undo**;
-  mail that arrives while the question is open is left alone. **Select
+  mail that arrives or is moved into the list while the question is open is
+  left alone. With a filter such as **Unread**, the action reaches the same
+  messages as when you pick the rows one by one (only the folder you are
+  looking at). **Select
   all** is also in the command palette.
 
 ### Corrected in 0.8.10

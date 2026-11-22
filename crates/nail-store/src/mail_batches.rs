@@ -85,6 +85,9 @@ pub struct MailBatchApplied {
     pub queued: Vec<Enqueued>,
     /// Messages whose operation was left out because it changes nothing.
     pub unchanged: Vec<MessageId>,
+    /// Messages whose operation was left out because the message is no
+    /// longer stored (deleted elsewhere or expunged since it was planned).
+    pub gone: Vec<MessageId>,
     /// Whether every queued operation has an inverse.
     pub undoable: bool,
 }
@@ -191,12 +194,18 @@ enum Planned {
     Queue(Option<Operation>),
     /// It changes nothing.
     Skip,
+    /// The message is no longer stored.
+    Gone,
 }
 
 /// Plans one operation against the message's current state.
 fn plan_one(tx: &Transaction<'_>, op: &Operation) -> Result<Planned> {
     let message = op.message_id();
-    let stored = message_in_tx(tx, message)?;
+    let stored = match message_in_tx(tx, message) {
+        Ok(stored) => stored,
+        Err(err) if err.is_not_found() => return Ok(Planned::Gone),
+        Err(err) => return Err(err),
+    };
     let here = MessageSource {
         account_id: stored.summary.account_id.clone(),
         folder_id: stored.summary.folder_id.clone(),
@@ -460,10 +469,12 @@ impl Store {
             }
             let mut queued = Vec::new();
             let mut unchanged = Vec::new();
+            let mut gone = Vec::new();
             let mut inverses: Vec<(MessageId, i64, Option<Operation>)> = Vec::new();
             for op in operations {
                 match plan_one(tx, op)? {
                     Planned::Skip => unchanged.push(op.message_id().clone()),
+                    Planned::Gone => gone.push(op.message_id().clone()),
                     Planned::Queue(inverse) => {
                         let enqueued = enqueue_in_tx(tx, op)?;
                         inverses.push((op.message_id().clone(), enqueued.op.id.0, inverse));
@@ -514,6 +525,7 @@ impl Store {
                 batch,
                 queued,
                 unchanged,
+                gone,
                 undoable,
             })
         })
@@ -855,7 +867,9 @@ mod tests {
     fn a_failing_operation_rolls_the_whole_batch_back() {
         let store = store();
         let mut ops = moves(&["m1"], "a/Archive");
-        ops.extend(moves(&["missing"], "a/Archive"));
+        // A message gone meanwhile is left out (see above); a folder that
+        // does not exist fails the operation.
+        ops.extend(moves(&["m2"], "a/Nowhere"));
         assert!(store.apply_mail_batch(&plan("user"), &ops).is_err());
         assert_eq!(folder_of(&store, "m1"), "a/INBOX");
         assert_eq!(store.list_ops(None).unwrap().len(), 0);
@@ -985,6 +999,27 @@ mod tests {
         let undone =
             store.apply_mail_batch_part(&plan("user"), Some(batch), &moves(&["m2"], "a/Archive"));
         assert!(matches!(undone, Err(Error::Conflict(_))), "{undone:?}");
+    }
+
+    #[test]
+    fn a_message_gone_before_its_part_applies_is_left_out() {
+        let store = store();
+        // Expunged by the sync after the action was resolved.
+        assert!(store.delete_message(&MessageId("m2".into())).unwrap());
+        let applied = store
+            .apply_mail_batch_part(
+                &plan("user"),
+                None,
+                &moves(&["m1", "m2", "m3"], "a/Archive"),
+            )
+            .unwrap();
+        assert_eq!(applied.gone, [MessageId("m2".into())]);
+        assert_eq!(applied.queued.len(), 2);
+        assert!(applied.undoable);
+        assert_eq!(folder_of(&store, "m1"), "a/Archive");
+        assert_eq!(folder_of(&store, "m3"), "a/Archive");
+        let record = store.mail_batch(applied.batch.unwrap()).unwrap().unwrap();
+        assert_eq!(record.message_ids.len(), 2);
     }
 
     #[test]

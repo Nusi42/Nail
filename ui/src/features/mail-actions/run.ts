@@ -367,6 +367,7 @@ export async function runMailAction(
     messages: result.message_ids.length,
     batchId: result.batch_id,
     tags: action.type === "tags" ? tagToast(action.add, action.remove, options.tagNoun) : undefined,
+    leftOut: result.left_out,
   });
   if (result.batch_id !== null) {
     const until = result.undo_until === null ? NaN : Date.parse(result.undo_until);

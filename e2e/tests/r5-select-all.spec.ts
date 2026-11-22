@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { axeViolations } from "../support/axe";
 import { bulkMail, scrollUntilListed } from "../support/bulkMail";
 import { nailPerTest, serverMessages } from "../support/nail";
 import { messageList, messageRow, messageRows, moveSelectionTo, opsItem } from "../support/views";
@@ -55,6 +56,11 @@ test("Ctrl+A selects a list larger than one page; deselect one, move the rest", 
   const all = await selectedCount(page);
   expect(all).toBeGreaterThan(BULK);
   await expect(messageList(page)).toHaveAttribute("aria-multiselectable", "true");
+  // Announced from a live region beside the list box; no axe violation.
+  await expect(page.locator('[data-part="message-list.announcer"]')).toHaveText(
+    `All ${String(all)} selected`,
+  );
+  expect(await axeViolations(page, '[data-part="message-list"]')).toEqual([]);
 
   // Ctrl + click leaves a row out; the true count follows.
   await messageRow(page, TOP_ROW).click({ modifiers: ["ControlOrMeta"] });
@@ -142,4 +148,27 @@ test("Esc clears select all; Cancel acts on nothing", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(summary(page)).toHaveCount(0);
   await expect(selectedRows(page)).toHaveCount(1);
+  await expect(page.locator('[data-part="message-list.announcer"]')).toHaveText(
+    "Selection cleared",
+  );
+});
+
+test("the row's menu selects all; Ctrl+Space leaves the selected row out", async ({ page }) => {
+  const COUNT = 5;
+  await openWorkInbox(page, COUNT);
+  const row = messageRow(page, subjectOf(COUNT));
+  await row.click();
+  await row.click({ button: "right" });
+  await page
+    .getByRole("menu")
+    .getByRole("menuitem", { name: /Select all/ })
+    .click();
+  await expect(summary(page)).toHaveText(/^All \d+ selected$/);
+  const all = await selectedCount(page);
+  await expect(row).toHaveAttribute("aria-selected", "true");
+
+  await messageList(page).focus();
+  await page.keyboard.press("Control+Space");
+  await expect(row).toHaveAttribute("aria-selected", "false");
+  await expect(summary(page)).toHaveText(`All ${String(all - 1)} selected`);
 });

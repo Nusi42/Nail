@@ -22,6 +22,7 @@ import {
   mailListOf,
   refetchedSince,
   prunePicked,
+  rowFolderOf,
   rangeExcept,
   rangePick,
   togglePick,
@@ -551,6 +552,7 @@ function useRows(node: WidgetNode, pageSize: number) {
   // The list query "select all" names (R5, ADR 0235).
   const list = mailListOf({
     search: searching,
+    typedSearch: activeSearch !== null,
     folderId,
     threadRows,
     conversations: threadMode,
@@ -578,9 +580,9 @@ function useRows(node: WidgetNode, pageSize: number) {
 /**
  * "All N selected" (R5, ADR 0235): the true count of a selected whole list
  * from the core (`ResolveMailTargets`), the rows of the list minus the ones
- * left out until it answers. Announced politely when it changes.
+ * left out until it answers; `null` without "select all".
  */
-function AllSelectedSummary({ total }: { total: number | null }) {
+function useAllSelectedText(total: number | null): string | null {
   const t = useT();
   const all = useListSelection((s) => s.all);
   const scope = useListSelection((s) => s.scope);
@@ -592,9 +594,37 @@ function AllSelectedSummary({ total }: { total: number | null }) {
       ? counted?.messages
       : counted?.conversations;
   const count = rows ?? Math.max(0, (total ?? 0) - all.except.length);
+  return t("message-list-all-selected", { count });
+}
+
+/** The visible "All N selected" line at the top of the list. */
+function AllSelectedSummary({ total }: { total: number | null }) {
+  const text = useAllSelectedText(total);
+  if (text === null) return null;
+  return <div data-part="message-list.selection-summary">{text}</div>;
+}
+
+/**
+ * What a screen reader hears about "select all": a polite live region
+ * beside the list box (never inside it: a list box holds options only),
+ * mounted empty from the start so every change of its text is announced —
+ * "All N selected" on Ctrl+A and as rows are left out, "Selection cleared"
+ * when it ends.
+ */
+function SelectionAnnouncer({ total }: { total: number | null }) {
+  const t = useT();
+  const text = useAllSelectedText(total);
+  // The text before (React's "information from previous renders"): it
+  // tells "select all" ending from never having started.
+  const [previous, setPrevious] = useState(text);
+  const [cleared, setCleared] = useState(false);
+  if (text !== previous) {
+    setPrevious(text);
+    setCleared(text === null && previous !== null);
+  }
   return (
-    <div data-part="message-list.selection-summary" aria-live="polite" aria-atomic="true">
-      {t("message-list-all-selected", { count })}
+    <div data-part="message-list.announcer" aria-live="polite" aria-atomic="true">
+      {text ?? (cleared ? t("message-list-selection-cleared") : "")}
     </div>
   );
 }
@@ -858,7 +888,9 @@ export function MessageList({ node }: WidgetProps) {
   // Ctrl / Shift (`../actions/mailTargets.ts`).
   const uiStore = useUiStoreApi();
   const selection = listSelectionFor(uiStore);
-  const listedFolder = activeSearch ? null : folderId;
+  // The list's own rule (`rowFolderOf`): a filter chip keeps the folder,
+  // a typed search has none; the core resolves "select all" by the same.
+  const listedFolder = rowFolderOf(list);
   useEffect(() => {
     selection.getState().setScope({ conversations, folderId: listedFolder });
   }, [selection, conversations, listedFolder]);
@@ -990,24 +1022,43 @@ export function MessageList({ node }: WidgetProps) {
       expanded.has(row.key) ? { kind: "collapse", key: row.key } : { kind: "expand", key: row.key },
     );
   };
-  const controlState = useRef({ rows, selectedIndex, expanded, move });
+  // Ctrl+Space (`list.toggle-row`, R5): the selected row left out of
+  // "select all" or taken back, else picked besides the others or taken
+  // out — the keyboard's Ctrl + click.
+  const toggleRow = () => {
+    const row = rows[selectedIndex];
+    if (!row) return;
+    const state = selection.getState();
+    if (state.all !== null) state.setExcept(toggleExcept(state.all.except, row));
+    else state.setPicked(togglePick(state.picked, row, row));
+    anchorKey.current = row.key;
+  };
+  const controlState = useRef({ rows, selectedIndex, expanded, move, toggleRow });
   useEffect(() => {
-    controlState.current = { rows, selectedIndex, expanded, move };
+    controlState.current = { rows, selectedIndex, expanded, move, toggleRow };
   });
-  useEffect(() => {
-    if (!expandable) return undefined;
-    return registerListControl({
-      element: () => scrollRef.current,
-      expand: () => {
-        const s = controlState.current;
-        s.move(expandMove(s.rows, s.selectedIndex, s.expanded));
-      },
-      collapse: () => {
-        const s = controlState.current;
-        s.move(collapseMove(s.rows, s.selectedIndex, s.expanded));
-      },
-    });
-  }, [expandable]);
+  useEffect(
+    () =>
+      registerListControl({
+        element: () => scrollRef.current,
+        ...(expandable
+          ? {
+              expand: () => {
+                const s = controlState.current;
+                s.move(expandMove(s.rows, s.selectedIndex, s.expanded));
+              },
+              collapse: () => {
+                const s = controlState.current;
+                s.move(collapseMove(s.rows, s.selectedIndex, s.expanded));
+              },
+            }
+          : {}),
+        toggleRow: () => {
+          controlState.current.toggleRow();
+        },
+      }),
+    [expandable],
+  );
 
   // A double-click opens the message like Enter (a narrow layout switches
   // to the reader); its first click already chose the row.
@@ -1072,7 +1123,12 @@ export function MessageList({ node }: WidgetProps) {
       const row = rows[target];
       if (!row) return;
       const anchor = rows.findIndex((r) => r.key === anchorKey.current);
-      selection.getState().setPicked(rangePick(rows, anchor >= 0 ? anchor : selectedIndex, target));
+      const from = anchor >= 0 ? anchor : selectedIndex;
+      const state = selection.getState();
+      // Under "select all" like Shift + click: the rows are left out or
+      // taken back, the whole list stays selected.
+      if (state.all !== null) state.setExcept(rangeExcept(state.all.except, rows, from, target));
+      else state.setPicked(rangePick(rows, from, target));
       setChosenKey(row.key);
       selectMessage(row.messageId);
       selectThread(row.threadId);
@@ -1108,163 +1164,168 @@ export function MessageList({ node }: WidgetProps) {
   }
 
   return (
-    <div
-      ref={scrollRef}
-      data-part="message-list"
-      data-key-context="list"
-      data-node-id={node.id ?? undefined}
-      data-state={activeSearch ? "search" : undefined}
-      data-filter={filtered ? listFilter : undefined}
-      role={expandable ? "tree" : "listbox"}
-      aria-multiselectable="true"
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      aria-label={node.label ? label(node.label) : t("common-messages")}
-      aria-activedescendant={
-        selectedIndex >= 0 && items.some((i) => i.index === selectedIndex)
-          ? rowId(selectedIndex)
-          : undefined
-      }
-      aria-busy={query.isFetching || loading}
-    >
-      {activeSearch && total !== null && !searchError && query.isSuccess && (
-        <div data-part="message-list.search-summary">
-          {t("message-list-search-results", { count: total, query: activeSearch.text })}
-        </div>
-      )}
-      <AllSelectedSummary total={listTotal} />
-      {status}
-      {columns.length > 0 && (
-        <div data-part="message-list.header" aria-hidden="true">
-          {columns.map((c) => (
-            <span key={c.id} data-part="message-list.header.cell" data-column={c.id}>
-              {t(`message-list-column-${c.id}`)}
-            </span>
-          ))}
-        </div>
-      )}
-      <div data-part="message-list.spacer" data-geom={`${geom}-before`} aria-hidden="true" />
-      {items.map((item) => {
-        const row = rows[item.index];
-        if (!row) return null;
-        const selected =
-          all !== null
-            ? inAll(all, row.key)
-            : item.index === selectedIndex || pickedKeys.has(row.key);
-        const ctx = { locale, now, unread: row.unread, me: t("conversations-me") };
-        if (row.child) {
-          const position = siblingPosition(rows, item.index);
+    <>
+      <div
+        ref={scrollRef}
+        data-part="message-list"
+        data-key-context="list"
+        data-node-id={node.id ?? undefined}
+        data-state={activeSearch ? "search" : undefined}
+        data-filter={filtered ? listFilter : undefined}
+        role={expandable ? "tree" : "listbox"}
+        aria-multiselectable="true"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        aria-label={node.label ? label(node.label) : t("common-messages")}
+        aria-activedescendant={
+          selectedIndex >= 0 && items.some((i) => i.index === selectedIndex)
+            ? rowId(selectedIndex)
+            : undefined
+        }
+        aria-busy={query.isFetching || loading}
+      >
+        {activeSearch && total !== null && !searchError && query.isSuccess && (
+          <div data-part="message-list.search-summary">
+            {t("message-list-search-results", { count: total, query: activeSearch.text })}
+          </div>
+        )}
+        <AllSelectedSummary total={listTotal} />
+        {status}
+        {columns.length > 0 && (
+          <div data-part="message-list.header" aria-hidden="true">
+            {columns.map((c) => (
+              <span key={c.id} data-part="message-list.header.cell" data-column={c.id}>
+                {t(`message-list-column-${c.id}`)}
+              </span>
+            ))}
+          </div>
+        )}
+        <div data-part="message-list.spacer" data-geom={`${geom}-before`} aria-hidden="true" />
+        {items.map((item) => {
+          const row = rows[item.index];
+          if (!row) return null;
+          const selected =
+            all !== null
+              ? inAll(all, row.key)
+              : item.index === selectedIndex || pickedKeys.has(row.key);
+          const ctx = { locale, now, unread: row.unread, me: t("conversations-me") };
+          if (row.child) {
+            const position = siblingPosition(rows, item.index);
+            return (
+              <ChildRowView
+                key={item.key}
+                id={rowId(item.index)}
+                index={item.index}
+                measure={virtualizer.measureElement}
+                message={row.child}
+                parentKey={row.parentKey}
+                selected={selected}
+                states={row.states(selected)}
+                posinset={position?.posinset ?? 1}
+                setsize={position?.setsize ?? 1}
+                locale={locale}
+                now={now}
+                onChoose={(event) => {
+                  clickRow(row, item.index, event);
+                }}
+              />
+            );
+          }
+          const isOpen = expandable && row.expandable && expanded.has(row.key);
           return (
-            <ChildRowView
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the list box handles the keyboard and the focus for its rows (aria-activedescendant).
+            <div
               key={item.key}
               id={rowId(item.index)}
-              index={item.index}
-              measure={virtualizer.measureElement}
-              message={row.child}
-              parentKey={row.parentKey}
-              selected={selected}
-              states={row.states(selected)}
-              posinset={position?.posinset ?? 1}
-              setsize={position?.setsize ?? 1}
-              locale={locale}
-              now={now}
-              onChoose={(event) => {
+              ref={virtualizer.measureElement}
+              data-index={item.index}
+              role={expandable ? "treeitem" : "option"}
+              aria-selected={selected}
+              {...(expandable
+                ? { "aria-level": 1, ...(row.expandable ? { "aria-expanded": isOpen } : {}) }
+                : {})}
+              data-part="message-list.row"
+              data-view={columns.length > 0 ? "columns" : "rows"}
+              data-state={
+                [row.states(selected), isOpen ? "expanded" : null].filter(Boolean).join(" ") ||
+                undefined
+              }
+              data-account={row.accountId}
+              data-message={row.messageId}
+              data-thread={row.threadId ?? undefined}
+              onClick={(event) => {
                 clickRow(row, item.index, event);
               }}
-            />
-          );
-        }
-        const isOpen = expandable && row.expandable && expanded.has(row.key);
-        return (
-          // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the list box handles the keyboard and the focus for its rows (aria-activedescendant).
-          <div
-            key={item.key}
-            id={rowId(item.index)}
-            ref={virtualizer.measureElement}
-            data-index={item.index}
-            role={expandable ? "treeitem" : "option"}
-            aria-selected={selected}
-            {...(expandable
-              ? { "aria-level": 1, ...(row.expandable ? { "aria-expanded": isOpen } : {}) }
-              : {})}
-            data-part="message-list.row"
-            data-view={columns.length > 0 ? "columns" : "rows"}
-            data-state={
-              [row.states(selected), isOpen ? "expanded" : null].filter(Boolean).join(" ") ||
-              undefined
-            }
-            data-account={row.accountId}
-            data-message={row.messageId}
-            data-thread={row.threadId ?? undefined}
-            onClick={(event) => {
-              clickRow(row, item.index, event);
-            }}
-            onDoubleClick={openRow}
-          >
-            {columns.length > 0 ? (
-              <div data-part="message-list.row.columns">
-                {columns.map((c) => (
-                  <span key={c.id} data-part="message-list.row.cell" data-column={c.id}>
-                    {renderTemplate(c.template, row.data, ctx).map((segment, index) => (
-                      <SegmentView key={index} segment={segment} />
-                    ))}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <>
-                {row.unread && <span data-part="message-list.row.unread-dot" aria-hidden="true" />}
-                <Avatar
-                  part="message-list.row.avatar"
-                  name={row.from?.name ?? null}
-                  email={row.from?.email ?? ""}
-                />
-                <div data-part="message-list.row.body">
-                  {templates.map((template, line) => (
-                    <div
-                      key={line}
-                      data-part="message-list.row.line"
-                      data-fields={lineFields[line]}
-                    >
-                      {renderTemplate(template, row.data, ctx).map((segment, index) => (
+              onDoubleClick={openRow}
+            >
+              {columns.length > 0 ? (
+                <div data-part="message-list.row.columns">
+                  {columns.map((c) => (
+                    <span key={c.id} data-part="message-list.row.cell" data-column={c.id}>
+                      {renderTemplate(c.template, row.data, ctx).map((segment, index) => (
                         <SegmentView key={index} segment={segment} />
                       ))}
-                    </div>
+                    </span>
                   ))}
-                  <TagLine tags={row.tags} accounts={accountNames} withAccounts={mixedAccounts} />
                 </div>
-                {expandable && (
-                  // The list's keyboard (→ / ←) opens and closes the
-                  // conversation; the chevron is its pointer twin, so it is
-                  // no focus stop of its own inside the tree item (hidden
-                  // from assistive technology: the item says aria-expanded).
-                  <span
-                    data-part="message-list.row.expander"
-                    data-state={row.expandable ? (isOpen ? "expanded" : undefined) : "single"}
-                    title={
-                      row.expandable
-                        ? t(isOpen ? "conversations-collapse" : "conversations-expand")
-                        : undefined
-                    }
-                    aria-hidden="true"
-                    onClick={(event) => {
-                      if (!row.expandable) return;
-                      event.stopPropagation();
-                      toggle(row);
-                      scrollRef.current?.focus({ preventScroll: true });
-                    }}
-                  >
-                    {row.expandable && (
-                      <Icon name="chevron-right" part="message-list.row.expander.icon" />
-                    )}
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })}
-      <div data-part="message-list.spacer" data-geom={`${geom}-after`} aria-hidden="true" />
-    </div>
+              ) : (
+                <>
+                  {row.unread && (
+                    <span data-part="message-list.row.unread-dot" aria-hidden="true" />
+                  )}
+                  <Avatar
+                    part="message-list.row.avatar"
+                    name={row.from?.name ?? null}
+                    email={row.from?.email ?? ""}
+                  />
+                  <div data-part="message-list.row.body">
+                    {templates.map((template, line) => (
+                      <div
+                        key={line}
+                        data-part="message-list.row.line"
+                        data-fields={lineFields[line]}
+                      >
+                        {renderTemplate(template, row.data, ctx).map((segment, index) => (
+                          <SegmentView key={index} segment={segment} />
+                        ))}
+                      </div>
+                    ))}
+                    <TagLine tags={row.tags} accounts={accountNames} withAccounts={mixedAccounts} />
+                  </div>
+                  {expandable && (
+                    // The list's keyboard (→ / ←) opens and closes the
+                    // conversation; the chevron is its pointer twin, so it is
+                    // no focus stop of its own inside the tree item (hidden
+                    // from assistive technology: the item says aria-expanded).
+                    <span
+                      data-part="message-list.row.expander"
+                      data-state={row.expandable ? (isOpen ? "expanded" : undefined) : "single"}
+                      title={
+                        row.expandable
+                          ? t(isOpen ? "conversations-collapse" : "conversations-expand")
+                          : undefined
+                      }
+                      aria-hidden="true"
+                      onClick={(event) => {
+                        if (!row.expandable) return;
+                        event.stopPropagation();
+                        toggle(row);
+                        scrollRef.current?.focus({ preventScroll: true });
+                      }}
+                    >
+                      {row.expandable && (
+                        <Icon name="chevron-right" part="message-list.row.expander.icon" />
+                      )}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+        <div data-part="message-list.spacer" data-geom={`${geom}-after`} aria-hidden="true" />
+      </div>
+      <SelectionAnnouncer total={listTotal} />
+    </>
   );
 }

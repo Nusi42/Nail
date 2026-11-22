@@ -397,6 +397,9 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
         backfill: Some(crate::compose::unlink_received_server_copies),
         foreign_keys_off: false,
     },
+    // Schema v24 (ADR 0236): when each message entered its folder, for the
+    // `as_of` mark of a whole list.
+    Migration::sql(crate::thread::targets::V24),
 ];
 
 /// The schema version this build creates and understands.
@@ -578,6 +581,7 @@ mod tests {
                 "mcp_clients",
                 "mcp_grants",
                 "mcp_idempotency",
+                "message_listed_seq",
                 "message_security",
                 "message_tags",
                 "messages",

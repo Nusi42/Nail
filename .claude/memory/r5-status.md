@@ -33,7 +33,12 @@ server has every move after about 31 s; Delete 7.3 s / about 29 s; each undo que
   build): rerun alone before suspecting code.
 - A new modal confirmation must also be added to `CONFIRMATIONS` in `ui/src/features/composer/instances.test.tsx`.
 - The move window needs `selectedMessageId` (it says "Select a message first" otherwise), also for a list target.
-- The rowid mark can be reused after the newest message is deleted (ADR 0236); a monotonic column would close it.
+- Review fixes (ADR 0238): the mark is `messages.listed_seq` (schema v24, triggers on insert and folder change), not
+  the rowid; a chip list's conversation rows carry `listed_folder_id` (one rule `MailList::row_target` =
+  `ui/src/actions/rowTargets.ts`, ts-vectors); vanished list rows / exceptions are skipped, `left_out` reports a
+  failed later part; the select-all live region is `message-list.announcer` beside the list box (a live region
+  inside `role=listbox` is an axe violation); `ctrl+space` = `list.toggle-row`.
+- A new table needs its name in `schema::tests::migrates_empty_database_to_latest`.
 
 **Follow-ups (plan status line):** tag states for a whole list; rules "run on selected" with a list target; smaller
 store transactions inside a part; profile the replay of 25 000 IMAP moves; a 1 200-row e2e gate variant; the

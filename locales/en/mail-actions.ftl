@@ -8,6 +8,15 @@
 ## ($conversations = conversations acted on, 0 for a card's own message;
 ## $messages = messages touched).
 
+# A very large action stopped part-way (R5): $messages were changed, $left
+# were not and stay as they were (the action can be run again on them).
+mail-actions-done-partial = { $messages ->
+    [one] 1 message changed
+   *[other] { $messages } messages changed
+}; { $left ->
+    [one] 1 message could not be changed
+   *[other] { $left } messages could not be changed
+}
 mail-actions-done-archive = { $conversations ->
     [0] { $messages ->
         [one] Message archived

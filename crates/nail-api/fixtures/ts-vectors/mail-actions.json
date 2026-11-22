@@ -394,6 +394,283 @@
       ],
       "fn": "listFolderOf",
       "out": null
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f1",
+          "source": "conversations"
+        }
+      ],
+      "fn": "rowFolderOf",
+      "out": "f1"
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f1",
+          "source": "conversations"
+        },
+        {
+          "messageId": "m1",
+          "threadId": "t1"
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "folder_id": "f1",
+        "kind": "conversation",
+        "thread_id": "t1"
+      }
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f1",
+          "source": "conversations"
+        },
+        {
+          "messageId": "m1",
+          "threadId": null
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "kind": "message",
+        "message_id": "m1"
+      }
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f2",
+          "source": "messages"
+        }
+      ],
+      "fn": "rowFolderOf",
+      "out": "f2"
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f2",
+          "source": "messages"
+        },
+        {
+          "messageId": "m1",
+          "threadId": "t1"
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "kind": "message",
+        "message_id": "m1"
+      }
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f2",
+          "source": "messages"
+        },
+        {
+          "messageId": "m1",
+          "threadId": null
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "kind": "message",
+        "message_id": "m1"
+      }
+    },
+    {
+      "args": [
+        {
+          "conversations": true,
+          "listed_folder_id": "f3",
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        }
+      ],
+      "fn": "rowFolderOf",
+      "out": "f3"
+    },
+    {
+      "args": [
+        {
+          "conversations": true,
+          "listed_folder_id": "f3",
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        },
+        {
+          "messageId": "m1",
+          "threadId": "t1"
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "folder_id": "f3",
+        "kind": "conversation",
+        "thread_id": "t1"
+      }
+    },
+    {
+      "args": [
+        {
+          "conversations": true,
+          "listed_folder_id": "f3",
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        },
+        {
+          "messageId": "m1",
+          "threadId": null
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "kind": "message",
+        "message_id": "m1"
+      }
+    },
+    {
+      "args": [
+        {
+          "conversations": true,
+          "listed_folder_id": null,
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        }
+      ],
+      "fn": "rowFolderOf",
+      "out": null
+    },
+    {
+      "args": [
+        {
+          "conversations": true,
+          "listed_folder_id": null,
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        },
+        {
+          "messageId": "m1",
+          "threadId": "t1"
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "folder_id": null,
+        "kind": "conversation",
+        "thread_id": "t1"
+      }
+    },
+    {
+      "args": [
+        {
+          "conversations": true,
+          "listed_folder_id": null,
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        },
+        {
+          "messageId": "m1",
+          "threadId": null
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "kind": "message",
+        "message_id": "m1"
+      }
+    },
+    {
+      "args": [
+        {
+          "conversations": false,
+          "listed_folder_id": "f3",
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        }
+      ],
+      "fn": "rowFolderOf",
+      "out": "f3"
+    },
+    {
+      "args": [
+        {
+          "conversations": false,
+          "listed_folder_id": "f3",
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        },
+        {
+          "messageId": "m1",
+          "threadId": "t1"
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "kind": "message",
+        "message_id": "m1"
+      }
+    },
+    {
+      "args": [
+        {
+          "conversations": false,
+          "listed_folder_id": "f3",
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        },
+        {
+          "messageId": "m1",
+          "threadId": null
+        }
+      ],
+      "fn": "listRowTarget",
+      "out": {
+        "kind": "message",
+        "message_id": "m1"
+      }
     }
   ]
 }

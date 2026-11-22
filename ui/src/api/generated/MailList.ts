@@ -24,7 +24,15 @@ folder_id: FolderId, } | { "source": "search",
  */
 query: SearchQuery, 
 /**
- * The rows stand for their conversations without a folder (a list
- * with conversations) instead of the hit messages.
+ * The rows stand for their conversations (a list with
+ * conversations) instead of the hit messages.
  */
-conversations: boolean, };
+conversations: boolean, 
+/**
+ * The folder a conversation row is listed in
+ * ([`ConversationRef::folder_id`]): the folder of a filter chip
+ * without a typed search (the folder's list, filtered), so a row
+ * reaches what the same row picked alone reaches; `null` for a
+ * typed search (its conversations without a folder).
+ */
+listed_folder_id: FolderId | null, };

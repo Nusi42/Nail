@@ -5105,6 +5105,36 @@
     {
       "args": [
         "default-layout",
+        "list.toggle-row",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.toggle-row",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+space"
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.toggle-row",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
         "conversation.next-card",
         [],
         "global"

@@ -9,7 +9,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use nail_api::{ApiError, Event, Response, SavedSearch, SavedSearchId, SearchQuery};
+use nail_api::search::SearchError;
+use nail_api::{
+    ApiError, Event, MessageId, Response, SavedSearch, SavedSearchId, SearchQuery, ThreadId,
+};
 use nail_search::{SearchContext, SearchIndex, SearchScope, VirtualAccountScope, run_request};
 use nail_store::MessageFilter;
 
@@ -126,14 +129,9 @@ impl Service {
         self.search_with(query, ServerSearchMode::All).await
     }
 
-    /// `Search` with a choice of server search. Server hits come on top of
-    /// the first page (at most `limit` of them, marked `from_server`, in
-    /// `total`); paging counts local hits only.
-    pub(crate) async fn search_with(
-        &self,
-        mut query: SearchQuery,
-        server_mode: ServerSearchMode,
-    ) -> Result<Response> {
+    /// Where a search looks (a virtual account or folder means its
+    /// members) and the context its terms are read in.
+    async fn search_scope(&self, query: &SearchQuery) -> Result<(SearchScope, SearchContext)> {
         if self.inner.search.is_closed() {
             return Err(ApiError::new(
                 nail_api::ErrorCode::Unavailable,
@@ -166,6 +164,42 @@ impl Service {
                 })
                 .collect(),
         };
+        Ok((scope, ctx))
+    }
+
+    /// Every local hit of `query` (no server search, no page) with its
+    /// thread, newest first: the rows of a whole search list (R5), read in
+    /// one query of the store, so rows removed or added meanwhile never
+    /// shift a page. A hit removed before its thread is read is left out.
+    /// The inner error is a query the user must fix.
+    pub(crate) async fn local_hits(
+        &self,
+        query: &SearchQuery,
+    ) -> Result<std::result::Result<Vec<(MessageId, Option<ThreadId>)>, SearchError>> {
+        let (scope, ctx) = self.search_scope(query).await?;
+        let parsed = match nail_search::parse_query(&query.text) {
+            Ok(parsed) => parsed,
+            Err(error) => return Ok(Err(error)),
+        };
+        let index = self.inner.search.get();
+        let store = self.inner.store.clone();
+        let hits = tokio::task::spawn_blocking(move || {
+            let ids = nail_search::matching_ids(&index, &store, &parsed, &scope, &ctx)?;
+            Ok::<_, crate::error::CoreError>(store.message_threads(&ids)?)
+        })
+        .await??;
+        Ok(Ok(hits))
+    }
+
+    /// `Search` with a choice of server search. Server hits come on top of
+    /// the first page (at most `limit` of them, marked `from_server`, in
+    /// `total`); paging counts local hits only.
+    pub(crate) async fn search_with(
+        &self,
+        mut query: SearchQuery,
+        server_mode: ServerSearchMode,
+    ) -> Result<Response> {
+        let (scope, ctx) = self.search_scope(&query).await?;
         query.limit = query.limit.min(MAX_PAGE_SIZE);
         let index = self.inner.search.get();
         let store = self.inner.store.clone();
@@ -307,7 +341,7 @@ impl Service {
             if failed {
                 info.failed.push(account.clone());
             }
-            let known: std::collections::HashSet<nail_api::MessageId> =
+            let known: std::collections::HashSet<MessageId> =
                 hits.iter().map(|h| h.message.id.clone()).collect();
             let room = cap.saturating_sub(added);
             let summaries = self

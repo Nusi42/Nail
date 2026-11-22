@@ -102,9 +102,11 @@ pub enum MessageTarget {
 /// A whole message list except some rows ([`MessageTarget::List`]).
 ///
 /// The core lists the rows exactly as the message list pages them and
-/// treats each row as the target it stands for in the list: a conversation
-/// row as [`MessageTarget::Conversation`] (with the listed folder; without
-/// a folder in a search), a message row as [`MessageTarget::Message`]. The
+/// treats each row as the target it stands for in the list
+/// ([`MailList::row_target`], pinned against the UI's `rowTarget` by the
+/// `mail-actions` ts-vectors in `crates/nail-api/tests/integration/ts_vectors.rs`): a
+/// conversation row as [`MessageTarget::Conversation`] with
+/// [`MailList::row_folder_id`], a message row as [`MessageTarget::Message`]. The
 /// action reaches the rows' messages minus the messages the `except`
 /// targets resolve to; a conversation counts when one of its messages is
 /// left.
@@ -154,10 +156,17 @@ pub enum MailList {
     Search {
         /// The query the list runs.
         query: SearchQuery,
-        /// The rows stand for their conversations without a folder (a list
-        /// with conversations) instead of the hit messages.
+        /// The rows stand for their conversations (a list with
+        /// conversations) instead of the hit messages.
         #[serde(default)]
         conversations: bool,
+        /// The folder a conversation row is listed in
+        /// ([`ConversationRef::folder_id`]): the folder of a filter chip
+        /// without a typed search (the folder's list, filtered), so a row
+        /// reaches what the same row picked alone reaches; `null` for a
+        /// typed search (its conversations without a folder).
+        #[serde(default)]
+        listed_folder_id: Option<FolderId>,
     },
 }
 
@@ -168,6 +177,39 @@ impl MailList {
         match self {
             Self::Conversations { folder_id } | Self::Messages { folder_id } => Some(folder_id),
             Self::Search { query, .. } => query.folder_id.as_ref(),
+        }
+    }
+
+    /// The folder the list's conversation rows are listed in
+    /// ([`ConversationRef::folder_id`]; the UI's `ListScope.folderId`).
+    pub fn row_folder_id(&self) -> Option<&FolderId> {
+        match self {
+            Self::Conversations { folder_id } | Self::Messages { folder_id } => Some(folder_id),
+            Self::Search {
+                listed_folder_id, ..
+            } => listed_folder_id.as_ref(),
+        }
+    }
+
+    /// Whether the list's rows stand for conversations (else for messages).
+    pub fn conversation_rows(&self) -> bool {
+        match self {
+            Self::Conversations { .. } => true,
+            Self::Messages { .. } => false,
+            Self::Search { conversations, .. } => *conversations,
+        }
+    }
+
+    /// The target a row of this list stands for (the UI's `rowTarget`,
+    /// pinned by the `mail-actions` ts-vectors): a conversation row
+    /// (`thread`, in a list of conversation rows) its conversation in
+    /// [`Self::row_folder_id`], any other row its message.
+    pub fn row_target(&self, message: &MessageId, thread: Option<&ThreadId>) -> MessageTarget {
+        match thread {
+            Some(thread) if self.conversation_rows() => {
+                MessageTarget::conversation(thread.clone(), self.row_folder_id().cloned())
+            }
+            _ => MessageTarget::message(message.clone()),
         }
     }
 }
@@ -463,6 +505,11 @@ pub struct MailActionResult {
     /// Until when the batch can be undone (RFC 3339); `null` with
     /// `batch_id`.
     pub undo_until: Option<String>,
+    /// Messages the action did not reach because a later part of a large
+    /// action failed (R5): they stay as they were, and the UI says so.
+    /// Messages that vanished meanwhile (deleted elsewhere) are not counted.
+    #[serde(default)]
+    pub left_out: u32,
 }
 
 /// What [`crate::Request::ResolveMailTargets`] found
@@ -539,7 +586,7 @@ mod tests {
         assert_eq!(parsed.as_of, None);
         assert!(matches!(
             parsed.list,
-            MailList::Search { ref query, conversations: false } if query.text == "is:unread"
+            MailList::Search { ref query, conversations: false, listed_folder_id: None } if query.text == "is:unread"
         ));
         assert_eq!(
             serde_json::to_value(MailList::Messages {
