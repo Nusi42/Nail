@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.9] — 2026-11-22
+
 ### Fixed — bulk actions (ADR 0230)
 
 - The status bar's "Saving N changes" counts the core's real queue of
@@ -417,6 +419,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.9]: https://github.com/Nusi42/Nail/releases/tag/v0.8.9
 [0.8.8]: https://github.com/Nusi42/Nail/releases/tag/v0.8.8
 [0.8.6]: https://github.com/Nusi42/Nail/releases/tag/v0.8.6
 [0.8.5]: https://github.com/Nusi42/Nail/releases/tag/v0.8.5
