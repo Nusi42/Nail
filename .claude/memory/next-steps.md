@@ -7,6 +7,13 @@ metadata:
 
 **Where to work:** the maintainer starts Claude Code in the master `<master>`. It is only the launch point: `main` lives there and moves only by `git merge --ff-only work-1`. All edits, builds, tests and commits happen in `<work root>\nail-work-1` (`work-1`, the lead) and `nail-work-2`–`work-7` (packages). See [[work-folders]] (ADR 0132). CodeGraph's index is in `nail-work-1/.codegraph`: pass that folder as `projectPath`.
 
+**Wave R4 done 2026-11-22** (reviews: 15 must-fix findings fixed in `38ed2b96`, ADR 0233, schema v23; verify
+gate passed). `release:prepare --version 0.8.9` started for the maintainer's try. Follow-ups: the e2e suite is
+load-flaky at 16 workers (green with `--workers=4`); `m1b` `nails_own_draft_copy_continues_its_draft` fails
+rarely under load (an older Nail draft copy still listed while its replacement is queued opens as a second draft:
+a duplicate, never a loss; pre-existing); bulk Retry / Dismiss cover message writes only; a mass permanent failure
+logs one WARN per op; the R4 e2e bulk spec uses 300 messages (plan said 500; core test 2,000).
+
 **Wave R4 integrated 2026-11-21** (ADRs 0230-0232, [[r4-status]], `docs/plan.md` "Wave R4" status): WS1-WS3
 rebased onto the lead branch; the core also no longer links a non-`\Draft` message as a draft's server copy; the
 `nail-server` lag test checks `OpsChanged` then `Resync`; the `ops` ts-vectors pin `opsWaiting`; Move out of
