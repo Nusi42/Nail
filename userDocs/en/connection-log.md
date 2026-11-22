@@ -43,7 +43,8 @@ Exchange (EWS), sign-in token servers and server discovery.
 - **Copy** and **Export…** give you the whole log as text (in the desktop
   app Export asks where to save the `.txt` file; in a browser it downloads
   it). This is the text to send to support.
-- **Clear** empties the log.
+- **Clear…** empties the log after asking: *Clear connection log* deletes
+  the recorded lines, *Cancel* (the default, also Enter) keeps them.
 
 ### What is recorded
 

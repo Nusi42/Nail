@@ -298,13 +298,14 @@ export function configWithIdentity(): string {
 }
 
 /**
- * Closes the first-run screen with "Skip" (M4b: the desktop app offers it
- * once per session until completed; a seeded run starts fresh).
+ * Skips the first-run screen with its window's × (M4b: the desktop app
+ * offers it once per session until completed; a seeded run starts fresh;
+ * R6: × skips, there is no Skip button).
  */
 export async function skipFirstRun(page: Page): Promise<void> {
   const welcome = page.getByRole("dialog", { name: "Welcome to Nail" });
   await expect(welcome).toBeVisible({ timeout: 60_000 });
-  await welcome.getByRole("button", { name: "Skip" }).click();
+  await welcome.getByRole("button", { name: "Close", exact: true }).click();
   await expect(welcome).toBeHidden();
 }
 

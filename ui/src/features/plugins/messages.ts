@@ -30,6 +30,8 @@ export const notMessages: readonly string[] = [
   "plugin-panel",
   "plugin-manager",
   "plugin-install",
+  // R6: the removal question's window kind.
+  "plugin-uninstall",
   "plugin-dialog",
   // M5c window kinds of plug-in dialogs and the send veto.
   "plugin-modal",
@@ -86,6 +88,7 @@ export function runtimeIds(): string[] {
     ...[...PLUGIN_PERMISSIONS, network].map(permissionMessageId),
     "window-plugin-install",
     "window-plugin-manager",
+    "window-plugin-uninstall",
     ...PLUGIN_RUN_STATE_VALUES.map((s) => `plugin-state-${s}`),
     ...PLUGIN_LOG_LEVEL_VALUES.map((l) => `plugin-log-level-${l}`),
     ...PLUGIN_LOG_SOURCE_VALUES.map((s) => `plugin-log-source-${s}`),

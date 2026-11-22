@@ -12,13 +12,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import { must } from "../../test/must";
 import { PrintHost } from "../print";
 import { handlePinEvent } from "./PinPrompt";
 import { RECOVERY_CREATE_DIALOG, RecoveryGate } from "./RecoveryKey";
 import { formatRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
 import { handleSecurityEvent } from ".";
 import { closePinPrompt, simulateLostVaultKey, simulatePinRequest } from "./vaultMock";
-import { must } from "../../test/must";
 import { stubPrintEachTest } from "../../test/env";
 import { PKCS11_MODULE } from "../../test/mockIds";
 import { renderSettings } from "../settings/testing";
@@ -80,6 +80,12 @@ describe("recovery key", () => {
     expect(await violations(container)).toEqual([]);
     await user.click(screen.getByRole("button", { name: "Create recovery key" }));
     const dialog = await screen.findByRole("dialog", { name: "Recovery key" });
+    // R6: a wizard with Cancel on every step and Done at the end.
+    const footerButtons = () =>
+      within(must(dialog.querySelector<HTMLElement>('[data-part="dialog.footer"]')))
+        .getAllByRole("button")
+        .map((b) => b.textContent);
+    expect(footerButtons()).toEqual(["Create recovery key", "Cancel"]);
     await user.click(within(dialog).getByRole("button", { name: "Create recovery key" }));
     const shown = await within(dialog).findByRole("figure", { name: "Recovery key" });
     const key = env.transport.data.features.vault.recoveryKey ?? "";
@@ -95,9 +101,11 @@ describe("recovery key", () => {
       expect(printed.spy).toHaveBeenCalled();
     });
     expect(within(dialog).getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(footerButtons()).toEqual(["Next", "Cancel"]);
     await user.click(within(dialog).getByRole("checkbox", { name: /I have written down/ }));
     await user.click(within(dialog).getByRole("button", { name: "Next" }));
     const input = within(dialog).getByLabelText("Recovery key");
+    expect(footerButtons()).toEqual(["Check", "Show the key again", "Cancel"]);
     await user.type(input, "ABCD-");
     expect(within(dialog).getByRole("button", { name: "Check" })).toBeDisabled();
     await user.clear(input);
@@ -112,7 +120,8 @@ describe("recovery key", () => {
     expect(await within(dialog).findByText("Your recovery key works. Keep it safe.")).toBeVisible();
     // The key is forgotten once it was typed back.
     expect(within(dialog).queryByRole("figure")).toBeNull();
-    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
+    expect(footerButtons()).toEqual(["Done"]);
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
     expect(await screen.findByText("Last checked")).toBeVisible();
     expect(screen.queryByText(/Never — check/)).toBeNull();
     stop();
@@ -168,10 +177,25 @@ describe("recovery key", () => {
     await user.type(input, created.key);
     await user.click(within(dialog).getByRole("button", { name: "Check" }));
     expect(await within(dialog).findByText("This recovery key works.")).toBeVisible();
-    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
+    // A finished check shows only Done (R6).
+    expect(within(dialog).queryByRole("button", { name: "Check" })).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    // Removing asks in a destructive confirmation: Cancel focused, Enter keeps it.
     await user.click(screen.getByRole("button", { name: "Remove recovery key" }));
-    expect(screen.getByText(/your data is lost if the key/)).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Remove it" }));
+    const ask = await screen.findByRole("dialog", { name: "Remove recovery key" });
+    expect(within(ask).getByText("Remove the recovery key?")).toBeVisible();
+    expect(within(ask).getByText(/your data is lost if the key/)).toBeVisible();
+    await waitFor(() => {
+      expect(within(ask).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Remove recovery key" })).toBeNull();
+    });
+    expect(env.transport.data.features.vault.recoveryKey).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Remove recovery key" }));
+    const again = await screen.findByRole("dialog", { name: "Remove recovery key" });
+    await user.click(within(again).getByRole("button", { name: "Remove recovery key" }));
     expect(await screen.findByText(/There is no recovery key yet/)).toBeVisible();
     expect(env.transport.data.features.vault.recoveryKey).toBeNull();
   });
@@ -314,7 +338,7 @@ describe("PIN dialog", () => {
     const pin = within(dialog).getByLabelText("PIN");
     await waitFor(() => expect(pin).toHaveFocus());
     await user.type(pin, "12");
-    expect(within(dialog).getByRole("button", { name: "OK" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Unlock" })).toBeDisabled();
     await user.type(pin, "34{Enter}");
     await waitFor(() => {
       expect(env.transport.requests).toContainEqual(
@@ -326,7 +350,7 @@ describe("PIN dialog", () => {
     expect(within(again).getByText("2 attempts left.")).toBeVisible();
     expect(within(again).getByLabelText("PIN")).toHaveValue("");
     await user.type(within(again).getByLabelText("PIN"), "123456");
-    await user.click(within(again).getByRole("button", { name: "OK" }));
+    await user.click(within(again).getByRole("button", { name: "Unlock" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
@@ -342,7 +366,7 @@ describe("PIN dialog", () => {
       closePinPrompt(env.transport, prompt.prompt_id, "token-removed");
     });
     expect(await within(dialog).findByText("The card was removed.")).toBeVisible();
-    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });

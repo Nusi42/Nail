@@ -493,6 +493,7 @@ security-secret-smartcard = Stays on the smartcard
 window-security-recovery-create = { security-recovery-input }
 window-security-recovery-verify = Check the recovery key
 window-security-recovery-restore = Open your data with the recovery key
+window-security-recovery-remove = { security-recovery-remove }
 security-action-recovery-create = Create a recovery key…
 security-action-recovery-check = Check the recovery key…
 security-action-recovery-restore = Restore access with the recovery key…
@@ -512,8 +513,8 @@ security-recovery-replace-warning = The current recovery key stops working as so
 security-recovery-check = Check recovery key
 security-recovery-remove = Remove recovery key
 security-recovery-remove-warning = Without a recovery key, your data is lost if the key in { common-keychain-short } is lost.
-security-recovery-remove-confirm = Remove it
-security-recovery-keep = Keep it
+security-recovery-remove-confirm = { security-recovery-remove }
+security-recovery-remove-question = Remove the recovery key?
 security-recovery-intro = Nail creates a recovery key and shows it once. Write it down or print it, and keep it somewhere safe away from this computer. Nail does not keep a copy.
 security-recovery-save-kit = Also save it in a text file (a recovery kit)
 security-recovery-kit-file = Recovery kit file
@@ -594,6 +595,8 @@ security-pin-attempts = { $count ->
 }
 security-pin-last-attempt = Last attempt: a wrong PIN locks the card.
 security-pin-label = PIN
+# The PIN dialog's verb: passes the PIN to the card.
+security-pin-unlock = { security-unlock-submit }
 security-pin-hint = Nail waits until { $until }. The PIN is passed to the card and not stored.
 security-pin-nothing = No card is asking for a PIN.
 security-pin-prompt-gone = { common-pin-request-gone }

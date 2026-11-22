@@ -15,7 +15,7 @@
  *   Nothing is deleted; replaced configuration files keep a backup.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   BackupItem,
   BackupManifest,
@@ -27,7 +27,7 @@ import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useDateFormat } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useClient } from "../../state/queries";
-import { CheckGroup, StepHeader, TextField, WizardButtons } from "./Fields";
+import { CheckGroup, StepHeader, TextField } from "./Fields";
 import { Counts, IssueList, JobView, Problem } from "./Job";
 import {
   BACKUP_FILE_EXTENSION,
@@ -46,7 +46,7 @@ import {
 import { PathField, useSavePath } from "./PathField";
 import { rememberJob } from "./queries";
 import { useBusyAction } from "../../state/busyAction";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter } from "../../widgets/dialog";
 
 /** What an archive holds: when, by which Nail, items with sizes. */
 export function ManifestSummary({ manifest }: { manifest: BackupManifest }) {
@@ -194,9 +194,7 @@ export function BackupWizard({ close }: { close: () => void }) {
             </section>
           )}
           {problem && <Problem problem={problem} />}
-          <WizardButtons>
-            <CloseButton onClose={close} action="close" />
-          </WizardButtons>
+          <DialogFooter done={{ onDone: close }} />
         </div>
       </div>
     );
@@ -254,18 +252,16 @@ export function BackupWizard({ close }: { close: () => void }) {
           defaultPath={defaultBackupName(t)}
         />
         {problem && <Problem problem={problem} />}
-        <WizardButtons>
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="primary"
-            data-action="start"
-            disabled={busy || !ready}
-            onClick={() => void run(false)}
-          >
-            {t("portability-backup-start")}
-          </button>
-        </WizardButtons>
+        <DialogFooter
+          primary={{
+            label: t("portability-backup-start"),
+            action: "start",
+            disabled: !ready,
+            onClick: () => void run(false),
+          }}
+          cancel={{ onClick: close }}
+          busy={busy}
+        />
       </div>
     </div>
   );
@@ -372,6 +368,13 @@ export function RestoreWizard({ close }: { close: () => void }) {
   const [verifyId, setVerifyId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const { busy, problem, run } = useBusyAction();
+  const planStep = useRef<HTMLDivElement>(null);
+  // The dry run's step ends in a destructive "Restore now": the focus
+  // starts on Cancel, never on the destructive button (ADR 0239).
+  useEffect(() => {
+    if (step !== "plan") return;
+    planStep.current?.querySelector<HTMLButtonElement>('[data-role="cancel"]')?.focus();
+  }, [step]);
 
   const guarded = async (work: () => Promise<void>) => {
     await run(async () => {
@@ -446,18 +449,16 @@ export function RestoreWizard({ close }: { close: () => void }) {
             onChange={setPassphrase}
           />
           {problem && <Problem problem={problem} />}
-          <WizardButtons>
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="primary"
-              data-action="open"
-              disabled={busy || passphrase === "" || !isAbsolutePath(path)}
-              onClick={() => void open()}
-            >
-              {t("common-open")}
-            </button>
-          </WizardButtons>
+          <DialogFooter
+            primary={{
+              label: t("common-open"),
+              action: "open",
+              disabled: passphrase === "" || !isAbsolutePath(path),
+              onClick: () => void open(),
+            }}
+            cancel={{ onClick: close }}
+            busy={busy}
+          />
         </div>
       )}
       {step === "choose" && manifest && (
@@ -492,33 +493,27 @@ export function RestoreWizard({ close }: { close: () => void }) {
             </p>
           )}
           {problem && <Problem problem={problem} />}
-          <WizardButtons>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="back"
-              disabled={busy}
-              onClick={() => {
+          <DialogFooter
+            primary={{
+              label: t("portability-restore-dry-run"),
+              action: "dry-run",
+              disabled: items.length === 0,
+              onClick: () => void dryRun(),
+            }}
+            secondary={{
+              label: t("common-back"),
+              action: "back",
+              onClick: () => {
                 setStep("open");
-              }}
-            >
-              {t("common-back")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="primary"
-              data-action="dry-run"
-              disabled={busy || items.length === 0}
-              onClick={() => void dryRun()}
-            >
-              {t("portability-restore-dry-run")}
-            </button>
-          </WizardButtons>
+              },
+            }}
+            cancel={{ onClick: close }}
+            busy={busy}
+          />
         </div>
       )}
       {step === "plan" && plan && (
-        <div data-part="wizard.step-body" data-step="plan">
+        <div data-part="wizard.step-body" data-step="plan" ref={planStep}>
           <StepHeader step={3} steps={4} titleId="portability-restore-plan-title" />
           <p data-part="wizard.intro">{t("portability-restore-plan-intro")}</p>
           <PlanTable actions={plan.actions} captionId="portability-restore-plan-caption" />
@@ -539,29 +534,25 @@ export function RestoreWizard({ close }: { close: () => void }) {
             {t("portability-restore-nothing-deleted")}
           </p>
           {problem && <Problem problem={problem} />}
-          <WizardButtons>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="back"
-              disabled={busy}
-              onClick={() => {
+          {/* Restoring replaces data: red, never the default — the focus
+              starts on Cancel and Enter never runs it (ADR 0239). */}
+          <DialogFooter
+            primary={{
+              label: t("portability-restore-start"),
+              action: "restore",
+              destructive: true,
+              onClick: () => void restore(),
+            }}
+            secondary={{
+              label: t("common-back"),
+              action: "back",
+              onClick: () => {
                 setStep("choose");
-              }}
-            >
-              {t("common-back")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="danger"
-              data-action="restore"
-              disabled={busy}
-              onClick={() => void restore()}
-            >
-              {t("portability-restore-start")}
-            </button>
-          </WizardButtons>
+              },
+            }}
+            cancel={{ onClick: close }}
+            busy={busy}
+          />
         </div>
       )}
       {step === "job" && jobId && (
@@ -570,9 +561,7 @@ export function RestoreWizard({ close }: { close: () => void }) {
           <JobView jobId={jobId}>
             {(report) => (report.restore ? <RestoreSummary report={report.restore} /> : null)}
           </JobView>
-          <WizardButtons>
-            <CloseButton onClose={close} action="close" />
-          </WizardButtons>
+          <DialogFooter done={{ onDone: close }} />
         </div>
       )}
     </div>

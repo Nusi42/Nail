@@ -219,9 +219,22 @@ describe("connection log viewer", () => {
     const [path, text] = must(Object.entries(env.transport.data.features.connlog.exports)[0]);
     expect(path).toMatch(/nail-connection-log-account-acc-work\.txt$/);
     expect(text).toContain("<redacted>");
-    // Clear.
-    await user.click(within(viewer).getByRole("button", { name: "Clear" }));
+    // Clear… asks first (R6): a destructive confirmation, Cancel focused,
+    // Enter does not clear; Cancel keeps the lines.
+    await user.click(within(viewer).getByRole("button", { name: "Clear…" }));
+    const ask = await screen.findByRole("dialog", { name: "Clear connection log" });
+    expect(ask).toHaveTextContent("Clear “Connection log of Work”?");
+    expect(within(ask).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Clear connection log" })).toBeNull();
+    });
+    expect(within(viewer).getByText(/A0001 LOGIN/)).toBeVisible();
+    await user.click(within(viewer).getByRole("button", { name: "Clear…" }));
+    const again = await screen.findByRole("dialog", { name: "Clear connection log" });
+    await user.click(within(again).getByRole("button", { name: "Clear connection log" }));
     expect(await within(viewer).findByText(/^Nothing recorded yet/)).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Clear connection log" })).toBeNull();
     unwire();
     await settleQueries(env);
   });

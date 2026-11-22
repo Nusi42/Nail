@@ -33,7 +33,13 @@ import { RUN_COMMAND, runCommandHandler } from "./commands";
 import { isForThisUi } from "./context";
 import { INSTALL_DIALOG, InstallDialog } from "./InstallDialog";
 import { PluginDialogWindow, PluginDialogs } from "./PluginDialogs";
-import { MANAGER_DIALOG, PluginManager, PluginManagerDialog } from "./PluginManager";
+import {
+  MANAGER_DIALOG,
+  PluginManager,
+  PluginManagerDialog,
+  UNINSTALL_DIALOG,
+  UninstallDialog,
+} from "./PluginManager";
 import { PluginNotifications } from "./PluginNotifications";
 import { PluginPanel } from "./PluginPanel";
 import { appendLogLine, pluginKeys } from "./queries";
@@ -107,6 +113,7 @@ export const actions: Feature["actions"] = {
 export const dialogs: NonNullable<Feature["dialogs"]> = {
   [INSTALL_DIALOG]: InstallDialog,
   [MANAGER_DIALOG]: PluginManagerDialog,
+  [UNINSTALL_DIALOG]: UninstallDialog,
   // M5c: plug-in dialogs and the send veto are windows too (`./windows.ts`).
   ...Object.fromEntries(PLUGIN_DIALOG_KINDS.map((kind) => [kind, PluginDialogWindow])),
   [SEND_VETO_WINDOW]: SendVetoWindow,
@@ -120,6 +127,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
 export const windows: NonNullable<Feature["windows"]> = {
   [INSTALL_DIALOG]: { size: { width: 640, height: 560 }, min_size: { width: 480, height: 400 } },
   [MANAGER_DIALOG]: { size: { width: 900, height: 640 }, min_size: { width: 600, height: 420 } },
+  [UNINSTALL_DIALOG]: { confirmation: true },
   ...pluginWindows,
 };
 

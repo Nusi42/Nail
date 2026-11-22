@@ -37,6 +37,7 @@ plugin-permission-some-accounts = Only these accounts
 
 window-plugin-install = Install a plug-in
 window-plugin-manager = { common-plug-ins }
+window-plugin-uninstall = { plugin-manager-uninstall }
 
 ## Layout labels (@plugin.…)
 
@@ -112,8 +113,11 @@ plugin-manager-show-log = Log
 plugin-manager-show-layout = Place in layout
 plugin-manager-grants-save = Save permissions
 plugin-manager-grants-saved = Permissions saved.
-plugin-manager-uninstall-confirm = Remove { $name }? Its settings, data and log are deleted. Items it added to your layout stay until you remove them.
-plugin-manager-uninstall-no = Keep
+# Remove… in the manager asks first (a confirmation window).
+plugin-manager-remove = Remove plug-in…
+plugin-manager-uninstall-confirm = Remove “{ $name }”?
+plugin-manager-uninstall-note = Its settings, data and log are deleted. Items it added to your layout stay until you remove them.
+plugin-manager-uninstall = Remove plug-in
 
 ## Run states
 

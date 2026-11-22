@@ -16,6 +16,7 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient, useMessage } from "../../state/queries";
 import { useUi } from "../../state/uiStore";
+import { DialogFooter } from "../../widgets/dialog";
 import { SelectField, TextField } from "../../widgets/forms";
 import { identityText } from "./IdentityCrypto";
 import { ImportResult } from "./KeyTools";
@@ -117,9 +118,15 @@ function SendSetup() {
 export function AutocryptImport({
   messageId,
   onDone,
+  close,
 }: {
   messageId: MessageId;
   onDone?: (result: KeyImportResult) => void;
+  /**
+   * In the import dialog: the shared footer (Import key, Cancel; then
+   * Done) instead of the inline button (ADR 0239).
+   */
+  close?: () => void;
 }) {
   const t = useT();
   const client = useClient();
@@ -157,7 +164,19 @@ export function AutocryptImport({
     }
   };
 
-  if (result) return <ImportResult result={result} />;
+  if (result) {
+    return (
+      <>
+        <ImportResult result={result} />
+        {close && <DialogFooter done={{ onDone: close }} />}
+      </>
+    );
+  }
+  const errorText = error && (
+    <p data-part="security-autocrypt.error" role="alert">
+      {t(error)}
+    </p>
+  );
   return (
     <form
       data-part="security-autocrypt.import"
@@ -175,19 +194,33 @@ export function AutocryptImport({
           setCode(formatPasscode(v));
         }}
       />
-      <button
-        type="submit"
-        data-part="form.button"
-        data-variant="primary"
-        data-action="import-setup"
-        disabled={busy || !isCompletePasscode(code)}
-      >
-        {t("security-autocrypt-import")}
-      </button>
-      {error && (
-        <p data-part="security-autocrypt.error" role="alert">
-          {t(error)}
-        </p>
+      {close ? (
+        <>
+          {errorText}
+          <DialogFooter
+            primary={{
+              label: t("security-autocrypt-import"),
+              action: "import-setup",
+              submit: true,
+              disabled: !isCompletePasscode(code),
+            }}
+            cancel={{ onClick: close }}
+            busy={busy}
+          />
+        </>
+      ) : (
+        <>
+          <button
+            type="submit"
+            data-part="form.button"
+            data-variant="primary"
+            data-action="import-setup"
+            disabled={busy || !isCompletePasscode(code)}
+          >
+            {t("security-autocrypt-import")}
+          </button>
+          {errorText}
+        </>
       )}
     </form>
   );
@@ -236,27 +269,24 @@ export function AutocryptSetup({ node }: WidgetProps) {
   );
 }
 
-/** Dialog `security-autocrypt-import`: imports the selected setup message. */
+/**
+ * Dialog `security-autocrypt-import`: imports the selected setup message
+ * (Import key, Cancel; after the import only Done).
+ */
 export function AutocryptImportDialog({ close }: DialogProps) {
   const t = useT();
   const selectedId = useUi((s) => s.selectedMessageId);
-  const [done, setDone] = useState(false);
   return (
     <div data-part="security-autocrypt.dialog">
       <p data-part="security-autocrypt.intro">{t("security-autocrypt-import-intro")}</p>
       {selectedId === null ? (
-        <p data-part="security-autocrypt.hint">{t("security-autocrypt-select-message")}</p>
+        <>
+          <p data-part="security-autocrypt.hint">{t("security-autocrypt-select-message")}</p>
+          <DialogFooter cancel={{ onClick: close }} />
+        </>
       ) : (
-        <AutocryptImport
-          messageId={selectedId}
-          onDone={() => {
-            setDone(true);
-          }}
-        />
+        <AutocryptImport messageId={selectedId} close={close} />
       )}
-      <button type="button" data-part="form.button" data-action="close" onClick={close}>
-        {t(done ? "security-autocrypt-code-done" : "security-cancel")}
-      </button>
     </div>
   );
 }

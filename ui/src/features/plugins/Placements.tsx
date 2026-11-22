@@ -7,6 +7,10 @@
  * and applies them with the merge dialog's request (`ApplyConfigMerge`,
  * which backs up the file first; "Undo" reverts to that backup). Nothing is
  * written without "Add to layout".
+ *
+ * In the install wizard (`inWizard`) the step ends in the shared footer
+ * (ADR 0239): Add to layout and Not now (the wizard's Cancel), then Done;
+ * in the plug-in manager the buttons stay a row of the section.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -18,11 +22,25 @@ import { differs } from "../customization/merge";
 import { backupsKey } from "../customization/MergeDialog";
 import { useBusyAction } from "../../state/busyAction";
 import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter } from "../../widgets/dialog";
 
 interface Props {
   pluginId: string;
   /** Called when the user is done (applied, skipped or nothing to place). */
   onDone: () => void;
+  /** The last step of the install wizard: the shared footer. */
+  inWizard?: boolean;
+}
+
+/** The end of a finished state: Done (wizard) or Close (manager section). */
+function DoneButton({ inWizard, onDone }: { inWizard: boolean; onDone: () => void }) {
+  return inWizard ? (
+    <DialogFooter done={{ onDone }} />
+  ) : (
+    <div data-part="plugin-placements.actions">
+      <CloseButton onClose={onDone} action="done" />
+    </div>
+  );
 }
 
 /** The merge choices: checked items taken from the proposal, the rest kept. */
@@ -37,7 +55,7 @@ export function placementChoices(
 
 type Stage = { kind: "choose" } | { kind: "applied"; backup: ConfigBackup | null };
 
-export function Placements({ pluginId, onDone }: Props) {
+export function Placements({ pluginId, onDone, inWizard = false }: Props) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
@@ -73,9 +91,7 @@ export function Placements({ pluginId, onDone }: Props) {
         <p data-part="plugin-placements.error" role="alert">
           {t(message.id, message.args)}
         </p>
-        <div data-part="plugin-placements.actions">
-          <CloseButton onClose={onDone} action="done" />
-        </div>
+        <DoneButton inWizard={inWizard} onDone={onDone} />
       </section>
     );
   }
@@ -107,20 +123,18 @@ export function Placements({ pluginId, onDone }: Props) {
             {t(problem.id, problem.args)}
           </p>
         )}
-        <div data-part="plugin-placements.actions">
-          {stage.backup && (
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="undo"
-              disabled={busy}
-              onClick={() => void undo()}
-            >
-              {t("common-undo")}
-            </button>
-          )}
-          <CloseButton onClose={onDone} action="done" />
-        </div>
+        {stage.backup && (
+          <button
+            type="button"
+            data-part="form.button"
+            data-action="undo"
+            disabled={busy}
+            onClick={() => void undo()}
+          >
+            {t("common-undo")}
+          </button>
+        )}
+        <DoneButton inWizard={inWizard} onDone={onDone} />
       </section>
     );
   }
@@ -138,9 +152,7 @@ export function Placements({ pluginId, onDone }: Props) {
             ? t("plugin-placements-invalid", { count: preview.errors.length })
             : t("plugin-placements-nothing")}
         </p>
-        <div data-part="plugin-placements.actions">
-          <CloseButton onClose={onDone} action="done" />
-        </div>
+        <DoneButton inWizard={inWizard} onDone={onDone} />
       </section>
     );
   }
@@ -209,27 +221,40 @@ export function Placements({ pluginId, onDone }: Props) {
           </li>
         ))}
       </ul>
-      <div data-part="plugin-placements.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="apply"
-          data-variant="primary"
-          disabled={busy || taken === 0}
-          onClick={() => void apply()}
-        >
-          {t("plugin-placements-apply", { count: taken })}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="skip"
-          disabled={busy}
-          onClick={onDone}
-        >
-          {t("common-not-now")}
-        </button>
-      </div>
+      {inWizard ? (
+        <DialogFooter
+          primary={{
+            label: t("plugin-placements-apply", { count: taken }),
+            action: "apply",
+            disabled: taken === 0,
+            onClick: () => void apply(),
+          }}
+          cancel={{ label: t("common-not-now"), action: "skip", onClick: onDone }}
+          busy={busy}
+        />
+      ) : (
+        <div data-part="plugin-placements.actions">
+          <button
+            type="button"
+            data-part="form.button"
+            data-action="apply"
+            data-variant="primary"
+            disabled={busy || taken === 0}
+            onClick={() => void apply()}
+          >
+            {t("plugin-placements-apply", { count: taken })}
+          </button>
+          <button
+            type="button"
+            data-part="form.button"
+            data-action="skip"
+            disabled={busy}
+            onClick={onDone}
+          >
+            {t("common-not-now")}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

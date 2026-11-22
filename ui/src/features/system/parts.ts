@@ -16,7 +16,6 @@ export const SYSTEM_PLAIN_LISTS = ["default-apps.list", "about-nail.facts", "fir
 export const SYSTEM_ROWS = [
   "update-status.buttons",
   "default-apps.buttons",
-  "first-run.buttons",
   "program-draft",
   "default-apps.item",
 ];

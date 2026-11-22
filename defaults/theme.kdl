@@ -2477,7 +2477,6 @@ theme "default" mode="system" {
     part "remote-login.title" { margin 0; font-size "$font-size.xl"; }
     part "remote-login.intro" { margin 0; color "$color.fg-muted"; }
     part "remote-login.form" { display "flex"; flex-direction "column"; gap "$space.sm"; }
-    part "remote-login.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "remote-login.notices" { display "flex"; flex-direction "column"; gap "$space.xs"; }
     part "remote-login.notice" { margin 0; }
     part "remote-login.notice:error" { color "$color.danger"; }
@@ -2657,7 +2656,6 @@ theme "default" mode="system" {
     part "remote-pairing.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
 
     part "remote-pair.form" { display "flex"; flex-direction "column"; gap "$space.sm"; }
-    part "remote-pair.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "remote-pair.code-panel" { display "flex"; flex-direction "column"; gap "$space.sm"; }
     part "remote-pair.code" {
         font-family "$font.mono"
@@ -3036,10 +3034,6 @@ theme "default" mode="system" {
         gap "$space.md"
         padding "$space.lg"
     }
-    part "plugin.dialog.buttons" {
-        gap "$space.sm"
-        padding "$space.sm" "$space.lg" "$space.lg"
-    }
     part "plugin.dialog.error" { color "$color.danger"; }
     part "plugin.tree" {
         display "flex"
@@ -3150,18 +3144,6 @@ theme "default" mode="system" {
         width "$size.icon"
         height "$size.icon"
     }
-    part "plugin.dialog.button" {
-        padding "$space.xs" "$space.md"
-        border "$border.thin"
-        border-radius "$radius.sm"
-        color "$color.fg"
-        background-color "$color.bg-subtle"
-    }
-    part "plugin.dialog.button[variant=\"primary\"]" {
-        border-color "$color.accent"
-        color "$color.accent-fg"
-        background-color "$color.accent"
-    }
     part "plugin.notifications.list" {
         display "flex"
         flex-direction "column"
@@ -3216,7 +3198,6 @@ theme "default" mode="system" {
         margin 0
         font-size "$font-size.lg"
     }
-    part "plugin-install.actions" { gap "$space.sm"; }
     part "plugin-install.status" { color "$color.fg-muted"; }
     part "plugin-manager" {
         display "flex"
@@ -4000,7 +3981,6 @@ theme "default" mode="system" {
     part "first-run.step.text" { margin 0; }
     part "first-run.step.state" { font-size "$font-size.sm"; color "$color.fg-muted"; }
     part "first-run.later" { font-size "$font-size.sm"; color "$color.fg-muted"; }
-    part "first-run.buttons" { gap "$space.sm"; justify-content "flex-end"; }
     part "first-run.error" { color "$color.danger"; }
 
     part "program-draft" {
@@ -4201,6 +4181,7 @@ theme "default" mode="system" {
     part "recovery" { display "flex"; flex-direction "column"; gap "$space.md"; }
     part "recovery.text" { margin 0; }
     part "recovery.result" { font-weight "$font-weight.medium"; }
+    part "recovery.tools" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "recovery-key" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.md"; border "2px dashed $color.border"; border-radius "$radius.md"; }
     part "recovery-key.value" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; font-family "$font.mono"; font-size "$font-size.lg"; }
     part "recovery-key.group" { font-family "$font.mono"; letter-spacing "0.05em"; }
@@ -4209,7 +4190,6 @@ theme "default" mode="system" {
     part "recovery-settings.fact" { display "flex"; gap "$space.sm"; }
     part "recovery-settings.fact.label" { color "$color.fg-muted"; }
     part "recovery-settings.fact.value" { margin 0; font-weight "$font-weight.medium"; }
-    part "recovery-settings.confirm" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
 
     // Smartcards (PKCS#11): modules, cards, keys and certificates; the PIN prompt.
     part "smartcards" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }

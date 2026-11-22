@@ -76,7 +76,10 @@ shows, for each item, what would happen, without changing anything:
 
 In the restore assistant: open the backup with its passphrase, optionally
 check it, choose the items, then **Show what would change** (the dry run)
-and **Restore now**. Details:
+and **Restore now**. *Restore now* is never the default button: when the
+dry run shows, *Cancel* has the focus and Enter does not restore. Every
+step has **Cancel** (nothing is changed before *Restore now*); the report
+ends with **Done**. Details:
 
 * **Configuration** (settings, theme, layout, rules, accounts) is replaced
   file by file; files that are already identical are left alone. Settings

@@ -27,15 +27,7 @@ import { useLocale, useT } from "../../i18n/I18nProvider";
 import { DATE_ONLY, useDateFormat } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { queryKeys, useClient } from "../../state/queries";
-import {
-  Check,
-  CheckGroup,
-  RadioGroup,
-  SelectField,
-  StepHeader,
-  TextField,
-  WizardButtons,
-} from "./Fields";
+import { Check, CheckGroup, RadioGroup, SelectField, StepHeader, TextField } from "./Fields";
 import { Counts, IssueList, JobView, Problem } from "./Job";
 import {
   IMPORT_FORMATS,
@@ -50,7 +42,7 @@ import {
 import { PathField } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars, useImportSources } from "./queries";
 import { useBusyAction } from "../../state/busyAction";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter } from "../../widgets/dialog";
 import { AccountChoiceField, NullablePickerField } from "../../widgets/pickers";
 
 type Step = "source" | "options" | "job";
@@ -67,6 +59,7 @@ function SourceStep({
   problem,
   onNext,
   onUseFound,
+  close,
 }: {
   format: ImportFormat;
   setFormat: (f: ImportFormat) => void;
@@ -76,6 +69,7 @@ function SourceStep({
   problem: LocalizedMessage | null;
   onNext: () => void;
   onUseFound: (format: ImportFormat, path: string) => void;
+  close: () => void;
 }) {
   const t = useT();
   const dates = useDateFormat();
@@ -145,18 +139,15 @@ function SourceStep({
         filters={importFilters(format)}
       />
       {problem && <Problem problem={problem} />}
-      <WizardButtons>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="next"
-          disabled={busy || !isAbsolutePath(path)}
-          onClick={onNext}
-        >
-          {t(busy ? "portability-reading" : "portability-import-read")}
-        </button>
-      </WizardButtons>
+      <DialogFooter
+        primary={{
+          label: t(busy ? "portability-reading" : "portability-import-read"),
+          action: "next",
+          disabled: busy || !isAbsolutePath(path),
+          onClick: onNext,
+        }}
+        cancel={{ onClick: close }}
+      />
     </div>
   );
 }
@@ -234,11 +225,13 @@ function OptionsStep({
   problem,
   onBack,
   onStart,
+  close,
 }: {
   preview: ImportPreview;
   busy: boolean;
   problem: LocalizedMessage | null;
   onBack: () => void;
+  close: () => void;
   onStart: (options: {
     folders: string[] | null;
     collections: string[] | null;
@@ -389,23 +382,12 @@ function OptionsStep({
         titleId="portability-preview-issues-title"
       />
       {problem && <Problem problem={problem} />}
-      <WizardButtons>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="back"
-          disabled={busy}
-          onClick={onBack}
-        >
-          {t("common-back")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="start"
-          disabled={busy || nothing}
-          onClick={() => {
+      <DialogFooter
+        primary={{
+          label: t("common-import"),
+          action: "start",
+          disabled: nothing,
+          onClick: () => {
             onStart({
               folders: folders.length === preview.folders.length ? null : folders,
               collections: collections.length === preview.collections.length ? null : collections,
@@ -417,11 +399,12 @@ function OptionsStep({
               calendarId,
               addressBookId,
             });
-          }}
-        >
-          {t("common-import")}
-        </button>
-      </WizardButtons>
+          },
+        }}
+        secondary={{ label: t("common-back"), action: "back", onClick: onBack }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
     </div>
   );
 }
@@ -662,6 +645,7 @@ export function ImportWizard({ close }: { close: () => void }) {
           setPath={setPath}
           busy={busy}
           problem={problem}
+          close={close}
           onNext={() => void read(format, path)}
           onUseFound={(f, p) => {
             setFormat(f);
@@ -676,6 +660,7 @@ export function ImportWizard({ close }: { close: () => void }) {
           preview={preview}
           busy={busy}
           problem={problem}
+          close={close}
           onBack={() => {
             setProblem(null);
             setStep("source");
@@ -691,9 +676,7 @@ export function ImportWizard({ close }: { close: () => void }) {
           <JobView jobId={jobId}>
             {(report: JobReport) => <Proposals accounts={report.accounts} rules={report.rules} />}
           </JobView>
-          <WizardButtons>
-            <CloseButton onClose={close} action="close" />
-          </WizardButtons>
+          <DialogFooter done={{ onDone: close }} />
         </div>
       )}
     </div>

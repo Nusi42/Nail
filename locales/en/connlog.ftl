@@ -27,12 +27,17 @@ connlog-viewer-actions = Connection log actions
 connlog-viewer-pause = Pause
 connlog-viewer-copy = { common-copy }
 connlog-viewer-export = { common-export-ellipsis }
-connlog-viewer-clear = Clear
+connlog-viewer-clear = Clear…
+# Clear… asks first: the cleared lines cannot be brought back. $log is the
+# log's heading (“Connection log of Work”).
+connlog-clear-question = Clear “{ $log }”?
+connlog-clear-note = The recorded lines are deleted. New connections are logged again.
+connlog-clear-confirm = Clear connection log
+window-connection-log-clear = { connlog-clear-confirm }
 connlog-viewer-copied = The connection log was copied.
 connlog-viewer-saved = The connection log was saved.
 connlog-viewer-downloaded = The connection log was downloaded.
 connlog-viewer-export-unsupported = The connection log could not be saved here.
-connlog-viewer-cleared = The connection log was cleared.
 connlog-viewer-paused =
     { $count ->
         [0] Paused.
@@ -67,7 +72,6 @@ connlog-details-redacted = Passwords, tokens and message content are never shown
 connlog-details-copy = Copy details
 connlog-details-copied = The details were copied.
 connlog-details-show-log = Show in connection log
-connlog-details-close = { common-close }
 connlog-details-gone = The details of this error are no longer available.
 
 ## Settings › Accounts

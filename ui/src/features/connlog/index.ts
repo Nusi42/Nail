@@ -25,9 +25,9 @@
  */
 import type { WindowRegistration } from "../../state/windows";
 import type { Feature } from "../types";
-import { ConnectionLogWindow } from "./ConnectionLogWindow";
+import { ClearLogDialog, ConnectionLogWindow } from "./ConnectionLogWindow";
 import { ErrorDetailsWindow } from "./ErrorDetails";
-import { APP_LOG_KIND, CONNECTION_LOG_KIND, ERROR_DETAILS_KIND } from "./names";
+import { APP_LOG_KIND, CLEAR_KIND, CONNECTION_LOG_KIND, ERROR_DETAILS_KIND } from "./names";
 import { handleConnlogEvent } from "./queries";
 import { AppLogWindow } from "./Settings";
 
@@ -48,6 +48,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
   [CONNECTION_LOG_KIND]: ConnectionLogWindow,
   [ERROR_DETAILS_KIND]: ErrorDetailsWindow,
   [APP_LOG_KIND]: AppLogWindow,
+  [CLEAR_KIND]: ClearLogDialog,
 };
 
 /**
@@ -78,6 +79,7 @@ export const windows: NonNullable<Feature["windows"]> = {
     min_size: { width: 420, height: 320 },
     pop_out: false,
   },
+  [CLEAR_KIND]: { confirmation: true },
 };
 
 /** Core event handlers: new log entries, changed sync errors. */

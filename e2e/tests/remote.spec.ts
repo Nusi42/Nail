@@ -80,7 +80,7 @@ test("a second browser pairs with a code from the desktop", async ({ page }) => 
   const settings = viewRegion(page, "Settings");
   await openSettingsTab(page, "Devices");
   await settings.getByRole("button", { name: "Pair a device" }).first().click();
-  await page.getByRole("button", { name: "Create pairing code" }).click();
+  await page.getByRole("button", { name: "Create code" }).click();
   const code = (await page.locator('[data-part="remote-pair.code"]').textContent())?.trim() ?? "";
   expect(code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
   await expect(page.locator('[data-part="remote-pair.code-panel"]')).toContainText(remote.url);

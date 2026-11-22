@@ -8,7 +8,6 @@
 import type { JobKind, JobStatus } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useDateFormat } from "../../i18n/format";
-import type { DialogProps } from "../../layout/dialogRegistry";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { useUiStoreApi } from "../../state/uiStore";
 import { RestoreSummary } from "./BackupWizard";
@@ -24,7 +23,6 @@ import {
 } from "./names";
 import { useJobs } from "./queries";
 import { portabilityStoreFor, usePortabilityState } from "./store";
-import { CloseButton } from "../../widgets/CloseButton";
 
 function JobRow({ job }: { job: JobStatus }) {
   const t = useT();
@@ -154,8 +152,11 @@ export function BackupRestoreWidget({ node }: WidgetProps) {
   );
 }
 
-/** Dialog `portability-report`: the job the lists chose. */
-export function ReportDialog({ close }: DialogProps) {
+/**
+ * Dialog `portability-report`: the job the lists chose. An information
+ * window: × closes it, no footer (ADR 0239).
+ */
+export function ReportDialog() {
   const jobId = usePortabilityState((s) => s.reportJobId);
   return (
     <div data-part="portability.report-dialog">
@@ -171,9 +172,6 @@ export function ReportDialog({ close }: DialogProps) {
           )}
         </JobView>
       )}
-      <div data-part="wizard.buttons">
-        <CloseButton onClose={close} action="close" />
-      </div>
     </div>
   );
 }

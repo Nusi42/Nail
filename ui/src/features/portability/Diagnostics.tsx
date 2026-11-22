@@ -6,8 +6,10 @@
  * whether addresses and subjects are replaced, then **sees exactly what
  * the zip will hold** (`PreviewDiagnostics`: every file, its size, what was
  * removed, the start of its text) before saving it
- * (`CreateDiagnosticsBundle` with the same options). Changing an option
- * asks for a fresh preview first.
+ * (`CreateDiagnosticsBundle` with the same options). A wizard (ADR 0239):
+ * Next shows the preview, Back returns to the options (a changed option
+ * asks for a fresh preview), Save bundle writes it, Done closes; Cancel on
+ * every step.
  */
 import { useState } from "react";
 import { ConnectionLogSettingsCard } from "../connlog";
@@ -22,7 +24,7 @@ import { useLocale, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useClient, useMessage } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
-import { Check, CheckGroup, WizardButtons } from "./Fields";
+import { Check, CheckGroup } from "./Fields";
 import { Problem } from "./Job";
 import {
   DIAGNOSTICS_FILTERS,
@@ -42,7 +44,7 @@ import { DIAGNOSTICS_DIALOG } from "./names";
 import { PathField, useSavePath } from "./PathField";
 import { usePortabilityState } from "./store";
 import { useBusyAction } from "../../state/busyAction";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter } from "../../widgets/dialog";
 
 /** `nail_api::diagnostics::DIAGNOSTICS_MANIFEST_ENTRY`. */
 const MANIFEST_ENTRY = "manifest.json";
@@ -116,7 +118,7 @@ export function DiagnosticsPreview({ manifest }: { manifest: DiagnosticsManifest
 }
 
 /** The diagnostics dialog's content. */
-export function DiagnosticsBundleView({ close }: { close?: () => void }) {
+export function DiagnosticsBundleView({ close }: { close: () => void }) {
   const t = useT();
   const locale = useLocale();
   const client = useClient();
@@ -169,89 +171,100 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
       setBundle(answer.bundle);
     });
 
+  // A wizard (ADR 0239): the options, then exactly what the bundle holds
+  // with where to save it, then the saved file with Done.
+  const state = bundle ? "saved" : preview ? "previewed" : "options";
   return (
-    <div data-part="diagnostics" data-state={bundle ? "saved" : preview ? "previewed" : "options"}>
-      <p data-part="wizard.intro">{t("portability-diagnostics-intro")}</p>
-      <CheckGroup<DiagnosticsItem>
-        legend={t("portability-backup-items")}
-        field="items"
-        selected={options.items}
-        onChange={(items) => {
-          change({ ...options, items });
-        }}
-        choices={DIAGNOSTICS_ITEMS.map((item) => ({
-          value: item,
-          label: t(diagnosticsItemId(item)),
-          hint: t(`portability-diagnostics-item-hint-${item}`),
-        }))}
-      />
-      {mail && (
-        <fieldset data-part="form.section" data-field="messages">
-          <legend data-part="form.section.title">{t("portability-diagnostics-messages")}</legend>
-          <p data-part="form.hint" data-tone="warning">
-            {t("portability-diagnostics-mail-warning", { max: MAX_DIAGNOSTICS_MESSAGES })}
+    <div data-part="diagnostics" data-state={state}>
+      {state === "options" && (
+        <>
+          <p data-part="wizard.intro">{t("portability-diagnostics-intro")}</p>
+          <CheckGroup<DiagnosticsItem>
+            legend={t("portability-backup-items")}
+            field="items"
+            selected={options.items}
+            onChange={(items) => {
+              change({ ...options, items });
+            }}
+            choices={DIAGNOSTICS_ITEMS.map((item) => ({
+              value: item,
+              label: t(diagnosticsItemId(item)),
+              hint: t(`portability-diagnostics-item-hint-${item}`),
+            }))}
+          />
+          {mail && (
+            <fieldset data-part="form.section" data-field="messages">
+              <legend data-part="form.section.title">
+                {t("portability-diagnostics-messages")}
+              </legend>
+              <p data-part="form.hint" data-tone="warning">
+                {t("portability-diagnostics-mail-warning", { max: MAX_DIAGNOSTICS_MESSAGES })}
+              </p>
+              {candidates.length === 0 ? (
+                <p data-part="form.hint">{t("portability-diagnostics-select-message")}</p>
+              ) : (
+                <ul data-part="portability.choices">
+                  {candidates.map((id) => (
+                    <li key={id} data-part="portability.choice">
+                      <label data-part="form.check">
+                        <input
+                          data-part="form.checkbox"
+                          type="checkbox"
+                          checked={options.message_ids.includes(id)}
+                          onChange={(e) => {
+                            change({
+                              ...options,
+                              message_ids: e.target.checked
+                                ? [...options.message_ids, id]
+                                : options.message_ids.filter((m) => m !== id),
+                            });
+                          }}
+                        />
+                        <MessageLabel id={id} />
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </fieldset>
+          )}
+          <Check
+            label={t("portability-diagnostics-redact")}
+            field="redact-addresses"
+            checked={options.redact_addresses}
+            onChange={(redact_addresses) => {
+              change({ ...options, redact_addresses });
+            }}
+            hint={t("portability-diagnostics-redact-hint")}
+          />
+          <p data-part="form.hint" data-field="secrets">
+            {t("portability-diagnostics-secrets")}
           </p>
-          {candidates.length === 0 ? (
-            <p data-part="form.hint">{t("portability-diagnostics-select-message")}</p>
-          ) : (
-            <ul data-part="portability.choices">
-              {candidates.map((id) => (
-                <li key={id} data-part="portability.choice">
-                  <label data-part="form.check">
-                    <input
-                      data-part="form.checkbox"
-                      type="checkbox"
-                      checked={options.message_ids.includes(id)}
-                      onChange={(e) => {
-                        change({
-                          ...options,
-                          message_ids: e.target.checked
-                            ? [...options.message_ids, id]
-                            : options.message_ids.filter((m) => m !== id),
-                        });
-                      }}
-                    />
-                    <MessageLabel id={id} />
-                  </label>
+          {issues.length > 0 && (
+            <ul data-part="diagnostics.issues">
+              {issues.map((issue) => (
+                <li key={issue} data-part="form.hint" data-tone="danger">
+                  {t(diagnosticsIssueId(issue))}
                 </li>
               ))}
             </ul>
           )}
-        </fieldset>
+        </>
       )}
-      <Check
-        label={t("portability-diagnostics-redact")}
-        field="redact-addresses"
-        checked={options.redact_addresses}
-        onChange={(redact_addresses) => {
-          change({ ...options, redact_addresses });
-        }}
-        hint={t("portability-diagnostics-redact-hint")}
-      />
-      <p data-part="form.hint" data-field="secrets">
-        {t("portability-diagnostics-secrets")}
-      </p>
-      {issues.length > 0 && (
-        <ul data-part="diagnostics.issues">
-          {issues.map((issue) => (
-            <li key={issue} data-part="form.hint" data-tone="danger">
-              {t(diagnosticsIssueId(issue))}
-            </li>
-          ))}
-        </ul>
-      )}
-      {preview && <DiagnosticsPreview manifest={preview} />}
-      {preview && !bundle && (
-        <PathField
-          labelId="portability-diagnostics-file"
-          field="bundle-path"
-          value={path}
-          onChange={setPath}
-          kind="save-file"
-          titleId="portability-diagnostics-pick-title"
-          filters={DIAGNOSTICS_FILTERS}
-          defaultPath={`${plainText(t("portability-diagnostics-default-name", { date: new Date().toISOString().slice(0, 10) }))}.zip`}
-        />
+      {state === "previewed" && preview && (
+        <>
+          <DiagnosticsPreview manifest={preview} />
+          <PathField
+            labelId="portability-diagnostics-file"
+            field="bundle-path"
+            value={path}
+            onChange={setPath}
+            kind="save-file"
+            titleId="portability-diagnostics-pick-title"
+            filters={DIAGNOSTICS_FILTERS}
+            defaultPath={`${plainText(t("portability-diagnostics-default-name", { date: new Date().toISOString().slice(0, 10) }))}.zip`}
+          />
+        </>
       )}
       {bundle && (
         <section data-part="diagnostics.saved" role="status">
@@ -268,33 +281,40 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
         </section>
       )}
       {problem && <Problem problem={problem} />}
-      {/* One button row at the end: in the dialog it stays visible at the
+      {/* One footer at the end: in the dialog it stays visible at the
           window's bottom while the body scrolls (P1, ADR 0144). */}
-      <WizardButtons>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant={preview ? undefined : "primary"}
-          data-action="preview"
-          disabled={busy || issues.length > 0}
-          onClick={() => void showPreview()}
-        >
-          {t("portability-diagnostics-preview")}
-        </button>
-        {preview && !bundle && (
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="primary"
-            data-action="save"
-            disabled={busy || !isAbsolutePath(path)}
-            onClick={() => void save()}
-          >
-            {t("portability-diagnostics-save")}
-          </button>
-        )}
-        {close && <CloseButton onClose={close} action="close" />}
-      </WizardButtons>
+      {state === "saved" ? (
+        <DialogFooter done={{ onDone: close }} />
+      ) : state === "options" ? (
+        <DialogFooter
+          primary={{
+            label: t("portability-diagnostics-preview"),
+            action: "preview",
+            disabled: issues.length > 0,
+            onClick: () => void showPreview(),
+          }}
+          cancel={{ onClick: close }}
+          busy={busy}
+        />
+      ) : (
+        <DialogFooter
+          primary={{
+            label: t("portability-diagnostics-save"),
+            action: "save",
+            disabled: !isAbsolutePath(path),
+            onClick: () => void save(),
+          }}
+          secondary={{
+            label: t("common-back"),
+            action: "back",
+            onClick: () => {
+              setPreview(null);
+            },
+          }}
+          cancel={{ onClick: close }}
+          busy={busy}
+        />
+      )}
     </div>
   );
 }

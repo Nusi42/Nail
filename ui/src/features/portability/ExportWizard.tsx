@@ -13,7 +13,7 @@ import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useAccounts, useClient, useFolders } from "../../state/queries";
 import { useUi } from "../../state/uiStore";
-import { Check, CheckGroup, RadioGroup, SelectField, StepHeader, WizardButtons } from "./Fields";
+import { Check, CheckGroup, RadioGroup, SelectField, StepHeader } from "./Fields";
 import { JobView, Problem } from "./Job";
 import {
   EXPORT_FORMATS,
@@ -30,7 +30,7 @@ import {
 import { PathField, useSavePath } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars } from "./queries";
 import { useBusyAction } from "../../state/busyAction";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter } from "../../widgets/dialog";
 import { AccountChoiceField, PickerListField } from "../../widgets/pickers";
 
 type SourceKind = ExportSource["type"];
@@ -119,9 +119,7 @@ export function ExportWizard({ close }: { close: () => void }) {
         <div data-part="wizard.step-body" data-step="job">
           <StepHeader step={2} steps={2} titleId="portability-export-job-title" />
           <JobView jobId={jobId} />
-          <WizardButtons>
-            <CloseButton onClose={close} action="close" />
-          </WizardButtons>
+          <DialogFooter done={{ onDone: close }} />
         </div>
       </div>
     );
@@ -242,18 +240,16 @@ export function ExportWizard({ close }: { close: () => void }) {
           />
         )}
         {problem && <Problem problem={problem} />}
-        <WizardButtons>
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="primary"
-            data-action="start"
-            disabled={busy || count === 0 || !isAbsolutePath(path)}
-            onClick={() => void start()}
-          >
-            {t("portability-export-start")}
-          </button>
-        </WizardButtons>
+        <DialogFooter
+          primary={{
+            label: t("portability-export-start"),
+            action: "start",
+            disabled: count === 0 || !isAbsolutePath(path),
+            onClick: () => void start(),
+          }}
+          cancel={{ onClick: close }}
+          busy={busy}
+        />
       </div>
     </div>
   );

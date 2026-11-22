@@ -28,6 +28,7 @@ import type { FeatureEventHandler } from "../types";
 import { pinIsPlausible } from "./smartcardModel";
 import { smartcardKeys } from "./Smartcards";
 import { useBusyAction } from "../../state/busyAction";
+import { DialogFooter } from "../../widgets/dialog";
 
 export const PIN_DIALOG = "smartcard-pin";
 
@@ -190,26 +191,16 @@ function PinForm({ prompt, close }: { prompt: PinPrompt; close: () => void }) {
           {t(problem.id, problem.args)}
         </p>
       )}
-      <div data-part="wizard.buttons">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="answer"
-          disabled={busy || !pinIsPlausible(pin)}
-        >
-          {t("common-ok")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="cancel"
-          disabled={busy}
-          onClick={() => void answer(null)}
-        >
-          {t("common-cancel")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("security-pin-unlock"),
+          action: "answer",
+          submit: true,
+          disabled: !pinIsPlausible(pin),
+        }}
+        cancel={{ onClick: () => void answer(null), action: "cancel" }}
+        busy={busy}
+      />
     </form>
   );
 }
@@ -244,19 +235,14 @@ export function PinPromptView({ close }: { close: () => void }) {
       <p data-part="pin-prompt.text" role="status">
         {t(closed ? PIN_PROMPT_CLOSE_REASON_MESSAGE_IDS[closed] : "security-pin-nothing")}
       </p>
-      <div data-part="wizard.buttons">
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="close"
-          onClick={() => {
+      <DialogFooter
+        done={{
+          onDone: () => {
             pins.getState().dismiss();
             close();
-          }}
-        >
-          {t("common-close")}
-        </button>
-      </div>
+          },
+        }}
+      />
     </div>
   );
 }

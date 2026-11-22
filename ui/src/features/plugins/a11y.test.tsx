@@ -22,6 +22,7 @@ import { InstallDialog } from "./InstallDialog";
 import { crashPlugin } from "./mockHost";
 import { PluginDialogs } from "./PluginDialogs";
 import { PluginNotifications } from "./PluginNotifications";
+import { UNINSTALL_DIALOG, UninstallDialog } from "./PluginManager";
 import { installFollowUp, must, wireEvents } from "./testUtil";
 import { WindowLayer } from "../../layout/WindowLayer";
 
@@ -206,6 +207,19 @@ describe("plug-in UI accessibility", () => {
     expect(await violations(view.container)).toEqual([]);
   });
 
+  it("the removal question", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    await installFollowUp(env);
+    renderNode(widget("plugin-manager"), env);
+    await user.click(await screen.findByRole("button", { name: "Remove plug-in…" }));
+    const view = renderWithProviders(
+      <UninstallDialog name={UNINSTALL_DIALOG} close={vi.fn()} />,
+      env,
+    );
+    expect(await violations(view.container)).toEqual([]);
+  });
+
   it("a broken package", async () => {
     const user = userEvent.setup();
     const env = createEnv();
@@ -224,7 +238,6 @@ describe("plug-in UI accessibility", () => {
       await installFollowUp(env);
       const view = renderNode(widget("plugin-manager"), env);
       await user.click(await screen.findByRole("button", { name: section }));
-      await user.click(screen.getByRole("button", { name: "Remove" }));
       await settleQueries(env, 20);
       expect(await violations(view.container)).toEqual([]);
     },

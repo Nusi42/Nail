@@ -40,6 +40,15 @@ await nail.ui.showDialog({ title: "Follow up", body, buttons: [{ id: "save", lab
   `null` when the dialog was dismissed) and the `values` of every input by
   its `id`. A primary button can only be used when every `required` input
   has a value.
+- **Dialog buttons by role.** Nail draws the buttons in its own dialog
+  footer and orders them the way the user's system does (Windows and
+  Linux: the primary button first, macOS: last). Mark the main button with
+  `primary: true`; the others are secondary. Nail always adds a **Cancel**
+  that dismisses the dialog (`button: null`, like Escape and ×). A button
+  of your own with the id `cancel` takes that place instead: it shows your
+  label and answers `"cancel"` — so older plug-ins that list their own
+  Cancel button keep working and show it only once. Use labels that are
+  verbs ("Save reminder", not "OK").
 - **Panels** (`ctx.panels.register`): Nail asks the plug-in to render the
   panel when it is shown; `nail.ui.updatePanel` replaces its content.
 - **Attachment previews** ([attachments and links](attachments-and-links.md)):

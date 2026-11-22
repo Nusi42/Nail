@@ -11,9 +11,12 @@
  *
  * Not offered in remote-UI sessions or without a desktop host (`nail
  * serve`, the e2e harness): there `GetInstallation` answers `unsupported`.
+ *
+ * One button, Get started (R6, ADR 0239); closing the window (× or Esc)
+ * skips the screen the same way: both complete the first run.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useActions } from "../../actions/ActionsProvider";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -34,6 +37,7 @@ import {
 } from "./queries";
 import { systemStoreFor } from "./store";
 import { useBusyAction } from "../../state/busyAction";
+import { DialogFooter } from "../../widgets/dialog";
 
 function DefaultAppsStep() {
   const t = useT();
@@ -127,15 +131,33 @@ export function FirstRun({ close }: { close: () => void }) {
   const desktop = installation.isSuccess;
   const defaultApps = usePlatformFeature("default-apps");
   const startup = usePlatformFeature("start-with-system");
+  const ui = useUiStoreApi();
+  const completed = useRef(false);
 
   const complete = async (then?: () => void) => {
     await run(async () => {
       const answer = await client.request({ type: "CompleteFirstRun" }, "FirstRun");
+      completed.current = true;
       queryClient.setQueryData(systemKeys.firstRun, answer.state);
       close();
       then?.();
     });
   };
+
+  // × and Esc skip: closing the window completes the first run too.
+  useEffect(
+    () => () => {
+      setTimeout(() => {
+        if (completed.current) return;
+        if (ui.getState().windows.includes(FIRST_RUN_DIALOG)) return; // re-mounted
+        void client
+          .request({ type: "CompleteFirstRun" }, "FirstRun")
+          .then((answer) => queryClient.setQueryData(systemKeys.firstRun, answer.state))
+          .catch(() => undefined);
+      }, 0);
+    },
+    [client, queryClient, ui],
+  );
 
   return (
     <div data-part="first-run">
@@ -154,27 +176,14 @@ export function FirstRun({ close }: { close: () => void }) {
           {t(problem.id, problem.args)}
         </p>
       )}
-      <div data-part="first-run.buttons">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="done"
-          disabled={busy}
-          onClick={() => void complete()}
-        >
-          {t("system-first-run-done")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="skip"
-          disabled={busy}
-          onClick={() => void complete()}
-        >
-          {t("system-first-run-skip")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("system-first-run-done"),
+          action: "done",
+          onClick: () => void complete(),
+        }}
+        busy={busy}
+      />
     </div>
   );
 }

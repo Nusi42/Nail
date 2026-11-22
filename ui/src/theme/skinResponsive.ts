@@ -46,10 +46,6 @@ export const DIALOG_BUTTON_ROWS = [
   // ADR 0239: the shared footer; the rows below go as their dialogs move to it.
   "dialog.footer",
   "wizard.buttons",
-  "plugin-install.actions",
-  "remote-pair.actions",
-  "scheduling.dialog.actions",
-  "merge-dialog.actions",
   "mail-confirm.actions",
   "confirmation.buttons",
 ] as const;

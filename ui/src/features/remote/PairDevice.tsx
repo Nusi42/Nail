@@ -4,6 +4,9 @@
  * code with the address to open and the certificate fingerprint the
  * browser must show too. The dialog follows the code until a browser
  * uses it (`RemoteAccessChanged` refreshes the list).
+ *
+ * R6 (ADR 0239): Create code and Cancel in the shared footer; the code
+ * step shows Revoke code (red, beside the code) and only Done.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type SubmitEvent } from "react";
@@ -17,6 +20,7 @@ import type {
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useClient } from "../../state/queries";
+import { DialogFooter } from "../../widgets/dialog";
 import { SelectField } from "../../widgets/forms";
 import { InputField, Toggle, AccessPresetField } from "./fields";
 import {
@@ -100,15 +104,6 @@ function CodePanel({ created, onClose }: { created: Created; onClose: () => void
             )}
           </div>
           <p data-part="form.hint">{t("remote-pair-once")}</p>
-        </>
-      )}
-      {error && (
-        <p data-part="remote-pair.error" role="alert">
-          {t(error)}
-        </p>
-      )}
-      <div data-part="remote-pair.actions">
-        {current.state === "pending" && (
           <button
             type="button"
             data-part="form.button"
@@ -116,19 +111,16 @@ function CodePanel({ created, onClose }: { created: Created; onClose: () => void
             data-variant="danger"
             onClick={() => void cancel()}
           >
-            {t("remote-pair-cancel-code")}
+            {t("remote-pair-revoke-code")}
           </button>
-        )}
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="close"
-          data-variant={current.state === "pending" ? undefined : "primary"}
-          onClick={onClose}
-        >
-          {t("common-close")}
-        </button>
-      </div>
+        </>
+      )}
+      {error && (
+        <p data-part="remote-pair.error" role="alert">
+          {t(error)}
+        </p>
+      )}
+      <DialogFooter done={{ onDone: onClose }} />
     </section>
   );
 }
@@ -137,10 +129,12 @@ function CreateForm({
   users,
   initialUser,
   onCreated,
+  close,
 }: {
   users: readonly RemoteUser[];
   initialUser: RemoteUserId | null;
   onCreated: (created: Created) => void;
+  close: () => void;
 }) {
   const t = useT();
   const client = useClient();
@@ -160,9 +154,12 @@ function CreateForm({
 
   if (usable.length === 0) {
     return (
-      <p data-part="remote-pair.empty" role="note">
-        {t("remote-pair-no-users")}
-      </p>
+      <>
+        <p data-part="remote-pair.empty" role="note">
+          {t("remote-pair-no-users")}
+        </p>
+        <DialogFooter cancel={{ onClick: close }} />
+      </>
     );
   }
 
@@ -245,17 +242,16 @@ function CreateForm({
           {t(error)}
         </p>
       )}
-      <div data-part="remote-pair.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="create-code"
-          disabled={busy || user === undefined}
-        >
-          {t("remote-pair-create")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("remote-pair-create"),
+          action: "create-code",
+          submit: true,
+          disabled: user === undefined,
+        }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
     </form>
   );
 }
@@ -275,10 +271,15 @@ export function PairDeviceDialog({ close }: DialogProps) {
       )}
       {created !== null ? (
         <CodePanel created={created} onClose={close} />
+      ) : users.data ? (
+        <CreateForm
+          users={users.data}
+          initialUser={initialUser}
+          onCreated={setCreated}
+          close={close}
+        />
       ) : (
-        users.data && (
-          <CreateForm users={users.data} initialUser={initialUser} onCreated={setCreated} />
-        )
+        <DialogFooter cancel={{ onClick: close }} />
       )}
     </section>
   );

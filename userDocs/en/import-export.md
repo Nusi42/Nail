@@ -5,7 +5,9 @@ write them out again in standard formats. Imports and exports run in the
 background with a progress bar; you can keep working, and you can cancel
 at any time (what was already imported or written stays). At the end you
 get a **report**: what was imported or written, and every item that was
-changed or left out, with the reason.
+changed or left out, with the reason. Every step of the assistants has
+**Cancel**; the report ends with **Done** (a job that is still running goes
+on in the background — its progress is in **Settings → Data & backup**).
 
 Start an import or export from **Settings → Data & backup**
 (**Import…**, **Export…**), from the welcome screen, or from the

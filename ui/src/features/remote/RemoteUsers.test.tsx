@@ -187,7 +187,7 @@ describe("pairing, desktop side", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Access" }), "read-only");
     await user.click(screen.getByRole("checkbox", { name: /Administration/ }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Code valid for" }), "5");
-    await user.click(screen.getByRole("button", { name: "Create pairing code" }));
+    await user.click(screen.getByRole("button", { name: "Create code" }));
 
     const panel = await screen.findByRole("region", { name: "Pairing code" });
     const request = env.transport.requests.find((r) => r.type === "CreatePairingCode");
@@ -217,7 +217,9 @@ describe("pairing, desktop side", () => {
       await within(panel).findByText(/Paired. The new device is signed in./),
     ).toBeInTheDocument();
     expect(env.transport.data.features.remote.devices[0]?.name).toBe("Tablet");
-    await user.click(within(panel).getByRole("button", { name: "Close" }));
+    // The code step shows only Done (R6).
+    expect(within(panel).queryByRole("button", { name: "Revoke code" })).not.toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Done" }));
     expect(close).toHaveBeenCalled();
   });
 
@@ -230,15 +232,17 @@ describe("pairing, desktop side", () => {
       env,
     );
     expect(await screen.findByRole("note")).toHaveTextContent("There is no remote user yet.");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     unmount();
 
     await createAda(env.transport);
     renderWithProviders(<PairDeviceDialog name={PAIR_DIALOG} close={() => undefined} />, env);
-    await user.click(await screen.findByRole("button", { name: "Create pairing code" }));
+    await user.click(await screen.findByRole("button", { name: "Create code" }));
     const panel = await screen.findByRole("region", { name: "Pairing code" });
     expect(within(panel).getByText(/Remote access is not running/)).toBeInTheDocument();
     expect(within(panel).queryByRole("img")).not.toBeInTheDocument();
-    await user.click(within(panel).getByRole("button", { name: "Cancel code" }));
+    await user.click(within(panel).getByRole("button", { name: "Revoke code" }));
     expect(await within(panel).findByText("This code was cancelled.")).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Revoke code" })).not.toBeInTheDocument();
   });
 });

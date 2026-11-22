@@ -3,8 +3,9 @@
  * the redacted protocol lines of one account (or account setup) as the
  * core recorded them, newest last and followed live; filters by protocol
  * and level, Pause, Copy / Export (the text Rust formats:
- * `ExportConnectionLog`), Clear. No message content or credential ever
- * reaches the UI — the core redacted every line before storing it.
+ * `ExportConnectionLog`), Clear (asks first: `connection-log-clear`, a
+ * destructive `ConfirmDialog`, ADR 0239). No message content or credential
+ * ever reaches the UI — the core redacted every line before storing it.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,7 +15,8 @@ import { useLocale, useT } from "../../i18n/I18nProvider";
 import { TIME_MILLIS, formatDateTime } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useAccounts, useClient } from "../../state/queries";
-import { useUiStoreApi } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { ConfirmDialog } from "../../widgets/dialog";
 import { SelectField } from "../../widgets/forms";
 import { downloadText, saveThroughPicker } from "../../widgets/attachmentSave";
 import {
@@ -28,7 +30,7 @@ import {
   protocolsIn,
   type LogFilter,
 } from "./model";
-import { VIEWER_PART } from "./names";
+import { CLEAR_KIND, VIEWER_PART } from "./names";
 import { refreshConnectionLog, useConnectionLog } from "./queries";
 import { useConnlogState, viewerTarget } from "./store";
 
@@ -56,6 +58,65 @@ function useScopeTitle(scope: ConnectionLogScope): string {
 
 type Notice = { id: string; tone: "done" | "error" } | null;
 
+/** The log the open "Clear?" question is about (per UI store). */
+interface PendingClear {
+  scope: ConnectionLogScope;
+  title: string;
+}
+
+const pendingClear = new WeakMap<UiStore, PendingClear>();
+
+/** Asks before clearing the log of `scope` (`connection-log-clear`). */
+export function askClear(ui: UiStore, scope: ConnectionLogScope, title: string): void {
+  pendingClear.set(ui, { scope, title });
+  ui.getState().openWindow(CLEAR_KIND);
+}
+
+/** Window `connection-log-clear`: "Clear the connection log of X?". */
+export function ClearLogDialog({ close }: DialogProps) {
+  const t = useT();
+  const ui = useUiStoreApi();
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const [what] = useState(() => pendingClear.get(ui) ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // However the question ends (Cancel, ×, Esc, clearing), it is forgotten.
+  useEffect(
+    () => () => {
+      if (what !== null && pendingClear.get(ui) === what) pendingClear.delete(ui);
+    },
+    [ui, what],
+  );
+  const clear = async () => {
+    if (what === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await client.request({ type: "ClearConnectionLog", scope: what.scope }, "Done");
+      await refreshConnectionLog(client, queryClient, what.scope);
+      close();
+    } catch (failure) {
+      setError(t(errorMessageIdOf(failure)));
+      setBusy(false);
+    }
+  };
+  return (
+    <ConfirmDialog
+      kind="clear-connection-log"
+      risk="destructive"
+      question={t("connlog-clear-question", { log: what?.title ?? "" })}
+      detail={<p data-part="dialog.note">{t("connlog-clear-note")}</p>}
+      action={t("connlog-clear-confirm")}
+      onConfirm={() => void clear()}
+      canConfirm={what !== null}
+      cancel={{ onClick: close }}
+      busy={busy}
+      error={error}
+    />
+  );
+}
+
 /** The viewer of one scope. */
 export function ConnectionLogViewer({
   scope,
@@ -67,7 +128,7 @@ export function ConnectionLogViewer({
   const t = useT();
   const locale = useLocale();
   const client = useClient();
-  const queryClient = useQueryClient();
+  const ui = useUiStoreApi();
   const title = useScopeTitle(scope);
   const log = useConnectionLog(scope);
   const [filter, setFilter] = useState<LogFilter>(ALL_ENTRIES);
@@ -140,13 +201,6 @@ export function ConnectionLogViewer({
         case "unsupported":
           return { id: "connlog-viewer-export-unsupported", tone: "error" };
       }
-    });
-
-  const clear = () =>
-    run(async () => {
-      await client.request({ type: "ClearConnectionLog", scope }, "Done");
-      await refreshConnectionLog(client, queryClient, scope);
-      return { id: "connlog-viewer-cleared", tone: "done" };
     });
 
   const protocols = protocolsIn(entries);
@@ -239,7 +293,9 @@ export function ConnectionLogViewer({
             data-action="clear"
             data-variant="danger"
             disabled={busy || entries.length === 0}
-            onClick={() => void clear()}
+            onClick={() => {
+              askClear(ui, scope, title);
+            }}
           >
             {t("connlog-viewer-clear")}
           </button>

@@ -81,8 +81,8 @@ version of Nail*. For each plug-in:
   stopped, reloaded) and every refused call, filtered by level, and
   **Clear log**;
 - **Place in layout** proposes its buttons and panels again;
-- **Remove** uninstalls it after a confirmation. Its settings, data and log
-  are deleted; the lines it added to `layout.kdl` stay until you delete
+- **Remove plug-in…** asks first, then uninstalls it (*Remove plug-in*;
+  *Cancel* is the default). Its settings, data and log are deleted; the lines it added to `layout.kdl` stay until you delete
   them (a button of a missing plug-in stays disabled).
 
 A plug-in that throws an error in a command, a panel or while starting, or

@@ -36,7 +36,8 @@ available in the browser when you use Nail remotely.
 
 Signing and decrypting work as with any other own key. The first time a
 card is needed, Nail asks for its PIN and tells you which card and which
-key it is for, and what for (signing or decrypting). If you type a wrong
+key it is for, and what for (signing or decrypting); **Unlock** passes the
+PIN to the card. If you type a wrong
 PIN, Nail asks again and warns you when only one try is left; after too
 many wrong PINs the card locks its PIN, and you need the card's own tool
 (and its PUK) to unlock it.

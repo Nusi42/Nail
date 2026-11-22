@@ -63,10 +63,9 @@ export const PLUGIN_PARTS = [
   "plugin.dialog",
   "plugin.dialog.header",
   "plugin.dialog.plugin",
+  "plugin.dialog.form",
   "plugin.dialog.body",
   "plugin.dialog.error",
-  "plugin.dialog.buttons",
-  "plugin.dialog.button",
   "plugin.panel",
   "plugin.panel.error",
   "plugin.notifications",
@@ -119,8 +118,8 @@ export function pluginPartSelector(part: string): string | null {
  */
 export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog"] { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 [data-part="plugin.dialog.header"] { display: flex; align-items: center; flex: 0 0 auto; }
+[data-part="plugin.dialog.form"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 [data-part="plugin.dialog.body"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: auto; }
-[data-part="plugin.dialog.buttons"] { display: flex; justify-content: flex-end; flex-wrap: wrap; }
 [data-part="plugin.stack"] { display: flex; flex-direction: column; min-width: 0; }
 [data-part="plugin.stack"][data-direction="horizontal"] { flex-direction: row; flex-wrap: wrap; align-items: center; }
 [data-part="plugin.field"] { display: flex; flex-direction: column; }
@@ -146,7 +145,6 @@ export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog"] { display: flex; fle
 [data-part="plugin-install.kinds"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nail-space-xs) var(--nail-space-lg); min-width: 0; margin: 0; padding: var(--nail-space-sm) var(--nail-space-md); border: 1px solid var(--nail-color-border); border-radius: var(--nail-radius-md); }
 [data-part="plugin-install.kinds.legend"] { padding: 0 var(--nail-space-xs); }
 [data-part="plugin-install.kind"] { display: inline-flex; align-items: center; gap: var(--nail-space-xs); min-height: var(--nail-size-control); }
-[data-part="plugin-install.actions"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nail-space-sm); }
 [data-part="plugin-banners"], [data-part="plugin-badges"], [data-part="plugin-veto.list"], [data-part="plugin-activity.job-list"],
 [data-part="plugin.notifications.list"], [data-part="plugin.message-list"], [data-part="plugin.contact-picker.list"], [data-part="plugin-permissions"], [data-part="plugin-permissions.account-list"], [data-part="plugin-manager.list"], [data-part="plugin-placements.items"], [data-part="plugin-placements.conflicts"], [data-part="plugin-logs.list"], [data-part="plugin-install.issue-list"], [data-part="plugin-install.contributions"] { list-style: none; margin: 0; padding: 0; }
 `;

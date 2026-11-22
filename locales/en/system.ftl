@@ -118,7 +118,6 @@ system-first-run-import-text = Import mail, contacts and calendars from another 
 system-first-run-import-later = The import assistant comes with a later version of Nail.
 system-first-run-later = You can change these later in Settings.
 system-first-run-done = Get started
-system-first-run-skip = Skip
 
 ## Composer: mail prepared by another program (Simple MAPI)
 

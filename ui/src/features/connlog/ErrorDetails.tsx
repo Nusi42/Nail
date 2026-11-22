@@ -74,7 +74,7 @@ function useSummary(report: ErrorReport): string {
 }
 
 /** The details of one report. */
-export function ErrorDetailsView({ report, close }: { report: ErrorReport; close: () => void }) {
+export function ErrorDetailsView({ report }: { report: ErrorReport }) {
   const t = useT();
   const ui = useUiStoreApi();
   const summary = useSummary(report);
@@ -129,37 +129,26 @@ export function ErrorDetailsView({ report, close }: { report: ErrorReport; close
             {t("connlog-details-show-log")}
           </button>
         )}
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="close"
-          onClick={close}
-        >
-          {t("connlog-details-close")}
-        </button>
       </div>
     </div>
   );
 }
 
-/** The details window: its report comes from the store. */
-export function ErrorDetailsWindow({ name, close }: DialogProps) {
+/**
+ * The details window: its report comes from the store. A tool window: ×
+ * (and Esc) close it, no footer Close (ADR 0239).
+ */
+export function ErrorDetailsWindow({ name }: DialogProps) {
   const t = useT();
   const report = useConnlogState((s) => s.reports[name]);
   if (!report) {
     return (
       <div data-part={DETAILS_PART}>
         <p data-part="error-details.summary">{t("connlog-details-gone")}</p>
-        <div data-part="error-details.actions">
-          <button type="button" data-part="form.button" data-action="close" onClick={close}>
-            {t("connlog-details-close")}
-          </button>
-        </div>
       </div>
     );
   }
-  return <ErrorDetailsView report={report} close={close} />;
+  return <ErrorDetailsView report={report} />;
 }
 
 /** "Show details" next to an error: opens its details window. */

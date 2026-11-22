@@ -86,7 +86,8 @@ test("the full Follow-up example installs with its permissions, creates a task a
   // M5b: the ranked reader bar (`item "mail.forward" rank=3`).
   expect(layout).toMatch(/item "mail\.forward"[^\n]*\s+item "plugin\.follow-up\.follow-up"/);
   expect(layout).toContain('bind "shift+f" "plugin.follow-up.follow-up"');
-  await dialog.getByRole("button", { name: "Close" }).first().click();
+  // The wizard's last step ends with Done (R6).
+  await dialog.getByRole("button", { name: "Done" }).click();
   await expect(
     settings.locator('[data-part="plugin-manager.plugin"][data-state="running"]'),
   ).toBeVisible();

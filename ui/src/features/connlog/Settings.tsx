@@ -16,7 +16,6 @@ import { errorMessageIdOf } from "../../api/client";
 import type { AccountId, SkippedMessage, SyncErrorRecord } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
-import type { DialogProps } from "../../layout/dialogRegistry";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { Switch } from "../../widgets/primitives";
@@ -195,8 +194,11 @@ export function ConnectionLogSettingsCard() {
   );
 }
 
-/** The application log's recent lines (redacted by the core). */
-export function AppLogWindow({ close }: DialogProps) {
+/**
+ * The application log's recent lines (redacted by the core). A tool
+ * window: × (and Esc) close it, no footer Close (ADR 0239).
+ */
+export function AppLogWindow() {
   const t = useT();
   const appLog = useAppLog();
   const lines = appLog.data?.lines ?? [];
@@ -232,9 +234,6 @@ export function AppLogWindow({ close }: DialogProps) {
           onClick={() => void appLog.refetch()}
         >
           {t("connlog-app-log-refresh")}
-        </button>
-        <button type="button" data-part="form.button" data-action="close" onClick={close}>
-          {t("connlog-details-close")}
         </button>
       </div>
     </div>

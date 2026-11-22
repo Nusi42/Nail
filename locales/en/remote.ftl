@@ -85,7 +85,7 @@ remote-pair-user = { remote-audit-col-user }
 remote-pair-device-name-desktop-hint = Optional. Leave it empty to use the name the browser suggests.
 remote-pair-ttl = Code valid for
 remote-pair-ttl-minutes = { $minutes } minutes
-remote-pair-create = Create pairing code
+remote-pair-create = Create code
 remote-pair-no-users = There is no remote user yet. Create one under Users first.
 remote-pair-open-dialog = { remote-action-pair }
 remote-pair-code-title = Pairing code
@@ -97,6 +97,8 @@ remote-pair-fingerprint-intro = The browser shows this certificate fingerprint. 
 remote-pair-no-fingerprint = Remote access runs without TLS, so there is no fingerprint to compare.
 remote-pair-once = This code is shown only now. Anyone who has it can pair a device until it is used or expires.
 remote-pair-cancel-code = Cancel code
+# The pairing dialog: the shown code stops working.
+remote-pair-revoke-code = Revoke code
 
 remote-pairing-title = Codes waiting to be used
 remote-pairing-pending = { $device } for { $user }, until { $time }

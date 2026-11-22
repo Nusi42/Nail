@@ -95,6 +95,30 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   asks before typed details are thrown away; the folder synchronization
   dialog has Save / Cancel and asks when changed.
 
+### Changed — the data, security, plug-in and system dialogs (ADR 0239)
+
+- The import, export, backup, restore and diagnostics wizards, the recovery
+  key wizards, Pair a device, the re-authentication, Autocrypt import and
+  the plug-in install wizard use the shared `DialogFooter`: Cancel on every
+  step, Done on the result step. "Restore now" is destructive (never the
+  default, Cancel focused); the diagnostics bundle is a wizard (Next, Back,
+  Save bundle, Cancel); the smartcard PIN prompt's verb is "Unlock".
+- Clearing a connection log (`connection-log-clear`), removing a plug-in
+  (`plugin-uninstall`) and removing the recovery key
+  (`security-recovery-remove`) ask in a destructive `ConfirmDialog`; the
+  inline "Are you sure" rows are gone.
+- Plug-in dialogs render their buttons through `DialogFooter`: `primary`
+  buttons are the primary role, the others secondary; Nail adds Cancel
+  (`button: null`), and a plug-in button with the id `cancel` takes its
+  place. The plug-in API is unchanged.
+- Error details and the application log have no footer Close (× only); the
+  job report window has no footer; the welcome screen has one Get started,
+  and closing it skips the first run.
+- Theme parts `remote-login.actions`, `remote-pair.actions`,
+  `plugin-install.actions`, `first-run.buttons`, `recovery-settings.confirm`,
+  `plugin.dialog.buttons` and `plugin.dialog.button` are gone (the shared
+  `dialog.footer` styles them); new: `recovery.tools`, `plugin.dialog.form`.
+
 ### Fixed — large selections (ADR 0235)
 
 - Acting on more than 500 selected conversations failed with "Too many

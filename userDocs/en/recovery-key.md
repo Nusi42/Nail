@@ -90,6 +90,7 @@ lost. Keep backups as well.
 
 ## Removing the recovery key
 
-You can remove the recovery key in **Settings → Privacy & data protection**. Turning
+You can remove the recovery key in **Settings → Privacy & data protection**
+(**Remove recovery key**; Nail asks first, and *Cancel* is the default). Turning
 encryption at rest off removes it automatically, because the key it
 protects no longer exists.

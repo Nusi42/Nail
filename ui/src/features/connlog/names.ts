@@ -10,6 +10,9 @@ export const CONNECTION_LOG_KIND = "connection-log";
 /** One error's details: `error-details:<n>`. */
 export const ERROR_DETAILS_KIND = "error-details";
 
+/** The confirmation before a connection log is cleared (modal). */
+export const CLEAR_KIND = "connection-log-clear";
+
 /** The application log's recent lines (Settings → Diagnostics). */
 export const APP_LOG_KIND = "application-log";
 

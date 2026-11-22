@@ -104,7 +104,9 @@ user with all devices.
    name for the device, then *Pair this browser*.
 5. Nail offers to add a **passkey** so the next sign-in needs no password.
 
-A code works once and only for a few minutes. *Cancel code* withdraws it.
+Choose *Create code* to get the code (or *Cancel* to leave). A code works
+once and only for a few minutes. *Revoke code* withdraws it; *Done* closes
+the window (the code keeps working until it is used or expires).
 Your computer shows a **New device signed in** alert whenever a device is
 paired.
 

@@ -612,6 +612,11 @@ describe("window model", () => {
     "pim-remove-source",
     "scheduling-cancel-meeting",
     "smartcard-pin",
+    // R6 WD4: the removal / clearing questions of plug-ins, the recovery
+    // key and the connection log.
+    "plugin-uninstall",
+    "security-recovery-remove",
+    "connection-log-clear",
     // R6 (ADR 0239): the close guard's shared unsaved-changes prompt.
     UNSAVED_PROMPT,
     // R6: the settings sections' questions (`features/settings/confirm.tsx`).

@@ -11,6 +11,9 @@
  *    the reviewed package is installed (`LoadDevPlugin` for a folder).
  * 4. Placements: the plug-in's suggested toolbar / menu / key / panel
  *    placements, confirmed like a merge (`./Placements.tsx`).
+ *
+ * A wizard (R6, ADR 0239): Cancel on every step (the shared footer), Back
+ * on the review, and only Done once the plug-in is installed.
  */
 import { useId, useState } from "react";
 import { errorMessageOf, NailError } from "../../api/client";
@@ -31,7 +34,7 @@ import { allGranted, grantsValid, orderedGrants } from "./grants";
 import { Permissions } from "./Permissions";
 import { Placements } from "./Placements";
 import { usePluginsState } from "./store";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter } from "../../widgets/dialog";
 
 /** Dialog name. */
 export const INSTALL_DIALOG = "plugin-install";
@@ -99,12 +102,14 @@ function Review({
   onChange,
   onInstall,
   onBack,
+  close,
 }: {
   stage: Extract<Stage, { kind: "review" }>;
   busy: boolean;
   onChange: (stage: Extract<Stage, { kind: "review" }>) => void;
   onInstall: () => void;
   onBack: () => void;
+  close: () => void;
 }) {
   const t = useT();
   const accounts = useAccounts();
@@ -198,33 +203,25 @@ function Review({
           )}
         </>
       )}
-      <div data-part="plugin-install.actions">
-        {!blocked && (
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="install"
-            data-variant="primary"
-            disabled={busy || !grantsValid(stage.grants)}
-            onClick={onInstall}
-          >
-            {t(
-              preview.installed_version === null
-                ? "plugin-install-install"
-                : "plugin-install-update-button",
-            )}
-          </button>
-        )}
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="back"
-          disabled={busy}
-          onClick={onBack}
-        >
-          {t("common-back")}
-        </button>
-      </div>
+      <DialogFooter
+        {...(blocked
+          ? {}
+          : {
+              primary: {
+                label: t(
+                  preview.installed_version === null
+                    ? "plugin-install-install"
+                    : "plugin-install-update-button",
+                ),
+                action: "install",
+                disabled: !grantsValid(stage.grants),
+                onClick: onInstall,
+              },
+            })}
+        secondary={{ label: t("common-back"), action: "back", onClick: onBack }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
     </div>
   );
 }
@@ -344,26 +341,23 @@ export function InstallDialog({ close }: DialogProps) {
             required
             onChange={setText}
           />
-          <div data-part="plugin-install.actions">
-            <button
-              type="submit"
-              data-part="form.button"
-              data-action="preview"
-              data-variant="primary"
-              disabled={busy || text.trim() === ""}
-            >
-              {t("plugin-install-preview")}
-            </button>
-            <button type="button" data-part="form.button" data-action="cancel" onClick={close}>
-              {t("common-cancel")}
-            </button>
-          </div>
+          <DialogFooter
+            primary={{
+              label: t("plugin-install-preview"),
+              action: "preview",
+              submit: true,
+              disabled: text.trim() === "",
+            }}
+            cancel={{ onClick: close, action: "cancel" }}
+            busy={busy}
+          />
         </form>
       )}
       {stage.kind === "review" && (
         <Review
           stage={stage}
           busy={busy}
+          close={close}
           onChange={setStage}
           onInstall={() => void install()}
           onBack={() => {
@@ -377,12 +371,7 @@ export function InstallDialog({ close }: DialogProps) {
           <p data-part="plugin-install.status" role="status">
             {t("plugin-install-done", { name: stage.plugin.manifest.name })}
           </p>
-          <Placements
-            pluginId={stage.plugin.id}
-            onDone={() => {
-              setStage({ kind: "done", plugin: stage.plugin });
-            }}
-          />
+          <Placements pluginId={stage.plugin.id} inWizard onDone={close} />
         </>
       )}
       {stage.kind === "done" && (
@@ -390,9 +379,7 @@ export function InstallDialog({ close }: DialogProps) {
           <p data-part="plugin-install.status" role="status">
             {t("plugin-install-done", { name: stage.plugin.manifest.name })}
           </p>
-          <div data-part="plugin-install.actions">
-            <CloseButton onClose={close} action="close" />
-          </div>
+          <DialogFooter done={{ onDone: close }} />
         </>
       )}
     </div>

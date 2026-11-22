@@ -251,6 +251,12 @@ describe("remote re-authentication", () => {
     );
     const group = screen.getByRole("group", { name: "Confirm it’s you" });
     expect(within(group).getByRole("textbox", { name: "User name" })).toHaveAttribute("readonly");
+    // The shared footer (R6): the verb, then Cancel.
+    expect(
+      within(group)
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("data-role")),
+    ).toEqual(["primary", "cancel"]);
     expect(within(group).getByLabelText("Password")).toHaveFocus();
     await user$.keyboard("nope{Enter}");
     expect(await within(group).findByRole("alert")).toHaveTextContent("wrong");

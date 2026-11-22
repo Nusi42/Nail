@@ -13,7 +13,7 @@
  *
  * M4c (WP124, ADR 0094): the vault recovery key (widget
  * `security-recovery-key`, dialogs `security-recovery-create` / `-verify` /
- * `-restore`, effect `RecoveryGate`), smartcards (widget
+ * `-restore` / `-remove` (a confirmation), effect `RecoveryGate`), smartcards (widget
  * `security-smartcards`) and the PIN dialog (`smartcard-pin`, opened by
  * `PinRequested`).
  *
@@ -34,12 +34,14 @@ import { KeyManager } from "./KeyManager";
 import { PIN_DIALOG, PinPromptDialog, handlePinEvent } from "./PinPrompt";
 import {
   RECOVERY_CREATE_DIALOG,
+  RECOVERY_REMOVE_DIALOG,
   RECOVERY_RESTORE_DIALOG,
   RECOVERY_VERIFY_DIALOG,
   RECOVERY_WIDGET,
   RecoveryCreateDialog,
   RecoveryGate,
   RecoveryKeyWidget,
+  RecoveryRemoveDialog,
   RecoveryRestoreDialog,
   RecoveryVerifyDialog,
 } from "./RecoveryKey";
@@ -146,6 +148,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
   [RECOVERY_CREATE_DIALOG]: RecoveryCreateDialog,
   [RECOVERY_VERIFY_DIALOG]: RecoveryVerifyDialog,
   [RECOVERY_RESTORE_DIALOG]: RecoveryRestoreDialog,
+  [RECOVERY_REMOVE_DIALOG]: RecoveryRemoveDialog,
   [PIN_DIALOG]: PinPromptDialog,
   // R6 (ADR 0239): the settings' questions.
   [SECURITY_VAULT_DIALOG]: SettingsConfirmDialog,
@@ -177,6 +180,7 @@ export const windows: NonNullable<Feature["windows"]> = {
   [PIN_DIALOG]: { confirmation: true, size: { width: 440, height: 320 } },
   [SECURITY_VAULT_DIALOG]: { confirmation: true },
   [SECURITY_KEY_DELETE_DIALOG]: { confirmation: true },
+  [RECOVERY_REMOVE_DIALOG]: { confirmation: true },
 };
 
 /** Message queries of the reader (`queryKeys.message` in `state/queries.ts`). */

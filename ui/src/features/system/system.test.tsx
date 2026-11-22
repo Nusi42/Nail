@@ -488,21 +488,40 @@ describe("first-run screen", () => {
     expect(sent(env, "CompleteFirstRun")).toHaveLength(1);
   });
 
-  it("Skip completes it too; outside the desktop only the import step shows", async () => {
+  it("× skips: closing completes it too; outside the desktop only the import step shows", async () => {
     const env = createEnv();
     env.transport.data.features.system.desktop = false;
-    const close = vi.fn();
-    const user = userEvent.setup();
-    renderWithProviders(<FirstRun close={close} />, env);
+    env.transport.data.features.system.firstRun.completed = false;
+    const view = renderWithProviders(<FirstRun close={vi.fn()} />, env);
     await waitFor(() => {
       expect(env.queryClient.isFetching()).toBe(0);
     });
     expect(screen.queryByRole("button", { name: "Choose in Default apps" })).toBeNull();
     expect(screen.getByText("Bring your mail along")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Skip" }));
+    // One button (R6): Get started; no Skip.
+    const footer = must(document.querySelector<HTMLElement>('[data-part="dialog.footer"]'));
+    expect(
+      within(footer)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Get started"]);
+    // The window closes (×, Esc): the first run counts as done.
+    view.unmount();
     await waitFor(() => {
-      expect(close).toHaveBeenCalled();
+      expect(env.transport.data.features.system.firstRun.completed).toBe(true);
     });
+    expect(sent(env, "CompleteFirstRun")).toHaveLength(1);
+  });
+
+  it("does not complete it again when the window only re-mounts", async () => {
+    const env = createEnv();
+    env.store.getState().openWindow(FIRST_RUN_DIALOG);
+    const view = renderWithProviders(<FirstRun close={vi.fn()} />, env);
+    view.unmount();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    expect(sent(env, "CompleteFirstRun")).toHaveLength(0);
   });
 });
 

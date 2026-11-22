@@ -70,6 +70,16 @@ closing a window.
   size and corners apply with the section's **Save**; the toolbar and column
   editors save the same way. Applying someone else's theme is a wizard with
   **Next**, **Apply theme**, **Back** and **Cancel**.
+- **Assistants end the same way** — import, export, back up, restore, the
+  diagnostics bundle, the recovery key, pairing a device and installing a
+  plug-in have **Cancel** on every step and end with one **Done**. **Restore
+  now** is never the default button. The smartcard PIN prompt says
+  **Unlock**; the welcome screen has one **Get started**, and × skips it.
+- **Asked before it is gone** — clearing a connection log, removing a
+  plug-in and removing the recovery key now ask first (Cancel is the
+  default).
+- **Plug-in dialogs look like Nail's** — their buttons sit in Nail's footer
+  in your system's order, with a **Cancel** of their own.
 
 ### Corrected in 0.8.10
 

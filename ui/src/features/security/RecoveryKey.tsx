@@ -19,7 +19,6 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
-import { errorMessageOf } from "../../api/client";
 import type { LocalizedMessage, RecoveryKeyStatus } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useDateFormat } from "../../i18n/format";
@@ -31,12 +30,14 @@ import { printSheet } from "../print";
 import { securityKeys, useVaultStatus } from "./queries";
 import { parseRecoveryKey, recoveryIssueId, recoveryKeyGroups } from "./recoveryKeyText";
 import { useBusyAction } from "../../state/busyAction";
-import { CloseButton } from "../../widgets/CloseButton";
+import { ConfirmDialog, DialogFooter } from "../../widgets/dialog";
 
 export const RECOVERY_WIDGET = "security-recovery-key";
 export const RECOVERY_CREATE_DIALOG = "security-recovery-create";
 export const RECOVERY_VERIFY_DIALOG = "security-recovery-verify";
 export const RECOVERY_RESTORE_DIALOG = "security-recovery-restore";
+/** The confirmation before the recovery key is removed. */
+export const RECOVERY_REMOVE_DIALOG = "security-recovery-remove";
 
 const KIT_FILTERS = [{ label_id: "security-recovery-kit-filter", extensions: ["txt"] }];
 
@@ -237,18 +238,16 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
             />
           )}
           {problem && <ProblemText problem={problem} />}
-          <div data-part="wizard.buttons">
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="primary"
-              data-action="create"
-              disabled={busy || (saveKit && kitPath.trim() === "")}
-              onClick={() => void create()}
-            >
-              {t(replacing ? "security-recovery-replace" : "security-recovery-create")}
-            </button>
-          </div>
+          <DialogFooter
+            primary={{
+              label: t(replacing ? "security-recovery-replace" : "security-recovery-create"),
+              action: "create",
+              disabled: saveKit && kitPath.trim() === "",
+              onClick: () => void create(),
+            }}
+            cancel={{ onClick: close }}
+            busy={busy}
+          />
         </>
       )}
       {step === "show" && key && (
@@ -262,7 +261,7 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
               {t("security-recovery-kit-saved", { path: savedTo })}
             </p>
           )}
-          <div data-part="wizard.buttons">
+          <div data-part="recovery.tools">
             <button
               type="button"
               data-part="form.button"
@@ -297,21 +296,18 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
             <span data-part="form.check.label">{t("security-recovery-stored")}</span>
           </label>
           {problem && <ProblemText problem={problem} />}
-          <div data-part="wizard.buttons">
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="primary"
-              data-action="next"
-              disabled={!stored}
-              onClick={() => {
+          <DialogFooter
+            primary={{
+              label: t("security-recovery-next"),
+              action: "next",
+              disabled: !stored,
+              onClick: () => {
                 setProblem(null);
                 setStep("verify");
-              }}
-            >
-              {t("security-recovery-next")}
-            </button>
-          </div>
+              },
+            }}
+            cancel={{ onClick: close }}
+          />
         </>
       )}
       {step === "verify" && (
@@ -323,29 +319,24 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
             label={t("security-recovery-input")}
           />
           {problem && <ProblemText problem={problem} />}
-          <div data-part="wizard.buttons">
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="back"
-              onClick={() => {
+          <DialogFooter
+            primary={{
+              label: t("security-recovery-verify"),
+              action: "verify",
+              disabled: !parseRecoveryKey(typed).ok,
+              onClick: () => void verify(),
+            }}
+            secondary={{
+              label: t("security-recovery-show-again"),
+              action: "back",
+              onClick: () => {
                 setProblem(null);
                 setStep("show");
-              }}
-            >
-              {t("security-recovery-show-again")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="primary"
-              data-action="verify"
-              disabled={busy || !parseRecoveryKey(typed).ok}
-              onClick={() => void verify()}
-            >
-              {t("security-recovery-verify")}
-            </button>
-          </div>
+              },
+            }}
+            cancel={{ onClick: close }}
+            busy={busy}
+          />
         </>
       )}
       {step === "done" && (
@@ -353,9 +344,7 @@ export function RecoveryKeyCreate({ close }: { close: () => void }) {
           <p data-part="recovery.text" role="status" data-tone="success">
             {t("security-recovery-done")}
           </p>
-          <div data-part="wizard.buttons">
-            <CloseButton onClose={close} action="close" />
-          </div>
+          <DialogFooter done={{ onDone: close }} />
         </>
       )}
     </div>
@@ -399,19 +388,21 @@ export function RecoveryKeyVerify({ close }: { close: () => void }) {
         </p>
       )}
       {problem && <ProblemText problem={problem} />}
-      <div data-part="wizard.buttons">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="verify"
-          disabled={busy || !parseRecoveryKey(typed).ok}
-          onClick={() => void verify()}
-        >
-          {t("security-recovery-verify")}
-        </button>
-        <CloseButton onClose={close} action="close" />
-      </div>
+      {/* A matching key finishes the check: only Done (ADR 0239). */}
+      {result === true ? (
+        <DialogFooter done={{ onDone: close }} />
+      ) : (
+        <DialogFooter
+          primary={{
+            label: t("security-recovery-verify"),
+            action: "verify",
+            disabled: !parseRecoveryKey(typed).ok,
+            onClick: () => void verify(),
+          }}
+          cancel={{ onClick: close }}
+          busy={busy}
+        />
+      )}
     </div>
   );
 }
@@ -445,9 +436,7 @@ export function RecoveryKeyRestore({ close }: { close: () => void }) {
         <p data-part="recovery.text" role="status" data-tone="success">
           {t(restartNeeded ? "vault-restart-needed" : "security-recovery-restored")}
         </p>
-        <div data-part="wizard.buttons">
-          <CloseButton onClose={close} action="close" />
-        </div>
+        <DialogFooter done={{ onDone: close }} />
       </div>
     );
   }
@@ -457,20 +446,18 @@ export function RecoveryKeyRestore({ close }: { close: () => void }) {
         {t(needed ? "security-recovery-restore-needed" : "security-recovery-restore-intro")}
       </p>
       <RecoveryKeyInput value={typed} onChange={setTyped} label={t("security-recovery-input")} />
-      {problem && <ProblemText problem={problem} />}
-      <div data-part="wizard.buttons">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="restore"
-          disabled={busy || !parseRecoveryKey(typed).ok}
-          onClick={() => void restore()}
-        >
-          {t("security-recovery-restore")}
-        </button>
-      </div>
       <p data-part="form.hint">{t("security-recovery-restore-lost")}</p>
+      {problem && <ProblemText problem={problem} />}
+      <DialogFooter
+        primary={{
+          label: t("security-recovery-restore"),
+          action: "restore",
+          disabled: !parseRecoveryKey(typed).ok,
+          onClick: () => void restore(),
+        }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
     </div>
   );
 }
@@ -478,28 +465,13 @@ export function RecoveryKeyRestore({ close }: { close: () => void }) {
 /** Widget `security-recovery-key`. */
 export function RecoveryKeyWidget() {
   const t = useT();
-  const client = useClient();
-  const queryClient = useQueryClient();
   const ui = useUiStoreApi();
   const format = useDateFormat();
   const vault = useVaultStatus();
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const status = vault.data;
   if (!status) return null;
   const recovery = status.recovery;
   const encrypted = status.state === "encrypted";
-
-  const remove = async () => {
-    setProblem(null);
-    try {
-      const answer = await client.request({ type: "RemoveRecoveryKey" }, "VaultStatus");
-      queryClient.setQueryData(securityKeys.vault, answer.status);
-      setConfirmRemove(false);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    }
-  };
 
   return (
     <section data-part="recovery-settings" data-state={recovery.configured ? "configured" : "none"}>
@@ -538,7 +510,7 @@ export function RecoveryKeyWidget() {
           {t("security-recovery-missing")}
         </p>
       )}
-      <div data-part="wizard.buttons">
+      <div data-part="recovery.tools">
         {status.needs_recovery ? (
           <button
             type="button"
@@ -577,14 +549,14 @@ export function RecoveryKeyWidget() {
                   {t("security-recovery-check")}
                 </button>
               )}
-              {recovery.configured && !confirmRemove && (
+              {recovery.configured && (
                 <button
                   type="button"
                   data-part="form.button"
                   data-variant="danger"
                   data-action="remove"
                   onClick={() => {
-                    setConfirmRemove(true);
+                    ui.getState().openWindow(RECOVERY_REMOVE_DIALOG);
                   }}
                 >
                   {t("security-recovery-remove")}
@@ -594,40 +566,39 @@ export function RecoveryKeyWidget() {
           )
         )}
       </div>
-      {confirmRemove && (
-        <div
-          data-part="recovery-settings.confirm"
-          role="group"
-          aria-label={t("security-recovery-remove")}
-        >
-          <p data-part="form.hint" data-tone="warning">
-            {t("security-recovery-remove-warning")}
-          </p>
-          <div data-part="wizard.buttons">
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="danger"
-              data-action="confirm-remove"
-              onClick={() => void remove()}
-            >
-              {t("security-recovery-remove-confirm")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="keep"
-              onClick={() => {
-                setConfirmRemove(false);
-              }}
-            >
-              {t("security-recovery-keep")}
-            </button>
-          </div>
-        </div>
-      )}
-      {problem && <ProblemText problem={problem} />}
     </section>
+  );
+}
+
+/**
+ * Dialog `security-recovery-remove`: asks before the recovery key goes
+ * (a destructive `ConfirmDialog`: the focus on Cancel, Enter never
+ * removes it; ADR 0239).
+ */
+export function RecoveryRemoveDialog({ close }: DialogProps) {
+  const t = useT();
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const { busy, problem, run } = useBusyAction();
+  const remove = async () => {
+    await run(async () => {
+      const answer = await client.request({ type: "RemoveRecoveryKey" }, "VaultStatus");
+      queryClient.setQueryData(securityKeys.vault, answer.status);
+      close();
+    });
+  };
+  return (
+    <ConfirmDialog
+      kind="remove-recovery-key"
+      risk="destructive"
+      question={t("security-recovery-remove-question")}
+      detail={<p data-part="dialog.note">{t("security-recovery-remove-warning")}</p>}
+      action={t("security-recovery-remove-confirm")}
+      onConfirm={() => void remove()}
+      cancel={{ onClick: close }}
+      busy={busy}
+      error={problem ? t(problem.id, problem.args) : null}
+    />
   );
 }
 

@@ -66,6 +66,23 @@ function renderDialogs(env: Env, extra: React.ReactNode = null) {
   );
 }
 
+/** Opens the import wizard and reads the mbox file `C:\Mail\archive.mbox` (step 2). */
+async function openImportOptions(env: Env, user: ReturnType<typeof userEvent.setup>) {
+  const { dialog } = await openImport(env, user);
+  await user.type(within(dialog).getByLabelText("File"), "C:\\Mail\\archive.mbox");
+  await user.click(within(dialog).getByRole("button", { name: "Read source" }));
+  expect(await within(dialog).findByText("Step 2 of 3")).toBeVisible();
+  return dialog;
+}
+
+/** The labels of a dialog's footer buttons, in their order on screen. */
+function footerLabels(dialog: HTMLElement): string[] {
+  const footer = must(dialog.querySelector<HTMLElement>('[data-part="dialog.footer"]'));
+  return within(footer)
+    .getAllByRole("button")
+    .map((b) => b.textContent);
+}
+
 /** Opens the import wizard through its action; the dialog and the render's container. */
 async function openImport(env: Env, user: ReturnType<typeof userEvent.setup>) {
   const { container } = renderDialogs(env, <RunAction id={IMPORT_ACTION} />);
@@ -94,6 +111,8 @@ describe("import wizard", () => {
     const user = userEvent.setup();
     const { dialog, container } = await openImport(env, user);
     expect(within(dialog).getByText("Step 1 of 3")).toBeVisible();
+    // R6: Cancel on every step, Done on the result (Windows order).
+    expect(footerLabels(dialog)).toEqual(["Read source", "Cancel"]);
     expect(within(dialog).getByRole("radio", { name: "mbox file" })).toBeChecked();
     await user.type(within(dialog).getByLabelText("File"), "archive.mbox");
     expect(within(dialog).getByText(/Type the full path, for example/)).toBeVisible();
@@ -109,6 +128,7 @@ describe("import wizard", () => {
       "Import from archive.mbox",
     );
     expect(await violations(container)).toEqual([]);
+    expect(footerLabels(dialog)).toEqual(["Import", "Back", "Cancel"]);
     await user.click(within(dialog).getByRole("button", { name: "Import" }));
     expect(env.transport.requests.find((r) => r.type === "StartImport")).toMatchObject({
       options: {
@@ -133,16 +153,26 @@ describe("import wizard", () => {
     expect(within(issues).getByText("Welcome to the list")).toBeVisible();
     expect(within(issues).getAllByText("Details").length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
+    expect(footerLabels(dialog)).toEqual(["Done"]);
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    expect(env.store.getState().windows).not.toContain(IMPORT_DIALOG);
+    stop();
+  });
+
+  it("closes from any step with Cancel", async () => {
+    const { env, stop } = setup();
+    const user = userEvent.setup();
+    const dialog = await openImportOptions(env, user);
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(env.store.getState().windows).not.toContain(IMPORT_DIALOG);
+    expect(env.transport.requests.some((r) => r.type === "StartImport")).toBe(false);
     stop();
   });
 
   it("imports into a folder of an account chosen with the pickers", async () => {
     const { env, stop } = setup();
     const user = userEvent.setup();
-    const { dialog } = await openImport(env, user);
-    await user.type(within(dialog).getByLabelText("File"), "C:\\Mail\\archive.mbox");
-    await user.click(within(dialog).getByRole("button", { name: "Read source" }));
-    expect(await within(dialog).findByText("Step 2 of 3")).toBeVisible();
+    const dialog = await openImportOptions(env, user);
     // Empty = Local Folders (the placeholder says so); an account brings its folder picker.
     const account = within(dialog).getByRole("combobox", { name: "Account" });
     expect(account).toHaveAttribute("placeholder", "Local Folders (on this computer only)");
@@ -267,12 +297,14 @@ describe("export wizard", () => {
     expect(within(dialog).queryByRole("radio", { name: "Calendar file (.ics)" })).toBeNull();
     await user.type(within(dialog).getByLabelText("Save as"), "C:\\out\\inbox.mbox");
     expect(await violations(container)).toEqual([]);
+    expect(footerLabels(dialog)).toEqual(["Export", "Cancel"]);
     await user.click(within(dialog).getByRole("button", { name: "Export" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(/The file exists/);
     await user.click(within(dialog).getByRole("checkbox", { name: "Replace existing files" }));
     await user.click(within(dialog).getByRole("button", { name: "Export" }));
     finish(env);
     expect(await within(dialog).findByText(/^Export: Done/)).toBeVisible();
+    expect(footerLabels(dialog)).toEqual(["Done"]);
     expect(env.transport.requests.filter((r) => r.type === "StartExport").at(-1)).toMatchObject({
       format: "mbox",
       source: { type: "folders", folder_ids: ["acc-personal/Inbox"], include_subfolders: false },
@@ -308,6 +340,7 @@ describe("backup and restore", () => {
       /Nail backup \d{4}-\d{2}-\d{2}\.nailbackup$/,
     );
     expect(await violations(container)).toEqual([]);
+    expect(footerLabels(dialog)).toEqual(["Back up", "Cancel"]);
     await user.click(within(dialog).getByRole("button", { name: "Back up" }));
     expect(env.transport.requests.find((r) => r.type === "CreateBackup")).toMatchObject({
       contents: { items: [...defaultBackupContents().items, "keys"] },
@@ -322,6 +355,7 @@ describe("backup and restore", () => {
     finish(env);
     const check = await within(dialog).findByRole("region", { name: "Backup check" });
     expect(await within(check).findByText("Backup check: Done")).toBeVisible();
+    expect(footerLabels(dialog)).toEqual(["Done"]);
     stop();
   });
 
@@ -405,10 +439,19 @@ describe("backup and restore", () => {
     expect(within(dialog).getByText(/Nothing is deleted/)).toBeVisible();
     expect(env.transport.requests.some((r) => r.type === "StartRestore")).toBe(false);
     expect(await violations(container)).toEqual([]);
-    await user.click(within(dialog).getByRole("button", { name: "Restore now" }));
+    // Restore now is destructive (R6): red, never a submit button, the focus
+    // starts on Cancel; Back and Cancel sit beside it.
+    const restoreNow = within(dialog).getByRole("button", { name: "Restore now" });
+    expect(restoreNow).toHaveAttribute("data-variant", "danger");
+    expect(restoreNow).toHaveAttribute("type", "button");
+    expect(footerLabels(dialog)).toEqual(["Restore now", "Back", "Cancel"]);
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.click(restoreNow);
     finish(env);
     expect(await within(dialog).findByRole("table", { name: "What was restored" })).toBeVisible();
     expect(within(dialog).getByText("Restart Nail to finish the restore.")).toBeVisible();
+    // The result step: only Done.
+    expect(footerLabels(dialog)).toEqual(["Done"]);
     expect(env.transport.requests.find((r) => r.type === "StartRestore")).toMatchObject({
       contents: { items: notArrayContaining(["plugins"]) },
     });
@@ -450,7 +493,9 @@ describe("job lists", () => {
     await user.click(screen.getByRole("button", { name: "Show report" }));
     const dialog = await screen.findByRole("dialog", { name: "Report" });
     expect(await within(dialog).findByText("32 contacts")).toBeVisible();
-    await user.click(must(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)));
+    // An information window: × only, no footer (R6).
+    expect(dialog.querySelector('[data-part="dialog.footer"]')).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
     await user.click(screen.getByRole("button", { name: "Import…" }));
     expect(env.store.getState().windows).toContain(IMPORT_DIALOG);
     stop();
@@ -484,7 +529,9 @@ describe("diagnostics bundle", () => {
     expect(
       within(dialog).getByRole("checkbox", { name: "Chosen messages (full content)" }),
     ).not.toBeChecked();
-    await user.click(within(dialog).getByRole("button", { name: "Show what will be included" }));
+    // A wizard (R6): the options with Next and Cancel.
+    expect(footerLabels(dialog)).toEqual(["Next", "Cancel"]);
+    await user.click(within(dialog).getByRole("button", { name: "Next" }));
     const preview = await within(dialog).findByRole("region", {
       name: "The bundle will contain exactly these files",
     });
@@ -493,31 +540,28 @@ describe("diagnostics bundle", () => {
     expect(within(preview).queryByText(/\.eml$/)).toBeNull();
     expect(within(preview).getAllByText("Passwords and keys removed").length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
-    // One button row, last in the dialog, so it stays at the window's bottom.
-    const rows = dialog.querySelectorAll('[data-part="wizard.buttons"]');
-    expect(rows).toHaveLength(1);
-    const row = must(rows[0]);
-    expect(row.parentElement?.lastElementChild).toBe(row);
-    expect(
-      within(row as HTMLElement)
-        .getAllByRole("button")
-        .map((b) => b.textContent),
-    ).toEqual(["Show what will be included", "Save bundle", "Close"]);
-    // Opting in to mail needs a message; the preview is asked for again.
+    // One footer, last in the dialog, so it stays at the window's bottom.
+    const footers = dialog.querySelectorAll('[data-part="dialog.footer"]');
+    expect(footers).toHaveLength(1);
+    const footer = must(footers[0]);
+    expect(footer.parentElement?.lastElementChild).toBe(footer);
+    expect(footerLabels(dialog)).toEqual(["Save bundle", "Back", "Cancel"]);
+    // Back: opting in to mail needs a message; the preview is asked for again.
+    await user.click(within(dialog).getByRole("button", { name: "Back" }));
+    expect(within(dialog).queryByRole("region", { name: /exactly these files/ })).toBeNull();
     await user.click(
       within(dialog).getByRole("checkbox", { name: "Chosen messages (full content)" }),
     );
-    expect(within(dialog).queryByRole("region", { name: /exactly these files/ })).toBeNull();
     expect(within(dialog).getByText("Choose the messages to include.")).toBeVisible();
-    expect(
-      within(dialog).getByRole("button", { name: "Show what will be included" }),
-    ).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Next" })).toBeDisabled();
     await user.click(await within(dialog).findByRole("checkbox", { name: first?.subject ?? "" }));
-    await user.click(within(dialog).getByRole("button", { name: "Show what will be included" }));
+    await user.click(within(dialog).getByRole("button", { name: "Next" }));
     expect(await within(dialog).findByText(/\.eml$/)).toBeVisible();
     await user.type(within(dialog).getByLabelText("Save the bundle as"), "C:\\support\\nail.zip");
     await user.click(within(dialog).getByRole("button", { name: "Save bundle" }));
     expect(await within(dialog).findByText(/Checksum \(SHA-256\): 9f2c4e1a/)).toBeVisible();
+    // The result: only Done.
+    expect(footerLabels(dialog)).toEqual(["Done"]);
     expect(env.transport.requests.find((r) => r.type === "CreateDiagnosticsBundle")).toMatchObject({
       options: { items: arrayContaining(["mail-content"]), message_ids: [first?.id] },
       path: "C:\\support\\nail.zip",

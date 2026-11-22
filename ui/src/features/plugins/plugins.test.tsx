@@ -18,8 +18,9 @@ import { clientIdOf } from "./context";
 import { InstallDialog } from "./InstallDialog";
 import { permissionMessageId } from "./messages";
 import { crashPlugin } from "./mockHost";
-import { PluginDialogs } from "./PluginDialogs";
+import { PluginDialogs, footerButtons } from "./PluginDialogs";
 import { PluginNotifications, TOAST_MS } from "./PluginNotifications";
+import { UNINSTALL_DIALOG, UninstallDialog } from "./PluginManager";
 import { pluginsStoreFor } from "./store";
 import {
   ALL_GRANTS,
@@ -46,6 +47,17 @@ function openDialog(env: Env, dialog: Partial<PluginDialog> & { spec: PluginDial
       },
     });
   });
+}
+
+/** The plug-in dialogs effect with the window layer that shows them. */
+function renderPluginDialogs(env: Env) {
+  return renderWithProviders(
+    <>
+      <PluginDialogs />
+      <WindowLayer layout={env.transport.data.layout} />
+    </>,
+    env,
+  );
 }
 
 describe("plugins feature slot", () => {
@@ -399,13 +411,7 @@ describe("plug-in commands, dialogs and notifications", () => {
   it("shows only this UI's dialogs; non-modal ones do not block", () => {
     const env = createEnv();
     const unsubscribe = wireEvents(env);
-    renderWithProviders(
-      <>
-        <PluginDialogs />
-        <WindowLayer layout={env.transport.data.layout} />
-      </>,
-      env,
-    );
+    renderPluginDialogs(env);
     openDialog(env, {
       dialog_id: "other",
       client_id: "someone-else",
@@ -436,13 +442,7 @@ describe("plug-in commands, dialogs and notifications", () => {
     const user = userEvent.setup();
     const env = createEnv();
     const unsubscribe = wireEvents(env);
-    renderWithProviders(
-      <>
-        <PluginDialogs />
-        <WindowLayer layout={env.transport.data.layout} />
-      </>,
-      env,
-    );
+    renderPluginDialogs(env);
     const spec = {
       title: "Search",
       body: [
@@ -466,6 +466,62 @@ describe("plug-in commands, dialogs and notifications", () => {
     expect(screen.getByRole("textbox", { name: "Query" })).toHaveValue("abc");
     // The mock host has no dialog "d1": the core's error is shown in the dialog.
     expect(screen.getByRole("alert")).toHaveTextContent("The item no longer exists.");
+    unsubscribe();
+  });
+
+  it("sorts a plug-in's dialog buttons by role", () => {
+    const save = { id: "save", label: "Save", primary: true };
+    const later = { id: "later", label: "Later" };
+    const cancel = { id: "Cancel", label: "Never mind" };
+    expect(footerButtons([later, cancel, save])).toEqual({
+      primary: save,
+      secondary: [later],
+      cancel,
+    });
+    expect(footerButtons([later])).toEqual({ primary: null, secondary: [later], cancel: null });
+    // A primary button is never the Cancel, even with the id `cancel`.
+    const primaryCancel = { id: "cancel", label: "Cancel it", primary: true };
+    expect(footerButtons([primaryCancel])).toEqual({
+      primary: primaryCancel,
+      secondary: [],
+      cancel: null,
+    });
+  });
+
+  it("orders a plug-in dialog's buttons in the shared footer and adds Cancel", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    const unsubscribe = wireEvents(env);
+    renderPluginDialogs(env);
+    openDialog(env, {
+      spec: {
+        title: "Choose",
+        body: [{ type: "text", value: "Pick one" }],
+        buttons: [
+          { id: "later", label: "Later" },
+          { id: "go", label: "Go", primary: true },
+          { id: "skip", label: "Skip it" },
+        ],
+      },
+    });
+    const dialog = screen.getByRole("dialog", { name: "Choose" });
+    const footer = must(dialog.querySelector<HTMLElement>('[data-part="dialog.footer"]'));
+    // Nail orders by role (Windows / Linux: primary, secondary, Cancel);
+    // further secondary buttons sit before the end group.
+    const end = must(footer.querySelector<HTMLElement>('[data-part="dialog.footer.end"]'));
+    expect(
+      within(end)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Go", "Later", "Cancel"]);
+    expect(within(footer).getByRole("button", { name: "Skip it" })).toHaveAttribute(
+      "data-role",
+      "secondary",
+    );
+    expect(within(footer).getByRole("button", { name: "Go" })).toHaveAttribute("type", "submit");
+    // Nail's Cancel dismisses the dialog like × and Escape.
+    await user.click(within(footer).getByRole("button", { name: "Cancel" }));
+    expect(requestsOf(env, "RespondPluginDialog")[0]).toMatchObject({ button: null });
     unsubscribe();
   });
 
@@ -681,9 +737,9 @@ describe("install dialog", () => {
     await user.type(screen.getByRole("textbox"), "C:/plugins/follow-up.nailplugin");
     await user.click(screen.getByRole("button", { name: "Check the plug-in" }));
     await user.click(await screen.findByRole("button", { name: "Install" }));
+    // The wizard's last step: Not now is its Cancel and ends the wizard (R6).
     await user.click(await screen.findByRole("button", { name: "Not now" }));
     expect(requestsOf(env, "ApplyConfigMerge")).toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: "Close" }));
     expect(close).toHaveBeenCalled();
   });
 
@@ -865,17 +921,32 @@ describe("plug-in manager", () => {
   it("uninstalls after a confirmation", async () => {
     const user = userEvent.setup();
     const { env, row, unsubscribe } = await renderManager();
-    await user.click(within(row).getByRole("button", { name: "Remove" }));
-    const confirm = within(row).getByRole("group", { name: "Remove" });
-    await user.click(within(confirm).getByRole("button", { name: "Keep" }));
-    expect(requestsOf(env, "UninstallPlugin")).toHaveLength(0);
-    await user.click(within(row).getByRole("button", { name: "Remove" }));
-    await user.click(
-      within(within(row).getByRole("group", { name: "Remove" })).getByRole("button", {
-        name: "Remove",
-      }),
+    // Remove… opens a destructive confirmation (R6): Cancel has the focus
+    // and Enter does not remove.
+    await user.click(within(row).getByRole("button", { name: "Remove plug-in…" }));
+    expect(env.store.getState().windows).toContain(UNINSTALL_DIALOG);
+    const close = vi.fn();
+    const first = renderWithProviders(
+      <UninstallDialog name={UNINSTALL_DIALOG} close={close} />,
+      env,
     );
+    const ask = screen.getByRole("group", { name: "Remove “Follow-up”?" });
+    expect(ask).toHaveTextContent("Its settings, data and log are deleted.");
+    await waitFor(() => {
+      expect(within(ask).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await user.keyboard("{Enter}");
+    expect(requestsOf(env, "UninstallPlugin")).toHaveLength(0);
+    expect(close).toHaveBeenCalledTimes(1);
+    first.unmount();
+    // Asked again: Remove plug-in removes it and closes the question.
+    await user.click(within(row).getByRole("button", { name: "Remove plug-in…" }));
+    renderWithProviders(<UninstallDialog name={UNINSTALL_DIALOG} close={close} />, env);
+    await user.click(screen.getByRole("button", { name: "Remove plug-in" }));
     expect(requestsOf(env, "UninstallPlugin")).toHaveLength(1);
+    await waitFor(() => {
+      expect(close).toHaveBeenCalledTimes(2);
+    });
     expect(await screen.findByText("No plug-ins are installed.")).toBeInTheDocument();
     unsubscribe();
   });

@@ -13,14 +13,26 @@
  *   and valid formats; invalid fields are marked, described and focused.
  * - `button` nodes inside the dialog send `PluginUiAction` with the
  *   current values; the plug-in may answer with an updated dialog (same id).
+ * - The dialog's buttons end it in the shared footer (R6, ADR 0239): the
+ *   plug-in names their roles (`primary`, else secondary), Nail orders
+ *   them for the viewer's system and adds Cancel (`button: null`, like ×
+ *   and Escape). A plug-in's own button with the id `cancel` is that
+ *   Cancel, with the plug-in's label and answering `"cancel"`
+ *   (`footerButtons`).
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { errorMessageOf, NailError } from "../../api/client";
-import type { JsonValue, LocalizedMessage, PluginDialog } from "../../api/generated";
+import type {
+  JsonValue,
+  LocalizedMessage,
+  PluginDialog,
+  PluginDialogButton,
+} from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
+import { DialogFooter } from "../../widgets/dialog";
 import { clientIdOf } from "./context";
 import { partAttrs } from "./parts";
 import { usePlugins } from "./queries";
@@ -31,6 +43,29 @@ import { mergeValues, validate, type FieldIssue, type Values } from "./tree/valu
 
 const FOCUSABLE =
   'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), a[href], [tabindex="0"]';
+
+/** The id of a plug-in button that is the dialog's Cancel. */
+export const PLUGIN_CANCEL_ID = "cancel";
+
+/**
+ * A plug-in dialog's buttons by role: the first `primary` one, the other
+ * buttons (secondary), and the plug-in's own Cancel (`id` `cancel`, not
+ * primary) when it has one.
+ */
+export function footerButtons(buttons: readonly PluginDialogButton[]): {
+  primary: PluginDialogButton | null;
+  secondary: PluginDialogButton[];
+  cancel: PluginDialogButton | null;
+} {
+  const primary = buttons.find((b) => b.primary === true) ?? null;
+  const cancel =
+    buttons.find((b) => b !== primary && b.id.toLowerCase() === PLUGIN_CANCEL_ID) ?? null;
+  return {
+    primary,
+    secondary: buttons.filter((b) => b !== primary && b !== cancel),
+    cancel,
+  };
+}
 
 /** The plug-in's display name (its id until the list is loaded). */
 export function usePluginName(pluginId: string): string {
@@ -64,7 +99,11 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const body = ref.current?.querySelector('[data-part="plugin.dialog.body"]');
-    const first = body?.querySelector<HTMLElement>(FOCUSABLE) ?? ref.current;
+    // No field: the footer's first button.
+    const first =
+      body?.querySelector<HTMLElement>(FOCUSABLE) ??
+      ref.current?.querySelector<HTMLElement>('[data-part="dialog.footer"] button') ??
+      ref.current;
     first?.focus();
     return () => {
       if (previous?.isConnected) previous.focus();
@@ -141,8 +180,10 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
     }
   };
 
-  const buttons = spec.buttons ?? [];
-  const primary = buttons.find((b) => b.primary);
+  const { primary, secondary, cancel } = footerButtons(spec.buttons ?? []);
+  // The footer holds one secondary button; further ones sit between its
+  // start and its end (`dialog.footer` children).
+  const [firstSecondary, ...moreSecondary] = secondary;
   const invalidCount = Object.keys(issues).length;
 
   const frame = (
@@ -164,57 +205,80 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
         </span>
       </div>
       <form
-        {...partAttrs("plugin.dialog.body", plugin)}
+        {...partAttrs("plugin.dialog.form", plugin)}
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
           if (primary && !busy) submit(primary.id, true);
         }}
       >
-        {invalidCount > 0 && (
-          <p {...partAttrs("plugin.dialog.error", plugin)} role="alert">
-            {t("plugin-dialog-invalid", { count: invalidCount })}
-          </p>
-        )}
-        {problem && (
-          <p {...partAttrs("plugin.dialog.error", plugin)} role="alert">
-            {t(problem.id, problem.args)}
-          </p>
-        )}
-        <PluginTree
-          plugin={plugin}
-          nodes={spec.body}
-          values={values}
-          issues={issues}
-          busy={busy}
-          onChange={change}
-          onAction={(id) => void action(id)}
-        />
-        {buttons.length > 0 && (
-          <div {...partAttrs("plugin.dialog.buttons", plugin)}>
-            {buttons.map((button) => (
-              <button
-                key={button.id}
-                type={button.primary ? "submit" : "button"}
-                {...partAttrs("plugin.dialog.button", plugin, button.id)}
-                data-variant={button.primary ? "primary" : "default"}
-                disabled={busy}
-                onClick={
-                  button.primary
-                    ? (event) => {
-                        event.preventDefault();
-                        submit(button.id, true);
-                      }
-                    : () => {
-                        submit(button.id, false);
-                      }
+        <div {...partAttrs("plugin.dialog.body", plugin)}>
+          {invalidCount > 0 && (
+            <p {...partAttrs("plugin.dialog.error", plugin)} role="alert">
+              {t("plugin-dialog-invalid", { count: invalidCount })}
+            </p>
+          )}
+          {problem && (
+            <p {...partAttrs("plugin.dialog.error", plugin)} role="alert">
+              {t(problem.id, problem.args)}
+            </p>
+          )}
+          <PluginTree
+            plugin={plugin}
+            nodes={spec.body}
+            values={values}
+            issues={issues}
+            busy={busy}
+            onChange={change}
+            onAction={(id) => void action(id)}
+          />
+        </div>
+        <DialogFooter
+          {...(primary === null
+            ? {}
+            : { primary: { label: primary.label, action: primary.id, submit: true } })}
+          {...(firstSecondary === undefined
+            ? {}
+            : {
+                secondary: {
+                  label: firstSecondary.label,
+                  action: firstSecondary.id,
+                  onClick: () => {
+                    submit(firstSecondary.id, false);
+                  },
+                },
+              })}
+          cancel={
+            cancel === null
+              ? {
+                  onClick: () => void respond(null),
                 }
-              >
-                {button.label}
-              </button>
-            ))}
-          </div>
-        )}
+              : {
+                  label: cancel.label,
+                  action: cancel.id,
+                  onClick: () => {
+                    submit(cancel.id, false);
+                  },
+                }
+          }
+          busy={busy}
+        >
+          {moreSecondary.map((button) => (
+            <button
+              key={button.id}
+              type="button"
+              data-part="form.button"
+              data-role="secondary"
+              data-action={button.id}
+              disabled={busy}
+              onClick={() => {
+                submit(button.id, false);
+              }}
+            >
+              {button.label}
+            </button>
+          ))}
+        </DialogFooter>
       </form>
     </div>
   );

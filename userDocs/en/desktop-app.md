@@ -22,9 +22,8 @@ things to set up. You can change all of them later in Settings.
   contacts and calendars from Thunderbird, mbox or Maildir files and
   calendar and contact files (see [Importing and exporting](import-export.md)).
 
-*Get started* and *Skip* both close the screen for good. If you close it
-with ×, it comes back at the next start. To see it again, use the
-*Welcome screen* command.
+*Get started* closes the screen for good; closing it with × (or Esc) skips
+it the same way. To see it again, use the *Welcome screen* command.
 
 ## Updates and About Nail
 

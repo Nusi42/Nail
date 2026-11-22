@@ -13,8 +13,12 @@
  *
  * The app shell mounts `RemoteLogin` in web mode when `Status` says the
  * browser is not authenticated (WP45).
+ *
+ * Every step ends in the shared footer (R6, ADR 0239): the step's verb as
+ * the primary, the other way in as the secondary and, in the
+ * re-authentication, Cancel.
  */
-import { useEffect, useState, type SubmitEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type SubmitEvent } from "react";
 import type {
   AuthFailure,
   AuthPurpose,
@@ -23,6 +27,7 @@ import type {
   RemoteSession,
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
+import { DialogFooter } from "../../widgets/dialog";
 import type { AuthTransport } from "./authClient";
 import { InputField } from "./fields";
 import { groupFingerprint, normalizePairingCode, secondsUntil } from "./model";
@@ -102,6 +107,20 @@ async function call(run: () => Promise<AuthResponse>): Promise<Step> {
       retryAfter: null,
     };
   }
+}
+
+/**
+ * A step that replaces the previous one gives its primary button the focus
+ * (the step's main action; Enter runs it).
+ */
+function useFocusPrimary<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    ref.current
+      ?.querySelector<HTMLButtonElement>('[data-part="dialog.footer"] [data-role="primary"]')
+      ?.focus();
+  }, []);
+  return ref;
 }
 
 /** Shared state of the forms: busy flag, notice and throttle. */
@@ -204,18 +223,37 @@ function PairForm({
         maxLength={64}
       />
       <NoticeLine notice={attempt.notice} wait={attempt.wait} />
-      <div data-part="remote-login.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="pair"
-          disabled={attempt.blocked || typed === ""}
-        >
-          {t("remote-pair-browser-submit")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("remote-pair-browser-submit"),
+          action: "pair",
+          submit: true,
+          disabled: attempt.blocked || typed === "",
+        }}
+      />
     </form>
+  );
+}
+
+/** The passkey is ready: Continue (focused) goes on. */
+function PasskeyAdded({ name, onDone }: { name: string; onDone: () => void }) {
+  const t = useT();
+  const step = useFocusPrimary<HTMLElement>();
+  return (
+    <section
+      ref={step}
+      data-part="remote-login.form"
+      data-step="passkey-added"
+      aria-label={t("remote-passkey-added-title")}
+    >
+      <h1 data-part="remote-login.title">{t("remote-passkey-added-title")}</h1>
+      <p data-part="remote-login.intro" role="status">
+        {t("remote-passkey-added", { name })}
+      </p>
+      <DialogFooter
+        primary={{ label: t("common-continue"), action: "continue", onClick: onDone }}
+      />
+    </section>
   );
 }
 
@@ -274,31 +312,7 @@ function OfferPasskey({
   };
 
   if (added) {
-    return (
-      <section
-        data-part="remote-login.form"
-        data-step="passkey-added"
-        aria-label={t("remote-passkey-added-title")}
-      >
-        <h1 data-part="remote-login.title">{t("remote-passkey-added-title")}</h1>
-        <p data-part="remote-login.intro" role="status">
-          {t("remote-passkey-added", { name: name.trim() })}
-        </p>
-        <div data-part="remote-login.actions">
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="primary"
-            data-action="continue"
-            // eslint-disable-next-line jsx-a11y/no-autofocus -- the step's only action takes the focus when the step replaces the previous one.
-            autoFocus
-            onClick={onDone}
-          >
-            {t("common-continue")}
-          </button>
-        </div>
-      </section>
-    );
+    return <PasskeyAdded name={name.trim()} onDone={onDone} />;
   }
 
   return (
@@ -320,20 +334,15 @@ function OfferPasskey({
         maxLength={64}
       />
       <NoticeLine notice={attempt.notice} wait={attempt.wait} />
-      <div data-part="remote-login.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="add-passkey"
-          disabled={attempt.blocked || name.trim() === ""}
-        >
-          {t("remote-passkey-offer-add")}
-        </button>
-        <button type="button" data-part="form.button" data-action="skip" onClick={onDone}>
-          {t("common-not-now")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("remote-passkey-offer-add"),
+          action: "add-passkey",
+          submit: true,
+          disabled: attempt.blocked || name.trim() === "",
+        }}
+        secondary={{ label: t("common-not-now"), action: "skip", onClick: onDone }}
+      />
     </form>
   );
 }
@@ -350,8 +359,13 @@ interface SignInProps {
   /** Fixed login name (re-authentication), else typed. */
   userName: string | null;
   onSuccess: (answer: AuthResponse) => void;
-  /** Extra buttons (e.g. "Cancel" of the re-authentication). */
-  extra?: ReactNode;
+  /** The re-authentication's Cancel (the login page has none). */
+  onCancel?: () => void;
+}
+
+/** The footer's Cancel when the steps run in the re-authentication. */
+function cancelOf(onCancel: (() => void) | undefined) {
+  return onCancel === undefined ? {} : { cancel: { onClick: onCancel } };
 }
 
 function PasskeyStep({
@@ -361,10 +375,11 @@ function PasskeyStep({
   userName,
   onSuccess,
   onPassword,
-  extra,
+  onCancel,
 }: SignInProps & { onPassword: () => void }) {
   const t = useT();
   const attempt = useAttempt();
+  const step = useFocusPrimary<HTMLDivElement>();
 
   const signIn = async () => {
     if (attempt.blocked) return;
@@ -400,34 +415,25 @@ function PasskeyStep({
   };
 
   return (
-    <div data-part="remote-login.form" data-step="passkey">
+    <div ref={step} data-part="remote-login.form" data-step="passkey">
       <p data-part="remote-login.intro">
         {t(purpose === "reauth" ? "remote-reauth-passkey-intro" : "remote-login-passkey-intro")}
       </p>
       <NoticeLine notice={attempt.notice} wait={attempt.wait} />
-      <div data-part="remote-login.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="passkey"
-          // eslint-disable-next-line jsx-a11y/no-autofocus -- the step's main action takes the focus when the step replaces the previous one.
-          autoFocus
-          disabled={attempt.blocked}
-          onClick={() => void signIn()}
-        >
-          {t("remote-login-passkey")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="use-password"
-          onClick={onPassword}
-        >
-          {t("remote-login-use-password")}
-        </button>
-        {extra}
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("remote-login-passkey"),
+          action: "passkey",
+          disabled: attempt.blocked,
+          onClick: () => void signIn(),
+        }}
+        secondary={{
+          label: t("remote-login-use-password"),
+          action: "use-password",
+          onClick: onPassword,
+        }}
+        {...cancelOf(onCancel)}
+      />
     </div>
   );
 }
@@ -439,7 +445,7 @@ function PasswordStep({
   userName,
   onSuccess,
   onPasskey,
-  extra,
+  onCancel,
 }: SignInProps & { onPasskey: () => void }) {
   const t = useT();
   const [name, setName] = useState(userName ?? "");
@@ -528,44 +534,42 @@ function PasswordStep({
         </>
       )}
       <NoticeLine notice={attempt.notice} wait={attempt.wait} />
-      <div data-part="remote-login.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          data-action={needsTotp ? "verify" : "sign-in"}
-          disabled={
-            attempt.blocked ||
-            name.trim() === "" ||
-            password === "" ||
-            (needsTotp && totp.trim() === "")
-          }
-        >
-          {t(
+      <DialogFooter
+        primary={{
+          label: t(
             needsTotp
               ? "remote-login-verify"
               : purpose === "reauth"
                 ? "remote-reauth-confirm"
                 : "remote-login-sign-in",
-          )}
-        </button>
-        {needsTotp && (
-          <button type="button" data-part="form.button" data-action="restart" onClick={restart}>
-            {t("remote-login-start-over")}
-          </button>
-        )}
-        {!needsTotp && passkeyOffered && (
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="use-passkey"
-            onClick={onPasskey}
-          >
-            {t("remote-login-use-passkey")}
-          </button>
-        )}
-        {extra}
-      </div>
+          ),
+          action: needsTotp ? "verify" : "sign-in",
+          submit: true,
+          disabled:
+            attempt.blocked ||
+            name.trim() === "" ||
+            password === "" ||
+            (needsTotp && totp.trim() === ""),
+        }}
+        {...(needsTotp
+          ? {
+              secondary: {
+                label: t("remote-login-start-over"),
+                action: "restart",
+                onClick: restart,
+              },
+            }
+          : passkeyOffered
+            ? {
+                secondary: {
+                  label: t("remote-login-use-passkey"),
+                  action: "use-passkey",
+                  onClick: onPasskey,
+                },
+              }
+            : {})}
+        {...cancelOf(onCancel)}
+      />
     </form>
   );
 }
@@ -774,11 +778,7 @@ export function RemoteReauth({
         onSuccess={(answer) => {
           if (answer.type === "Reauthenticated") onDone(answer.reauth_until);
         }}
-        extra={
-          <button type="button" data-part="form.button" data-action="cancel" onClick={onCancel}>
-            {t("common-cancel")}
-          </button>
-        }
+        onCancel={onCancel}
       />
     </section>
   );

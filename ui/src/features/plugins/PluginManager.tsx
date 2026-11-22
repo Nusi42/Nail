@@ -6,15 +6,19 @@
  * development folder (both through the install dialog). M4a: the
  * confirmation policy of plug-ins that may write, and the activity (hooks,
  * background jobs, CPU time, what the plug-in adds).
+ *
+ * Remove… asks first in the modal confirmation `plugin-uninstall` (a
+ * destructive `ConfirmDialog`, R6 / ADR 0239).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type { LocalizedMessage, PluginGrant, PluginInfo } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
+import type { DialogProps } from "../../layout/dialogRegistry";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccounts, useClient } from "../../state/queries";
-import { useUi, useUiStoreApi } from "../../state/uiStore";
+import { useUi, useUiStoreApi, type UiStore } from "../../state/uiStore";
 import { PolicyEditor } from "../agents/PolicyEditor";
 import { Activity } from "./Activity";
 import { isWritePermission } from "./extensions";
@@ -28,9 +32,65 @@ import { Settings } from "./Settings";
 import { pluginsStoreFor, type InstallMode } from "./store";
 import { hasText } from "../../text/empty";
 import { useBusyAction } from "../../state/busyAction";
+import { ConfirmDialog } from "../../widgets/dialog";
 
 /** Dialog name. */
 export const MANAGER_DIALOG = "plugin-manager";
+/** The confirmation before a plug-in is removed. */
+export const UNINSTALL_DIALOG = "plugin-uninstall";
+
+/** The plug-in the open removal question is about (per UI store). */
+interface PendingUninstall {
+  id: string;
+  name: string;
+}
+
+const pendingUninstall = new WeakMap<UiStore, PendingUninstall>();
+
+/** Asks before removing `plugin` (`plugin-uninstall`). */
+export function askUninstall(store: UiStore, plugin: PluginInfo): void {
+  pendingUninstall.set(store, { id: plugin.id, name: plugin.manifest.name });
+  store.getState().openWindow(UNINSTALL_DIALOG);
+}
+
+/** Dialog `plugin-uninstall`: "Remove “X”?" — Remove plug-in (red), Cancel. */
+export function UninstallDialog({ close }: DialogProps) {
+  const t = useT();
+  const store = useUiStoreApi();
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const [what] = useState(() => pendingUninstall.get(store) ?? null);
+  const { busy, problem, run } = useBusyAction();
+  // However the question ends (Cancel, ×, Esc, the removal), it is forgotten.
+  useEffect(
+    () => () => {
+      if (what !== null && pendingUninstall.get(store) === what) pendingUninstall.delete(store);
+    },
+    [store, what],
+  );
+  const uninstall = async () => {
+    if (what === null) return;
+    await run(async () => {
+      await client.request({ type: "UninstallPlugin", plugin_id: what.id }, "Done");
+      void queryClient.invalidateQueries({ queryKey: pluginKeys.all });
+      close();
+    });
+  };
+  return (
+    <ConfirmDialog
+      kind="uninstall-plugin"
+      risk="destructive"
+      question={t("plugin-manager-uninstall-confirm", { name: what?.name ?? "" })}
+      detail={<p data-part="dialog.note">{t("plugin-manager-uninstall-note")}</p>}
+      action={t("plugin-manager-uninstall")}
+      onConfirm={() => void uninstall()}
+      canConfirm={what !== null}
+      cancel={{ onClick: close }}
+      busy={busy}
+      error={problem ? t(problem.id, problem.args) : null}
+    />
+  );
+}
 
 type Section = "permissions" | "confirmations" | "activity" | "settings" | "log" | "layout";
 export const MANAGER_SECTIONS: readonly Section[] = [
@@ -127,8 +187,8 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
+  const store = useUiStoreApi();
   const [open, setOpen] = useState<Section | null>(null);
-  const [confirming, setConfirming] = useState(false);
   const busyAction = useBusyAction();
   const { busy, problem } = busyAction;
   const sections = sectionsOf(plugin);
@@ -149,8 +209,6 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
         "Plugin",
       ),
     );
-  const uninstall = () =>
-    run(() => client.request({ type: "UninstallPlugin", plugin_id: plugin.id }, "Done"));
 
   return (
     <li
@@ -222,39 +280,12 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
           data-variant="danger"
           disabled={busy}
           onClick={() => {
-            setConfirming(true);
+            askUninstall(store, plugin);
           }}
         >
-          {t("common-remove")}
+          {t("plugin-manager-remove")}
         </button>
       </div>
-      {confirming && (
-        <div data-part="plugin-manager.confirm" role="group" aria-label={t("common-remove")}>
-          <p data-part="plugin-manager.confirm.text">
-            {t("plugin-manager-uninstall-confirm", { name: plugin.manifest.name })}
-          </p>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="confirm-uninstall"
-            data-variant="danger"
-            disabled={busy}
-            onClick={() => void uninstall()}
-          >
-            {t("common-remove")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="cancel-uninstall"
-            onClick={() => {
-              setConfirming(false);
-            }}
-          >
-            {t("plugin-manager-uninstall-no")}
-          </button>
-        </div>
-      )}
       {open !== null && (
         <div data-part="plugin-manager.section" data-section={open} id={sectionId}>
           {open === "permissions" && <GrantsEditor plugin={plugin} />}

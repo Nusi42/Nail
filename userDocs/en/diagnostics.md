@@ -18,16 +18,17 @@ or run **Create a diagnostics bundle…** from the
    settings and account states then contain placeholders such as
    `<address-1>` instead of addresses, and no subjects or names. Support can
    still follow what happened.
-3. **Show what will be included.** Nail lists exactly the files the zip
-   will contain, each with its size, what was removed from it, and — under
-   **Show text** — the beginning of its content. Read it if you want to
-   be sure.
+3. **Next.** Nail lists exactly the files the zip will contain, each with
+   its size, what was removed from it, and — under **Show text** — the
+   beginning of its content. Read it if you want to be sure.
 4. **Save bundle.** Type a path or choose **Browse…**. Nail shows where the
    file is, its size and its checksum (SHA-256), which you can quote to
-   support so they know they got the same file.
+   support so they know they got the same file. **Done** closes the
+   window.
 
-If you change any option after looking at the list, Nail asks you to look
-at the new list first.
+**Back** returns to the options; if you change one, Nail shows the new list
+before you can save. **Cancel** on any step closes the window without
+saving anything.
 
 ## What is never included
 
