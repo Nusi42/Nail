@@ -234,6 +234,36 @@ describe("the move window", () => {
     );
   });
 
+  it("asks once with the true count for a whole list and moves it with its mark", async () => {
+    const user = userEvent.setup();
+    // Select all keeps the row the list had selected.
+    const env = createEnv({
+      state: { activeAccountId: "acc-personal", selectedMessageId: `${INBOX}#2`, windows: [] },
+    });
+    setPendingMove(env.store, {
+      targets: [
+        { kind: "list", list: { source: "messages", folder_id: INBOX }, except: [], as_of: null },
+      ],
+      source: "list",
+    });
+    renderNode(widget("folder-picker"), env);
+    await user.click(await screen.findByRole("option", { name: "Trash" }));
+    const question = await findQuestion();
+    // A list's answer has no ids: the count is the core's `messages`.
+    const inInbox = env.transport.data.messages.filter((m) => m.folder_id === INBOX).length;
+    expect(question).toHaveTextContent(`Move ${String(inInbox)} messages to Trash?`);
+    expect(question).toHaveTextContent("Messages in Trash may be deleted for good later.");
+    await user.click(within(question).getByRole("button", { name: "Move" }));
+    await waitFor(() => {
+      expect(moves(env)).toHaveLength(1);
+    });
+    // One request: the list with the mark, never a second bulk question.
+    expect(must(moves(env)[0]).targets).toEqual([
+      expect.objectContaining({ kind: "list", as_of: expect.stringMatching(/./) as string }),
+    ]);
+    expect(env.store.getState().windows).not.toContain("mail-bulk-confirm");
+  });
+
   it("needs a selection", async () => {
     const user = userEvent.setup();
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });

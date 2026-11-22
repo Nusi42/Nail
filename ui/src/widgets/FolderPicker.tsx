@@ -154,7 +154,7 @@ export function FolderPicker({ node }: WidgetProps) {
         return;
       }
       const resolution = await resolveMove(ctx, folder.id);
-      if (resolution.message_ids.length === 0) await finish(folder);
+      if (resolution.messages === 0) await finish(folder);
       else setQuestion({ folder, role, resolution });
     } catch (e) {
       setError(errorMessageIdOf(e));
@@ -182,7 +182,7 @@ export function FolderPicker({ node }: WidgetProps) {
         kind="move"
         dataRole={question.role}
         question={t("mail-actions-move-confirm", {
-          count: question.resolution.message_ids.length,
+          count: question.resolution.messages,
           folder: question.folder.name,
         })}
         confirmLabel={t("mail-actions-move-confirm-yes")}

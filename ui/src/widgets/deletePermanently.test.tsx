@@ -95,6 +95,36 @@ describe("Delete permanently? (M5c, P3)", () => {
     expect(env.transport.data.messages).toContain(late);
   });
 
+  it("counts a whole list from the core's answer and deletes it with its mark", async () => {
+    const user = userEvent.setup();
+    const ids = [`${INBOX}#1`, `${INBOX}#2`];
+    const list: ActionTargets = {
+      targets: [
+        {
+          kind: "list",
+          list: { source: "messages", folder_id: TRASH },
+          except: [],
+          as_of: null,
+        },
+      ],
+      source: "list",
+    };
+    const { env } = await setup(list, (e) => {
+      toTrash(e, ids);
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Delete permanently?" });
+    // A list's answer has no ids: the count is `messages`.
+    expect(within(dialog).getByText("Delete 2 messages permanently?")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => {
+      const apply = env.transport.requests.find((r) => r.type === "ApplyMailAction");
+      expect(apply).toMatchObject({
+        targets: [{ kind: "list", as_of: expect.stringMatching(/./) as string }],
+        action: { type: "delete-permanently" },
+      });
+    });
+  });
+
   it("Cancel deletes nothing", async () => {
     const user = userEvent.setup();
     const { env } = await setup(messages([`${INBOX}#3`]), (e) => {

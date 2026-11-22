@@ -19,6 +19,9 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   action.
 - `Ctrl+A` in the message list selects the whole list, rows not loaded yet
   included; `Ctrl` / `Shift` + click deselects rows, `Esc` clears.
+- Every action on a whole selected list asks once with the true count and
+  names the action ("Archive all"); Select all is in the command palette
+  and the message list's right-click menu (ADR 0237).
 
 ### Changed — no limit on mail actions (ADR 0235)
 
@@ -28,6 +31,10 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   by one, and actions above `MAIL_ACTION_PART_MESSAGES` (10 000) messages
   run in parts with one undo. The issue `too-many-messages` is gone; the
   new issue `nested-list` refuses a list among a list's exceptions.
+- Actions on very large selections (tens of thousands of messages) run in
+  the background in parts and are still undone with a single Undo. Mail
+  that arrives after you confirm a Delete or a move is left alone.
+  Archiving and moving many messages is about four times faster (ADR 0236).
 
 ### Fixed — large selections (ADR 0235)
 

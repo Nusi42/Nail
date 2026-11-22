@@ -511,6 +511,23 @@
       "source": null
     },
     {
+      "selector": "message-list.selection-summary",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "sticky",
+        "top": "0",
+        "z-index": "1",
+        "padding": "var(--nail-space-xs) var(--nail-space-md)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)",
+        "border-bottom": "var(--nail-border-thin)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
       "selector": "account-switcher.item.name",
       "states": [],
       "conditions": [],

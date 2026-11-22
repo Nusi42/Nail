@@ -563,6 +563,7 @@ describe("window model", () => {
     "exchange-category-delete",
     "folder-delete",
     "gmail-label-delete",
+    "mail-bulk-confirm",
     "mail-delete-permanently",
     "mail-open-attachment",
     "mail-open-link",

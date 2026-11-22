@@ -218,6 +218,9 @@ layout "default" {
         // P2 (threads="expandable"): open / close a conversation row.
         action "list.expand"      label="@conversation-list.action.expand" icon="chevron-right"
         action "list.collapse"    label="@conversation-list.action.collapse" icon="chevron-down"
+        // R5: select the whole list ("All N selected") and end it.
+        action "list.select-all"  label="@message-list.action.select-all" icon="list-checks"
+        action "list.clear-selection" label="@message-list.action.clear-selection" icon="square-check-big"
         // The reader's card feed (P2; keys context="reader").
         action "conversation.next-card" label="@thread-view.action.next-card" icon="chevron-down"
         action "conversation.previous-card" label="@thread-view.action.previous-card" icon="chevron-up"
@@ -507,6 +510,11 @@ layout "default" {
         bind "o" "conversation.open-in-reader"
         bind "ctrl+p" "print.message"
         bind "ctrl+u" "source.message"
+        // Select the whole list, rows not loaded yet included (R5). Menus
+        // show an action's last binding: Cmd+A (macOS) first, Ctrl+A last.
+        bind "meta+a" "list.select-all"
+        bind "ctrl+a" "list.select-all"
+        bind "escape" "list.clear-selection"
     }
 
     // The reader's card feed (P2): j / k move between the cards (and
@@ -725,6 +733,8 @@ layout "default" {
         item "rules.add-to-rule"
         // "Run rule": a submenu of the saved rules (a menu source).
         item "rules.run-menu"
+        separator
+        item "list.select-all"
     }
 
     // A card of the reader's feed (right-click, or its "More" button): its

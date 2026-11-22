@@ -1,4 +1,4 @@
-# 0236 — R5 WT2: select all in the message list, one question per whole-list action
+# 0237 — R5 WT2: select all in the message list, one question per whole-list action
 
 Status: accepted (2026-11-22)
 
@@ -96,3 +96,15 @@ first ("destructive or above a threshold, decide and document").
   `features/mail-actions/selectAll.app.test.tsx` (the app on the mock core),
   `e2e/tests/r5-select-all.spec.ts` (web mode: a list larger than a page,
   a search, Esc, Undo).
+
+## Integration
+
+- The default layout binds `meta+a` before `ctrl+a`: a menu shows an
+  action's last binding, so the row menu's "Select all" says `Ctrl+A`, not
+  `Win+A`. "All N selected" is sticky at the top of the scrolling list.
+- The Move window's Drafts / Trash / Junk question and "Delete
+  permanently?" count `MailTargetResolution::messages` instead of
+  `message_ids` (empty for a list). A whole list moved into those folders
+  or deleted for good therefore gets that question, with its note and the
+  true count, and its confirmed resolution skips the bulk question: still
+  one question per action.

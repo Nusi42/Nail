@@ -1358,6 +1358,19 @@ selected Trash shows the true count; a core test archives 25 000 messages in par
 the maintainer's human gate on the 0.8.10 installer (select all in a large real IMAP folder, archive, undo), then
 release.
 
+*Status (integrated):* WT1 done (ADR 0236: list targets resolved in bulk, the `as_of` mark `mark-<n>`, actions above
+10 000 messages in parts with one batch and one undo, cached statements; 25 000 messages apply in about 5 s and undo
+in about 5 s in release, the IMAP mock has every move after about 30 s); WT2 done (ADR 0237: `Ctrl+A` / `Cmd+A`,
+`Esc`, Ctrl / Shift + click under select all, "All N selected", one question per whole-list action with the true
+count, `applyInChunks` removed). Integration: default keys, actions and row menu item in `defaults/layout.kdl`, part
+`message-list.selection-summary` (sticky) in `defaults/theme.kdl`; the Move window's Drafts / Trash / Junk question
+and "Delete permanently?" count `MailTargetResolution::messages`, so whole lists get those notes too (one question,
+not two). Follow-ups / deferred: tag states for a whole list in the label window; "run rules on selected" with a list
+target (`RunRules` has no list form); a smaller store transaction inside a part if the UI must stay snappier (each
+10 000-message part holds the store for about 1.6 s); profile the replay of 25 000 IMAP moves (about 1.2 ms per
+message); a monotonic mark column instead of the rowid (ADR 0236); a 1 200-row e2e variant of the gate; a note in ADR
+0164 that ADRs 0235 / 0236 replace its limits; the maintainer's UX review of how dialogs confirm and close.
+
 *Status (contract):* done (ADR 0235). List targets resolved in the core and the mock, the true count in
 `ResolveMailTargets`, no limit on conversations or messages (parts and `as_of` follow in WT1), `list-selection.ftl`
 slot, 0.8.10 notes prepared. Next: WT1 and WT2 in parallel.

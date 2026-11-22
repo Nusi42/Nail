@@ -311,6 +311,8 @@ Actions in the default layout:
 | Action | What it does |
 | --- | --- |
 | `mail.next`, `mail.previous` | Select the next / previous message |
+| `list.select-all` | Select the whole message list, rows not loaded yet included (default `ctrl+a` / `meta+a` in the list) |
+| `list.clear-selection` | End "select all" (default `escape` in the list) |
 | `mail.compose` | New message (continues an unfinished one) |
 | `mail.reply`, `mail.reply-all`, `mail.forward` | Answer or forward the selected message |
 | `mail.archive` | Move the selected message to the account's Archive |

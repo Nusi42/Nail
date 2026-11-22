@@ -24,7 +24,7 @@ const INBOX_SIZE = 400;
 
 /**
  * The list's select-all keys (ADR 0235): Ctrl+A, Cmd+A on macOS and Esc,
- * as the default layout binds them.
+ * as the default layout (`defaults/layout.kdl`) binds them.
  */
 const SELECT_KEYS: KeyBinding[] = [
   { context: "list", key: "ctrl+a", action: SELECT_ALL_ACTION, args: [] },
@@ -37,12 +37,8 @@ function renderInbox(): Env {
     inboxSize: INBOX_SIZE,
     state: { connection: "connecting", activeAccountId: "acc-personal", activeFolderId: INBOX },
   });
-  const keys = env.transport.data.layout.keys;
-  for (const binding of SELECT_KEYS) {
-    if (!keys.some((k) => k.context === binding.context && k.key === binding.key)) {
-      keys.push(binding);
-    }
-  }
+  // The mock serves the default layout (`default-layout.json`).
+  expect(env.transport.data.layout.keys).toEqual(expect.arrayContaining(SELECT_KEYS));
   renderApp(env);
   return env;
 }

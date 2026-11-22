@@ -13,3 +13,4 @@
 - [R2 status](r2-status.md) — rules window redesign, shared pickers, values from the mail, menu sources integrated (ADRs 0222-0226); one picker / menu button; fixture and golden regeneration pitfalls
 - [R3 status](r3-status.md) — rule list multi-select, combined Exchange badge, pickers everywhere (multi-value, strict), Paper theme (ADRs 0227-0229); theme CSS subset, stale Vitest glob cache
 - [R4 status](r4-status.md) — bulk actions: queue summary + resync, no OpStatus for message writes, combobox Move window, drafts safety (ADRs 0230-0232); snapshot / vitest-cache pitfalls
+- [R5 status](r5-status.md) — select all (Ctrl+A, list targets with `as_of` marks), large actions in parts with one undo (ADRs 0235-0237); timings; slow-machine Exchange flakes; CONFIRMATIONS set

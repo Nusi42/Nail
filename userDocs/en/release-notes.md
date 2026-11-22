@@ -31,6 +31,11 @@ Select a whole message list and act on it at once, however large it is.
   number of conversations any more: a very large action runs in parts in
   the background and is still undone as one, and its confirmation shows the
   true number of messages.
+- **Large actions are faster** — actions on very large selections (tens of
+  thousands of messages) run in the background in parts and are still
+  undone with a single **Undo**. Mail that arrives after you confirm a
+  Delete or a move is left alone. Archiving and moving many messages is
+  about four times faster.
 
 ## Nail 0.8.9 (`0.8.9`)
 

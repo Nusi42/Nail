@@ -60,7 +60,7 @@ export async function askDeletePermanently(
       },
       "MailTargets",
     );
-    if (resolution.message_ids.length === 0) return;
+    if (resolution.messages === 0) return;
     pending.set(ctx.store, { targets, resolution });
   } catch (error) {
     mailActionsStoreFor(ctx.store)
@@ -93,7 +93,7 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
   const queryClient = useQueryClient();
   const [what] = useState(() => pendingPermanentDelete(store));
   const [busy, setBusy] = useState(false);
-  const messages = what?.resolution.message_ids.length ?? 0;
+  const messages = what?.resolution.messages ?? 0;
   const conversations = what?.resolution.conversations ?? 0;
   return (
     <MailConfirm

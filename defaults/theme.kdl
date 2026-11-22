@@ -273,6 +273,17 @@ theme "default" mode="system" {
         border-bottom "$border.thin"
         background-color "$color.bg-subtle"
     }
+    // "All N selected" (R5): stays at the top while the list scrolls.
+    part "message-list.selection-summary" {
+        position "sticky"
+        top 0
+        z-index 1
+        padding "$space.xs" "$space.md"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
 
     // ---- Accounts: status indicators ----
 

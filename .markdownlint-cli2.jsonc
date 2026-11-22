@@ -24,5 +24,7 @@
     "**/dist/**",
     "**/test-results/**",
     "**/playwright-report/**",
+    // Untracked, gitignored local notes of a session (never committed).
+    ".claude/local/**",
   ],
 }

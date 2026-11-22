@@ -393,6 +393,17 @@
             "label": "@rules.action.run-menu",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "list.select-all",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@message-list.action.select-all",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-list.row"
@@ -623,6 +634,17 @@
             "label": "@rules.action.run-menu",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "list.select-all",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@message-list.action.select-all",
+            "shortcut": "ctrl+a",
+            "type": "action"
           }
         ],
         "name": "context:message-list.row"
@@ -851,6 +873,17 @@
             "args": [],
             "icon": "list-checks",
             "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "list.select-all",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@message-list.action.select-all",
             "shortcut": null,
             "type": "action"
           }
@@ -1083,6 +1116,17 @@
             "label": "@rules.action.run-menu",
             "shortcut": null,
             "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "list.select-all",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@message-list.action.select-all",
+            "shortcut": null,
+            "type": "action"
           }
         ],
         "name": "context:message-list.row"
@@ -1311,6 +1355,17 @@
             "args": [],
             "icon": "list-checks",
             "label": "@rules.action.run-menu",
+            "shortcut": null,
+            "type": "action"
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "action": "list.select-all",
+            "args": [],
+            "icon": "list-checks",
+            "label": "@message-list.action.select-all",
             "shortcut": null,
             "type": "action"
           }
@@ -4956,6 +5011,96 @@
       ],
       "fn": "shortcut",
       "out": "ctrl+u"
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.select-all",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.select-all",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.select-all",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.select-all",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.select-all",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "ctrl+a"
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.select-all",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.clear-selection",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.clear-selection",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": "escape"
+    },
+    {
+      "args": [
+        "default-layout",
+        "list.clear-selection",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
     },
     {
       "args": [

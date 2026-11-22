@@ -263,7 +263,10 @@ crates/nail-store      SQLite metadata (v19), blob store, per-account operation 
                        random-write consistency; P3 WP-actions-core (ADR 0165): thread/targets.rs conversation_targets
                        (every stored copy per reach), mail_batches.rs apply_mail_batch / undo_mail_batch (one
                        transaction, purged after 1 h / beyond 50, actor-owned), queue.rs group keys (replay hands
-                       consecutive same-key operations to an engine at once; tests/integration/queue_groups.rs)
+                       consecutive same-key operations to an engine at once; tests/integration/queue_groups.rs);
+                       R5 (ADR 0236): apply_mail_batch_part (a later part joins the batch through `into`),
+                       undo_mail_batch_part / undo_mail_batch_rest, message_mark + target_messages
+                       (thread/targets.rs, TargetMessage::row = rowid), STATEMENT_CACHE (64, store.rs)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -518,7 +521,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        grouped IMAP UID STORE / MOVE per folder, gmail.rs + exchange/sync.rs grouped writes,
                        exchange/batch.rs (RunningEngine.batch = the concrete Graph / EWS engine for write_many);
                        tests/mail_actions.rs; R4 (ADR 0230): ops_summary.rs (GetOpsSummary, coalesced OpsChanged,
-                       RetryFailedOps / DismissFailedOps); R5 (ADR 0235): mail_lists.rs (the rows of a list target)
+                       RetryFailedOps / DismissFailedOps); R5 (ADR 0235): mail_lists.rs (the rows of a list target;
+                       ADR 0236: ROWS_PER_STORE_CALL, the `mark-<n>` as_of mark, actions in parts with one undo)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -747,7 +751,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        R4 (ADRs 0230, 0232): state/opsSummary.ts (the status bar's queue tracker: GetOpsSummary /
                        OpsChanged / Resync, OPS_RECHECK_MS re-check), queryKeys.allMessageBodies (Resync refetches
                        the open message), widgets/FolderPicker.tsx (Move window combobox; matchRank, ASKS_BEFORE_MOVE
-                       in features/mail-actions/move.ts),
+                       in features/mail-actions/move.ts), R5 (ADR 0237): select all (features/mail-actions/
+                       bulk.ts + BulkConfirm.tsx, the list selection's `all` in actions/mailTargets.ts),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
@@ -1618,3 +1623,20 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `remote_access.rs` checks a list's folder and exceptions. Mock: `mockMailActions.ts` (`explicitTargetCount`,
   `listRows`, `as_of` marks); `listFolderOf` in `actions/mailTargets.ts`; both pinned by the `mail-actions`
   ts-vectors. Locale slot `locales/*/list-selection.ftl`.
+- WT1 (ADR 0236): list targets resolve in bulk (`ROWS_PER_STORE_CALL` = 500 rows per store call in
+  `mail_actions.rs`; message rows through `Store::target_messages`, `TargetMessage::row` = the rowid); `plan_moves`
+  looks up the target folder once per account. The `as_of` mark is `mark-<n>` from `Store::message_mark` (the
+  highest message rowid); `ApplyMailAction` leaves out a list's messages above it, any other mark format is an
+  invalid request. Actions above `MAIL_ACTION_PART_MESSAGES` run in parts, each its own store transaction
+  (`Store::apply_mail_batch_part`; a later part joins the first part's batch through `into`) with one
+  `MailChanged` and one `OpsChanged`; undo in parts (`undo_mail_batch_part` / `undo_mail_batch_rest`). The store
+  keeps 64 prepared statements per connection (`STATEMENT_CACHE` in `store.rs`). MCP takes no list targets.
+- WT2 (ADR 0237): `list.select-all` (default `ctrl+a` / `meta+a` in the list, the palette, the row menu) and
+  `list.clear-selection` (`escape`) in `features/mail-actions/index.ts`; the list selection's `all: { list, except }`
+  and `mailListOf` / `withAsOf` / `inAll` / `toggleExcept` in `actions/mailTargets.ts` (`currentTargets` returns
+  one list target); "All N selected" = part `message-list.selection-summary` (sticky; count from
+  `useListCount`). Every action on a whole list asks once (`features/mail-actions/bulk.ts`, `BulkConfirm.tsx`,
+  modal `mail-bulk-confirm`), unless its own question already counted it (the Move window's Drafts / Trash / Junk
+  question and "Delete permanently?", both counting `MailTargetResolution::messages`); `applyInChunks` is gone,
+  `RunOptions.resolution` / `confirmedTargets` send the counted ids or the list with its mark. E2e
+  `r5-select-all.spec.ts`; numbered bulk mail on the IMAP mock for R4 / R5 specs: `e2e/support/bulkMail.ts`.

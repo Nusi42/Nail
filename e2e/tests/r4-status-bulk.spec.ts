@@ -1,8 +1,8 @@
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
-import { control, nailPerTest, serverMessages, type NailServer } from "../support/nail";
+import { bulkMail, scrollUntilListed } from "../support/bulkMail";
+import { nailPerTest } from "../support/nail";
 import {
   accountSectionNamed,
-  messageList,
   messageRow,
   messageRows,
   moveSelectionTo,
@@ -21,32 +21,18 @@ const server = nailPerTest({ seed: "demo-multi" });
 
 /** Messages delivered to the "Work" inbox for the bulk move. */
 const BULK = 300;
-const subjectOf = (n: number) => `R4 bulk ${String(n).padStart(3, "0")}`;
+const mail = bulkMail("R4 bulk", "r4-bulk");
+const { subjectOf } = mail;
 const NEWEST = subjectOf(BULK);
 const OLDEST = subjectOf(1);
 
 test.describe.configure({ timeout: 240_000 });
 
-/** Delivers `BULK` messages, newer ones later (each with its own date). */
-async function deliverBulk(target: NailServer): Promise<void> {
-  for (let n = 1; n <= BULK; n++) {
-    const date = new Date(Date.UTC(2029, 0, 1, 0, n)).toUTCString();
-    await control(target, "imap-deliver", {
-      raw: `From: Bulk Sender <bulk@example.net>\r\nTo: ada@work.example\r\nSubject: ${subjectOf(n)}\r\nDate: ${date}\r\nMessage-ID: <r4-bulk-${String(n)}@example.net>\r\n\r\nBulk message ${String(n)}\r\n`,
-    });
-  }
-}
-
 const folderCounts = (page: Page) =>
   page.locator('[data-part="status-bar.item"][data-item="folder-counts"]');
 
 /** Opens the Work inbox once every bulk message is listed (newest on top). */
-async function openWorkInboxWithBulk(page: Page): Promise<void> {
-  await page.goto(server.url);
-  await sectionInbox(accountSectionNamed(page, "Work")).click();
-  await deliverBulk(server);
-  await expect(messageRow(page, NEWEST)).toHaveCount(1, { timeout: 60_000 });
-}
+const openWorkInboxWithBulk = (page: Page) => mail.openWorkInbox(page, server, BULK);
 
 /**
  * Picks every bulk row: a click on the newest, then (after scrolling until
@@ -54,27 +40,13 @@ async function openWorkInboxWithBulk(page: Page): Promise<void> {
  */
 async function pickAllBulk(page: Page): Promise<void> {
   await messageRow(page, NEWEST).click();
-  const list = messageList(page);
-  await expect
-    .poll(
-      async () => {
-        await list.evaluate((el) => {
-          el.scrollTop = el.scrollHeight;
-        });
-        return messageRow(page, OLDEST).count();
-      },
-      { timeout: 60_000 },
-    )
-    .toBe(1);
+  await scrollUntilListed(page, OLDEST);
   await messageRow(page, OLDEST).click({ modifiers: ["Shift"] });
   await expect(messageRow(page, OLDEST)).toHaveAttribute("aria-selected", "true");
 }
 
 /** The bulk messages in a server mailbox. */
-async function bulkOnServer(mailbox: string): Promise<number> {
-  const messages = await serverMessages(server, mailbox);
-  return messages.filter((m) => m.subject.startsWith("R4 bulk ")).length;
-}
+const bulkOnServer = (mailbox: string) => mail.onServer(server, mailbox);
 
 /** The status bar is idle and both lists show the server's state. */
 async function expectSettled(page: Page): Promise<void> {
