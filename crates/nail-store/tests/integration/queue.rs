@@ -280,6 +280,24 @@ impl Replayer for Hanging {
     }
 }
 
+/// Drives `pass` (replaying with [`Hanging`]) until `op` is on the wire.
+/// Waiting for the state instead of a fixed time keeps the tests reliable
+/// on a busy machine, where the claim can take longer than any fixed wait.
+async fn until_in_flight<F: Future + Unpin>(store: &Store, op: OpId, pass: &mut F) {
+    for _ in 0..500 {
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), &mut *pass)
+                .await
+                .is_err(),
+            "a pass with a hanging replayer never ends"
+        );
+        if store.get_op(op).unwrap().state == OpState::InFlight {
+            return;
+        }
+    }
+    panic!("the op was never claimed");
+}
+
 #[tokio::test]
 async fn in_flight_ops_are_recovered_after_restart() {
     let dir = tempfile::tempdir().unwrap();
@@ -301,13 +319,8 @@ async fn in_flight_ops_are_recovered_after_restart() {
         // "Crash" while the first op is on the wire: the pass never ends and
         // no destructor runs (unlike a cancellation, see below).
         let mut pass = Box::pin(store.replay_pending(&Hanging, ReplayPolicy::default()));
-        assert!(
-            tokio::time::timeout(Duration::from_millis(200), &mut pass)
-                .await
-                .is_err()
-        );
+        until_in_flight(&store, first, &mut pass).await;
         std::mem::forget(pass);
-        assert_eq!(store.get_op(first).unwrap().state, OpState::InFlight);
         (first, second)
     };
 
@@ -333,12 +346,10 @@ async fn in_flight_ops_are_recovered_after_restart() {
 async fn a_cancelled_pass_puts_the_op_back() {
     let (store, first, second) = two_queued_ops();
 
-    let pass = store.replay_pending(&Hanging, ReplayPolicy::default());
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), pass)
-            .await
-            .is_err()
-    );
+    let mut pass = Box::pin(store.replay_pending(&Hanging, ReplayPolicy::default()));
+    until_in_flight(&store, first, &mut pass).await;
+    // Cancelled: the pass is dropped while the op is on the wire.
+    drop(pass);
     let op = store.get_op(first).unwrap();
     assert_eq!((op.state, op.attempts), (OpState::Pending, 1));
     assert_eq!(store.pending_op_count().unwrap(), 2);
