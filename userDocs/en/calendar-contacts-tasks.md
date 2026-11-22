@@ -61,7 +61,17 @@ Sunday in American English).
 
 Moving or deleting one occurrence of a repeating event asks whether the
 change is for **this occurrence**, **this and following occurrences** or
-**all occurrences**.
+**all occurrences**; the button names what happens (**Save changes**, or the
+red **Delete events**, which `Enter` never presses).
+
+### The event, task and contact editors
+
+The editors' buttons stay at the bottom of the window while you scroll:
+**Delete…** on the left (it asks first, for example **Delete the event
+“Lunch”?** with **Delete event** and **Cancel**), **Save** and **Cancel** on
+the right, in your system's order. `Ctrl+Enter` in the notes saves. ×, `Esc`
+and **Cancel** with unsaved changes ask **Save changes to “…”?** (**Save**,
+**Don't save**, **Cancel**).
 
 Events of read-only calendars (subscriptions, shared calendars you cannot
 change) cannot be moved.
@@ -165,7 +175,12 @@ upcoming meetings with that person.
   **Shift + ↑ / ↓** in the list; **Space** adds or removes the contact you
   are on. **Delete** deletes the selection, **Enter** edits.
 - **Groups…** manages contact groups: create, rename, delete, choose
-  members (contacts of the same address book) and extra addresses.
+  members (contacts of the same address book) and extra addresses. Each
+  group saves on its own; **Delete group…** asks first (the contacts stay).
+  Close the window with × or `Esc`.
+- **Find duplicates…** merges contacts step by step: pick a group of
+  duplicates, choose what the merged card keeps, then **Merge N contacts**;
+  **Back** and **Cancel** are there on every step.
 - The **Collected addresses** book holds addresses Nail collected from
   mail you sent. It stays separate, so your real address books stay clean.
 - When you write an email, the **To**, **Cc** and **Bcc** fields suggest
@@ -221,7 +236,9 @@ contacts**.
 
 **Calendars and address books…** shows every source with its state (up to
 date, syncing, offline, sign-in failed) and the last sync; **Sync now** and
-**Remove** work per source. To add one, choose:
+**Remove…** work per source (**Remove…** asks first: the server keeps the
+calendars, you can add the source again). The window has no Close button;
+close it with × or `Esc`. To add one, choose:
 
 - **Subscription (ICS / webcal):** the address of a calendar feed, such as
   public holidays. Subscriptions are read-only. Nail fetches them only over

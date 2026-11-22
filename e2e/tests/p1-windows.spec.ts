@@ -462,9 +462,9 @@ const GROUPS: Record<string, Group> = {
       await page.setViewportSize(LARGE);
       // The filled rule is not saved: closing asks first (R2).
       await rulesWindow.locator('[data-part="window.close"]').click();
-      await rulesWindow
-        .getByRole("alertdialog")
-        .getByRole("button", { name: "Discard changes" })
+      await page
+        .locator('[data-part="window"][data-window^="unsaved-changes:"]')
+        .getByRole("button", { name: /^(Don't save|Discard changes)$/ })
         .click();
       await expect(rulesWindow).toBeHidden();
 

@@ -379,11 +379,11 @@ test("an old layout keeps its main window and is offered the new default", async
   await expect(merge).toBeVisible();
   const main = merge.locator('[data-part="merge-dialog.item"]', { hasText: 'window "main"' });
   await main.getByRole("radio", { name: "Take theirs" }).check();
-  await merge.getByRole("button", { name: "Apply" }).click();
+  await merge.getByRole("button", { name: "Apply layout" }).click();
   await expect
     .poll(() => readFileSync(path.join(server.configDir, "layout.kdl"), "utf8"))
     .toContain("view-host");
-  await merge.getByRole("button", { name: "Close" }).first().click();
+  await merge.getByRole("button", { name: "Done" }).click();
   await expect(rail(page)).toBeVisible();
   await expect(offer).toHaveCount(0);
 });

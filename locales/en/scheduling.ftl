@@ -9,7 +9,7 @@
 
 ## Dialog titles (window-<dialog name>)
 
-window-scheduling-cancel-meeting = Cancel meeting
+window-scheduling-cancel-meeting = { scheduling-cancel-confirm }
 window-scheduling-settings = { scheduling-action-settings }
 window-scheduling-find-time = { scheduling-action-find-time }
 
@@ -218,8 +218,9 @@ scheduling-cancel-scope-occurrence = Only the occurrence on { $occurrence }
 scheduling-cancel-scope-attendees = Remove some attendees
 scheduling-cancel-people = Attendees to remove
 scheduling-cancel-note = Note in the mail (optional)
-scheduling-cancel-confirm = Cancel and notify
-scheduling-keep-meeting = Keep the meeting
+# The verbs of the cancel question (R6): the red verb and the safe choice.
+scheduling-cancel-confirm = Cancel meeting
+scheduling-keep-meeting = Keep meeting
 scheduling-cancelled = The meeting is cancelled; the attendees are told.
 
 ## Settings

@@ -22,6 +22,7 @@ import type { Event as NailEvent } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
 import type { Feature, FeatureEventHandler } from "../types";
 import { CalendarWidget } from "./Calendar";
+import { PIM_CONFIRMS, pimConfirmDialogs } from "./Confirm";
 import { GroupsDialog, MergeDialog } from "./ContactDialogs";
 import { ContactCard } from "./ContactCard";
 import { ContactList } from "./ContactList";
@@ -252,6 +253,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
   [CALENDAR_SETTINGS_DIALOG]: CalendarSettingsDialog,
   [NEW_CALENDAR_DIALOG]: NewCalendarDialog,
   [REMOVE_CALENDAR_DIALOG]: RemoveCalendarDialog,
+  ...pimConfirmDialogs,
 };
 
 /**
@@ -277,6 +279,7 @@ export const windows: NonNullable<Feature["windows"]> = {
     min_size: { width: 400, height: 340 },
   },
   [REMOVE_CALENDAR_DIALOG]: { confirmation: true },
+  ...Object.fromEntries(PIM_CONFIRMS.map((kind) => [kind, { confirmation: true }])),
 };
 
 /** PIM data changed: refetch what shows it; reminders and failed writes become toasts. */

@@ -11,8 +11,15 @@
  *   default (`reset-key-binding`);
  * - `column-editor`: the column order of a message list
  *   (`column-order`).
+ *
+ * R6 (ADR 0239): the toolbar and column drafts are settings drafts
+ * (`useSettingsDraft`): the section's "Unsaved changes" bar saves or
+ * discards them, and picking another toolbar or list with unsaved changes
+ * asks first with the shared prompt.
  */
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
+import { askToLeave, useGuardKey, useSettingsDraft } from "../../widgets/dialog";
+import { useUiStoreApi } from "../../state/uiStore";
 import { errorMessageOf } from "../../api/client";
 import type {
   JsonValue,
@@ -62,7 +69,8 @@ function StatusLine({ status, part }: { status: Status | null; part: string }) {
   );
 }
 
-type Write = (run: () => Promise<void>, done: string) => Promise<void>;
+/** Runs a write and reports its outcome; `true` when it was written. */
+type Write = (run: () => Promise<void>, done: string) => Promise<boolean>;
 
 /** Runs a write and reports its outcome. */
 function useWrite(): [Status | null, Write] {
@@ -72,11 +80,22 @@ function useWrite(): [Status | null, Write] {
     try {
       await run();
       setStatus({ ok: true, message: { id: done } });
+      return true;
     } catch (error) {
       setStatus({ ok: false, message: errorMessageOf(error) });
+      return false;
     }
   };
   return [status, write];
+}
+
+/** Moves on to another toolbar or list: asks first while a draft is unsaved. */
+function useLeave(): (proceed: () => void) => void {
+  const ui = useUiStoreApi();
+  const key = useGuardKey();
+  return (proceed) => {
+    askToLeave(ui, key, proceed);
+  };
 }
 
 /** Every action of the layout's `actions` section, sorted by label. */
@@ -106,10 +125,13 @@ function keyed(items: readonly ToolbarItem[]): DraftItem[] {
 }
 
 function ToolbarDraft({
+  draftKey,
   name,
   items,
   write,
 }: {
+  /** The settings draft's key (the widget's node). */
+  draftKey: string;
   name: string;
   items: readonly ToolbarItem[];
   /** The editor's: a written toolbar re-creates the draft. */
@@ -139,6 +161,22 @@ function ToolbarDraft({
     setCounter(counter + 1);
   };
   const changed = JSON.stringify(draft.map((d) => d.item)) !== JSON.stringify(items);
+  useSettingsDraft(draftKey, {
+    dirty: changed,
+    save: () =>
+      write(
+        () =>
+          writeToolbar(
+            client,
+            name,
+            draft.map((d) => d.item),
+          ),
+        "customize-saved",
+      ),
+    discard: () => {
+      setDraft(keyed(items));
+    },
+  });
 
   return (
     <div data-part="toolbar-editor.draft">
@@ -204,35 +242,6 @@ function ToolbarDraft({
         <button
           type="button"
           data-part="form.button"
-          data-variant="primary"
-          disabled={!changed}
-          onClick={() =>
-            void write(
-              () =>
-                writeToolbar(
-                  client,
-                  name,
-                  draft.map((d) => d.item),
-                ),
-              "customize-saved",
-            )
-          }
-        >
-          {t("customize-save")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          disabled={!changed}
-          onClick={() => {
-            setDraft(keyed(items));
-          }}
-        >
-          {t("common-undo-changes")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
           onClick={() =>
             void write(
               () => updateLayout(client, [{ op: "reset-toolbar", toolbar: name }]),
@@ -248,8 +257,9 @@ function ToolbarDraft({
 }
 
 /** Settings → Customize → Toolbars (widget `toolbar-editor`). */
-export function ToolbarEditor({ node }: WidgetProps) {
+export function ToolbarEditor({ node, nodeKey }: WidgetProps) {
   const t = useT();
+  const leave = useLeave();
   const label = useLabel();
   const layout = useLayoutConfig();
   const names = Object.keys(layout.toolbars).sort();
@@ -274,7 +284,10 @@ export function ToolbarEditor({ node }: WidgetProps) {
           data-part="form.select"
           value={name ?? ""}
           onChange={(event) => {
-            setChosen(event.target.value);
+            const next = event.target.value;
+            leave(() => {
+              setChosen(next);
+            });
           }}
         >
           {names.map((n) => (
@@ -287,6 +300,7 @@ export function ToolbarEditor({ node }: WidgetProps) {
       {name !== null && (
         <ToolbarDraft
           key={`${name}:${JSON.stringify(items)}`}
+          draftKey={`toolbar-editor:${nodeKey}`}
           name={name}
           items={items}
           write={write}
@@ -594,7 +608,16 @@ export function messageLists(layout: ResolvedLayout): ListNode[] {
   return out;
 }
 
-function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
+function ColumnDraft({
+  draftKey,
+  list,
+  write,
+}: {
+  /** The settings draft's key (the widget's node). */
+  draftKey: string;
+  list: ListNode;
+  write: Write;
+}) {
   const t = useT();
   const client = useClient();
   const ids = useId();
@@ -605,6 +628,14 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
   const available = COLUMN_IDS.filter((c) => !columns.includes(c));
   const [adding, setAdding] = useState<string>(available[0] ?? "");
   const changed = JSON.stringify(columns) !== JSON.stringify(initial);
+  useSettingsDraft(draftKey, {
+    dirty: changed,
+    canSave: columns.length > 0,
+    save: () => write(() => writeColumnOrder(client, list.ref, columns), "customize-saved"),
+    discard: () => {
+      setColumns(initial);
+    },
+  });
   const entries = columns.map((c) => ({ key: c, label: t(`message-list-column-${c}`) }));
   const addable = available.includes(adding as (typeof COLUMN_IDS)[number])
     ? adding
@@ -654,36 +685,14 @@ function ColumnDraft({ list, write }: { list: ListNode; write: Write }) {
           </button>
         </div>
       )}
-      <div data-part="column-editor.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          disabled={!changed || columns.length === 0}
-          onClick={() =>
-            void write(() => writeColumnOrder(client, list.ref, columns), "customize-saved")
-          }
-        >
-          {t("customize-save")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          disabled={!changed}
-          onClick={() => {
-            setColumns(initial);
-          }}
-        >
-          {t("common-undo-changes")}
-        </button>
-      </div>
     </div>
   );
 }
 
 /** Settings → Customize → Columns (widget `column-editor`). */
-export function ColumnEditor({ node }: WidgetProps) {
+export function ColumnEditor({ node, nodeKey }: WidgetProps) {
   const t = useT();
+  const leave = useLeave();
   const label = useLabel();
   const layout = useLayoutConfig();
   const lists = messageLists(layout);
@@ -717,7 +726,10 @@ export function ColumnEditor({ node }: WidgetProps) {
               data-part="form.select"
               value={String(chosen)}
               onChange={(event) => {
-                setChosen(Number(event.target.value));
+                const next = Number(event.target.value);
+                leave(() => {
+                  setChosen(next);
+                });
               }}
             >
               {lists.map((l, index) => (
@@ -730,6 +742,7 @@ export function ColumnEditor({ node }: WidgetProps) {
           {list && (
             <ColumnDraft
               key={`${JSON.stringify(list.ref)}:${JSON.stringify(list.node.options.columns ?? null)}`}
+              draftKey={`column-editor:${nodeKey}`}
               list={list}
               write={write}
             />

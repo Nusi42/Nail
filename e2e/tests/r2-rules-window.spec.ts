@@ -19,7 +19,14 @@ import {
   openSettingsTab,
   sectionInbox,
   showView,
+  windowById,
 } from "../support/views";
+import { expectDialogFooter } from "../support/windowTour";
+import { pickTheme } from "../support/appearance";
+
+/** The shared unsaved-changes prompt (R6). */
+const unsavedPrompt = (page: Page) =>
+  page.locator('[data-part="window"][data-window^="unsaved-changes:"]');
 
 /**
  * R2 (ADR 0222): the redesigned rules window against the `demo-multi`
@@ -92,40 +99,49 @@ for (const size of SIZES) {
     await expect(window).toBeVisible();
   });
 
-  test(`Delete… and unsaved changes ask inside the window at ${at}`, async ({ page }) => {
+  test(`Delete… and unsaved changes ask with the shared dialogs at ${at}`, async ({ page }) => {
     const { window, editor, footer } = await withSavedRule(page, size);
 
-    // Delete… asks first; Cancel keeps the rule.
+    // R6: the shared footer — Delete… at the start, Save rule as the primary, no Close.
+    await expectDialogFooter(window, {
+      os: "windows",
+      roles: ["primary"],
+      start: true,
+    });
+
+    // Delete… asks first in a modal confirmation; Cancel keeps the rule.
     await footer.getByRole("button", { name: "Delete rule…" }).click();
-    const question = window.getByRole("alertdialog");
+    const question = windowById(page, "rule-delete");
     await expect(question).toContainText("Delete the rule “Flag releases”?");
-    await expect(question.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await expectDialogFooter(question, {
+      os: "windows",
+      roles: ["primary", "cancel"],
+      focused: "cancel",
+    });
     await page.screenshot({ path: screenshotFile("r2-rules", `delete-${String(size.width)}`) });
     // Answered from the keyboard, the focus goes back to the button that asked.
     await page.keyboard.press("Enter");
+    await expect(question).toBeHidden();
     await expect(ruleInList(window, "Flag releases")).toBeVisible();
     await expect(footer.getByRole("button", { name: "Delete rule…" })).toBeFocused();
 
-    // Unsaved changes: Escape asks instead of closing the window.
+    // Unsaved changes: Escape asks with the shared prompt instead of closing the window.
     const name = editor.getByRole("textbox", { name: "Name" });
     await name.fill("Flag release notes");
     await page.keyboard.press("Escape");
-    await expect(question).toContainText("Discard your changes to “Flag release notes”?");
+    const prompt = unsavedPrompt(page);
+    await expect(prompt).toContainText("Save changes to “Flag release notes”?");
     await expect(window).toBeVisible();
-    // Tab stays inside the question (modal): never the window's title bar.
-    const keep = question.getByRole("button", { name: "Keep editing" });
-    const discard = question.getByRole("button", { name: "Discard changes" });
-    await expect(keep).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(discard).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(keep).toBeFocused();
-    await page.keyboard.press("Enter");
+    await expectDialogFooter(prompt, {
+      os: "windows",
+      roles: ["primary", "secondary", "cancel"],
+      focused: "primary",
+    });
+    await prompt.getByRole("button", { name: "Cancel" }).click();
+    await expect(prompt).toBeHidden();
     await expect(name).toHaveValue("Flag release notes");
-    // Back in the field Escape was pressed in.
-    await expect(name).toBeFocused();
     await page.keyboard.press("Escape");
-    await question.getByRole("button", { name: "Discard changes" }).click();
+    await unsavedPrompt(page).getByRole("button", { name: "Don't save" }).click();
     await expect(window).toBeHidden();
 
     // Back again, the rule is as saved; Delete… then deletes it.
@@ -133,10 +149,7 @@ for (const size of SIZES) {
     await ruleInList(reopened, "Flag releases").click();
     const again = reopened.getByRole("form", { name: "Rule" });
     await rulesFooter(again).getByRole("button", { name: "Delete rule…" }).click();
-    await reopened
-      .getByRole("alertdialog")
-      .getByRole("button", { name: "Delete the rule" })
-      .click();
+    await windowById(page, "rule-delete").getByRole("button", { name: "Delete rule" }).click();
     await expect(ruleInList(reopened, "Flag releases")).toHaveCount(0);
   });
 }
@@ -222,10 +235,7 @@ for (const size of SIZES) {
   }) => {
     await openWorkInbox(page, server, size);
     const appearance = await openSettingsTab(page, "Appearance");
-    await appearance
-      .getByRole("radiogroup", { name: "Themes" })
-      .getByRole("radio", { name: /Nocturne/ })
-      .click();
+    await pickTheme(appearance, /Nocturne/);
     await showView(page, "Mail");
     await sectionInbox(accountSectionNamed(page, "Work")).click();
     const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);

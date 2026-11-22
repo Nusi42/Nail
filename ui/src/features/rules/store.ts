@@ -5,11 +5,15 @@
  * (R1). One store per client (so every app instance, and every test, has
  * its own).
  *
- * Unsaved changes (R2 design review, item 4): the editor reports whether
- * its rule differs from the saved one (`setDirty`). While it does, opening
- * another rule (`select`, `startNew`) or closing the window
- * (`./closeGuard.ts`) does not happen at once: it waits in `pending` until
- * the user discards the changes (`discard`) or keeps editing (`keepEditing`).
+ * Unsaved changes (R2 design review, item 4; R6, ADR 0239): the editor
+ * reports whether its rule differs from the saved one (`setDirty`) and how
+ * to ask before it is left (`setLeave`: the shared unsaved-changes prompt,
+ * `./RulesGuard.tsx`). While it is dirty, opening another rule (`select`,
+ * `startNew`) waits for the prompt's Save or Don't save; Cancel keeps the
+ * rule. Closing the window asks through the window layer's close guard.
+ *
+ * The editor's questions (delete a rule, run one that moves or deletes
+ * mail) open as modal confirmation windows (`question`, `./Questions.tsx`).
  *
  * Multi-select (R3, ADR 0227): the list's selected rules (`selected`, with
  * the `anchor` Shift extends from); the editor shows the focused one
@@ -62,13 +66,29 @@ const NO_SELECTION: RuleSelection = { selected: [], anchor: null };
 const only = (id: RuleId | null): RuleSelection =>
   id === null ? NO_SELECTION : { selected: [id], anchor: id };
 
+/** What waits for the unsaved-changes prompt: opening another rule (or none) with the list's selection. */
+interface Pending {
+  editing: Editing | null;
+  selection: RuleSelection;
+}
+
 /**
- * What waits for "Discard changes": opening another rule (or none) with the
- * list's selection, or closing the window (`close` closes it for good).
+ * A question of the editor, asked in a modal confirmation window
+ * (`./Questions.tsx`): deleting the shown rule, or a run that moves or
+ * deletes mail (the rules that run, their total preview count and the
+ * target's name). `go` does it.
  */
-export type Pending =
-  | { kind: "edit"; editing: Editing | null; selection: RuleSelection }
-  | { kind: "close"; close: () => void };
+export type RuleQuestion =
+  | { kind: "delete"; name: string; go: () => void }
+  | {
+      kind: "run";
+      names: readonly string[];
+      count: number;
+      target: string;
+      /** The verb ("Run", "Save and run 3 rules"), localized. */
+      action: string;
+      go: () => void;
+    };
 
 export interface RulesUiState {
   editing: Editing | null;
@@ -106,17 +126,15 @@ export interface RulesUiState {
   /** The rule being edited has changes that are not saved. */
   dirty: boolean;
   setDirty: (dirty: boolean) => void;
-  /** What waits for the user's answer to "Discard changes?", else `null`. */
-  pending: Pending | null;
-  /** Asks before `pending` happens while there are unsaved changes; else does it now. */
-  guard: (pending: Pending) => void;
-  /** Drops the unsaved changes and does what was waiting. */
-  discard: () => void;
-  /** Keeps the unsaved changes; what was waiting does not happen. */
-  keepEditing: () => void;
-  /** The editor asks a question (the rule list is `inert` meanwhile). */
-  asking: boolean;
-  setAsking: (asking: boolean) => void;
+  /**
+   * How the shown editor asks before it is left (`proceed` runs after the
+   * shared prompt's Save or Don't save); `null` without an editor.
+   */
+  leave: ((proceed: () => void) => void) | null;
+  setLeave: (leave: ((proceed: () => void) => void) | null) => void;
+  /** The editor's open question, else `null`. */
+  question: RuleQuestion | null;
+  setQuestion: (question: RuleQuestion | null) => void;
   /** The outcome of the last run from a menu, `null` when dismissed. */
   toast: RunToast | null;
   showToast: (toast: DistributiveOmit<RunToast, "seq">) => void;
@@ -131,17 +149,16 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
     let seq = 0;
     /** Does what waited (or was asked for while nothing is unsaved). */
     const apply = (pending: Pending) => {
-      if (pending.kind === "close") {
-        store?.setState({ pending: null, dirty: false });
-        pending.close();
-      } else {
-        store?.setState({
-          pending: null,
-          dirty: false,
-          editing: pending.editing,
-          selection: pending.selection,
+      store?.setState({ dirty: false, editing: pending.editing, selection: pending.selection });
+    };
+    /** Opens another rule; asks first while the shown one has unsaved changes. */
+    const guard = (pending: Pending) => {
+      const leave = store?.getState().leave ?? null;
+      if (store?.getState().dirty === true && leave !== null) {
+        leave(() => {
+          apply(pending);
         });
-      }
+      } else apply(pending);
     };
     store = createStore<RulesUiState>((set, get) => ({
       editing: null,
@@ -154,8 +171,7 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
           set({ selection: only(id) });
           return;
         }
-        get().guard({
-          kind: "edit",
+        guard({
           editing: id === null ? null : { kind: "saved", id, key: `saved-${id}` },
           selection: only(id),
         });
@@ -169,8 +185,7 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
           return;
         }
         set((s) => ({ picks: s.picks + 1 }));
-        get().guard({
-          kind: "edit",
+        guard({
           editing: { kind: "saved", id: focus, key: `saved-${focus}` },
           selection,
         });
@@ -184,14 +199,13 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
       },
       startNew: (rule) => {
         set((s) => ({ picks: s.picks + 1 }));
-        get().guard({
-          kind: "edit",
+        guard({
           editing: { kind: "new", rule, key: `new-${String(++seq)}` },
           selection: NO_SELECTION,
         });
       },
       forget: () => {
-        set({ editing: null, dirty: false, pending: null, selection: NO_SELECTION });
+        set({ editing: null, dirty: false, selection: NO_SELECTION });
       },
       picks: 0,
       origin: null,
@@ -206,21 +220,13 @@ export function rulesStore(client: NailClient): StoreApi<RulesUiState> {
       setDirty: (dirty) => {
         if (get().dirty !== dirty) set({ dirty });
       },
-      pending: null,
-      guard: (pending) => {
-        if (get().dirty) set({ pending });
-        else apply(pending);
+      leave: null,
+      setLeave: (leave) => {
+        set({ leave });
       },
-      discard: () => {
-        const pending = get().pending;
-        if (pending) apply(pending);
-      },
-      keepEditing: () => {
-        set({ pending: null });
-      },
-      asking: false,
-      setAsking: (asking) => {
-        if (get().asking !== asking) set({ asking });
+      question: null,
+      setQuestion: (question) => {
+        set({ question });
       },
       toast: null,
       showToast: (toast) => {

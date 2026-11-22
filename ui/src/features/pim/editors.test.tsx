@@ -25,7 +25,18 @@ import { EventEditorDialog } from "./EventEditor";
 import { ImportDialog } from "./ImportDialog";
 import { handlePimEvent } from ".";
 import { fireReminder } from "./mock";
-import { CONTACT_DIALOG, TASK_DIALOG } from "./names";
+import {
+  CONTACT_DIALOG,
+  DELETE_EVENT_DIALOG,
+  DELETE_GROUP_DIALOG,
+  DELETE_TASK_DIALOG,
+  REMOVE_SOURCE_DIALOG,
+  TASK_DIALOG,
+} from "./names";
+import { pimQuestion } from "./Confirm";
+import { closeGuardOf, MAIN_GUARD } from "../../layout/closeGuard";
+import { footerOrder, viewerOs } from "../../widgets/dialog";
+import { confirmPim } from "./testing";
 import { PimToasts } from "./Reminders";
 import { ScopeDialog } from "./ScopeDialog";
 import { SourcesDialog } from "./Sources";
@@ -249,7 +260,9 @@ describe("event editor", () => {
     const close3 = vi.fn();
     renderWithProviders(<EventEditorDialog name="pim-event-editor" close={close3} />, env);
     await user.click(await screen.findByRole("radio", { name: "All occurrences" }));
-    await user.click(screen.getByRole("button", { name: "Delete all occurrences" }));
+    // R6: Delete… asks first; the scope names the verb.
+    await user.click(screen.getByRole("button", { name: "Delete…" }));
+    await confirmPim(env, user, DELETE_EVENT_DIALOG, "Delete all occurrences");
     await waitFor(() => {
       expect(close3).toHaveBeenCalled();
     });
@@ -294,7 +307,7 @@ describe("event editor", () => {
     renderWithProviders(<ScopeDialog name="pim-edit-scope" close={close} />, env);
     expect(screen.getByText(/^Move “Stand-up” to/)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "This occurrence" })).toBeChecked();
-    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
@@ -454,7 +467,9 @@ describe("contacts", () => {
   it("edits groups and their members", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
-    renderWithProviders(<GroupsDialog name="pim-contact-groups" close={() => undefined} />, env);
+    renderWithProviders(<GroupsDialog />, env);
+    // A tool window: no footer Close (× is enough).
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     await user.click(await screen.findByRole("button", { name: "Family (2 members)" }));
     await user.click(await screen.findByRole("checkbox", { name: "Ada Lovelace" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -467,6 +482,23 @@ describe("contacts", () => {
     await user.click(screen.getByRole("button", { name: "Create group" }));
     await waitFor(() => {
       expect(pimOf(env).groups.some((g) => g.name === "Book club")).toBe(true);
+    });
+  });
+
+  it("asks before it deletes a group", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    renderWithProviders(<GroupsDialog />, env);
+    await user.click(await screen.findByRole("button", { name: "Family (2 members)" }));
+    await user.click(screen.getByRole("button", { name: "Delete group…" }));
+    // Nothing deleted before the answer.
+    expect(pimOf(env).groups.some((g) => g.id === "grp-family")).toBe(true);
+    expect(pimQuestion(env.store, DELETE_GROUP_DIALOG)?.question).toBe(
+      "Delete the group “Family”?",
+    );
+    await confirmPim(env, user, DELETE_GROUP_DIALOG, "Delete group");
+    await waitFor(() => {
+      expect(pimOf(env).groups.some((g) => g.id === "grp-family")).toBe(false);
     });
   });
 });
@@ -678,7 +710,7 @@ describe("import and sources", () => {
   it("fills in a webcal link Nail was opened with", async () => {
     const env = createEnv();
     pimStoreFor(env.store).getState().setSubscribeUrl("webcal://example.org/holidays.ics");
-    renderWithProviders(<SourcesDialog name="pim-sources" close={() => undefined} />, env);
+    renderWithProviders(<SourcesDialog />, env);
     expect(await screen.findByLabelText("Address of the calendar feed")).toHaveValue(
       "webcal://example.org/holidays.ics",
     );
@@ -690,7 +722,7 @@ describe("import and sources", () => {
   it("adds a calendar subscription after testing it, syncs and removes sources", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
-    renderWithProviders(<SourcesDialog name="pim-sources" close={() => undefined} />, env);
+    renderWithProviders(<SourcesDialog />, env);
     const list = await screen.findByRole("list", { name: "Sources" });
     expect(await within(list).findByText("On this computer")).toBeInTheDocument();
     expect(within(list).getAllByText("Up to date")).toHaveLength(4);
@@ -709,6 +741,10 @@ describe("import and sources", () => {
       "school-holidays",
     );
     await user.click(await screen.findByRole("button", { name: "Remove School holidays" }));
+    // R6: Remove asks first; the tool window has no footer Close.
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    expect(pimOf(env).sources.some((s) => s.id === "school-holidays")).toBe(true);
+    await confirmPim(env, user, REMOVE_SOURCE_DIALOG, "Remove source");
     await waitFor(() => {
       expect(pimOf(env).sources.some((s) => s.id === "school-holidays")).toBe(false);
     });
@@ -719,5 +755,65 @@ describe("import and sources", () => {
     await waitFor(() => {
       expect(pimOf(env).sources.some((s) => s.state === "syncing")).toBe(true);
     });
+  });
+});
+
+describe("R6: the editors' footer, questions and close guard", () => {
+  it("pins Delete… at the start, orders Save and Cancel by role and asks before deleting", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    const close = vi.fn();
+    pimStoreFor(env.store).getState().editTask({ mode: "edit", taskId: "tk-report" });
+    renderWithProviders(<TaskEditorDialog name={TASK_DIALOG} close={close} />, env);
+    const footer = must(
+      (await screen.findByRole("button", { name: "Delete…" })).closest<HTMLElement>(
+        '[data-part="dialog.footer"]',
+      ),
+    );
+    const start = must(footer.querySelector('[data-part="dialog.footer.start"]'));
+    expect(within(start as HTMLElement).getByRole("button", { name: "Delete…" })).toHaveAttribute(
+      "data-variant",
+      "danger",
+    );
+    const roles = [...footer.querySelectorAll('[data-part="dialog.footer.end"] button')].map((b) =>
+      b.getAttribute("data-role"),
+    );
+    expect(roles).toEqual(footerOrder(viewerOs()).filter((r) => r !== "secondary"));
+    await screen.findByRole("checkbox", { name: "Draft the text" });
+    await user.click(screen.getByRole("button", { name: "Delete…" }));
+    // Nothing is deleted before the answer; the verb names the subtasks.
+    expect(pimOf(env).tasks.some((t) => t.id === "tk-report")).toBe(true);
+    await confirmPim(env, user, DELETE_TASK_DIALOG, "Delete with its 2 subtasks");
+    await waitFor(() => {
+      expect(pimOf(env).tasks.some((t) => t.id === "tk-report")).toBe(false);
+    });
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("registers unsaved changes with the close guard, and none after Save", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    const close = vi.fn();
+    pimStoreFor(env.store)
+      .getState()
+      .editEvent({ mode: "edit", eventId: "ev-lunch", recurrenceId: null, start: null, end: null });
+    renderWithProviders(<EventEditorDialog name="pim-event-editor" close={close} />, env);
+    const title = await screen.findByLabelText("Title");
+    const guard = () => must(closeGuardOf(env.store, MAIN_GUARD));
+    expect(guard().isDirty()).toBe(false);
+    await user.type(title, " with Ada");
+    expect(guard().isDirty()).toBe(true);
+    expect(guard().name()).toMatch(/with Ada$/);
+    expect(guard().canSave?.()).toBe(true);
+    // Cancel goes the way of × and Esc (the window's close, which the guard watches).
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(close).toHaveBeenCalledTimes(1);
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await guard().save?.();
+    });
+    expect(saved).toBe(true);
+    expect(guard().isDirty()).toBe(false);
+    expect(pimOf(env).events.find((e) => e.id === "ev-lunch")?.fields.title).toMatch(/with Ada$/);
   });
 });

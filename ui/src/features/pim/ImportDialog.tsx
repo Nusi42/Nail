@@ -5,6 +5,9 @@
  * The file's text goes to the core as uploaded data (`PimImportSource::
  * Data`); a file Nail was opened with (a launch argument, desktop only) is
  * read by the core (`PimImportSource::File`) and previewed the same way.
+ *
+ * R6 (ADR 0239): a wizard with the shared footer — Import and Cancel, then
+ * Done on the result.
  */
 import { useEffect, useEffectEvent, useId, useState, type ChangeEvent } from "react";
 import type {
@@ -19,6 +22,7 @@ import { Problem, problemOf, useChangeContext, BookOptions } from "./common";
 import { pimWrite, useAddressBooks, useCalendars } from "./queries";
 import { usePim, usePimStore } from "./store";
 import { nonEmpty } from "../../text/empty";
+import { DialogFooter } from "../../widgets/dialog";
 
 /** What the dialog imports: uploaded text or a desktop file. */
 interface ImportFile {
@@ -226,22 +230,23 @@ export function ImportDialog({ close }: DialogProps) {
         </p>
       )}
       <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        {preview && !result && (
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="primary"
-            disabled={busy}
-            onClick={() => void run()}
-          >
-            {t("common-import")}
-          </button>
-        )}
-        <button type="button" data-part="form.button" onClick={close}>
-          {result ? t("common-close") : t("common-cancel")}
-        </button>
-      </div>
+      {result ? (
+        <DialogFooter done={{ onDone: close }} />
+      ) : (
+        <DialogFooter
+          {...(preview
+            ? {
+                primary: {
+                  label: t("common-import"),
+                  action: "import",
+                  onClick: () => void run(),
+                },
+              }
+            : {})}
+          cancel={{ onClick: close }}
+          busy={busy}
+        />
+      )}
     </div>
   );
 }

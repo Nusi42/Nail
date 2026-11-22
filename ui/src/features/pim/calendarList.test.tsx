@@ -329,7 +329,11 @@ describe("calendar list widget", () => {
     expect(
       await screen.findByText(/Remove the calendar “Personal” with all its events\?/),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Remove" }));
+    // R6: a destructive confirmation; Cancel has the focus.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await user.click(screen.getByRole("button", { name: "Remove calendar" }));
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });

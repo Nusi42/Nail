@@ -29,11 +29,13 @@
  * matches by rule; it does not simulate the rules one after another.
  * Save, Delete and the Text view act on the shown rule only.
  *
- * Unsaved changes: the editor tells the rules store (`setDirty`), so
- * switching rules or closing the window asks first (`./store.ts`,
- * `./closeGuard.ts`). Delete and a run that moves or deletes mail ask too,
- * inside the window (`./Confirm`). Any edit clears "Saved" and the
- * preview, which would describe an older rule.
+ * Unsaved changes: the editor tells the rules store (`setDirty`) and
+ * registers them where it is shown (`./RulesGuard.tsx`: the window's close
+ * guard, or a settings draft), so switching rules or closing the window
+ * asks first with the shared prompt (R6, ADR 0239). Delete and a run that
+ * moves or deletes mail ask in a modal confirmation window
+ * (`./Questions.tsx`). Any edit clears "Saved" and the preview, which
+ * would describe an older rule.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
@@ -56,7 +58,6 @@ import {
   undoRuleRun,
   type RuleRunTarget,
 } from "./api";
-import { Confirm } from "./Confirm";
 import { Footer, type FooterState } from "./Footer";
 import { LowerPanel, type LowerTab, type TestGroup, type TestResult } from "./LowerPanel";
 import { isDestructive, ruleIssues } from "./model";
@@ -72,6 +73,8 @@ import {
 } from "./runTargets";
 import { useRulesUi } from "./store";
 import { TextView } from "./TextView";
+import { RuleGuard } from "./RulesGuard";
+import { RULE_DELETE_DIALOG, RULE_RUN_DIALOG } from "./windows";
 import type { ExplainedMatch } from "./types";
 
 /** Maximum number of matches a test shows. */
@@ -117,20 +120,6 @@ interface TextRead {
   errors: readonly ConfigIssue[];
 }
 
-/**
- * A question the editor asks over its content: before a run that moves or
- * deletes mail, the rules that run and their total preview count.
- */
-type Question =
-  | { kind: "delete" }
-  | {
-      kind: "run";
-      rules: readonly Rule[];
-      count: number;
-      target: string;
-      go: () => void;
-    };
-
 /** The Run button's text: how many rules, and whether the shown rule is saved first. */
 export function runLabel(
   t: ReturnType<typeof useT>,
@@ -175,14 +164,10 @@ export function RuleEditor({
   const [footer, setFooter] = useState<FooterState>(null);
   const [tested, setTested] = useState<TestResult | null>(null);
   const [tab, setTab] = useState<LowerTab>("preview");
-  const [question, setQuestion] = useState<Question | null>(null);
   const { busy, problem, run } = useBusyAction();
   const runOn = useRunOn();
-  const pending = useRulesUi((s) => s.pending);
-  const discard = useRulesUi((s) => s.discard);
-  const keepEditing = useRulesUi((s) => s.keepEditing);
   const setDirty = useRulesUi((s) => s.setDirty);
-  const setAsking = useRulesUi((s) => s.setAsking);
+  const setQuestion = useRulesUi((s) => s.setQuestion);
   const forget = useRulesUi((s) => s.forget);
   const summary = useRef<HTMLParagraphElement>(null);
   const focusSummary = useRef(false);
@@ -267,16 +252,6 @@ export function RuleEditor({
       setDirty(false);
     },
     [setDirty],
-  );
-  const asking = question !== null || pending !== null;
-  useEffect(() => {
-    setAsking(asking);
-  }, [asking, setAsking]);
-  useEffect(
-    () => () => {
-      setAsking(false);
-    },
-    [setAsking],
   );
 
   // After Test, the preview's summary has the focus.
@@ -473,11 +448,13 @@ export function RuleEditor({
       (await testEach(rules, target, COUNT_LIMIT)).reduce((n, g) => n + g.matches.length, 0);
     setQuestion({
       kind: "run",
-      rules,
+      names: rules.map((r) => (isShown(r) ? (draft?.name ?? r.name) : r.name)),
       count: matched,
       target: label,
+      action: runLabel(t, { count: rules.length, savesFirst: unsaved && rules.some(isShown) }),
       go: () => void runNow(rules, target),
     });
+    ui.getState().openWindow(RULE_RUN_DIALOG);
   };
 
   const runOnTarget = () =>
@@ -521,6 +498,26 @@ export function RuleEditor({
 
   const shownName = draft?.name ?? rule.name;
 
+  /** Save of the unsaved-changes prompt: `true` when the rule was saved. */
+  const saveForGuard = async (): Promise<boolean> => {
+    let saved = false;
+    await run(async () => {
+      saved = (await persist()) !== null;
+    });
+    return saved;
+  };
+
+  /** Drops the unsaved changes: the rule as last saved, in the visual editor. */
+  const revert = () => {
+    latest.current = savedRule;
+    setRuleState(savedRule);
+    setTextState(written);
+    setRead(null);
+    setStuck(false);
+    setView("visual");
+    edited();
+  };
+
   return (
     <form
       data-part="rules.editor"
@@ -532,7 +529,14 @@ export function RuleEditor({
         void save();
       }}
     >
-      <div data-part="rules.editor.content" inert={asking}>
+      <RuleGuard
+        name={shownName}
+        dirty={dirty}
+        canSave={draft !== null && draft !== undefined && issues.length === 0}
+        save={saveForGuard}
+        revert={revert}
+      />
+      <div data-part="rules.editor.content">
         <RuleHeader
           rule={rule}
           onChange={setRule}
@@ -600,7 +604,8 @@ export function RuleEditor({
             isNew
               ? undefined
               : () => {
-                  setQuestion({ kind: "delete" });
+                  setQuestion({ kind: "delete", name: savedRule.name, go: () => void remove() });
+                  ui.getState().openWindow(RULE_DELETE_DIALOG);
                 }
           }
           runOn={runOn}
@@ -610,64 +615,6 @@ export function RuleEditor({
           onTest={() => void test()}
         />
       </div>
-      {question?.kind === "delete" && (
-        <Confirm
-          kind="delete"
-          question={t("rules-confirm-delete", { name: savedRule.name })}
-          confirmLabel={t("rules-delete-confirm")}
-          cancelLabel={t("common-cancel")}
-          danger
-          onCancel={() => {
-            setQuestion(null);
-          }}
-          onConfirm={() => {
-            setQuestion(null);
-            void remove();
-          }}
-        />
-      )}
-      {question?.kind === "run" && (
-        <Confirm
-          kind="run"
-          question={
-            question.rules.length === 1
-              ? t("rules-confirm-run", {
-                  name: question.rules[0]?.name ?? shownName,
-                  count: question.count,
-                  target: question.target,
-                })
-              : t("rules-confirm-run-many", {
-                  rules: question.rules.length,
-                  count: question.count,
-                  target: question.target,
-                })
-          }
-          confirmLabel={runLabel(t, {
-            count: question.rules.length,
-            savesFirst: unsaved && question.rules.some(isShown),
-          })}
-          cancelLabel={t("common-cancel")}
-          danger
-          onCancel={() => {
-            setQuestion(null);
-          }}
-          onConfirm={() => {
-            setQuestion(null);
-            question.go();
-          }}
-        />
-      )}
-      {pending !== null && question === null && (
-        <Confirm
-          kind="discard"
-          question={t("rules-confirm-discard", { name: shownName })}
-          confirmLabel={t("rules-discard")}
-          cancelLabel={t("common-keep-editing")}
-          danger
-          onCancel={keepEditing}
-          onConfirm={discard}
-        />
-      )}
     </form>
   );
 }

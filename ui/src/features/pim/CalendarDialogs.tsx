@@ -22,7 +22,7 @@ import { pimWrite, useCalendars, usePimSources } from "./queries";
 import { usePim } from "./store";
 import { sourceName } from "./Sources";
 import { TextField } from "../../widgets/forms";
-import { CloseButton } from "../../widgets/CloseButton";
+import { ConfirmDialog, DialogFooter } from "../../widgets/dialog";
 import { useBusyAction } from "../../state/busyAction";
 
 /** Problems of a calendar's name and colour before asking the core. */
@@ -154,9 +154,7 @@ export function CalendarSettingsDialog({ close }: DialogProps) {
     return (
       <div data-part="pim.calendar-dialog">
         <Problem message={{ id: "pim-calendar-gone" }} />
-        <div data-part="pim.editor.actions">
-          <CloseButton onClose={close} />
-        </div>
+        <DialogFooter done={{ onDone: close }} />
       </div>
     );
   }
@@ -351,36 +349,37 @@ export function RemoveCalendarDialog({ close }: DialogProps) {
   };
 
   const name = calendar?.settings.name ?? "";
+  const taskList = calendar !== undefined && isTaskList(calendar);
   const question =
     removal === "unsubscribe"
       ? t("pim-calendar-unsubscribe-question", { name })
-      : calendar && isTaskList(calendar)
+      : taskList
         ? t("pim-calendar-remove-task-list-question", { name })
         : t("pim-calendar-remove-question", { name });
-  return (
-    <div data-part="pim.calendar-dialog" data-removal={removal ?? undefined} aria-busy={busy}>
-      {calendar && removal !== null ? (
-        <p data-part="pim.calendar-dialog.question">{question}</p>
-      ) : (
+  if (!calendar || removal === null) {
+    return (
+      <div data-part="pim.calendar-dialog">
         <Problem message={{ id: calendar ? "pim-calendar-cannot-remove" : "pim-calendar-gone" }} />
-      )}
-      <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("common-cancel")}
-        </button>
-        {calendar && removal !== null && (
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="danger"
-            disabled={busy}
-            onClick={() => void remove()}
-          >
-            {removal === "unsubscribe" ? t("pim-calendar-unsubscribe") : t("common-remove")}
-          </button>
-        )}
+        <DialogFooter done={{ onDone: close }} />
       </div>
-    </div>
+    );
+  }
+  return (
+    <ConfirmDialog
+      kind={`remove-calendar-${removal}`}
+      risk="destructive"
+      question={question}
+      action={
+        removal === "unsubscribe"
+          ? t("pim-calendar-unsubscribe")
+          : taskList
+            ? t("pim-calendar-remove-task-list")
+            : t("pim-calendar-remove")
+      }
+      busy={busy}
+      error={problem === null ? null : t(problem.id, problem.args)}
+      onConfirm={() => void remove()}
+      cancel={{ onClick: close }}
+    />
   );
 }

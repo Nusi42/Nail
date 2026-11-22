@@ -19,11 +19,26 @@ window-pim-import = { pim-action-import }
 window-pim-sources = { common-pim-sources }
 window-pim-calendar-settings = Calendar settings
 window-pim-new-calendar = New calendar or task list
-window-pim-remove-calendar = Remove calendar
+pim-calendar-remove = Remove calendar
+window-pim-remove-calendar = { pim-calendar-remove }
+pim-calendar-remove-task-list = Remove task list
+# The questions before something is lost (R6: modal confirmations).
+window-pim-delete-event = { pim-delete-event }
+window-pim-delete-task = { pim-delete-task }
+window-pim-delete-group = { pim-group-delete }
+window-pim-remove-source = { pim-remove-source }
 
 ## Common
 
 pim-delete = { common-delete }
+# An editor's Delete… (it asks first).
+pim-delete-ask = Delete…
+pim-delete-event = Delete event
+pim-delete-event-question = Delete the event “{ $title }”?
+pim-delete-task = Delete task
+pim-delete-task-question = Delete the task “{ $title }”?
+# The question's window was opened without a question (it was answered elsewhere).
+pim-confirm-gone = There is nothing to confirm any more.
 pim-editor-nothing = Nothing to edit.
 pim-editor-read-only = This item is read-only.
 pim-categories = Categories (separated by commas)
@@ -150,6 +165,9 @@ pim-scope-all = { common-all-occurrences }
 pim-scope-nothing = There is no change to apply.
 pim-scope-move-intro = Move “{ $title }” to { $time }?
 pim-scope-delete-intro = Delete “{ $title }”?
+# The verbs of the scope question (R6).
+pim-scope-save = Save changes
+pim-scope-delete = Delete events
 
 ## Recurrence
 
@@ -332,6 +350,10 @@ pim-source-kind-exchange = Exchange account
 pim-source-synced = Last synced { $time }
 pim-source-sync-label = Sync { $name } now
 pim-sources-sync-all = Sync everything
+pim-remove-source-ask = { pim-calendar-remove-menu }
+pim-remove-source = Remove source
+pim-remove-source-question = Remove “{ $name }”?
+pim-remove-source-note = Its calendars, address books and task lists leave Nail. The server keeps them; you can add the source again.
 pim-source-add = Add a subscription or server
 pim-source-account = Use the login of
 pim-source-account-none = No mail account (enter a login)
@@ -479,6 +501,9 @@ pim-group-members = Members
 pim-group-member-emails = Other addresses (one per line)
 pim-group-saved = Group saved.
 pim-group-delete = Delete group
+pim-group-delete-ask = Delete group…
+pim-delete-group-question = Delete the group “{ $name }”?
+pim-delete-group-note = Its contacts stay in the address book.
 
 ## Merging
 

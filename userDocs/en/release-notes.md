@@ -43,13 +43,24 @@ closing a window.
 - **Questions that delete never default to it** — the red button names the
   action, Cancel has the focus, and `Enter` never deletes ("Delete
   permanently?" first; also "Delete folder", "Delete label", the Exchange
-  deletes, "Discard draft" and a plug-in's "Send anyway").
+  deletes, "Discard draft", the calendar and rule deletes and a plug-in's
+  "Send anyway").
 - **Mail dialogs in the same pattern** — closing a message with unsaved
   changes asks **Save changes to “…”?** with **Save draft**; `Enter` in
   **Subject** no longer sends (`Ctrl+Enter` does). Apply labels and
   categories save with **Save**, Automatic replies closes on **Save**, Print
   offers **Print**, **Save as PDF…** and **Cancel**, and discarding a draft
   in the Outbox asks first. See [Composing mail](composer.md).
+- **Calendars, contacts and tasks ask before deleting** — the event and task
+  editors keep their buttons in view, **Delete…** asks first, and so do
+  deleting a contact group and removing a calendar source. **Cancel
+  meeting** is red and **Keep meeting** has the focus. The editors and the
+  rules window ask before unsaved changes are lost. See [Calendar, contacts
+  and tasks](calendar-contacts-tasks.md#the-event-task-and-contact-editors).
+- **Appearance saves when you say so** — a picked theme, the accent, text
+  size and corners apply with the section's **Save**; the toolbar and column
+  editors save the same way. Applying someone else's theme is a wizard with
+  **Next**, **Apply theme**, **Back** and **Cancel**.
 
 ### Corrected in 0.8.10
 

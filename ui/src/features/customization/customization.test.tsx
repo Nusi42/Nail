@@ -386,13 +386,15 @@ describe("merge dialog", () => {
 
     await user.click(screen.getByRole("textbox"));
     await user.paste(THEME);
-    await user.click(screen.getByRole("button", { name: "Compare with mine" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
 
     const tokens = await screen.findByRole("heading", { name: "Tokens" });
     const section = must(tokens.closest<HTMLElement>('[data-part="merge-dialog.section"]'));
     expect(within(section).getByText("color.accent")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("3 differences, 0 taken, no conflicts");
-    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply theme" })).toBeDisabled();
+    // R6: Cancel on every step, in the footer's order.
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute("data-role", "cancel");
 
     // Take the accent colour only: the live preview shows it.
     const accent = must(
@@ -418,7 +420,7 @@ describe("merge dialog", () => {
     await user.click(within(section).getByRole("button", { name: "Take theirs: Tokens" }));
     expect(screen.getByRole("status")).toHaveTextContent("3 differences, 2 taken");
 
-    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await user.click(screen.getByRole("button", { name: "Apply theme" }));
     expect(
       await screen.findByText(/Applied\. Your previous file was backed up/),
     ).toBeInTheDocument();
@@ -429,7 +431,9 @@ describe("merge dialog", () => {
     expect(await screen.findByText("The previous version is back.")).toBeInTheDocument();
     expect(env.transport.data.theme.tokens.color?.accent).toBe(config.theme.tokens.color?.accent);
 
-    await user.click(screen.getByRole("button", { name: "Close" }));
+    // The result: Revert and one Done.
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Done" }));
     expect(close).toHaveBeenCalled();
   });
 
@@ -440,7 +444,7 @@ describe("merge dialog", () => {
     const view = renderWithProviders(<MergeDialog name="config-merge" close={vi.fn()} />, env);
     await user.click(screen.getByRole("textbox"));
     await user.paste(THEME);
-    await user.click(screen.getByRole("button", { name: "Compare with mine" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
     await user.click(await screen.findByRole("button", { name: "Take all theirs" }));
     await previewing(env, "Nord");
     // Turning the live preview off restores the real configuration, too.
@@ -463,13 +467,13 @@ describe("merge dialog", () => {
     await user.click(screen.getByRole("radio", { name: "Layout (layout.kdl)" }));
     await user.click(screen.getByRole("textbox"));
     await user.paste('theme "x" {}');
-    await user.click(screen.getByRole("button", { name: "Compare with mine" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
     expect(
       await screen.findByText("The file you loaded has an error. Fix it and compare again."),
     ).toBeInTheDocument();
     expect(screen.getByText(/Line 1, column 1: expected `layout/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByRole("button", { name: "Compare with mine" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
     expect(requestsOf(env, "PreviewConfigMerge")[0]?.file).toBe("layout");
   });
 

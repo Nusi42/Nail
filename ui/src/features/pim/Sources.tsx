@@ -6,6 +6,9 @@
  *   subscriptions, CalDAV and CardDAV servers) with their state; sync now,
  *   remove, and add a subscription or server (tested first). A DAV source
  *   can use a mail account's login (`account=` in `accounts.kdl`).
+ *
+ * R6 (ADR 0239): a tool window — no footer Close (× is enough); Remove
+ * asks first (`./Confirm.tsx`).
  */
 import { useEffect, useId, useState, type SubmitEvent } from "react";
 import { errorMessageId } from "../../api/client";
@@ -17,7 +20,6 @@ import type {
 } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
-import type { DialogProps } from "../../layout/dialogRegistry";
 import { useAccounts } from "../../state/queries";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { formatInstant } from "./fmt";
@@ -25,7 +27,8 @@ import { usePim, usePimStore } from "./store";
 import { pimWrite, usePimSources } from "./queries";
 import { localZone } from "./time";
 import { TextField } from "../../widgets/forms";
-import { CloseButton } from "../../widgets/CloseButton";
+import { askPim } from "./Confirm";
+import { REMOVE_SOURCE_DIALOG } from "./names";
 
 export const SOURCE_KINDS = ["ics", "caldav", "carddav"] as const;
 export type NewSourceKind = (typeof SOURCE_KINDS)[number];
@@ -57,15 +60,15 @@ export function sourceName(
 // Sources dialog
 
 /** The `pim-sources` dialog. */
-export function SourcesDialog({ close }: DialogProps) {
-  return <SourcesPanel close={close} />;
+export function SourcesDialog() {
+  return <SourcesPanel />;
 }
 
 /**
  * The sources with their state and the form to add one: the dialog's body,
- * and (without `close`) part of the settings page's calendar section.
+ * and part of the settings page's calendar section.
  */
-export function SourcesPanel({ close }: { close?: () => void }) {
+export function SourcesPanel() {
   const t = useT();
   const format = useDateFormat();
   const ctx = useChangeContext();
@@ -129,9 +132,25 @@ export function SourcesPanel({ close }: { close?: () => void }) {
                   aria-label={t("common-remove-named", {
                     name: sourceName(t, source, source.id),
                   })}
-                  onClick={() => void run({ type: "RemovePimSource", source_id: source.id })}
+                  onClick={() => {
+                    setProblem(null);
+                    askPim(ctx.store, REMOVE_SOURCE_DIALOG, {
+                      question: t("pim-remove-source-question", {
+                        name: sourceName(t, source, source.id),
+                      }),
+                      detail: t("pim-remove-source-note"),
+                      action: t("pim-remove-source"),
+                      go: async () => {
+                        await pimWrite(
+                          ctx,
+                          { type: "RemovePimSource", source_id: source.id },
+                          "Done",
+                        );
+                      },
+                    });
+                  }}
                 >
-                  {t("common-remove")}
+                  {t("pim-remove-source-ask")}
                 </button>
               </>
             )}
@@ -148,7 +167,6 @@ export function SourcesPanel({ close }: { close?: () => void }) {
         >
           {t("pim-sources-sync-all")}
         </button>
-        {close && <CloseButton onClose={close} />}
       </div>
     </div>
   );

@@ -10,9 +10,14 @@
  * occurrence", "this and following" (the core splits the series) or "all
  * occurrences" (moving the times moves the whole series by the same
  * amount). Deleting uses the same choice.
+ *
+ * R6 (ADR 0239): the shared footer, pinned at the bottom of the window —
+ * `Delete…` at the start (it asks first, `./Confirm.tsx`), Save and Cancel
+ * by role; ×, Esc and Cancel with unsaved changes ask with the shared
+ * prompt (Save / Don't save / Cancel). Ctrl+Enter in the description saves.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useId, useMemo, useState, type SubmitEvent } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type {
   Alarm,
   AlarmAction,
@@ -45,10 +50,12 @@ import { wallDelta } from "./changes";
 import {
   NumberField,
   Problem,
-  problemOf,
   useChangeContext,
   EditorMain,
   CalendarOptions,
+  useEditorSave,
+  EditorLoadError,
+  EditorFooter,
 } from "./common";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { formatInstant } from "./fmt";
@@ -72,7 +79,9 @@ import {
 import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
 import { TextField, TextAreaField } from "../../widgets/forms";
 import { RemoveButton } from "../../widgets/RemoveButton";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogForm } from "../../widgets/dialog";
+import { askPim } from "./Confirm";
+import { DELETE_EVENT_DIALOG } from "./names";
 
 const UNIT_SECONDS: Record<AlarmUnit, number> = {
   minutes: 60,
@@ -293,12 +302,7 @@ function EventEditorLoader({ target, close }: { target: EventEditorTarget; close
     return <LoadingDialog part="pim.editor" textPart="pim.editor.loading" />;
   }
   if (event.isError || calendars.isError) {
-    return (
-      <div data-part="pim.editor" data-state="error">
-        <Problem message={problemOf(event.error ?? calendars.error)} />
-        <CloseButton onClose={close} />
-      </div>
-    );
+    return <EditorLoadError error={event.error ?? calendars.error} close={close} />;
   }
   return (
     <EventEditor
@@ -354,12 +358,17 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
     initialForm(target, event, writable, occurrence, viewerTz),
   );
   const [secondary, setSecondary] = useState<string>("");
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
   const zones = useMemo(() => timeZoneNames(), []);
   const update = (patch: Partial<EventForm>) => {
     setForm((f) => ({ ...f, ...patch }));
   };
+  // The editor's target is done with once the editor goes (not when another one replaced it).
+  useEffect(
+    () => () => {
+      if (ctx.pim.getState().eventEditor === target) ctx.pim.getState().editEvent(null);
+    },
+    [ctx.pim, target],
+  );
 
   const base = event
     ? event.fields
@@ -377,109 +386,106 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
   const scopeEditable = occurrence !== null;
   const recurrenceLocked = scopeEditable && form.scope === "this";
 
-  const submit = async (e: SubmitEvent) => {
-    e.preventDefault();
-    const issue = formIssue(form);
-    if (issue) {
-      setProblem(issue);
-      return;
-    }
-    setBusy(true);
-    setProblem(null);
-    try {
-      const fields = preview;
-      if (target.mode === "new") {
+  const title = form.title.trim() || t("common-no-title");
+  /** Writes the event (a move, then the scope's change). */
+  const write = async () => {
+    const fields = preview;
+    if (target.mode === "new") {
+      await saveEvent(
+        ctx,
+        { mode: "create", calendarId: form.calendarId },
+        fields,
+        recurrenceOf(form.recurrence, fields.start, null),
+      );
+    } else if (event) {
+      if (form.calendarId !== event.calendar_id) {
+        await ctx.client.request(
+          { type: "MoveEvent", event_id: event.id, calendar_id: form.calendarId },
+          "EventSaved",
+        );
+      }
+      if (occurrence === null) {
         await saveEvent(
           ctx,
-          { mode: "create", calendarId: form.calendarId },
+          { mode: "update", eventId: event.id, scope: "all", recurrenceId: null },
           fields,
-          recurrenceOf(form.recurrence, fields.start, null),
+          recurrenceOf(form.recurrence, fields.start, event.recurrence),
         );
-      } else if (event) {
-        if (form.calendarId !== event.calendar_id) {
-          await ctx.client.request(
-            { type: "MoveEvent", event_id: event.id, calendar_id: form.calendarId },
-            "EventSaved",
-          );
-        }
-        if (occurrence === null) {
-          await saveEvent(
-            ctx,
-            { mode: "update", eventId: event.id, scope: "all", recurrenceId: null },
-            fields,
-            recurrenceOf(form.recurrence, fields.start, event.recurrence),
-          );
-        } else if (form.scope === "this") {
-          await saveEvent(
-            ctx,
-            { mode: "update", eventId: event.id, scope: "this", recurrenceId: occurrence },
-            fields,
-            event.recurrence,
-          );
-        } else if (form.scope === "this-and-following") {
-          await saveEvent(
-            ctx,
-            {
-              mode: "update",
-              eventId: event.id,
-              scope: "this-and-following",
-              recurrenceId: occurrence,
-            },
-            fields,
-            recurrenceOf(form.recurrence, fields.start, event.recurrence),
-          );
-        } else {
-          // All occurrences: move the series by what this occurrence moved.
-          const shownStart = target.start ?? event.fields.start;
-          const shownEnd = target.end ?? event.fields.end;
-          const sameKind = shownStart.type === fields.start.type;
-          const startDelta = wallDelta(shownStart, fields.start);
-          const endDelta = wallDelta(shownEnd, fields.end);
-          const seriesFields: EventFields = sameKind
-            ? {
-                ...fields,
-                start: shiftPimTime(
-                  withZone(event.fields.start, fields.start),
-                  startDelta.days,
-                  startDelta.minutes,
-                ),
-                end: shiftPimTime(
-                  withZone(event.fields.end, fields.end),
-                  endDelta.days,
-                  endDelta.minutes,
-                ),
-              }
-            : fields;
-          await saveEvent(
-            ctx,
-            { mode: "update", eventId: event.id, scope: "all", recurrenceId: occurrence },
-            seriesFields,
-            recurrenceOf(form.recurrence, seriesFields.start, event.recurrence),
-          );
-        }
+      } else if (form.scope === "this") {
+        await saveEvent(
+          ctx,
+          { mode: "update", eventId: event.id, scope: "this", recurrenceId: occurrence },
+          fields,
+          event.recurrence,
+        );
+      } else if (form.scope === "this-and-following") {
+        await saveEvent(
+          ctx,
+          {
+            mode: "update",
+            eventId: event.id,
+            scope: "this-and-following",
+            recurrenceId: occurrence,
+          },
+          fields,
+          recurrenceOf(form.recurrence, fields.start, event.recurrence),
+        );
+      } else {
+        // All occurrences: move the series by what this occurrence moved.
+        const shownStart = target.start ?? event.fields.start;
+        const shownEnd = target.end ?? event.fields.end;
+        const sameKind = shownStart.type === fields.start.type;
+        const startDelta = wallDelta(shownStart, fields.start);
+        const endDelta = wallDelta(shownEnd, fields.end);
+        const seriesFields: EventFields = sameKind
+          ? {
+              ...fields,
+              start: shiftPimTime(
+                withZone(event.fields.start, fields.start),
+                startDelta.days,
+                startDelta.minutes,
+              ),
+              end: shiftPimTime(
+                withZone(event.fields.end, fields.end),
+                endDelta.days,
+                endDelta.minutes,
+              ),
+            }
+          : fields;
+        await saveEvent(
+          ctx,
+          { mode: "update", eventId: event.id, scope: "all", recurrenceId: occurrence },
+          seriesFields,
+          recurrenceOf(form.recurrence, seriesFields.start, event.recurrence),
+        );
       }
-      ctx.pim.getState().editEvent(null);
-      close();
-    } catch (error) {
-      setProblem(problemOf(error));
-    } finally {
-      setBusy(false);
     }
   };
+  const { busy, problem, submit, finish } = useEditorSave({
+    name: title,
+    state: form,
+    readOnly,
+    canSave: form.calendarId !== "",
+    check: () => formIssue(form),
+    write,
+    close,
+  });
 
-  const remove = async () => {
+  /** Delete…: asks first (the occurrence's scope names the verb), then deletes and closes. */
+  const askDelete = () => {
     if (!event) return;
-    setBusy(true);
-    setProblem(null);
-    try {
-      await deleteEvent(ctx, event.id, occurrence === null ? "all" : form.scope, occurrence);
-      ctx.pim.getState().editEvent(null);
-      close();
-    } catch (error) {
-      setProblem(problemOf(error));
-    } finally {
-      setBusy(false);
-    }
+    askPim(ctx.store, DELETE_EVENT_DIALOG, {
+      question:
+        occurrence !== null
+          ? t("pim-scope-delete-intro", { title })
+          : t("pim-delete-event-question", { title }),
+      action: occurrence !== null ? t(`pim-delete-scope-${form.scope}`) : t("pim-delete-event"),
+      go: async () => {
+        await deleteEvent(ctx, event.id, occurrence === null ? "all" : form.scope, occurrence);
+        finish();
+        close();
+      },
+    });
   };
 
   const tzOptions = (
@@ -503,14 +509,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
       : null;
 
   return (
-    <form
-      data-part="pim.editor"
-      data-kind="event"
-      onSubmit={(e) => void submit(e)}
-      aria-busy={busy}
-      aria-describedby={problem ? ids.problem : undefined}
-      noValidate
-    >
+    <DialogForm part="pim.editor" dialog="event" busy={busy} onSubmit={() => void submit()}>
       <EditorMain readOnly={readOnly} busy={busy}>
         <div data-part="form.field" data-field="title">
           <label data-part="form.label" htmlFor={ids.title}>
@@ -856,40 +855,14 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
       </EditorMain>
 
       <Problem message={problem} id={ids.problem} />
-      <div data-part="pim.editor.actions">
-        {!readOnly && (
-          <button
-            type="submit"
-            data-part="form.button"
-            data-variant="primary"
-            disabled={busy || form.calendarId === ""}
-          >
-            {t("common-save")}
-          </button>
-        )}
-        {event && !readOnly && (
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="danger"
-            disabled={busy}
-            onClick={() => void remove()}
-          >
-            {occurrence !== null ? t(`pim-delete-scope-${form.scope}`) : t("pim-delete")}
-          </button>
-        )}
-        <button
-          type="button"
-          data-part="form.button"
-          onClick={() => {
-            ctx.pim.getState().editEvent(null);
-            close();
-          }}
-        >
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <EditorFooter
+        onDelete={event ? askDelete : null}
+        readOnly={readOnly}
+        saveDisabled={form.calendarId === ""}
+        busy={busy}
+        close={close}
+      />
+    </DialogForm>
   );
 }
 

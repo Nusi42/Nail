@@ -6,7 +6,7 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import type { CalendarDate } from "@internationalized/date";
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useId, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { AddressBook, Calendar, CalendarId, LocalizedMessage } from "../../api/generated";
 import { errorMessageOf } from "../../api/client";
 import { useT } from "../../i18n/I18nProvider";
@@ -19,6 +19,7 @@ import { eventCardDeclarations, swatchDeclarations } from "./colors";
 import { usePimStore } from "./store";
 import { isKnownZone, localZone } from "./time";
 import { TextField } from "../../widgets/forms";
+import { DialogFooter, useCloseGuard } from "../../widgets/dialog";
 
 /** Everything a PIM write from a component needs. */
 export function useChangeContext(): ChangeContext {
@@ -81,7 +82,10 @@ export function EditorMain({
   );
 }
 
-/** A dialog's problem and its actions: Cancel, then the submit button. */
+/**
+ * A form dialog's problem and its footer (R6, ADR 0239): the verb (the
+ * form's submit button) and Cancel by role, in the viewer's system's order.
+ */
 export function SubmitActions({
   problem,
   busy,
@@ -93,19 +97,192 @@ export function SubmitActions({
   submitLabel: string;
   onCancel: () => void;
 }) {
-  const t = useT();
   return (
     <>
       <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        <button type="button" data-part="form.button" onClick={onCancel}>
-          {t("common-cancel")}
-        </button>
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {submitLabel}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{ label: submitLabel, submit: true, action: "submit" }}
+        cancel={{ onClick: onCancel }}
+        busy={busy}
+      />
     </>
+  );
+}
+
+/**
+ * Saving an editor (R6, ADR 0239): `check` says why the item cannot be
+ * saved (shown as the editor's problem), `write` writes it. `persist`
+ * saves and reports whether it did; `submit` saves and closes. The close
+ * guard asks when ×, Esc or Cancel would drop changes — what differs from
+ * `state` as the editor opened — and saves through `persist`. `finish`
+ * after the editor deleted its item, so its own close does not ask.
+ */
+export function useEditorSave({
+  name,
+  state,
+  readOnly,
+  canSave = true,
+  check,
+  write,
+  close,
+}: {
+  /** What is edited, localized (its title). */
+  name: string;
+  /** The editor's state (compared as JSON). */
+  state: unknown;
+  readOnly: boolean;
+  /** More conditions for saving than `check` (a chosen calendar). */
+  canSave?: boolean;
+  /** Why the item cannot be saved, `null` when it can. */
+  check: () => LocalizedMessage | null;
+  /** Writes the item. */
+  write: () => Promise<void>;
+  close: () => void;
+}) {
+  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pristine] = useState(() => JSON.stringify(state));
+  const finished = useRef(false);
+  const dirty = !readOnly && JSON.stringify(state) !== pristine;
+  const finish = () => {
+    finished.current = true;
+  };
+  /** Saves: `true` when saved (the editor may close). */
+  const persist = async (): Promise<boolean> => {
+    const issue = check();
+    if (issue) {
+      setProblem(issue);
+      return false;
+    }
+    setBusy(true);
+    setProblem(null);
+    try {
+      await write();
+      finish();
+      return true;
+    } catch (error) {
+      setProblem(problemOf(error));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  useCloseGuard({
+    name: () => name,
+    isDirty: () => !finished.current && dirty,
+    canSave: () => canSave && check() === null,
+    save: persist,
+  });
+  return {
+    problem,
+    setProblem,
+    busy,
+    dirty,
+    persist,
+    finish,
+    /** Saves, then closes the editor. */
+    submit: async () => {
+      if (await persist()) close();
+    },
+  };
+}
+
+/**
+ * An editor's footer: `Delete…` alone at the start (it asks first; left out
+ * for a new or read-only item), Save (the form's submit button) and Cancel by
+ * role.
+ */
+export function EditorFooter({
+  onDelete,
+  readOnly,
+  saveDisabled,
+  busy,
+  close,
+}: {
+  onDelete: (() => void) | null;
+  readOnly: boolean;
+  saveDisabled: boolean;
+  busy: boolean;
+  close: () => void;
+}) {
+  const t = useT();
+  return (
+    <DialogFooter
+      {...(onDelete && !readOnly
+        ? {
+            start: {
+              label: t("pim-delete-ask"),
+              destructive: true,
+              action: "delete",
+              onClick: onDelete,
+            },
+          }
+        : {})}
+      {...(readOnly
+        ? {}
+        : {
+            primary: {
+              label: t("common-save"),
+              submit: true,
+              action: "save",
+              disabled: saveDisabled,
+            },
+          })}
+      cancel={{ onClick: close }}
+      busy={busy}
+    />
+  );
+}
+
+/** Radio buttons for one of `values` (a scope), each labelled `label(value)`. */
+export function ScopeRadios<V extends string>({
+  part,
+  legend,
+  values,
+  value,
+  label,
+  onChange,
+  children,
+}: {
+  part: string;
+  legend: string;
+  values: readonly V[];
+  value: V;
+  label: (value: V) => string;
+  onChange: (value: V) => void;
+  /** More fields under the choices (a day). */
+  children?: ReactNode;
+}) {
+  const name = useId();
+  return (
+    <fieldset data-part={part}>
+      <legend data-part="form.section.title">{legend}</legend>
+      {values.map((v) => (
+        <label key={v} data-part="form.check" data-scope={v}>
+          <input
+            type="radio"
+            name={name}
+            value={v}
+            checked={value === v}
+            onChange={() => {
+              onChange(v);
+            }}
+          />
+          <span>{label(v)}</span>
+        </label>
+      ))}
+      {children}
+    </fieldset>
+  );
+}
+
+/** An editor whose item or lists failed to load: the reason and Done. */
+export function EditorLoadError({ error, close }: { error: unknown; close: () => void }) {
+  return (
+    <div data-part="pim.editor" data-state="error">
+      <Problem message={problemOf(error)} />
+      <DialogFooter done={{ onDone: close }} />
+    </div>
   );
 }
 

@@ -6,9 +6,12 @@
  * people (each with a kind and "preferred"), birthday and anniversary
  * (the year may be unknown), notes, categories, custom fields and the
  * photo. Unknown vCard properties stay with the card (the core keeps them).
+ *
+ * R6 (ADR 0239): the shared footer (Save, Cancel by role) and the close
+ * guard — unsaved changes ask on ×, Esc and Cancel.
  */
 import { CalendarDate } from "@internationalized/date";
-import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent } from "react";
 import type {
   AddressBook,
   Contact,
@@ -17,18 +20,19 @@ import type {
   ContactKind,
   CustomField,
   LabeledValue,
-  LocalizedMessage,
   PostalAddress,
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import {
   Problem,
-  problemOf,
   useChangeContext,
   EditorMain,
   CategoriesField,
   OptionalSection,
+  useEditorSave,
+  EditorLoadError,
+  EditorFooter,
 } from "./common";
 import { CONTACT_KINDS } from "./constants";
 import { DateTimeInput } from "./DateTimeInput";
@@ -40,7 +44,7 @@ import { nonEmpty } from "../../text/empty";
 import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
 import { TextField, TextAreaField } from "../../widgets/forms";
 import { RemoveButton } from "../../widgets/RemoveButton";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogForm } from "../../widgets/dialog";
 
 /** The `TYPE` choices of emails, addresses and URLs (vCard home / work / other). */
 const PLACE_KINDS = ["home", "work", "other"] as const;
@@ -113,12 +117,7 @@ export function ContactEditorDialog({ close }: DialogProps) {
     return <LoadingDialog part="pim.editor" textPart="pim.editor.loading" />;
   }
   if (contact.isError || books.isError) {
-    return (
-      <div data-part="pim.editor" data-state="error">
-        <Problem message={problemOf(contact.error ?? books.error)} />
-        <CloseButton onClose={close} />
-      </div>
-    );
+    return <EditorLoadError error={contact.error ?? books.error} close={close} />;
   }
   return (
     <ContactEditor
@@ -189,8 +188,6 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
       writable[0]?.id ??
       "",
   );
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
   const update = (patch: Partial<ContactFields>) => {
     setFields((f) => ({ ...f, ...patch }));
   };
@@ -209,45 +206,48 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
   };
   const readOnly = contact?.read_only === true;
 
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
+  /** Writes the contact (a move to another book, then its fields). */
+  const write = async () => {
     const cleaned = cleanContact(fields);
-    if (!cleaned.display_name) {
-      setProblem({ id: "pim-issue-missing-name" });
-      return;
-    }
-    setBusy(true);
-    setProblem(null);
-    try {
-      if (contact) {
-        if (bookId !== contact.address_book_id) {
-          await pimWrite(
-            ctx,
-            { type: "MoveContact", contact_id: contact.id, address_book_id: bookId },
-            "ContactSaved",
-          );
-        }
+    if (contact) {
+      if (bookId !== contact.address_book_id) {
         await pimWrite(
           ctx,
-          { type: "UpdateContact", contact_id: contact.id, fields: cleaned },
+          { type: "MoveContact", contact_id: contact.id, address_book_id: bookId },
           "ContactSaved",
         );
-      } else {
-        const saved = await pimWrite(
-          ctx,
-          { type: "CreateContact", address_book_id: bookId, fields: cleaned },
-          "ContactSaved",
-        );
-        ctx.pim.getState().showContact(saved.contact.id);
       }
-      ctx.pim.getState().editContact(null);
-      close();
-    } catch (error) {
-      setProblem(problemOf(error));
-    } finally {
-      setBusy(false);
+      await pimWrite(
+        ctx,
+        { type: "UpdateContact", contact_id: contact.id, fields: cleaned },
+        "ContactSaved",
+      );
+    } else {
+      const saved = await pimWrite(
+        ctx,
+        { type: "CreateContact", address_book_id: bookId, fields: cleaned },
+        "ContactSaved",
+      );
+      ctx.pim.getState().showContact(saved.contact.id);
     }
   };
+  const { busy, problem, setProblem, submit } = useEditorSave({
+    name: cleanContact(fields).display_name || t("pim-contact-unnamed"),
+    state: { fields, bookId },
+    readOnly,
+    canSave: bookId !== "",
+    check: () => (cleanContact(fields).display_name ? null : { id: "pim-issue-missing-name" }),
+    write,
+    close,
+  });
+
+  // The editor's target is done with once the editor goes (not when another one replaced it).
+  useEffect(
+    () => () => {
+      if (ctx.pim.getState().contactEditor === target) ctx.pim.getState().editContact(null);
+    },
+    [ctx.pim, target],
+  );
 
   const onPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -263,13 +263,7 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
   };
 
   return (
-    <form
-      data-part="pim.editor"
-      data-kind="contact"
-      onSubmit={(e) => void submit(e)}
-      aria-busy={busy}
-      noValidate
-    >
+    <DialogForm part="pim.editor" dialog="contact" busy={busy} onSubmit={() => void submit()}>
       <EditorMain readOnly={readOnly} busy={busy}>
         <div data-part="form.field" data-field="address-book">
           <label data-part="form.label" htmlFor={ids.book}>
@@ -541,29 +535,14 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
       </EditorMain>
 
       <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        {!readOnly && (
-          <button
-            type="submit"
-            data-part="form.button"
-            data-variant="primary"
-            disabled={busy || bookId === ""}
-          >
-            {t("common-save")}
-          </button>
-        )}
-        <button
-          type="button"
-          data-part="form.button"
-          onClick={() => {
-            ctx.pim.getState().editContact(null);
-            close();
-          }}
-        >
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <EditorFooter
+        onDelete={null}
+        readOnly={readOnly}
+        saveDisabled={bookId === ""}
+        busy={busy}
+        close={close}
+      />
+    </DialogForm>
   );
 }
 

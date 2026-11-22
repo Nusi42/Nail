@@ -4,6 +4,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { BUILTIN_THEMES } from "../../ui/src/api/generated/constants";
 import { nailPerTest, control } from "../support/nail";
 import { openSettingsTab, showView, viewRegion, messageRows, openMail } from "../support/views";
+import { saveSettingsSection } from "../support/appearance";
 
 /**
  * Wave M5a (ADRs 0102–0107) against `nail serve --seed demo-multi`: the
@@ -99,6 +100,7 @@ test("themes are picked in Settings → Appearance and kept in theme.kdl", async
     ["Graphite", "graphite"],
   ] as const) {
     await gallery.getByRole("radio", { name: new RegExp(name) }).click();
+    await saveSettingsSection(page);
     await expectAccent(page, ACCENT[id]);
     await expect(gallery.getByRole("radio", { name: new RegExp(name) })).toHaveAttribute(
       "aria-checked",
@@ -112,10 +114,11 @@ test("themes are picked in Settings → Appearance and kept in theme.kdl", async
 
   // The accent override applies on top of the theme.
   await appearance.getByRole("textbox", { name: "Accent colour", exact: true }).fill("#ff0066");
-  await appearance.getByRole("button", { name: "Apply" }).click();
+  await saveSettingsSection(page);
   await expectAccent(page, "#ff0066");
   await expect.poll(themeFile).toContain('color "accent" "#ff0066"');
   await appearance.getByRole("button", { name: "Use theme defaults" }).click();
+  await saveSettingsSection(page);
   await expectAccent(page, ACCENT.graphite);
   await expect.poll(themeFile).not.toContain('color "accent"');
 });
@@ -131,7 +134,7 @@ test("High contrast keeps its own accent; the override applies again afterwards"
   const noteText = "High contrast uses its own colours.";
   const note = appearance.getByText(noteText, { exact: true });
   await field.fill("#ff0066");
-  await appearance.getByRole("button", { name: "Apply" }).click();
+  await saveSettingsSection(page);
   await expectAccent(page, "#ff0066");
   await expect.poll(themeFile).toContain('color "accent" "#ff0066"');
   await expect(note).toBeHidden();
@@ -140,6 +143,7 @@ test("High contrast keeps its own accent; the override applies again afterwards"
   // High contrast picked: its own accent, the control off with the note.
   const gallery = appearance.getByRole("radiogroup", { name: "Themes" });
   await gallery.getByRole("radio", { name: /High contrast/ }).click();
+  await saveSettingsSection(page);
   await expect.poll(themeFile).toContain('extends="high-contrast"');
   await expectAccent(page, ACCENT["high-contrast"]);
   await expect(note).toBeVisible();
@@ -152,12 +156,14 @@ test("High contrast keeps its own accent; the override applies again afterwards"
 
   // Another theme: the override applies again.
   await gallery.getByRole("radio", { name: /Sage/ }).click();
+  await saveSettingsSection(page);
   await expectAccent(page, "#ff0066");
   await expect(note).toBeHidden();
   await expect(field).toBeEnabled();
 
   // Follow Windows choosing High contrast does the same.
   await appearance.getByRole("switch", { name: "Follow Windows" }).click();
+  await saveSettingsSection(page);
   await expect.poll(themeFile).toContain("follow-system=#true");
   await control(server, "system-appearance", { scheme: "dark", high_contrast: true });
   await expectAccent(page, ACCENT["high-contrast"]);
@@ -180,6 +186,7 @@ test("Compact density applies to every theme and hides the tag line", async ({ p
     .getByRole("radiogroup", { name: "Density" })
     .getByRole("radio", { name: "Compact" })
     .click();
+  await saveSettingsSection(page);
   await expect(page.locator("html")).toHaveAttribute("data-nail-density", "compact");
   await expect.poll(themeFile).toContain('density="compact"');
   // Back to Mail to see the rows (M5b: Settings is a view of its own).
@@ -193,6 +200,7 @@ test("Compact density applies to every theme and hides the tag line", async ({ p
     .getByRole("radiogroup", { name: "Themes" })
     .getByRole("radio", { name: /Nocturne/ })
     .click();
+  await saveSettingsSection(page);
   await expectAccent(page, ACCENT.nocturne);
   await expect(page.locator("html")).toHaveAttribute("data-nail-density", "compact");
 });
@@ -211,8 +219,10 @@ test("Follow Windows switches with the OS, including contrast themes", async ({ 
   // Another pair: Sage / Nocturne.
   const appearance = await openAppearance(page);
   await appearance.getByRole("combobox", { name: "Light theme" }).selectOption("sage");
+  await saveSettingsSection(page);
   await expectAccent(page, ACCENT.sage);
   await appearance.getByRole("combobox", { name: "Dark theme" }).selectOption("nocturne");
+  await saveSettingsSection(page);
   await control(server, "system-appearance", { scheme: "dark" });
   await expectAccent(page, ACCENT.nocturne);
   await expect.poll(themeFile).toContain('light="sage"');
@@ -235,6 +245,7 @@ test("a theme file added to themes/ is listed at once and can be used", async ({
   await expect(ocean).toBeVisible({ timeout: 15_000 });
   await expect(ocean).toContainText("your theme");
   await ocean.click();
+  await saveSettingsSection(page);
   await expectAccent(page, "#4fb3d9");
   await expect.poll(themeFile).toContain('extends="ocean"');
 

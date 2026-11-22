@@ -13,7 +13,7 @@ import type { JsonValue, Rule, RuleId } from "../../api/generated";
 import { useClient } from "../../state/queries";
 import { usePopOutContext } from "../popout/hooks";
 import { isPopOutPage, registerPopOutPreparer } from "../popout/model";
-import { RULES_WINDOW } from "./closeGuard";
+import { RULES_WINDOW } from "./windows";
 import { rulesStore, type RulesOrigin, type RulesUiState } from "./store";
 
 /** What the main page hands a popped-out rules window. */

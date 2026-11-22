@@ -52,6 +52,7 @@ import { useActionEnabled, useActions } from "../../actions/ActionsProvider";
 import { errorMessageIdOf } from "../../api/client";
 import type { Rule, RuleId, RuleTrigger } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
+import { tabbables } from "../../layout/WindowLayer";
 import { useClient } from "../../state/queries";
 import { Icon } from "../../widgets/Icon";
 import { ExchangeRuleBadges } from "../exchange";
@@ -510,10 +511,10 @@ export function RuleManagerView() {
   const rules = useRules();
   const editing = useRulesUi((s) => s.editing);
   const saved = useRulesUi((s) => s.saved);
-  const asking = useRulesUi((s) => s.asking);
   const selection = useRulesUi((s) => s.selection);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const root = useRef<HTMLElement>(null);
   const list = rules.data ?? [];
   const shown = filterRules(list, filter);
   const selectedRule =
@@ -521,9 +522,9 @@ export function RuleManagerView() {
   const initial = editing?.kind === "new" ? editing.rule : selectedRule;
   const current = editing?.kind === "saved" ? editing.id : null;
   return (
-    <section data-part="rules" aria-label={t("rules-title")}>
+    <section ref={root} data-part="rules" aria-label={t("rules-title")}>
       <div data-part="rules.panes">
-        <div data-part="rules.side" inert={asking}>
+        <div data-part="rules.side">
           <RuleList
             rules={list}
             shown={shown}
@@ -544,6 +545,13 @@ export function RuleManagerView() {
             }}
             onDeleted={() => {
               setError(null);
+              // The button that asked went with the rule: the focus stays in the rules.
+              setTimeout(() => {
+                const active = document.activeElement;
+                if (active === null || active === document.body) {
+                  if (root.current) tabbables(root.current)[0]?.focus();
+                }
+              }, 0);
             }}
           />
         ) : (

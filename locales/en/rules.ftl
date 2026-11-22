@@ -4,6 +4,9 @@
 # ui/src/features/rules/messages.ts.
 
 window-rules = { common-filter-rules }
+# The editor's questions (modal confirmation windows over the rules window).
+window-rule-delete = { rules-delete-confirm }
+window-rule-run = Run rules
 rules-action-open = { common-filter-rules }
 rules-action-create-from-message = Create rule from message
 rules-action-run-menu = Run rule
@@ -301,7 +304,7 @@ rules-run-why-failed = This run failed, so there is nothing to undo.
 rules-run-why-nothing = This run changed nothing.
 rules-run-why-final = This run sent, copied or permanently deleted mail, or later changes replaced what it did: that cannot be taken back.
 rules-confirm-delete = Delete the rule “{ $name }”? Its recent runs are deleted with it.
-rules-delete-confirm = Delete the rule
+rules-delete-confirm = Delete rule
 rules-confirm-run = “{ $name }” moves or deletes mail. It matches { $count ->
     [0] no message
     [one] one message
@@ -312,8 +315,6 @@ rules-confirm-run-many = Of these { $rules } rules, some move or delete mail. To
     [one] one match
    *[other] { $count } matches
 } in { $target }. Run them now?
-rules-confirm-discard = Discard your changes to “{ $name }”?
-rules-discard = { common-discard-changes }
 rules-no-message = Select a message in the list first.
 rules-starters = Start from a template
 rules-starter-newsletters-name = Newsletters to a folder

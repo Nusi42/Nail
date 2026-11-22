@@ -22,6 +22,7 @@ import { mockEditHistory } from "../../api/editHistoryMock";
 import { applyEditHistory } from "../../state/editHistory";
 import { recordRequests } from "../../test/env";
 import { renderApp } from "../../test/app";
+import { renderAppearance, saveBar, saveSection } from "./testing";
 
 stubElementSizesEachTest();
 
@@ -183,6 +184,15 @@ theme "Demo" extends="default" mode="dark" {
   });
 });
 
+/** Renders the section and picks Nocturne (not saved yet). */
+async function pickNocturne(env: ReturnType<typeof createEnv>) {
+  const requests = recordRequests(env);
+  renderAppearance(env);
+  const nocturne = await screen.findByRole("radio", { name: /Nocturne/ });
+  fireEvent.click(nocturne);
+  return { requests, nocturne };
+}
+
 describe("appearance-settings widget", () => {
   it("shows the gallery, Follow Windows with its pair, and density", async () => {
     const env = createEnv();
@@ -220,18 +230,20 @@ describe("appearance-settings widget", () => {
     await settleQueries(env);
   });
 
-  it("picks a fixed theme and turns Follow Windows off", async () => {
+  it("picks a fixed theme and turns Follow Windows off on Save", async () => {
     const env = createEnv();
-    const requests = recordRequests(env);
-    renderNode(widget("appearance-settings"), env);
-    const nocturne = await screen.findByRole("radio", { name: /Nocturne/ });
-    fireEvent.click(nocturne);
-    await waitFor(() => expect(nocturne).toHaveAttribute("aria-checked", "true"));
+    const { requests, nocturne } = await pickNocturne(env);
+    expect(nocturne).toHaveAttribute("aria-checked", "true");
+    // R6: nothing applies before Save.
+    expect(requests).not.toContainEqual({ type: "SetTheme", theme_id: "nocturne" });
+    await saveSection();
     expect(requests).toContainEqual({ type: "SetTheme", theme_id: "nocturne" });
-    expect(screen.getByRole("switch", { name: "Follow Windows" })).toHaveAttribute(
-      "aria-checked",
-      "false",
-    );
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "Follow Windows" })).toHaveAttribute(
+        "aria-checked",
+        "false",
+      );
+    });
     expect(screen.queryByLabelText("Light theme")).toBeNull();
     expect(env.transport.data.features.appearance.settings).toMatchObject({
       theme: "nocturne",
@@ -240,51 +252,59 @@ describe("appearance-settings widget", () => {
     await settleQueries(env);
   });
 
-  it("changes the pair, density and Follow Windows through SetThemePreferences", async () => {
+  it("discards an unsaved pick with the bar's Discard", async () => {
     const env = createEnv();
-    renderNode(widget("appearance-settings"), env);
+    const { requests, nocturne } = await pickNocturne(env);
+    const bar = must(saveBar());
+    fireEvent.click(within(bar).getByRole("button", { name: "Discard" }));
+    expect(saveBar()).toBeNull();
+    expect(nocturne).toHaveAttribute("aria-checked", "false");
+    expect(requests.map((r) => r.type)).not.toContain("SetTheme");
+    await settleQueries(env);
+  });
+
+  it("changes the pair, density and Follow Windows through SetThemePreferences on Save", async () => {
+    const env = createEnv();
+    renderAppearance(env);
     fireEvent.change(await screen.findByLabelText("Dark theme"), {
       target: { value: "nocturne" },
     });
-    await waitFor(() => {
-      expect(env.transport.data.features.appearance.settings.dark).toBe("nocturne");
-    });
     fireEvent.click(screen.getByRole("radio", { name: "Compact" }));
-    await waitFor(() => {
-      expect(env.transport.data.features.appearance.settings.density).toBe("compact");
-    });
     fireEvent.click(screen.getByRole("switch", { name: "Follow Windows" }));
-    await waitFor(() => {
-      expect(env.transport.data.features.appearance.settings.follow_system).toBe(false);
+    expect(env.transport.data.features.appearance.settings).toMatchObject({
+      dark: "graphite",
+      density: "comfortable",
+      follow_system: true,
     });
+    await saveSection();
     expect(env.transport.data.features.appearance.settings).toMatchObject({
       light: "frost",
       dark: "nocturne",
       density: "compact",
+      follow_system: false,
     });
     await settleQueries(env);
   });
 
-  it("validates and applies the overrides", async () => {
+  it("validates the overrides and saves them with the section", async () => {
     const env = createEnv();
-    renderNode(widget("appearance-settings"), env);
+    renderAppearance(env);
     const accent = await screen.findByRole("textbox", { name: "Accent colour" });
+    // No Apply of its own (R6): the section's bar saves.
+    expect(screen.queryByRole("button", { name: "Apply" })).toBeNull();
     fireEvent.change(accent, { target: { value: "blue" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Enter the accent colour as a hex colour, for example #3b5bdb.",
     );
+    expect(within(must(saveBar())).getByRole("button", { name: "Save" })).toBeDisabled();
     fireEvent.change(accent, { target: { value: "#2e7d5b" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    await waitFor(() => {
-      expect(env.transport.data.features.appearance.settings.overrides).toEqual({
-        accent: "#2e7d5b",
-      });
+    await saveSection();
+    expect(env.transport.data.features.appearance.settings.overrides).toEqual({
+      accent: "#2e7d5b",
     });
     fireEvent.click(screen.getByRole("button", { name: "Use theme defaults" }));
-    await waitFor(() => {
-      expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
-    });
+    await saveSection();
+    expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
     await settleQueries(env);
   });
 
@@ -294,7 +314,7 @@ describe("appearance-settings widget", () => {
     state.settings.overrides = { accent: "#ff0066", font_size: 15 };
     const ownAccent = () => mockConfigTheme(env.transport).tokens.color?.accent;
     const note = "High contrast uses its own colours.";
-    renderNode(widget("appearance-settings"), env);
+    renderAppearance(env);
     const accent = await screen.findByRole("textbox", { name: "Accent colour" });
     const picker = screen.getByLabelText("Pick the accent colour");
     expect(accent).toHaveValue("#ff0066");
@@ -306,12 +326,11 @@ describe("appearance-settings widget", () => {
     // High contrast picked: its own accent, the stored value kept and shown.
     fireEvent.click(screen.getByRole("radio", { name: /High contrast/ }));
     expect(await screen.findByText(note)).toHaveAttribute("data-part", "appearance.accent-note");
-    await waitFor(() => {
-      expect(accent).toBeDisabled();
-    });
+    expect(accent).toBeDisabled();
     expect(picker).toBeDisabled();
     expect(accent).toHaveAccessibleDescription(note);
     expect(picker).toHaveAccessibleDescription(note);
+    await saveSection();
     expect(accent).toHaveValue("#ff0066");
     expect(state.settings.overrides).toEqual({ accent: "#ff0066", font_size: 15 });
     const hcAccent = BUILTIN_THEME_FILES.get("high-contrast")?.tokens.color?.accent;
@@ -323,10 +342,9 @@ describe("appearance-settings widget", () => {
 
     // Another theme: the accent applies again.
     fireEvent.click(screen.getByRole("radio", { name: /Sage/ }));
-    await waitFor(() => {
-      expect(accent).toBeEnabled();
-    });
+    expect(accent).toBeEnabled();
     expect(screen.queryByText(note)).toBeNull();
+    await saveSection();
     expect(ownAccent()).toBe("#ff0066");
 
     await settleQueries(env);
@@ -381,76 +399,56 @@ describe("appearance-settings widget", () => {
     }
   });
 
-  it("applies the text size and corner radius sliders live, after a pause", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      const env = createEnv();
-      renderNode(widget("appearance-settings"), env);
-      const size = await screen.findByRole("slider", { name: "Text size" });
-      // No override yet: the theme's own value, marked as the default.
-      expect(size).toHaveValue("14");
-      expect(screen.getByText("14 px (theme default)")).toBeInTheDocument();
-      fireEvent.change(size, { target: { value: "16" } });
-      fireEvent.change(screen.getByRole("slider", { name: "Corner radius" }), {
-        target: { value: "4" },
-      });
-      expect(screen.getByText("16 px")).toBeInTheDocument();
-      // Nothing written while the user is still moving the sliders.
-      expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
-      });
-      await waitFor(() => {
-        expect(env.transport.data.features.appearance.settings.overrides).toEqual({
-          font_size: 16,
-          radius: 4,
-        });
-      });
-      await settleQueries(env);
-    } finally {
-      vi.useRealTimers();
-    }
+  it("saves the text size and corner radius sliders with the section", async () => {
+    const env = createEnv();
+    renderAppearance(env);
+    const size = await screen.findByRole("slider", { name: "Text size" });
+    // No override yet: the theme's own value, marked as the default.
+    expect(size).toHaveValue("14");
+    expect(screen.getByText("14 px (theme default)")).toBeInTheDocument();
+    fireEvent.change(size, { target: { value: "16" } });
+    fireEvent.change(screen.getByRole("slider", { name: "Corner radius" }), {
+      target: { value: "4" },
+    });
+    expect(screen.getByText("16 px")).toBeInTheDocument();
+    // Nothing written before Save.
+    expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
+    await saveSection();
+    expect(env.transport.data.features.appearance.settings.overrides).toEqual({
+      font_size: 16,
+      radius: 4,
+    });
+    await settleQueries(env);
   });
 
-  // Review finding (ADR 0138): Undo right after a slider move undoes that
-  // move; the delayed write must not put the undone value back afterwards.
-  it("writes a waiting slider change before Undo, then undoes it", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      const env = createEnv();
-      env.transport.onEvent((event) => {
-        if (event.type === "EditHistoryChanged") {
-          applyEditHistory(env.queryClient, event.history);
-        }
-      });
-      renderNode(widget("appearance-settings"), env);
-      const accent = await screen.findByRole("textbox", { name: "Accent colour" });
-      fireEvent.change(accent, { target: { value: "#aa3366" } });
-      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-      const undo = await screen.findByRole("button", { name: /^Undo / });
-      await waitFor(() => {
-        expect(undo).toBeEnabled();
-      });
-      fireEvent.change(screen.getByRole("slider", { name: "Corner radius" }), {
-        target: { value: "12" },
-      });
-      // Undo before the pause is over.
-      fireEvent.click(undo);
-      await waitFor(() => {
-        expect(mockEditHistory(env.transport, "appearance").redo).toHaveLength(1);
-      });
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
-      });
-      // The radius is undone, the accent stays, and Redo is still there.
-      expect(env.transport.data.features.appearance.settings.overrides).toEqual({
-        accent: "#aa3366",
-      });
+  // Review finding (ADR 0138), R6: Undo acts on what was saved; an unsaved
+  // change stays a draft and is never written by Undo.
+  it("undoes a saved change and keeps an unsaved one as a draft", async () => {
+    const env = createEnv();
+    env.transport.onEvent((event) => {
+      if (event.type === "EditHistoryChanged") {
+        applyEditHistory(env.queryClient, event.history);
+      }
+    });
+    renderAppearance(env);
+    const accent = await screen.findByRole("textbox", { name: "Accent colour" });
+    fireEvent.change(accent, { target: { value: "#aa3366" } });
+    await saveSection();
+    const undo = await screen.findByRole("button", { name: /^Undo / });
+    await waitFor(() => {
+      expect(undo).toBeEnabled();
+    });
+    fireEvent.change(screen.getByRole("slider", { name: "Corner radius" }), {
+      target: { value: "12" },
+    });
+    fireEvent.click(undo);
+    await waitFor(() => {
       expect(mockEditHistory(env.transport, "appearance").redo).toHaveLength(1);
-      await settleQueries(env);
-    } finally {
-      vi.useRealTimers();
-    }
+    });
+    expect(env.transport.data.features.appearance.settings.overrides).toEqual({});
+    // The radius is still unsaved.
+    expect(saveBar()).not.toBeNull();
+    await settleQueries(env);
   });
 
   it("explains when the core cannot change themes yet", async () => {

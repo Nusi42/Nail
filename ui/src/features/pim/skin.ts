@@ -223,7 +223,6 @@ ${p("context-menu.item")}[data-tone="danger"] { color: ${T.danger}; }
 ${p("context-menu.item")}[data-tone="danger"] ${p("context-menu.item.icon")} { color: ${T.danger}; }`;
 
 const DIALOGS = `${p("pim.calendar-dialog")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: min(${DIALOG_MIN}, 100%); padding: ${T.lg}; }
-${p("pim.calendar-dialog.question")} { margin: 0; max-width: 60ch; }
 ${p("pim.colors")} { display: grid; gap: ${T.sm}; margin: 0; padding: 0; border: none; min-width: 0; }
 ${p("pim.colors.options")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; }
 ${p("pim.colors.option")} { position: relative; display: inline-grid; place-items: center; width: ${T.control}; height: ${T.control}; border-radius: ${T.pill}; }

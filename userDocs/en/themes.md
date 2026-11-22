@@ -119,7 +119,8 @@ offers **Undo anyway**.
 - **Rename** changes the theme's name. With **Also rename the file** the
   file gets a matching name too; wherever the theme was in use, or another
   of your themes extends it, Nail follows the new name.
-- **Delete** asks first, then removes the file. Where the theme was in use,
+- **Delete** asks first (**Delete theme**, with **Cancel** focused), then
+  removes the file. Where the theme was in use,
   Nail switches to the default theme of its kind (Frost, Graphite or High
   contrast). **Undo** brings the file back.
 

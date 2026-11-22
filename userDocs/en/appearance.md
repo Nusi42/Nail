@@ -64,15 +64,22 @@ invitation and label chips). Density applies to every theme.
   Inputs, menus and windows follow in proportion; 0 gives square corners.
 - **Accent colour** (`#rgb` or `#rrggbb`): buttons, links, the unread dot,
   focus rings, selections and pressed chips. It applies to the light and the
-  dark theme alike. Type it and click **Apply**, or use the colour picker
-  beside the field. High contrast themes keep their own colours: while one is
+  dark theme alike. Type it, or use the colour picker beside the field. High contrast themes keep their own colours: while one is
   in use, the field is off ("High contrast uses its own colours"), and your
   accent applies again as soon as you switch to another theme.
 
-The sliders and the colour picker apply as you move them; Nail writes the
-value once you pause for a moment. Until you set one, a slider shows the
-theme's own value ("14 px (theme default)"). **Use theme defaults** clears
-all three. Nail refuses values outside the ranges and says why.
+Until you set one, a slider shows the theme's own value ("14 px (theme
+default)"). **Use theme defaults** clears all three. Nail refuses values
+outside the ranges and says why.
+
+## Saving your choices
+
+Like every settings section, Appearance applies nothing until you save: a
+picked theme, Follow Windows and its pair, density, the accent, text size
+and corner radius wait in the bar **Unsaved changes to “Appearance”** at the
+bottom. **Save** applies and writes them, **Discard** forgets them, and
+leaving the section first asks whether to save. The theme cards preview each
+theme while you choose. See [Settings](settings.md#saving-your-changes).
 
 ## Undo
 

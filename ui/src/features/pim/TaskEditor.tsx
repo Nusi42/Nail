@@ -6,17 +6,14 @@
  * alarms (relative to the due date), and the subtasks — each can be
  * completed or opened, and new ones added. A task created from an email
  * shows a link back to it.
+ *
+ * R6 (ADR 0239): the shared footer like the event editor's — `Delete…` at
+ * the start (it asks first, naming the subtasks), Save and Cancel by role;
+ * unsaved changes ask on ×, Esc and Cancel.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useId, useMemo, useState, type SubmitEvent } from "react";
-import type {
-  Calendar,
-  LocalizedMessage,
-  PimTime,
-  Task,
-  TaskFields,
-  TaskStatus,
-} from "../../api/generated";
+import { useEffect, useId, useMemo, useState } from "react";
+import type { Calendar, PimTime, Task, TaskFields, TaskStatus } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import {
@@ -27,7 +24,13 @@ import {
   CategoriesField,
   CalendarOptions,
   OptionalSection,
+  useEditorSave,
+  EditorLoadError,
+  EditorFooter,
 } from "./common";
+import { askPim } from "./Confirm";
+import { DELETE_TASK_DIALOG } from "./names";
+import { DialogForm } from "../../widgets/dialog";
 import { TASK_STATUSES } from "./constants";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { AlarmEditor } from "./EventEditor";
@@ -41,7 +44,6 @@ import { localZone, makePimTime, splitPimTime, todayIn, utcString } from "./time
 import { nonEmpty } from "../../text/empty";
 import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
 import { TextField, TextAreaField } from "../../widgets/forms";
-import { CloseButton } from "../../widgets/CloseButton";
 
 /** Priority choices (iCalendar 1 = highest … 9 = lowest; 0 / none = undefined). */
 export const PRIORITIES = [
@@ -85,12 +87,7 @@ export function TaskEditorDialog({ close }: DialogProps) {
     return <LoadingDialog part="pim.editor" textPart="pim.editor.loading" />;
   }
   if (task.isError || calendars.isError) {
-    return (
-      <div data-part="pim.editor" data-state="error">
-        <Problem message={problemOf(task.error ?? calendars.error)} />
-        <CloseButton onClose={close} />
-      </div>
-    );
+    return <EditorLoadError error={task.error ?? calendars.error} close={close} />;
   }
   return (
     <TaskEditor
@@ -148,8 +145,6 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
     return anchor ? choiceOf(task?.recurrence ?? null, anchor) : { type: "none" };
   });
   const [subtaskTitle, setSubtaskTitle] = useState("");
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [busy, setBusy] = useState(false);
   const siblings = useTasks([listId], true);
   const update = (patch: Partial<TaskFields>) => {
     setFields((f) => ({ ...f, ...patch }));
@@ -185,69 +180,77 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
     categories: fields.categories.map((c) => c.trim()).filter(Boolean),
   });
 
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
+  /** Due before start: the task cannot be saved. */
+  const dueBeforeStart = (next: TaskFields) =>
+    next.start !== null &&
+    next.due !== null &&
+    splitPimTime(next.due).day.compare(splitPimTime(next.start).day) < 0;
+
+  /** Writes the task (a move to another list, then its fields). */
+  const write = async () => {
     const next = built();
-    if (
-      next.start &&
-      next.due &&
-      splitPimTime(next.due).day.compare(splitPimTime(next.start).day) < 0
-    ) {
-      setProblem({ id: "pim-issue-end-before-start" });
-      return;
-    }
-    setBusy(true);
-    setProblem(null);
-    try {
-      const rec = anchor ? recurrenceOf(recurrence, anchor, task?.recurrence ?? null) : null;
-      if (task) {
-        if (listId !== task.calendar_id) {
-          await pimWrite(
-            ctx,
-            { type: "MoveTask", task_id: task.id, calendar_id: listId },
-            "TaskSaved",
-          );
-          next.parent_id = null;
-        }
+    const rec = anchor ? recurrenceOf(recurrence, anchor, task?.recurrence ?? null) : null;
+    if (task) {
+      if (listId !== task.calendar_id) {
         await pimWrite(
           ctx,
-          { type: "UpdateTask", task_id: task.id, fields: next, recurrence: rec },
+          { type: "MoveTask", task_id: task.id, calendar_id: listId },
           "TaskSaved",
         );
-      } else {
-        const saved = await pimWrite(
-          ctx,
-          { type: "CreateTask", calendar_id: listId, fields: next, recurrence: rec },
-          "TaskSaved",
-        );
-        ctx.pim.getState().showTask(saved.task.id);
+        next.parent_id = null;
       }
-      ctx.pim.getState().editTask(null);
-      close();
-    } catch (error) {
-      setProblem(problemOf(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async () => {
-    if (!task) return;
-    setBusy(true);
-    setProblem(null);
-    try {
       await pimWrite(
         ctx,
-        { type: "DeleteTask", task_id: task.id, with_subtasks: true },
-        "PimDeleted",
+        { type: "UpdateTask", task_id: task.id, fields: next, recurrence: rec },
+        "TaskSaved",
       );
-      ctx.pim.getState().editTask(null);
-      close();
-    } catch (error) {
-      setProblem(problemOf(error));
-    } finally {
-      setBusy(false);
+    } else {
+      const saved = await pimWrite(
+        ctx,
+        { type: "CreateTask", calendar_id: listId, fields: next, recurrence: rec },
+        "TaskSaved",
+      );
+      ctx.pim.getState().showTask(saved.task.id);
     }
+  };
+  const title = fields.title.trim() || t("common-no-title");
+  const { busy, problem, setProblem, submit, finish } = useEditorSave({
+    name: title,
+    state: { fields, listId, start, due, recurrence },
+    readOnly,
+    canSave: listId !== "",
+    check: () => (dueBeforeStart(built()) ? { id: "pim-issue-end-before-start" } : null),
+    write,
+    close,
+  });
+
+  // The editor's target is done with once the editor goes (not when another one replaced it).
+  useEffect(
+    () => () => {
+      if (ctx.pim.getState().taskEditor === target) ctx.pim.getState().editTask(null);
+    },
+    [ctx.pim, target],
+  );
+
+  /** Delete…: asks first (naming the subtasks that go with it), then deletes and closes. */
+  const askDelete = () => {
+    if (!task) return;
+    askPim(ctx.store, DELETE_TASK_DIALOG, {
+      question: t("pim-delete-task-question", { title }),
+      action:
+        subtasks.length > 0
+          ? t("pim-task-delete-with-subtasks", { count: subtasks.length })
+          : t("pim-delete-task"),
+      go: async () => {
+        await pimWrite(
+          ctx,
+          { type: "DeleteTask", task_id: task.id, with_subtasks: true },
+          "PimDeleted",
+        );
+        finish();
+        close();
+      },
+    });
   };
 
   const addSubtask = async () => {
@@ -276,13 +279,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
   const message = fields.links.at(0);
 
   return (
-    <form
-      data-part="pim.editor"
-      data-kind="task"
-      onSubmit={(e) => void submit(e)}
-      aria-busy={busy}
-      noValidate
-    >
+    <DialogForm part="pim.editor" dialog="task" busy={busy} onSubmit={() => void submit()}>
       <EditorMain readOnly={readOnly} busy={busy}>
         <div data-part="form.field" data-field="title">
           <label data-part="form.label" htmlFor={ids.title}>
@@ -552,42 +549,14 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
       )}
 
       <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        {!readOnly && (
-          <button
-            type="submit"
-            data-part="form.button"
-            data-variant="primary"
-            disabled={busy || listId === ""}
-          >
-            {t("common-save")}
-          </button>
-        )}
-        {task && !readOnly && (
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="danger"
-            disabled={busy}
-            onClick={() => void remove()}
-          >
-            {subtasks.length > 0
-              ? t("pim-task-delete-with-subtasks", { count: subtasks.length })
-              : t("pim-delete")}
-          </button>
-        )}
-        <button
-          type="button"
-          data-part="form.button"
-          onClick={() => {
-            ctx.pim.getState().editTask(null);
-            close();
-          }}
-        >
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <EditorFooter
+        onDelete={task ? askDelete : null}
+        readOnly={readOnly}
+        saveDisabled={listId === ""}
+        busy={busy}
+        close={close}
+      />
+    </DialogForm>
   );
 }
 

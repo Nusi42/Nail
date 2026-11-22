@@ -80,7 +80,10 @@ merge-dialog-file-theme = Theme (theme.kdl)
 merge-dialog-file-layout = Layout (layout.kdl)
 merge-dialog-load = Load a file
 merge-dialog-paste = Or paste its text
-merge-dialog-compare = Compare with mine
+# The wizard's steps (R6): Next compares, then the apply verb names the file.
+merge-dialog-next = Next
+merge-dialog-apply-theme = Apply theme
+merge-dialog-apply-layout = Apply layout
 merge-dialog-incoming-invalid =
     { $count ->
         [one] The file you loaded has an error. Fix it and compare again.
@@ -147,7 +150,6 @@ customize-action-errors = { config-error-list-label }
 ## Customize tab editors (M2c WP54): toolbars, keys, columns
 
 customize-editors-tabs = Editors
-customize-save = Save to layout.kdl
 customize-saved = Saved to layout.kdl.
 customize-reset-done = The default is back.
 customize-move-up = Move { $label } up

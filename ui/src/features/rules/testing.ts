@@ -5,10 +5,12 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { createElement } from "react";
 import type { Rule } from "../../api/generated";
+import { WindowLayer } from "../../layout/WindowLayer";
+import { withCloseGuard } from "../../test/closeGuard";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
 import { INBOX } from "../../test/mockIds";
 import { onRulesEvent } from "./api";
-import { RuleManagerView } from "./RuleManager";
+import { RULES_WINDOW } from "./windows";
 
 /** A test app whose mock core answers at once and whose rules queries follow its events. */
 export function setup(state: Parameters<typeof createEnv>[0] = {}): Env {
@@ -108,12 +110,26 @@ export function ruleOption(name: string): RegExp {
 }
 
 /**
- * Renders the rules window and opens the rule named `name` from the list,
- * or a new rule (`null`); returns the editor, its footer and "Run on".
+ * Renders the rules window in the window layer, with the close guard
+ * installed as the app does (its questions open as windows over it).
+ */
+export function renderRulesWindow(env: Env) {
+  withCloseGuard(env);
+  env.store.setState({ windows: [RULES_WINDOW] });
+  return renderWithProviders(
+    createElement(WindowLayer, { layout: env.transport.data.layout }),
+    env,
+  );
+}
+
+/**
+ * Renders the rules window (in the window layer, with the close guard
+ * installed as the app does) and opens the rule named `name` from the
+ * list, or a new rule (`null`); returns the editor, its footer and "Run on".
  */
 export async function openEditor(env: Env, name: string | null) {
   const user = userEvent.setup({ delay: null });
-  renderWithProviders(createElement(RuleManagerView), env);
+  renderRulesWindow(env);
   await user.click(
     await (name === null
       ? screen.findByRole("button", { name: "New rule" })
@@ -122,4 +138,9 @@ export async function openEditor(env: Env, name: string | null) {
   const editor = await screen.findByRole("form", { name: "Rule" });
   const footer = footerOf(editor);
   return { user, editor, footer, runOn: within(footer).getByRole("combobox", { name: "Run on" }) };
+}
+
+/** The open question window titled `title` ("Delete rule", "Run rules", "Unsaved changes"). */
+export function findQuestion(title: string): Promise<HTMLElement> {
+  return screen.findByRole("dialog", { name: title });
 }

@@ -21,6 +21,7 @@ import { rulesStore } from "./store";
 import {
   addArchiveAllRule,
   addTagAllRule,
+  findQuestion,
   footerOf,
   IN_INBOX,
   openEditor,
@@ -171,6 +172,10 @@ describe("the rules store's selection", () => {
   it("changes the selection at once on the shown rule, else asks first while unsaved", () => {
     const env = setup();
     const store = rulesStore(env.client);
+    const asked: (() => void)[] = [];
+    store.getState().setLeave((proceed) => {
+      asked.push(proceed);
+    });
     store.getState().select("a");
     expect(store.getState().selection).toEqual({ selected: ["a"], anchor: "a" });
     store.getState().choose({ selected: ["a", "b"], anchor: "a", focus: "a" });
@@ -180,15 +185,13 @@ describe("the rules store's selection", () => {
     // The editor has changes: nothing moves until the user answers.
     expect(store.getState().selection.selected).toEqual(["a", "b"]);
     expect(store.getState().editing).toMatchObject({ id: "a" });
-    expect(store.getState().pending).toMatchObject({
-      kind: "edit",
-      editing: { id: "b" },
-      selection: { selected: ["a", "b"] },
-    });
-    store.getState().keepEditing();
+    expect(asked).toHaveLength(1);
+    // Cancel: nothing moves.
+    asked.length = 0;
     expect(store.getState().editing).toMatchObject({ id: "a" });
     store.getState().choose({ selected: ["c"], anchor: "c", focus: "c" });
-    store.getState().discard();
+    // Save or Don't save: the pick goes ahead.
+    asked.shift()?.();
     expect(store.getState().editing).toMatchObject({ id: "c" });
     expect(store.getState().selection.selected).toEqual(["c"]);
   });
@@ -368,7 +371,7 @@ describe("several rules in the rules window", () => {
     await user.keyboard("{/Control}");
     const footer = footerOf(await screen.findByRole("form", { name: "Rule" }));
     await user.click(within(footer).getByRole("button", { name: "Run 2 rules" }));
-    const question = await screen.findByRole("alertdialog");
+    const question = await findQuestion("Run rules");
     expect(question).toHaveTextContent(
       `Of these 2 rules, some move or delete mail. Together they have ${String(2 * inbox)} matches in Current folder (Inbox). Run them now?`,
     );

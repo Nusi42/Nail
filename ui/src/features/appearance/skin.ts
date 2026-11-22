@@ -140,9 +140,7 @@ ${v("secondary")}, ${v("field")} { border: 1px solid; }
 ${v("field")} { align-self: stretch; }
 
 ${p("theme-dialog")} { display: flex; flex-direction: column; gap: ${T.md}; }
-${p("theme-dialog.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; margin-top: auto; }
-${p("theme-dialog.question")} { margin: 0; font-weight: ${T.semibold}; }
-${p("theme-dialog.note")}, ${p("theme-dialog.gone")} { margin: 0; color: ${T.muted}; }
+${p("theme-dialog.gone")} { margin: 0; color: ${T.muted}; }
 
 /* A narrow preview leaves out its folder column so the list and the message keep readable widths. */
 @container ${THEME_PREVIEW_CONTAINER} (max-width: 22rem) {

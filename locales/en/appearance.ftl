@@ -31,7 +31,7 @@ appearance-density-title = Density
 appearance-density-hint = Compact shows more messages at once: smaller rows and text, and no tag line in the message list.
 
 appearance-overrides-title = Accent, text size and corners
-appearance-overrides-hint = These apply to every theme (High contrast keeps its own accent). The sliders and the colour picker change the app as you move them; type a colour and choose Apply.
+appearance-overrides-hint = These apply to every theme (High contrast keeps its own accent). Changes apply when you save them.
 appearance-font-size = Text size
 appearance-radius = Corner radius
 # $value (number) — a size in pixels
@@ -163,6 +163,8 @@ theme-dialog-use = Use the new theme now
 theme-dialog-rename-file = Also rename the file ({ $file })
 # $name (string) — the theme's name
 theme-dialog-delete-question = Delete the theme “{ $name }”?
+# The verb of the confirmation.
+theme-dialog-delete = { edit-kind-delete-theme }
 # $file (string) — the theme's file
 theme-dialog-delete-note = { $file } is removed. Where the theme was in use, Nail switches to the default theme. You can undo this.
 

@@ -24,6 +24,10 @@ export const notMessages: readonly string[] = [
   "rule-view",
   // Query key of the run history.
   "rule-runs",
+  // R6: the editor's settings draft key and its question windows (`./windows.ts`).
+  "rule-editor",
+  "rule-delete",
+  "rule-run",
   // Prefixes of the on/off action choices (`<prefix>-label`, `-on`, `-off`).
   "rules-set-flag",
   "rules-set-read",

@@ -15,7 +15,7 @@ import type {
   PimTime,
 } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { Problem } from "../pim/common";
+import { Problem, ScopeRadios } from "../pim/common";
 import { DateTimeInput, type Clock } from "../pim/DateTimeInput";
 import { makePimTime, pimTimeIn, splitPimTime, toCalendarDate } from "../pim/time";
 import { RESPONSES, responseOfStatus, splitAddresses } from "./model";
@@ -363,24 +363,15 @@ export interface ScopeChoiceProps {
 /** "All occurrences" or "only the occurrence on …" for a recurring invitation. */
 export function ScopeChoice({ scope, onScope, day, onDay, tz }: ScopeChoiceProps) {
   const t = useT();
-  const name = useId();
   return (
-    <fieldset data-part="scheduling.scope">
-      <legend data-part="form.section.title">{t("scheduling-scope-legend")}</legend>
-      {(["series", "occurrence"] as const).map((value) => (
-        <label key={value} data-part="form.check" data-scope={value}>
-          <input
-            type="radio"
-            name={name}
-            value={value}
-            checked={scope === value}
-            onChange={() => {
-              onScope(value);
-            }}
-          />
-          <span>{t(`scheduling-scope-${value}`)}</span>
-        </label>
-      ))}
+    <ScopeRadios
+      part="scheduling.scope"
+      legend={t("scheduling-scope-legend")}
+      values={["series", "occurrence"] as const}
+      value={scope}
+      label={(value) => t(`scheduling-scope-${value}`)}
+      onChange={onScope}
+    >
       {scope === "occurrence" && (
         <DateTimeInput
           label={t("scheduling-scope-day")}
@@ -393,7 +384,7 @@ export function ScopeChoice({ scope, onScope, day, onDay, tz }: ScopeChoiceProps
           }}
         />
       )}
-    </fieldset>
+    </ScopeRadios>
   );
 }
 

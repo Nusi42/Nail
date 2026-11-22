@@ -3,9 +3,10 @@
  * the theme to start from → `DuplicateTheme`, optionally used at once, then
  * opened in the editor), "Rename theme" (`RenameTheme`, optionally with a
  * new file name) and the confirmation "Delete theme?" (`DeleteTheme`; a
- * selection naming the theme falls back to the default of its kind).
+ * selection naming the theme falls back to the default of its kind). R6
+ * (ADR 0239): all three use the shared dialog pieces.
  */
-import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
+import { useId, useRef, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -16,8 +17,7 @@ import { MAX_THEME_NAME_CHARS } from "../../api/generated";
 import { isThemeName, themeIdFromName } from "./model";
 import { useAppearance } from "./queries";
 import { useThemeName } from "./ThemeEditor";
-import { CloseButton } from "../../widgets/CloseButton";
-import { DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
+import { ConfirmDialog, DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
 
 function NameField({
   id,
@@ -165,8 +165,7 @@ export function RenameThemeDialog({ close }: DialogProps) {
   const [moveFile, setMoveFile] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const shown = name ?? theme?.name ?? "";
-  const submit = (event: SubmitEvent) => {
-    event.preventDefault();
+  const submit = () => {
     if (!theme) return;
     if (!isThemeName(shown)) {
       setInvalid(true);
@@ -194,14 +193,12 @@ export function RenameThemeDialog({ close }: DialogProps) {
     return (
       <div data-part="theme-dialog" data-dialog="rename">
         <p data-part="theme-dialog.gone">{t("edit-issue-theme-not-found")}</p>
-        <div data-part="theme-dialog.actions">
-          <CloseButton onClose={close} />
-        </div>
+        <DialogFooter done={{ onDone: close }} />
       </div>
     );
   }
   return (
-    <form data-part="theme-dialog" data-dialog="rename" noValidate onSubmit={submit}>
+    <DialogForm part="theme-dialog" dialog="rename" busy={rename.isPending} onSubmit={submit}>
       <NameField id={`${id}-name`} value={shown} onChange={setName} invalid={invalid} />
       <label data-part="form.check" data-field="rename-file">
         <input
@@ -222,11 +219,14 @@ export function RenameThemeDialog({ close }: DialogProps) {
         submitLabel={t("common-rename")}
         disabled={rename.isPending}
       />
-    </form>
+    </DialogForm>
   );
 }
 
-/** Window `theme-delete` (a confirmation). */
+/**
+ * Window `theme-delete`: a destructive `ConfirmDialog` ("Delete theme", the
+ * focus on Cancel, Enter never deleting; R6, ADR 0239).
+ */
 export function DeleteThemeDialog({ close }: DialogProps) {
   const t = useT();
   const ui = useUiStoreApi();
@@ -235,51 +235,39 @@ export function DeleteThemeDialog({ close }: DialogProps) {
   const subject = useThemeEditorState((s) => s.subject);
   const theme = appearance.data?.themes.find((th) => th.id === subject);
   const remove = useDeleteTheme();
-  const cancel = useRef<HTMLButtonElement>(null);
-  // The safe choice has the focus (after the frame focused its first button).
-  useEffect(() => {
-    queueMicrotask(() => cancel.current?.focus());
-  }, []);
-  const failure = remove.error;
+  const failure = remove.error ? errorMessageOf(remove.error) : null;
   return (
-    <div data-part="theme-dialog" data-dialog="delete" aria-busy={remove.isPending}>
-      <p data-part="theme-dialog.question">
-        {theme
+    <ConfirmDialog
+      kind="delete-theme"
+      risk="destructive"
+      question={
+        theme
           ? t("theme-dialog-delete-question", { name: nameOf(theme) })
-          : t("edit-issue-theme-not-found")}
-      </p>
-      {theme && (
-        <p data-part="theme-dialog.note">{t("theme-dialog-delete-note", { file: theme.file })}</p>
-      )}
-      {failure && (
-        <p data-part="form.error" role="alert">
-          {t(errorMessageOf(failure).id, errorMessageOf(failure).args)}
-        </p>
-      )}
-      <div data-part="theme-dialog.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="danger"
-          disabled={!theme || remove.isPending}
-          onClick={() => {
-            if (!theme) return;
-            remove.mutate(theme.id, {
-              onSuccess: () => {
-                const editor = themeEditorStoreFor(ui).getState();
-                if (editor.themeId === theme.id) editor.show(null);
-                close();
-              },
-            });
-          }}
-        >
-          {t("common-delete")}
-        </button>
-        <button ref={cancel} type="button" data-part="form.button" onClick={close}>
-          {t("common-cancel")}
-        </button>
-      </div>
-    </div>
+          : t("edit-issue-theme-not-found")
+      }
+      {...(theme
+        ? {
+            detail: (
+              <p data-part="dialog.note">{t("theme-dialog-delete-note", { file: theme.file })}</p>
+            ),
+          }
+        : {})}
+      action={t("theme-dialog-delete")}
+      canConfirm={theme !== undefined}
+      busy={remove.isPending}
+      error={failure === null ? null : t(failure.id, failure.args)}
+      onConfirm={() => {
+        if (!theme) return;
+        remove.mutate(theme.id, {
+          onSuccess: () => {
+            const editor = themeEditorStoreFor(ui).getState();
+            if (editor.themeId === theme.id) editor.show(null);
+            close();
+          },
+        });
+      }}
+      cancel={{ onClick: close }}
+    />
   );
 }
 

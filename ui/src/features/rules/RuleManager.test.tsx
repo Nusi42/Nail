@@ -9,7 +9,15 @@ import { appRegistry } from "../registry";
 import { actions, dialogs, widgets } from "./index";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
-import { addFromMenu, footerOf, ruleOption, setup, showTextView } from "./testing";
+import {
+  addFromMenu,
+  findQuestion,
+  footerOf,
+  renderRulesWindow,
+  ruleOption,
+  setup,
+  showTextView,
+} from "./testing";
 
 /** A field by its `name`, or the control inside the field row `data-field` (pickers). */
 function field(container: HTMLElement, name: string): HTMLElement {
@@ -91,11 +99,11 @@ describe("rule manager", () => {
     await user.click(await screen.findByRole("button", { name: "New rule" }));
     const editor = await screen.findByRole("form", { name: "Rule" });
     const save = within(editor).getByRole("button", { name: "Save rule" });
-    // What is missing: a badge in the footer that Save names.
-    expect(save).toHaveAttribute("aria-disabled", "true");
+    // What is missing: a badge in the footer; Save saves nothing meanwhile.
     const badge = within(footerOf(editor)).getByRole("button", { name: "2 things to fix" });
     expect(badge).toHaveAccessibleDescription(/Give the rule a name\.\s*Add at least one action\./);
-    expect(save.getAttribute("aria-describedby")).toBe(badge.getAttribute("aria-describedby"));
+    await user.click(save);
+    expect(env.transport.data.features.rules.rules).toHaveLength(1);
     expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveAttribute(
       "aria-invalid",
       "true",
@@ -123,7 +131,6 @@ describe("rule manager", () => {
     await addFromMenu(user, editor, "Add action", "Archive");
     await user.click(must(within(editor).getAllByRole("button", { name: "Up" })[1]));
 
-    expect(save).not.toHaveAttribute("aria-disabled");
     await user.click(save);
     await within(editor).findByText("Saved");
     const request = env.transport.requests.find((r) => r.type === "SaveRule");
@@ -235,7 +242,7 @@ describe("rule manager", () => {
     } as Rule;
     env.transport.data.features.rules.rules.push(extra);
     const user = userEvent.setup({ delay: null });
-    renderWithProviders(<RuleManagerView />, env);
+    renderRulesWindow(env);
     // Alt+Up on the focused row moves it up.
     await user.click(await screen.findByRole("option", { name: ruleOption("Second") }));
     await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
@@ -269,17 +276,26 @@ describe("rule manager", () => {
 
     const editor = await screen.findByRole("form", { name: "Rule" });
     await user.click(within(editor).getByRole("button", { name: "Delete rule…" }));
-    const question = await screen.findByRole("alertdialog");
+    const question = await findQuestion("Delete rule");
     expect(question).toHaveTextContent("Delete the rule “Second”?");
-    // The safe choice has the focus; the list cannot be used meanwhile.
-    expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    // The safe choice has the focus (R6: a destructive confirmation); the
+    // rules window cannot be used meanwhile.
+    await waitFor(() => {
+      expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    expect(within(question).getByRole("button", { name: "Delete rule" })).toHaveAttribute(
+      "data-variant",
+      "danger",
+    );
     expect(
       screen
         .getByRole("listbox", { name: "Rules, in the order they run", hidden: true })
         .closest("[inert]"),
     ).not.toBeNull();
-    await user.click(within(question).getByRole("button", { name: "Cancel" }));
+    // Enter on the safe choice (Cancel) deletes nothing.
+    await user.keyboard("{Enter}");
     expect(env.transport.data.features.rules.rules).toHaveLength(2);
+    expect(screen.queryByRole("dialog", { name: "Delete rule" })).toBeNull();
     // The focus goes back to the button that asked.
     await waitFor(() => {
       expect(within(editor).getByRole("button", { name: "Delete rule…" })).toHaveFocus();
@@ -287,9 +303,7 @@ describe("rule manager", () => {
 
     await user.click(within(editor).getByRole("button", { name: "Delete rule…" }));
     await user.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", {
-        name: "Delete the rule",
-      }),
+      within(await findQuestion("Delete rule")).getByRole("button", { name: "Delete rule" }),
     );
     await waitFor(() => {
       expect(env.transport.data.features.rules.rules.map((r) => r.id)).toEqual([

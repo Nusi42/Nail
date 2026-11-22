@@ -9,9 +9,17 @@
  *   primary contact and which values the merged card keeps. Contacts in
  *   the primary's address book are folded into it, the others stay in their
  *   books linked to it.
+ *
+ * R6 (ADR 0239): Contact groups is a tool window — each group saves on its
+ * own, "Delete group…" asks first, and there is no footer Close (× is
+ * enough). Merge contacts is a wizard: Cancel on every step, then
+ * "Merge N contacts" and Back.
  */
 import { useQueries } from "@tanstack/react-query";
 import { useId, useMemo, useState, type SubmitEvent } from "react";
+import { DialogFooter, DialogForm } from "../../widgets/dialog";
+import { askPim } from "./Confirm";
+import { DELETE_GROUP_DIALOG } from "./names";
 import type {
   AddressBook,
   Contact,
@@ -48,7 +56,6 @@ import {
 } from "./queries";
 import { usePim } from "./store";
 import { nonEmpty } from "../../text/empty";
-import { CloseButton } from "../../widgets/CloseButton";
 import { TextAreaField } from "../../widgets/forms";
 
 function bookLabel(
@@ -63,7 +70,7 @@ function bookLabel(
 // ---------------------------------------------------------------------------
 // Groups
 
-export function GroupsDialog({ close }: DialogProps) {
+export function GroupsDialog() {
   const t = useT();
   const ctx = useChangeContext();
   const books = useAddressBooks();
@@ -192,9 +199,6 @@ export function GroupsDialog({ close }: DialogProps) {
         </button>
       </form>
       <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        <CloseButton onClose={close} />
-      </div>
     </div>
   );
 }
@@ -235,14 +239,18 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () 
     }
   };
 
-  const remove = async () => {
+  /** Delete group…: asks first; the group's contacts stay. */
+  const askDelete = () => {
     setProblem(null);
-    try {
-      await pimWrite(ctx, { type: "DeleteContactGroup", group_id: group.id }, "PimDeleted");
-      onDeleted();
-    } catch (error) {
-      setProblem(problemOf(error));
-    }
+    askPim(ctx.store, DELETE_GROUP_DIALOG, {
+      question: t("pim-delete-group-question", { name: group.name }),
+      detail: t("pim-delete-group-note"),
+      action: t("pim-group-delete"),
+      go: async () => {
+        await pimWrite(ctx, { type: "DeleteContactGroup", group_id: group.id }, "PimDeleted");
+        onDeleted();
+      },
+    });
   };
 
   return (
@@ -307,9 +315,10 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () 
             type="button"
             data-part="form.button"
             data-variant="danger"
-            onClick={() => void remove()}
+            data-action="delete-group"
+            onClick={askDelete}
           >
-            {t("pim-group-delete")}
+            {t("pim-group-delete-ask")}
           </button>
         </div>
       )}
@@ -367,9 +376,7 @@ export function MergeDialog({ close }: DialogProps) {
       {duplicates.data && duplicates.data.length > 0 && (
         <DuplicateList groups={duplicates.data} onChoose={setChosen} />
       )}
-      <div data-part="pim.editor.actions">
-        <CloseButton onClose={close} />
-      </div>
+      <DialogFooter cancel={{ onClick: close }} />
     </div>
   );
 }
@@ -426,7 +433,7 @@ function MergeForm({
     return (
       <div data-part="pim.merge" data-state="error">
         <Problem message={error ? problemOf(error) : { id: "pim-merge-too-few" }} />
-        <CloseButton onClose={close} />
+        <DialogFooter done={{ onDone: close }} />
       </div>
     );
   }
@@ -482,8 +489,7 @@ function MergeChoices({
     }
   };
 
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     if (!primary) return;
     setBusy(true);
     setProblem(null);
@@ -520,7 +526,7 @@ function MergeChoices({
   };
 
   return (
-    <form data-part="pim.merge" onSubmit={(e) => void submit(e)} aria-busy={busy}>
+    <DialogForm part="pim.merge" busy={busy} onSubmit={() => void submit()}>
       <fieldset data-part="pim.merge.primary">
         <legend data-part="form.section.title">{t("pim-merge-primary")}</legend>
         {contacts.map((c) => (
@@ -618,19 +624,18 @@ function MergeChoices({
       )}
 
       <Problem message={problem} />
-      <div data-part="pim.editor.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("pim-merge-submit", { count: contacts.length })}
-        </button>
-        {onBack && (
-          <button type="button" data-part="form.button" onClick={onBack}>
-            {t("common-back")}
-          </button>
-        )}
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <DialogFooter
+        primary={{
+          label: t("pim-merge-submit", { count: contacts.length }),
+          submit: true,
+          action: "merge",
+        }}
+        {...(onBack
+          ? { secondary: { label: t("common-back"), action: "back", onClick: onBack } }
+          : {})}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
+    </DialogForm>
   );
 }

@@ -204,11 +204,19 @@ describe("meeting panel", () => {
     if (!Dialog) throw new Error("no dialog");
     const close = vi.fn();
     renderWithProviders(<Dialog name={CANCEL_DIALOG} close={close} />, env);
+    // R6: destructive — "Keep meeting" has the focus; the red verb is no submit button.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Keep meeting" })).toHaveFocus();
+    });
+    expect(screen.getByRole("button", { name: "Cancel meeting" })).toHaveAttribute(
+      "type",
+      "button",
+    );
     expect(screen.queryByRole("radio", { name: /Only the occurrence/ })).toBeNull();
     await user.click(screen.getByRole("radio", { name: "Remove some attendees" }));
-    expect(screen.getByRole("button", { name: "Cancel and notify" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel meeting" })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /Katherine Johnson/ }));
-    await user.click(screen.getByRole("button", { name: "Cancel and notify" }));
+    await user.click(screen.getByRole("button", { name: "Cancel meeting" }));
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
@@ -237,7 +245,7 @@ describe("meeting panel", () => {
     renderWithProviders(<Dialog name={CANCEL_DIALOG} close={() => undefined} />, env);
     expect(screen.getByRole("radio", { name: /Only the occurrence on/ })).toBeChecked();
     await user.click(screen.getByRole("radio", { name: "The whole meeting" }));
-    await user.click(screen.getByRole("button", { name: "Cancel and notify" }));
+    await user.click(screen.getByRole("button", { name: "Cancel meeting" }));
     await waitFor(() => {
       expect(requestsOf(env, "CancelMeeting")).toHaveLength(1);
     });

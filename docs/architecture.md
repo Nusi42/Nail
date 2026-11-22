@@ -1674,3 +1674,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`DIALOG_SKIN_CSS`; `dialog.footer` in `DIALOG_BUTTON_ROWS`; one rule set in `defaults/theme.kdl`). Texts
   `locales/*/dialog.ftl`. Reference migrations: `widgets/DeletePermanently.tsx`, `features/appearance/ThemeDialogs.tsx`.
   E2e `r6-dialog-pattern.spec.ts`; helpers `emulateViewerOs` / `expectDialogFooter` in `e2e/support/windowTour.ts`.
+- WD2 (ADR 0240): rules — `features/rules/RulesGuard.tsx` (the editor's close guard in a window, a settings draft
+  on the settings page; `askToLeave` through the store's `leave`), `Questions.tsx` (modal `rule-delete` /
+  `rule-run`), `windows.ts`; the footer is `DialogFooter` inside `rules.footer`. Appearance is one settings draft
+  (`AppearanceSettings.tsx`); the toolbar / column editors are settings drafts (`customization/Editors.tsx`); the
+  merge wizard uses `DialogFooter`. PIM: `features/pim/Confirm.tsx` (`askPim`, the modal `pim-delete-event` /
+  `-task` / `-group`, `pim-remove-source`), `useEditorGuard` and `EditorLoadError` in `pim/common.tsx`; scheduling's
+  Cancel meeting is a `ConfirmDialog`. E2e `r6-wd2-dialogs.spec.ts`; `e2e/support/appearance.ts`.

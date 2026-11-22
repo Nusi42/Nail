@@ -21,7 +21,10 @@
  *   visually hidden under a row of the same kind (same fields, same
  *   places; each field keeps its name); a row of another kind shows its
  *   own labels, so no label stands over another field.
- * - **Questions** (items 4, 5): over the whole window, centred.
+ * - **Footer** (R6, ADR 0239): the shared `dialog.footer` sits inside the
+ *   editor's own sticky footer, so it does not stick or draw its own edge
+ *   there (the window body's last button row would); it spans the footer,
+ *   so Save rule stays at the end whatever Run says.
  * - **"Saved"** fades after a moment (item 2); the problem list inside the
  *   shared problem indicator's details.
  * - **Exchange badge** (R3): one ⓘ per rule; its popover lists each
@@ -53,9 +56,10 @@ const STRUCTURE = `${p("rules")} { container: ${RULES_CONTAINER} / inline-size; 
 ${inRules("rules.footer")} { position: sticky; bottom: 0; z-index: 1; flex-shrink: 0; }
 ${inRules("rules.header")} { flex-shrink: 0; }
 ${inRules("rules.lower")} { flex-basis: auto; }
-${inRules("rules.confirm")} {
-  position: absolute; inset: 0; z-index: 2; margin: auto; height: fit-content; width: min(28rem, calc(100% - 2 * ${T.md}));
+${inRules("rules.footer")} > ${p("dialog.footer")}:last-child {
+  position: static; flex: 1 1 100%; padding: 0; border: none; background: none;
 }
+${inRules("rules.footer.tools")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; }
 ${p("rules.issues.items")} { margin: 0; padding-left: ${T.lg}; }
 :is(${ps("rules.text.gutter", "rules.empty.list", "exchange.rule-badge.reasons")}) { list-style: none; }
 ${p("rules.issues.item")} { overflow-wrap: anywhere; }

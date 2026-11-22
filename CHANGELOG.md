@@ -66,6 +66,17 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   footer Close; the move question before Trash, Drafts or Junk goes back to
   the picker on Esc; an Outbox draft's Discard asks first; the plug-in send
   veto's "Send anyway" is red and Cancel has the focus.
+- Rules, appearance, customization, calendars, contacts, tasks and
+  scheduling follow the pattern (ADR 0240): the rules window's unsaved rule
+  asks with the shared prompt and its delete / run questions are modal
+  confirmations; Settings → Appearance and the toolbar / column editors
+  save with the section's bar (no Apply, no live sliders); the merge
+  wizard has Next / Apply theme / Back / Cancel and Done; the event, task
+  and contact editors have a pinned footer with `Delete…` (asks first) and
+  ask before unsaved changes are lost; deleting a contact group and
+  removing a calendar source ask; Cancel meeting is a red "Cancel meeting"
+  with "Keep meeting" focused; the recurring-event question names its verb
+  ("Save changes" / "Delete events").
 
 ### Fixed — large selections (ADR 0235)
 

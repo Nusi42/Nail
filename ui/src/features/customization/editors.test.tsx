@@ -15,6 +15,10 @@ import {
 import { columnsOf } from "../../widgets/MessageList";
 import { messageLists, recordKey } from "./Editors";
 import { moved } from "./ReorderList";
+import { SettingsSaveBar } from "../../widgets/dialog";
+
+/** The section's "Unsaved changes" bar (R6: the editors save through it). */
+const bar = () => screen.queryByRole("group", { name: "Unsaved changes to “Customize”" });
 import { must } from "../../test/must";
 import { requestsOf } from "../../test/env";
 
@@ -40,6 +44,7 @@ function renderEditor(kind: string, env = createEnv()) {
   const view = renderWithProviders(
     <LiveLayout>
       <NodeView node={widget(kind)} path="t" />
+      <SettingsSaveBar name="Customize" />
     </LiveLayout>,
     env,
   );
@@ -94,8 +99,11 @@ describe("toolbar-editor", () => {
     await user.click(within(section).getByRole("button", { name: "Add separator" }));
     expect(items().at(-1)).toHaveTextContent("Separator");
     await user.click(within(must(items()[1])).getByRole("button", { name: /Remove/ }));
-    await user.click(within(section).getByRole("button", { name: "Save to layout.kdl" }));
+    await user.click(within(must(bar())).getByRole("button", { name: "Save" }));
     expect(await within(section).findByText("Saved to layout.kdl.")).toBeVisible();
+    await waitFor(() => {
+      expect(bar()).toBeNull();
+    });
     const [update] = requestsOf(env, "UpdateLayout");
     expect(update?.patches[0]).toMatchObject({ op: "toolbar-order", toolbar: "reader" });
     const written = env.transport.data.layout.toolbars.reader ?? [];
@@ -179,8 +187,8 @@ describe("column-editor", () => {
     const { env } = renderEditor("column-editor");
     const section = await screen.findByRole("region", { name: "Column editor" });
     expect(within(section).getByText(/shows rows made from templates/)).toBeVisible();
-    const save = within(section).getByRole("button", { name: "Save to layout.kdl" });
-    expect(save).toBeDisabled();
+    // Nothing unsaved: no bar.
+    expect(bar()).toBeNull();
     await user.selectOptions(within(section).getByLabelText("Column"), "subject");
     await user.click(within(section).getByRole("button", { name: "Add column" }));
     await user.selectOptions(within(section).getByLabelText("Column"), "from");
@@ -189,7 +197,7 @@ describe("column-editor", () => {
     await user.click(within(section).getByRole("button", { name: "Add column" }));
     const list = within(section).getByRole("list", { name: "Columns in display order" });
     await user.click(within(list).getByRole("button", { name: "Move From up" }));
-    await user.click(save);
+    await user.click(within(must(bar())).getByRole("button", { name: "Save" }));
     expect(await within(section).findByText("Saved to layout.kdl.")).toBeVisible();
     const [update] = requestsOf(env, "UpdateLayout");
     expect(update?.patches[0]).toMatchObject({

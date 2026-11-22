@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { nailPerTest } from "../support/nail";
 import { expectResponsive } from "../support/responsive";
 import { openSettingsTab } from "../support/views";
+import { pickTheme } from "../support/appearance";
 
 /**
  * R2 shared pickers (ADR 0222) on the real core (`demo-multi`): fields that
@@ -125,10 +126,7 @@ test("the pickers fit at 1024×700 and keep their looks in a dark theme and high
   // background, the highlighted row stands out.
   for (const theme of ["Nocturne", "High contrast"]) {
     const appearance = await openSettingsTab(page, "Appearance");
-    await appearance
-      .getByRole("radiogroup", { name: "Themes" })
-      .getByRole("radio", { name: new RegExp(theme) })
-      .click();
+    await pickTheme(appearance, new RegExp(theme));
     const themed = await sourceRow(page);
     await themed.getByRole("button", { name: "Show choices for Folder" }).click();
     await expect(popupOf(themed)).toBeVisible();

@@ -6,6 +6,10 @@
  * written until "Apply"; the previous file is backed up and can be restored
  * with one click. Earlier backups are listed for revert, too.
  *
+ * R6 (ADR 0239): a wizard with the shared footer — Next, then Apply theme
+ * (or Apply layout) and Back, Cancel on every step; the result offers
+ * Revert and Done.
+ *
  * The live preview is a temporary configuration in the renderer: the
  * resolved result of the current choices replaces the app's configuration
  * in the query cache; closing the dialog without applying restores (and
@@ -30,7 +34,7 @@ import { chooseAll, choiceList, differs, summarize, takeOf, type Choices } from 
 import { MERGE_FILES } from "./names";
 import { customizationStore } from "./state";
 import { DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter, DialogForm } from "../../widgets/dialog";
 
 /** Delay before the live preview follows a change of choices (ms). */
 export const PREVIEW_DELAY_MS = 150;
@@ -456,11 +460,11 @@ export function MergeDialog({ close }: DialogProps) {
       )}
 
       {stage.kind === "input" && (
-        <form
-          data-part="merge-dialog.input"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void compare();
+        <DialogForm
+          part="merge-dialog.input"
+          busy={busy}
+          onSubmit={() => {
+            if (incoming.trim() !== "") void compare();
           }}
         >
           <p data-part="merge-dialog.intro">{t("merge-dialog-intro")}</p>
@@ -502,18 +506,18 @@ export function MergeDialog({ close }: DialogProps) {
               setIncoming(e.target.value);
             }}
           />
-          <div data-part="merge-dialog.actions">
-            <button
-              type="submit"
-              data-part="form.button"
-              data-action="compare"
-              disabled={busy || incoming.trim() === ""}
-            >
-              {t("merge-dialog-compare")}
-            </button>
-          </div>
           <Backups file={file} client={client} />
-        </form>
+          <DialogFooter
+            primary={{
+              label: t("merge-dialog-next"),
+              submit: true,
+              action: "compare",
+              disabled: incoming.trim() === "",
+            }}
+            cancel={{ onClick: close }}
+            busy={busy}
+          />
+        </DialogForm>
       )}
 
       {preview && preview.errors.length > 0 && (
@@ -532,16 +536,16 @@ export function MergeDialog({ close }: DialogProps) {
               </li>
             ))}
           </ol>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="back"
-            onClick={() => {
-              setStage({ kind: "input" });
+          <DialogFooter
+            secondary={{
+              label: t("common-back"),
+              action: "back",
+              onClick: () => {
+                setStage({ kind: "input" });
+              },
             }}
-          >
-            {t("common-back")}
-          </button>
+            cancel={{ onClick: close }}
+          />
         </section>
       )}
 
@@ -561,6 +565,7 @@ export function MergeDialog({ close }: DialogProps) {
             setStage({ kind: "input" });
           }}
           onApply={() => void apply()}
+          onCancel={close}
         />
       )}
 
@@ -569,7 +574,7 @@ export function MergeDialog({ close }: DialogProps) {
           <p data-part="merge-dialog.status" role="status">
             {t(stage.backup ? "merge-dialog-applied" : "merge-dialog-reverted")}
           </p>
-          <div data-part="merge-dialog.actions">
+          <DialogFooter done={{ onDone: close }}>
             {stage.backup && (
               <button
                 type="button"
@@ -581,8 +586,7 @@ export function MergeDialog({ close }: DialogProps) {
                 {t("merge-dialog-revert")}
               </button>
             )}
-            <CloseButton onClose={close} action="close" />
-          </div>
+          </DialogFooter>
         </section>
       )}
     </div>
@@ -601,6 +605,7 @@ interface PreviewViewProps {
   onLivePreview: (on: boolean) => void;
   onBack: () => void;
   onApply: () => void;
+  onCancel: () => void;
 }
 
 function PreviewView({
@@ -615,6 +620,7 @@ function PreviewView({
   onLivePreview,
   onBack,
   onApply,
+  onCancel,
 }: PreviewViewProps) {
   const t = useT();
   const summary = summarize(preview, choices, fallback);
@@ -688,20 +694,19 @@ function PreviewView({
           }}
         />
       ))}
-      <div data-part="merge-dialog.actions">
-        <button type="button" data-part="form.button" data-action="back" onClick={onBack}>
-          {t("common-back")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="apply"
-          disabled={busy || summary.taken === 0}
-          onClick={onApply}
-        >
-          {t("common-apply")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t(
+            preview.file === "layout" ? "merge-dialog-apply-layout" : "merge-dialog-apply-theme",
+          ),
+          action: "apply",
+          disabled: summary.taken === 0,
+          onClick: onApply,
+        }}
+        secondary={{ label: t("common-back"), action: "back", onClick: onBack }}
+        cancel={{ onClick: onCancel }}
+        busy={busy}
+      />
     </section>
   );
 }

@@ -47,7 +47,7 @@ describe("the rules skin (R2)", () => {
       "rules",
       "rules.panes",
       "rules.footer",
-      "rules.confirm",
+      "rules.footer.tools",
       "rules.text.area",
       "rules.text.highlight",
       "rules.text.source",

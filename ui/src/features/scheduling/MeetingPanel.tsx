@@ -10,9 +10,14 @@
  *   with a comment, and "propose a new time".
  *
  * Plus the cancel dialog and the scheduling settings dialog.
+ *
+ * R6 (ADR 0239): "Cancel meeting" is a destructive `ConfirmDialog` — the
+ * red "Cancel meeting", "Keep meeting" as its cancel role with the focus,
+ * Enter never cancelling the meeting. The settings dialog has the shared
+ * footer (Save, Cancel) and asks before unsaved changes are lost.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useState, type Dispatch, type SetStateAction } from "react";
+import { useId, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type {
   CalendarEvent,
   CancelScope,
@@ -46,7 +51,7 @@ import {
 import { schedulingStoreFor, useScheduling } from "./store";
 import { useBusyAction } from "../../state/busyAction";
 import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
-import { CloseButton } from "../../widgets/CloseButton";
+import { ConfirmDialog, DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
 import { TextAreaField } from "../../widgets/forms";
 
 export interface MeetingPanelProps {
@@ -348,87 +353,84 @@ export function CancelMeetingDialog({ close }: DialogProps) {
   const scopes = CANCEL_SCOPES.filter(
     (s) => s !== "occurrence" || (target.recurring && target.recurrenceId !== null),
   );
+  const cancelMeeting = () => {
+    void run(
+      {
+        type: "CancelMeeting",
+        event_id: target.eventId,
+        scope,
+        recurrence_id: scope === "occurrence" ? target.recurrenceId : null,
+        attendees: scope === "attendees" ? chosen : [],
+        comment: comment.trim() || null,
+      },
+      { id: "scheduling-cancelled" },
+    ).then((ok) => {
+      if (ok) finish();
+    });
+  };
   return (
-    <form
-      data-part="scheduling.dialog"
-      data-dialog="cancel-meeting"
-      aria-busy={busy}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void run(
-          {
-            type: "CancelMeeting",
-            event_id: target.eventId,
-            scope,
-            recurrence_id: scope === "occurrence" ? target.recurrenceId : null,
-            attendees: scope === "attendees" ? chosen : [],
-            comment: comment.trim() || null,
-          },
-          { id: "scheduling-cancelled" },
-        ).then((ok) => {
-          if (ok) finish();
-        });
-      }}
-    >
-      <p data-part="scheduling.dialog.intro">
-        {t("scheduling-cancel-intro", { title: target.title || t("common-no-title") })}
-      </p>
-      <fieldset data-part="scheduling.cancel.scopes">
-        <legend data-part="form.section.title">{t("scheduling-cancel-legend")}</legend>
-        {scopes.map((value) => (
-          <label key={value} data-part="form.check" data-scope={value}>
-            <input
-              type="radio"
-              name={ids.scope}
-              checked={scope === value}
-              onChange={() => {
-                setScope(value);
-              }}
-            />
-            <span>
-              {t(`scheduling-cancel-scope-${value}`, {
-                occurrence: target.recurrenceId
-                  ? timeRangeText(t, format, target.recurrenceId, target.recurrenceId, localZone())
-                  : "",
-              })}
-            </span>
-          </label>
-        ))}
-      </fieldset>
-      {scope === "attendees" && (
-        <ul data-part="scheduling.cancel.people" aria-label={t("scheduling-cancel-people")}>
-          <PeopleChecks
-            people={target.attendees}
-            part="scheduling.cancel.person"
-            chosen={chosen}
-            setChosen={setChosen}
+    <ConfirmDialog
+      kind="cancel-meeting"
+      risk="destructive"
+      question={t("scheduling-cancel-intro", { title: target.title || t("common-no-title") })}
+      detail={
+        <>
+          <fieldset data-part="scheduling.cancel.scopes">
+            <legend data-part="form.section.title">{t("scheduling-cancel-legend")}</legend>
+            {scopes.map((value) => (
+              <label key={value} data-part="form.check" data-scope={value}>
+                <input
+                  type="radio"
+                  name={ids.scope}
+                  checked={scope === value}
+                  onChange={() => {
+                    setScope(value);
+                  }}
+                />
+                <span>
+                  {t(`scheduling-cancel-scope-${value}`, {
+                    occurrence: target.recurrenceId
+                      ? timeRangeText(
+                          t,
+                          format,
+                          target.recurrenceId,
+                          target.recurrenceId,
+                          localZone(),
+                        )
+                      : "",
+                  })}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {scope === "attendees" && (
+            <ul data-part="scheduling.cancel.people" aria-label={t("scheduling-cancel-people")}>
+              <PeopleChecks
+                people={target.attendees}
+                part="scheduling.cancel.person"
+                chosen={chosen}
+                setChosen={setChosen}
+              />
+            </ul>
+          )}
+          <TextAreaField
+            id={ids.note}
+            name="note"
+            labelId="scheduling-cancel-note"
+            value={comment}
+            onChange={(v) => {
+              setComment(v);
+            }}
           />
-        </ul>
-      )}
-      <TextAreaField
-        id={ids.note}
-        name="note"
-        labelId="scheduling-cancel-note"
-        value={comment}
-        onChange={(v) => {
-          setComment(v);
-        }}
-      />
-      <Problem message={problem} part="scheduling.problem" />
-      <div data-part="scheduling.dialog.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="danger"
-          disabled={busy || (scope === "attendees" && chosen.length === 0)}
-        >
-          {t("scheduling-cancel-confirm")}
-        </button>
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("scheduling-keep-meeting")}
-        </button>
-      </div>
-    </form>
+        </>
+      }
+      action={t("scheduling-cancel-confirm")}
+      canConfirm={scope !== "attendees" || chosen.length > 0}
+      busy={busy}
+      error={problem === null ? null : t(problem.id, problem.args)}
+      onConfirm={cancelMeeting}
+      cancel={{ label: t("scheduling-keep-meeting"), onClick: finish }}
+    />
   );
 }
 
@@ -451,11 +453,32 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
   const [draft, setDraft] = useState<SchedulingSettings | null>(null);
   const { busy, problem, run } = useBusyAction();
   const current = draft ?? settings.data ?? null;
+  /** Saved: closing no longer asks. */
+  const stored = useRef(false);
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(settings.data ?? null);
+  /** Saves the settings: `true` when saved. */
+  const persist = async (): Promise<boolean> => {
+    if (current === null) return false;
+    const ok = await run(async () => {
+      const { settings: saved } = await client.request(
+        { type: "SetSchedulingSettings", settings: current },
+        "SchedulingSettings",
+      );
+      queryClient.setQueryData(schedulingKeys.settings, saved);
+    });
+    if (ok) stored.current = true;
+    return ok;
+  };
+  useCloseGuard({
+    name: () => t("window-scheduling-settings"),
+    isDirty: () => !stored.current && dirty,
+    save: persist,
+  });
   if (settings.isError) {
     return (
       <div data-part="scheduling.dialog" data-state="error">
         <Problem message={errorMessageOf(settings.error)} part="scheduling.problem" />
-        <CloseButton onClose={close} />
+        <DialogFooter done={{ onDone: close }} />
       </div>
     );
   }
@@ -465,24 +488,15 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
   const writable = (calendars.data ?? []).filter(
     (c) => !c.read_only && c.components.includes("event"),
   );
-  const save = async () => {
-    await run(async () => {
-      const { settings: saved } = await client.request(
-        { type: "SetSchedulingSettings", settings: current },
-        "SchedulingSettings",
-      );
-      queryClient.setQueryData(schedulingKeys.settings, saved);
-      close();
-    });
-  };
   return (
-    <form
-      data-part="scheduling.dialog"
-      data-dialog="settings"
-      aria-busy={busy}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save();
+    <DialogForm
+      part="scheduling.dialog"
+      dialog="settings"
+      busy={busy}
+      onSubmit={() => {
+        void persist().then((ok) => {
+          if (ok) close();
+        });
       }}
     >
       <fieldset data-part="scheduling.settings.switches">
@@ -528,15 +542,12 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
         </select>
       </div>
       <Problem message={problem} part="scheduling.problem" />
-      <div data-part="scheduling.dialog.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("common-save")}
-        </button>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <DialogFooter
+        primary={{ label: t("common-save"), submit: true, action: "save" }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
+    </DialogForm>
   );
 }
 

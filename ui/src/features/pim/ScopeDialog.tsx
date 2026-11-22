@@ -2,19 +2,25 @@
  * "This occurrence / this and following / all occurrences" (dialog
  * `pim-edit-scope`) for a change of a recurring event made in a view: a
  * dragged or resized occurrence, or a deleted one (`PimState.pendingChange`).
+ *
+ * R6 (ADR 0239): the verb names the operation. A move is a form whose
+ * "Save changes" Enter runs; a delete is a destructive `ConfirmDialog`
+ * ("Delete events", the focus on Cancel, Enter never deleting). ×, Esc and
+ * Cancel drop the change.
  */
-import { useId, useState, type SubmitEvent } from "react";
+import { useEffect, useState } from "react";
 import type { EditScope, LocalizedMessage } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { applyDelete, applyMove } from "./changes";
-import { Problem, problemOf, useChangeContext } from "./common";
+import { Problem, problemOf, ScopeRadios, useChangeContext } from "./common";
 import { EDIT_SCOPES } from "./constants";
 import { formatPimTime } from "./fmt";
 import { usePim } from "./store";
 import { localZone } from "./time";
 import { EmptyDialog } from "../../widgets/DialogStates";
+import { ConfirmDialog, DialogFooter, DialogForm } from "../../widgets/dialog";
 
 export function ScopeDialog({ close }: DialogProps) {
   const t = useT();
@@ -24,7 +30,13 @@ export function ScopeDialog({ close }: DialogProps) {
   const [scope, setScope] = useState<EditScope>("this");
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
-  const name = useId();
+  // However the question ends (Cancel, ×, Esc, done), the change is forgotten.
+  useEffect(
+    () => () => {
+      if (ctx.pim.getState().pendingChange === change) ctx.pim.getState().setPendingChange(null);
+    },
+    [ctx.pim, change],
+  );
 
   const finish = () => {
     ctx.pim.getState().setPendingChange(null);
@@ -42,8 +54,7 @@ export function ScopeDialog({ close }: DialogProps) {
     );
   }
 
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     setBusy(true);
     setProblem(null);
     try {
@@ -59,54 +70,44 @@ export function ScopeDialog({ close }: DialogProps) {
   };
 
   const tz = localZone();
+  const title = change.instance.title || t("common-no-title");
+  const choices = (
+    <ScopeRadios
+      part="pim.scope.choices"
+      legend={t("pim-scope-legend")}
+      values={EDIT_SCOPES}
+      value={scope}
+      label={(value) => t(`pim-scope-${value}`)}
+      onChange={setScope}
+    />
+  );
+  if (change.kind === "delete") {
+    return (
+      <ConfirmDialog
+        kind="pim-scope-delete"
+        risk="destructive"
+        question={t("pim-scope-delete-intro", { title })}
+        detail={choices}
+        action={t("pim-scope-delete")}
+        busy={busy}
+        error={problem === null ? null : t(problem.id, problem.args)}
+        onConfirm={() => void submit()}
+        cancel={{ onClick: finish }}
+      />
+    );
+  }
   return (
-    <form
-      data-part="pim.scope"
-      data-kind={change.kind}
-      onSubmit={(e) => void submit(e)}
-      aria-busy={busy}
-    >
+    <DialogForm part="pim.scope" dialog={change.kind} busy={busy} onSubmit={() => void submit()}>
       <p data-part="pim.scope.intro">
-        {change.kind === "move"
-          ? t("pim-scope-move-intro", {
-              title: change.instance.title || t("common-no-title"),
-              time: formatPimTime(format, change.start, tz),
-            })
-          : t("pim-scope-delete-intro", {
-              title: change.instance.title || t("common-no-title"),
-            })}
+        {t("pim-scope-move-intro", { title, time: formatPimTime(format, change.start, tz) })}
       </p>
-      <fieldset data-part="pim.scope.choices">
-        <legend data-part="form.section.title">{t("pim-scope-legend")}</legend>
-        {EDIT_SCOPES.map((value) => (
-          <label key={value} data-part="form.check" data-scope={value}>
-            <input
-              type="radio"
-              name={name}
-              value={value}
-              checked={scope === value}
-              onChange={() => {
-                setScope(value);
-              }}
-            />
-            <span>{t(`pim-scope-${value}`)}</span>
-          </label>
-        ))}
-      </fieldset>
+      {choices}
       <Problem message={problem} />
-      <div data-part="pim.scope.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant={change.kind === "delete" ? "danger" : "primary"}
-          disabled={busy}
-        >
-          {change.kind === "move" ? t("common-apply") : t("pim-delete")}
-        </button>
-        <button type="button" data-part="form.button" onClick={finish}>
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <DialogFooter
+        primary={{ label: t("pim-scope-save"), submit: true, action: "move" }}
+        cancel={{ onClick: finish }}
+        busy={busy}
+      />
+    </DialogForm>
   );
 }

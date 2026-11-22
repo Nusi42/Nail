@@ -13,13 +13,13 @@ import { renderWithProviders } from "../../test/harness";
 import { requestsOf } from "../../test/env";
 import { INBOX } from "../../test/mockIds";
 import { must } from "../../test/must";
-import { guardRulesWindow } from "./closeGuard";
 import { RuleManagerView } from "./RuleManager";
 import { rulesStore } from "./store";
 import {
   addArchiveAllRule,
   addFromMenu,
   addTagAllRule,
+  findQuestion,
   IN_INBOX as inInbox,
   openEditor,
   ruleOption,
@@ -192,29 +192,27 @@ describe("Run on and Run in the footer", () => {
     await user.selectOptions(runOn, "folder");
     const ask = async () => {
       await user.click(within(footer).getByRole("button", { name: "Run" }));
-      return screen.findByRole("alertdialog");
+      return findQuestion("Run rules");
     };
     expect(await ask()).toHaveTextContent(
       `“Archive all” moves or deletes mail. It matches ${String(inboxCount)} messages in Current folder (Inbox). Run it now?`,
     );
     await user.click(
-      within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }),
+      within(screen.getByRole("dialog", { name: "Run rules" })).getByRole("button", {
+        name: "Cancel",
+      }),
     );
     expect(requestsOf(env, "RunRules")).toEqual([]);
-    // Escape is the safe answer, and goes no further.
+    // Escape is the safe answer, and goes no further; Enter never runs it.
     const asked = await ask();
-    // Tab stays inside the question (modal).
     await waitFor(() => {
       expect(within(asked).getByRole("button", { name: "Cancel" })).toHaveFocus();
     });
-    await user.tab();
-    expect(within(asked).getByRole("button", { name: "Run" })).toHaveFocus();
-    await user.tab();
-    expect(within(asked).getByRole("button", { name: "Cancel" })).toHaveFocus();
-    await user.tab({ shift: true });
-    expect(within(asked).getByRole("button", { name: "Run" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(requestsOf(env, "RunRules")).toEqual([]);
+    await ask();
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Run rules" })).toBeNull();
     expect(requestsOf(env, "RunRules")).toEqual([]);
     // The focus goes back to the button that asked.
     await waitFor(() => {
@@ -250,13 +248,17 @@ describe("Run on and Run in the footer", () => {
     const { user, footer, runOn } = await openEditor(env, "Archive all");
     await user.selectOptions(runOn, "messages");
     await user.click(within(footer).getByRole("button", { name: "Run" }));
-    expect(await screen.findByRole("alertdialog")).toHaveTextContent(
+    expect(await findQuestion("Run rules")).toHaveTextContent(
       "“Archive all” moves or deletes mail. It matches 2 messages in Selected messages (2). Run it now?",
     );
     expect(requestsOf(env, "TestRule")).toMatchObject([
       { message_ids: [elsewhere.id, inbox.id], folder_id: null },
     ]);
-    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Run" }));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Run rules" })).getByRole("button", {
+        name: "Run",
+      }),
+    );
     await within(footer).findByText(/^The rule ran:/);
     expect(requestsOf(env, "RunRules")).toMatchObject([
       { message_ids: [elsewhere.id, inbox.id], folder_id: null },
@@ -267,14 +269,14 @@ describe("Run on and Run in the footer", () => {
     const env = setup(inInbox);
     const { user, editor, footer } = await openEditor(env, null);
     const run = within(footer).getByRole("button", { name: "Save and run" });
-    expect(run).toHaveAttribute("aria-disabled", "true");
-    await user.click(run);
+    expect(run).toBeDisabled();
+    await user.click(within(footer).getByRole("button", { name: "Save rule" }));
     expect(requestsOf(env, "RunRules")).toEqual([]);
     expect(requestsOf(env, "SaveRule")).toEqual([]);
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), "Fresh");
     await user.click(within(editor).getByRole("button", { name: "Add action" }));
     await user.click(within(editor).getByRole("menuitem", { name: "Archive" }));
-    expect(run).not.toHaveAttribute("aria-disabled");
+    expect(run).toBeEnabled();
   });
 });
 
@@ -305,39 +307,58 @@ describe("recent runs", () => {
   });
 });
 
+/** Edits "Rust announcements" (" 2" added to its name), then picks "Tag all" in the list. */
+async function renameAndPickAnother() {
+  const env = setup();
+  addTagAllRule(env);
+  const { user, editor } = await openEditor(env, "Rust announcements");
+  await user.type(within(editor).getByRole("textbox", { name: "Name" }), " 2");
+  await user.click(screen.getByRole("option", { name: ruleOption("Tag all") }));
+  return { env, user, editor };
+}
+
 describe("unsaved changes", () => {
-  it("asks before another rule opens; Keep editing keeps the changes", async () => {
-    const env = setup();
-    addTagAllRule(env);
-    const { user, editor } = await openEditor(env, "Rust announcements");
-    await user.type(within(editor).getByRole("textbox", { name: "Name" }), " 2");
-    await user.click(screen.getByRole("option", { name: ruleOption("Tag all") }));
-    const question = await screen.findByRole("alertdialog");
-    expect(question).toHaveTextContent("Discard your changes to “Rust announcements 2”?");
-    expect(within(question).getByRole("button", { name: "Keep editing" })).toHaveFocus();
-    await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+  it("asks before another rule opens with the shared prompt; Cancel keeps the changes", async () => {
+    const { env, user, editor } = await renameAndPickAnother();
+    const question = await findQuestion("Unsaved changes");
+    expect(question).toHaveTextContent("Save changes to “Rust announcements 2”?");
+    // Save is the default (focused); Esc means Cancel and keeps the changes.
+    await waitFor(() => {
+      expect(question.querySelector('[data-role="primary"]')).toHaveFocus();
+    });
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull();
+    });
     expect(within(editor).getByRole("textbox", { name: "Name" })).toHaveValue(
       "Rust announcements 2",
     );
 
     await user.click(screen.getByRole("option", { name: ruleOption("Tag all") }));
     await user.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", {
-        name: "Discard changes",
-      }),
+      within(await findQuestion("Unsaved changes")).getByRole("button", { name: "Don't save" }),
     );
     expect(
       await within(await screen.findByRole("form", { name: "Rule" })).findByDisplayValue("Tag all"),
     ).toBeInTheDocument();
+    expect(requestsOf(env, "SaveRule")).toEqual([]);
+  });
+
+  it("saves from the prompt, then opens the other rule", async () => {
+    const { env, user } = await renameAndPickAnother();
+    await user.click(
+      within(await findQuestion("Unsaved changes")).getByRole("button", { name: "Save" }),
+    );
+    expect(
+      await within(await screen.findByRole("form", { name: "Rule" })).findByDisplayValue("Tag all"),
+    ).toBeInTheDocument();
+    expect(env.transport.data.features.rules.rules.map((r) => r.name)).toContain(
+      "Rust announcements 2",
+    );
   });
 
   it("asks before the window closes (its close button or Escape)", async () => {
     const env = setup();
-    // As the app does with the feature's background components.
-    const stop = guardRulesWindow(env.store, env.client);
-    act(() => {
-      env.store.getState().openWindow("rules");
-    });
     const { user, editor } = await openEditor(env, "Rust announcements");
     await user.type(within(editor).getByRole("textbox", { name: "Name" }), " 2");
     await act(async () => {
@@ -345,10 +366,25 @@ describe("unsaved changes", () => {
       await Promise.resolve();
     });
     expect(env.store.getState().windows).toContain("rules");
-    const question = await screen.findByRole("alertdialog");
-    await user.click(within(question).getByRole("button", { name: "Discard changes" }));
-    expect(env.store.getState().windows).not.toContain("rules");
-    stop();
+    const question = await findQuestion("Unsaved changes");
+    await user.click(within(question).getByRole("button", { name: "Don't save" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).not.toContain("rules");
+    });
+  });
+
+  it("offers only Discard changes while the rule cannot be saved", async () => {
+    const env = setup();
+    const { user, editor } = await openEditor(env, "Rust announcements");
+    await user.clear(within(editor).getByRole("textbox", { name: "Name" }));
+    await act(async () => {
+      env.store.getState().closeWindow("rules");
+      await Promise.resolve();
+    });
+    const question = await findQuestion("Unsaved changes");
+    expect(within(question).queryByRole("button", { name: "Save" })).toBeNull();
+    await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+    expect(env.store.getState().windows).toContain("rules");
   });
 });
 

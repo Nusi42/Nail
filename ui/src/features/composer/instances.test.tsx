@@ -603,6 +603,13 @@ describe("window model", () => {
     "remote-reauth",
     "pim-edit-scope",
     "pim-remove-calendar",
+    // R6: the rule editor's and the PIM editors' questions.
+    "rule-delete",
+    "rule-run",
+    "pim-delete-event",
+    "pim-delete-task",
+    "pim-delete-group",
+    "pim-remove-source",
     "scheduling-cancel-meeting",
     "smartcard-pin",
     // R6 (ADR 0239): the close guard's shared unsaved-changes prompt.

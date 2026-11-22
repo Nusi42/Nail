@@ -27,6 +27,15 @@ export const NEW_CALENDAR_DIALOG = "pim-new-calendar";
 /** Removing a calendar or unsubscribing (M5b). */
 export const REMOVE_CALENDAR_DIALOG = "pim-remove-calendar";
 
+/** "Delete the event …?" (R6: the editor's Delete… asks). */
+export const DELETE_EVENT_DIALOG = "pim-delete-event";
+/** "Delete the task …?" */
+export const DELETE_TASK_DIALOG = "pim-delete-task";
+/** "Delete the group …?" (Contact groups). */
+export const DELETE_GROUP_DIALOG = "pim-delete-group";
+/** "Remove the source …?" (Calendars and address books). */
+export const REMOVE_SOURCE_DIALOG = "pim-remove-source";
+
 /** Every dialog (for the catalog: `window-<name>`). */
 export const DIALOGS = [
   EVENT_DIALOG,
@@ -40,6 +49,10 @@ export const DIALOGS = [
   CALENDAR_SETTINGS_DIALOG,
   NEW_CALENDAR_DIALOG,
   REMOVE_CALENDAR_DIALOG,
+  DELETE_EVENT_DIALOG,
+  DELETE_TASK_DIALOG,
+  DELETE_GROUP_DIALOG,
+  REMOVE_SOURCE_DIALOG,
 ] as const;
 
 /** The settings page's "Calendar & contacts" section widget (M5b). */

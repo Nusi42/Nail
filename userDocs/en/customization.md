@@ -94,9 +94,11 @@ same careful way and can undo every step; see
 
 ## Editing toolbars, shortcuts and columns
 
-Settings → Layout & toolbars has three editors under the error list. Nothing is
-written until you click **Save to layout.kdl**; **Undo changes** forgets
-what you did since.
+Settings → Layout & toolbars has three editors under the error list. The
+toolbar and column editors write nothing until you click **Save** in the
+bar **Unsaved changes** at the bottom of the section; **Discard** forgets
+what you did since. Choosing another toolbar or list, or leaving the
+section, with unsaved changes asks first.
 
 **Toolbars.** Choose a toolbar (`main`, `reader`, `customize`, or one of
 your own). Each entry has **Up**, **Down** and **Remove**; with the
@@ -133,7 +135,7 @@ Customize** (the action `customize.merge`), then:
 
 1. Choose whether it is a theme or a layout, and load the file or paste its
    text.
-2. Choose **Compare with mine**. Nail lists the differences by section —
+2. Choose **Next**. Nail lists the differences by section —
    name, tokens, colour mode, part styles, icons, message display and
    sounds, raw CSS for a theme; windows, actions, key bindings, toolbars
    and menus for a layout. Each item shows your version and theirs.
@@ -142,9 +144,11 @@ Customize** (the action `customize.merge`), then:
    touch stay yours.
 4. With **Live preview** on, the window shows the result of your choices
    while you choose. Nothing is saved yet.
-5. **Apply** writes the result into your file. Your previous file is kept as
-   a backup; **Revert** right after applying, or later under
-   **Earlier versions**, brings it back.
+5. **Apply theme** (or **Apply layout**) writes the result into your file;
+   **Back** returns to the file, **Cancel** (on every step) closes without
+   writing. Your previous file is kept as a backup; **Revert** right after
+   applying, or later under **Earlier versions**, brings it back. **Done**
+   closes the dialog.
 
 Your own file stays as it is except for the items you took: comments and
 formatting around them are kept, and taking *everything* writes their file

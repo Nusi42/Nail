@@ -15,6 +15,7 @@ import {
   openMail,
   messageList,
 } from "../support/views";
+import { saveSettingsSection } from "../support/appearance";
 
 /**
  * Wave M5d (ADRs 0131–0137) against `nail serve --seed demo`: the in-app
@@ -378,13 +379,13 @@ test("customize a toolbar: right-click → Customize toolbar, into More, Undo", 
   await expect(dialog).toBeHidden();
 });
 
-/** Opens Nail at Settings → Appearance and applies the accent #aa3366; the Appearance region. */
+/** Opens Nail at Settings → Appearance and saves the accent #aa3366; the Appearance region. */
 async function openWithAccent(page: Page): Promise<Locator> {
   await open(page);
   const settings = await openSettings(page, "Appearance");
   const appearance = settings.getByRole("region", { name: "Appearance" });
   await appearance.getByRole("textbox", { name: "Accent colour", exact: true }).fill("#aa3366");
-  await appearance.getByRole("button", { name: "Apply" }).click();
+  await saveSettingsSection(page);
   await expect.poll(themeFile).toContain('color "accent" "#aa3366"');
   return appearance;
 }
@@ -399,14 +400,16 @@ async function themeEditorOn(page: Page, id: string): Promise<Locator> {
 test("appearance: accent and corner radius go to theme.kdl and undo", async ({ page }) => {
   const appearance = await openWithAccent(page);
 
-  // The slider writes after a pause.
+  // The slider is saved with the section (R6).
   const radius = appearance.getByRole("slider", { name: "Corner radius" });
-  // The sliders are disabled until the core answered the Apply (the file is
+  // The sliders are disabled until the core answered the Save (the file is
   // written before the answer arrives).
   await expect(radius).toBeEnabled();
   const start = Number(await radius.inputValue());
   await radius.focus();
   for (let i = 0; i < 4; i += 1) await page.keyboard.press("ArrowRight");
+  expect(themeFile()).not.toMatch(/radius "md"/);
+  await saveSettingsSection(page);
   await expect.poll(themeFile).toMatch(new RegExp(`radius "md" ${String(start + 4)}\\b`));
   await expect.poll(() => rootToken(page, "--nail-radius-md")).toBe(`${String(start + 4)}px`);
 
@@ -519,7 +522,7 @@ test("theme editor: rename a theme with its file, delete it, undo", async ({ pag
   await themeEditor.getByRole("button", { name: "Delete", exact: true }).click();
   const remove = page.getByRole("dialog", { name: "Delete theme?" });
   await expect(remove.getByText("Delete the theme “Deep Sea”?")).toBeVisible();
-  await remove.getByRole("button", { name: "Delete", exact: true }).click();
+  await remove.getByRole("button", { name: "Delete theme", exact: true }).click();
   await expect.poll(() => userThemeExists("deep-sea")).toBe(false);
   await expect.poll(themeFile).not.toContain("deep-sea");
 
@@ -620,7 +623,9 @@ test("theme editor: an Appearance override is named and can be cleared", async (
   await expect.poll(() => rootToken(page, "--nail-color-accent")).toBe("#2255ff");
 });
 
-test("appearance: Undo right after a slider move undoes that move", async ({ page }) => {
+test("appearance: Undo undoes what was saved; an unsaved slider move stays a draft", async ({
+  page,
+}) => {
   const appearance = await openWithAccent(page);
   const undo = appearance.getByRole("button", { name: /^Undo / });
   await expect(undo).toBeEnabled();
@@ -630,13 +635,17 @@ test("appearance: Undo right after a slider move undoes that move", async ({ pag
   await radius.focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
-  // At once, before the slider's delayed write.
+  // R6: the move is not written; Undo takes back the saved accent.
   await undo.click();
   await expect(appearance.getByRole("button", { name: /^Redo / })).toBeEnabled();
-  await page.waitForTimeout(1_000);
-  expect(themeFile()).toContain('color "accent" "#aa3366"');
+  await expect.poll(themeFile).not.toContain("#aa3366");
   expect(themeFile()).not.toMatch(/radius "md"/);
-  await expect(appearance.getByRole("button", { name: /^Redo / })).toBeEnabled();
+  // The move is still unsaved; Discard drops it.
+  const bar = page.locator('[data-part="settings-save-bar"]');
+  await expect(bar).toBeVisible();
+  await bar.locator('button[data-action="discard-settings"]').click();
+  await expect(bar).toBeHidden();
+  expect(themeFile()).not.toMatch(/radius "md"/);
 });
 
 test("a file changed on disk: Undo refuses until 'Undo anyway'", async ({ page }) => {

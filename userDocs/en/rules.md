@@ -121,11 +121,19 @@ The bar at the bottom of the window is always in view:
   it is saved first. If one of them moves, archives or deletes mail, Nail
   asks first and says how many matches they have together.
 - **Test rule** and **Save rule**. **Save rule**, **Delete rule…** and the
-  **Text** view always act on the rule in the editor only.
+  **Text** view always act on the rule in the editor only. **Save rule**
+  keeps the window open; close it with × or `Esc`.
+
+The questions (**Delete rule**, a run that moves or deletes mail) open in a
+small window over the rules: the red button names the action, **Cancel** has
+the focus and `Enter` never runs it.
 
 Leaving a rule with unsaved changes — opening another rule, closing the
-window, or pressing Escape — asks whether to **Discard changes** or **Keep
-editing**.
+window, or pressing Escape — asks **Save changes to “…”?**: **Save** saves
+the rule first, **Don't save** drops the changes, **Cancel** keeps editing.
+While the rule cannot be saved yet, the question offers **Discard changes**
+and **Keep editing**. In Settings → Mail & junk the rule is part of the
+section's unsaved changes (see [Settings](settings.md#saving-your-changes)).
 
 ### Preview and recent runs
 

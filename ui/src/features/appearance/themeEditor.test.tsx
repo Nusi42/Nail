@@ -37,6 +37,7 @@ import { ThemeEditorDialog } from "./ThemeEditor";
 import { resolveMockTheme } from "./themes";
 import { setThemeEditDelay } from "./useThemeEdits";
 import { recordRequests } from "../../test/env";
+import { renderAppearance, saveSection } from "./testing";
 import { type ComponentType } from "react";
 import { type DialogProps } from "../../layout/dialogRegistry";
 
@@ -713,7 +714,11 @@ describe("theme windows", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
     });
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    // R6: a destructive confirmation names its verb and is never the default.
+    const verb = screen.getByRole("button", { name: "Delete theme" });
+    expect(verb).toHaveAttribute("data-variant", "danger");
+    expect(verb).toHaveAttribute("type", "button");
+    fireEvent.click(verb);
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
     });
@@ -739,8 +744,9 @@ describe("Appearance page and inspector", () => {
 
   it("undoes an appearance change from the page", async () => {
     const env = createEnv();
-    renderNode(widget("appearance-settings"), env);
+    renderAppearance(env);
     fireEvent.click(await screen.findByRole("radio", { name: /Nocturne/ }));
+    await saveSection();
     const undo = await screen.findByRole("button", { name: "Undo Choose theme" });
     fireEvent.click(undo);
     await waitFor(() => {

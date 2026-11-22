@@ -26,7 +26,8 @@ import {
   runMenuActions,
   runMenuSource,
 } from "./runMenu";
-import { RULES_WINDOW, RulesCloseGuard } from "./closeGuard";
+import { RuleDeleteDialog, RuleRunDialog } from "./Questions";
+import { RULE_DELETE_DIALOG, RULE_RUN_DIALOG, RULES_WINDOW } from "./windows";
 import { RulesPopOutPreparer } from "./popOut";
 import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
@@ -92,19 +93,23 @@ export const actionInfo: NonNullable<Feature["actionInfo"]> = {
 };
 
 /**
- * Background components: the toast of a run from a menu, the guard that
- * keeps the rules window open while its rule has unsaved changes (R2), and
- * the preparer that hands a popped-out rules window the mail and rule.
+ * Background components: the toast of a run from a menu and the preparer
+ * that hands a popped-out rules window the mail and rule. (Unsaved changes
+ * ask through the window layer's close guard, `./RulesGuard.tsx`.)
  */
-export const effects: NonNullable<Feature["effects"]> = [
-  RunToast,
-  RulesCloseGuard,
-  RulesPopOutPreparer,
-];
+export const effects: NonNullable<Feature["effects"]> = [RunToast, RulesPopOutPreparer];
 
 /** Named dialogs (opened with `window.open "<name>"`). */
 export const dialogs: NonNullable<Feature["dialogs"]> = {
   [RULES_WINDOW]: RulesDialog,
+  [RULE_DELETE_DIALOG]: RuleDeleteDialog,
+  [RULE_RUN_DIALOG]: RuleRunDialog,
+};
+
+/** The editor's questions are modal confirmations over the rules window (R6). */
+export const windows: NonNullable<Feature["windows"]> = {
+  [RULE_DELETE_DIALOG]: { confirmation: true },
+  [RULE_RUN_DIALOG]: { confirmation: true },
 };
 
 /** Handlers for core events. */

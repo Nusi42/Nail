@@ -107,10 +107,10 @@ test("the merge dialog applies a shared theme and reverts it", async ({ page, na
   );
   const dialog = page.getByRole("dialog", { name: "Apply a theme or layout" });
   await dialog.getByRole("textbox").fill(SHARED_THEME);
-  await dialog.getByRole("button", { name: "Compare with mine" }).click();
+  await dialog.getByRole("button", { name: "Next" }).click();
   await expect(dialog.getByRole("heading", { name: "Tokens" })).toBeVisible();
   await dialog.getByRole("button", { name: "Take all theirs" }).click();
-  await dialog.getByRole("button", { name: "Apply" }).click();
+  await dialog.getByRole("button", { name: "Apply theme" }).click();
   await expect(dialog.getByText(/Applied\. Your previous file was backed up/)).toBeVisible();
 
   await expect.poll(() => page.evaluate(accent)).toBe("#aa3300");

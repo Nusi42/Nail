@@ -103,6 +103,8 @@ In the event editor of a meeting you organize you can **Send
 invitations** (to everyone or only to the people you choose, with a note)
 and **Cancel meeting…**: cancel the whole meeting, only one occurrence of
 a repeating meeting, or remove some attendees. The attendees are told.
+The red **Cancel meeting** button does it; **Keep meeting** has the focus,
+and `Enter` never cancels the meeting.
 
 ### Invitation settings
 
@@ -136,7 +138,7 @@ person.
 The command `scheduling.find-time` (or the `freebusy-timeline` widget)
 opens **Find a time** on its own: add people, choose the length, pick a
 suggested time and **Create meeting** opens a new event with those people
-invited.
+invited; **Cancel** closes it.
 
 ## Gmail accounts
 

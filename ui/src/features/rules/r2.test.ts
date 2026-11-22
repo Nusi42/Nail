@@ -6,7 +6,6 @@
  */
 import type { Rule, RuleRun } from "../../api/generated";
 import { createEnv } from "../../test/harness";
-import { guardRulesWindow, RULES_WINDOW } from "./closeGuard";
 import { actionText, folderRefText, runTargetText, whyNoUndo, type Localize } from "./describe";
 import { kdlTokens, lineNumbers } from "./kdlTokens";
 import {
@@ -225,49 +224,39 @@ describe("the text view's tokens", () => {
 });
 
 describe("unsaved changes", () => {
-  it("asks before another rule opens, and opens it on discard", () => {
+  it("asks before another rule opens, and opens it after the prompt's answer", () => {
     const env = createEnv();
     const store = rulesStore(env.client);
+    /** The prompt's pending answers: calling one is Save or Don't save, dropping it Cancel. */
+    const asked: (() => void)[] = [];
+    store.getState().setLeave((proceed) => {
+      asked.push(proceed);
+    });
     store.getState().select("a");
+    // Nothing unsaved: no question.
+    expect(asked).toHaveLength(0);
     expect(store.getState().editing).toMatchObject({ id: "a" });
     store.getState().setDirty(true);
     store.getState().select("b");
-    expect(store.getState().editing).toMatchObject({ id: "a" });
-    expect(store.getState().pending).toMatchObject({ kind: "edit", editing: { id: "b" } });
-    store.getState().keepEditing();
-    expect(store.getState().pending).toBeNull();
+    expect(asked).toHaveLength(1);
+    // Cancel: the rule stays.
+    asked.length = 0;
     expect(store.getState().editing).toMatchObject({ id: "a" });
     // The rule open already is no question.
     store.getState().select("a");
-    expect(store.getState().pending).toBeNull();
+    expect(asked).toHaveLength(0);
     store.getState().startNew(newRule());
-    store.getState().discard();
+    asked.shift()?.();
     expect(store.getState().editing).toMatchObject({ kind: "new" });
     expect(store.getState().dirty).toBe(false);
   });
 
-  it("keeps the rules window open while its rule is unsaved, and closes it on discard", () => {
+  it("opens another rule at once without an editor to ask", () => {
     const env = createEnv();
-    const ui = env.store;
     const store = rulesStore(env.client);
-    const stop = guardRulesWindow(ui, env.client);
-    ui.getState().openWindow(RULES_WINDOW);
-    // Nothing unsaved: it closes.
-    ui.getState().closeWindow(RULES_WINDOW);
-    expect(ui.getState().windows).toEqual([]);
-
-    ui.getState().openWindow(RULES_WINDOW);
+    store.getState().select("a");
     store.getState().setDirty(true);
-    ui.getState().closeWindow(RULES_WINDOW);
-    expect(ui.getState().windows).toEqual([RULES_WINDOW]);
-    expect(store.getState().pending).toMatchObject({ kind: "close" });
-    store.getState().keepEditing();
-    expect(ui.getState().windows).toEqual([RULES_WINDOW]);
-
-    ui.getState().closeWindow(RULES_WINDOW);
-    store.getState().discard();
-    expect(ui.getState().windows).toEqual([]);
-    expect(store.getState().dirty).toBe(false);
-    stop();
+    store.getState().select("b");
+    expect(store.getState().editing).toMatchObject({ id: "b" });
   });
 });

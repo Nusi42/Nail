@@ -46,7 +46,7 @@ import { fromAbsolute } from "@internationalized/date";
 import { nonEmpty } from "../../text/empty";
 import { RemoveButton } from "../../widgets/RemoveButton";
 import { plausibleEmail } from "../../state/addresses";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter } from "../../widgets/dialog";
 import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
 
 /** Kinds the picker offers (`CUTYPE`). */
@@ -359,6 +359,7 @@ export function FindTime({
   defaultDuration = 30,
   tz = localZone(),
   onOpened,
+  onCancel,
 }: {
   nodeKey: string;
   hourStart?: number | undefined;
@@ -366,6 +367,8 @@ export function FindTime({
   defaultDuration?: number;
   tz?: string;
   onOpened?: () => void;
+  /** In a dialog: its Cancel (R6, one footer). */
+  onCancel?: () => void;
 }) {
   const t = useT();
   const id = useId();
@@ -431,17 +434,15 @@ export function FindTime({
         hourEnd={hourEnd}
         tz={tz}
       />
-      <div data-part="scheduling.find-time.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          disabled={attendees.length === 0}
-          onClick={create}
-        >
-          {t("scheduling-find-create")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("scheduling-find-create"),
+          action: "create-meeting",
+          disabled: attendees.length === 0,
+          onClick: create,
+        }}
+        {...(onCancel ? { cancel: { onClick: onCancel } } : {})}
+      />
     </div>
   );
 }
@@ -466,10 +467,7 @@ export function FreeBusyWidget({ node, nodeKey }: WidgetProps) {
 export function FindTimeDialog({ close }: DialogProps) {
   return (
     <div data-part="scheduling.dialog" data-dialog="find-time">
-      <FindTime nodeKey="find-time-dialog" onOpened={close} />
-      <div data-part="scheduling.dialog.actions">
-        <CloseButton onClose={close} />
-      </div>
+      <FindTime nodeKey="find-time-dialog" onOpened={close} onCancel={close} />
     </div>
   );
 }
