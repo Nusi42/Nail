@@ -53,7 +53,8 @@ describe("automatic replies", () => {
     const user = userEvent.setup();
     env.transport.data.behaviour.workMs = 60_000;
     const Replies = dialog(AUTOMATIC_REPLIES_DIALOG);
-    renderWithProviders(<Replies name={AUTOMATIC_REPLIES_DIALOG} close={vi.fn()} />, env);
+    const close = vi.fn();
+    renderWithProviders(<Replies name={AUTOMATIC_REPLIES_DIALOG} close={close} />, env);
     await user.click(
       await screen.findByRole("radio", { name: "Send automatic replies only during this time" }),
     );
@@ -66,8 +67,13 @@ describe("automatic replies", () => {
     expect(
       screen.getByLabelText("Reply to people outside my organization", { selector: "select" }),
     ).toHaveValue("contacts-only");
+    // R6: one footer — Save (closes) and Cancel; no second Close.
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute("data-role", "cancel");
+    expect(close).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Saved in Nail; not on the server yet.")).toBeInTheDocument();
+    expect(close).toHaveBeenCalledOnce();
     const sent = requestsOf(env, "SetAutomaticReplies")[0];
     expect(sent?.settings.status).toBe("scheduled");
     expect(sent?.settings.start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$/);

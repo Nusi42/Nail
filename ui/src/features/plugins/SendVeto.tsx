@@ -2,9 +2,10 @@
  * Before-send vetoes (M4a, ADR 0079). A plug-in's before-send hook may
  * stop a message with a reason; `SendDraft` then answers `SendVetoed`
  * and nothing is queued. The veto dialog always names each plug-in and
- * shows its reason, and offers "Keep editing" (the default) and "Send
- * anyway" (`OverrideSendVeto`, valid for 10 minutes; the other hooks'
- * headers and content still apply).
+ * shows its reason, and offers Cancel (the default: keep editing) and
+ * "Send anyway" (`OverrideSendVeto`, valid for 10 minutes; the other
+ * hooks' headers and content still apply). R6 (ADR 0239): a destructive
+ * `ConfirmDialog` — Send anyway is red and never runs on Enter.
  *
  * Mount points: the composers call `sendDraftChecked` instead of
  * requesting `SendDraft` → `SendQueued` directly (it resolves with the
@@ -13,13 +14,14 @@
  * it came from), kept in step with the veto by the feature effect
  * `SendVetoDialog`; closing the window (× or Escape) keeps editing.
  */
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { errorMessageOf, NailError, type NailClient } from "../../api/client";
 import type { LocalizedMessage, OutboxEntry, Request } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import type { UiStore } from "../../state/uiStore";
+import { ConfirmDialog } from "../../widgets/dialog";
 import { pluginsStoreFor, usePluginsState } from "./store";
 import { SEND_VETO_WINDOW, setPluginWindowTitle } from "./windows";
 
@@ -101,15 +103,13 @@ function VetoView() {
   const client = useClient();
   const veto = usePluginsState((s) => s.veto);
   const showVeto = usePluginsState((s) => s.showVeto);
-  const ref = useRef<HTMLDivElement>(null);
-  const keep = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [expired, setExpired] = useState(false);
 
+  // The focus goes back where it was (the composer) when the question ends.
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    keep.current?.focus();
     return () => {
       if (previous?.isConnected) previous.focus();
     };
@@ -140,74 +140,42 @@ function VetoView() {
     }
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!busy) close(null);
-      return;
-    }
-  };
-
   return (
-    <>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the confirmation's keys (Enter, Escape) arrive from the buttons inside it. */}
-      <div
-        ref={ref}
-        data-part="plugin-veto"
-        data-key-context="plugin-veto"
-        aria-busy={busy}
-        onKeyDown={onKeyDown}
-      >
-        <p data-part="plugin-veto.intro">{t("plugin-veto-intro", { count: veto.vetoes.length })}</p>
-        <ul data-part="plugin-veto.list">
-          {veto.vetoes.map((v) => (
-            <li key={v.plugin_id} data-part="plugin-veto.item" data-plugin={v.plugin_id}>
-              <strong data-part="plugin-veto.plugin">
-                {t("plugin-veto-plugin", { plugin: v.plugin_name })}
-              </strong>
-              <q data-part="plugin-veto.reason">{v.reason}</q>
-            </li>
-          ))}
-        </ul>
-        {expired && (
-          <p data-part="plugin-veto.error" role="alert">
-            {t("plugin-veto-expired")}
-          </p>
-        )}
-        {problem && (
-          <p data-part="plugin-veto.error" role="alert">
-            {t(problem.id, problem.args)}
-          </p>
-        )}
-        <div data-part="plugin-veto.buttons">
-          <button
-            ref={keep}
-            type="button"
-            data-part="form.button"
-            data-action="keep-editing"
-            data-variant="primary"
-            disabled={busy}
-            onClick={() => {
-              close(null);
-            }}
-          >
-            {t("common-keep-editing")}
-          </button>
-          {!expired && (
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="send-anyway"
-              data-variant="danger"
-              disabled={busy}
-              onClick={() => void sendAnyway()}
-            >
-              {t("common-send-anyway")}
-            </button>
-          )}
-        </div>
-      </div>
-    </>
+    <div data-part="plugin-veto" data-key-context="plugin-veto">
+      <ConfirmDialog
+        kind="send-anyway"
+        risk="destructive"
+        question={t("plugin-veto-intro", { count: veto.vetoes.length })}
+        detail={
+          <>
+            <ul data-part="plugin-veto.list">
+              {veto.vetoes.map((v) => (
+                <li key={v.plugin_id} data-part="plugin-veto.item" data-plugin={v.plugin_id}>
+                  <strong data-part="plugin-veto.plugin">
+                    {t("plugin-veto-plugin", { plugin: v.plugin_name })}
+                  </strong>
+                  <q data-part="plugin-veto.reason">{v.reason}</q>
+                </li>
+              ))}
+            </ul>
+            {expired && (
+              <p data-part="plugin-veto.error" role="alert">
+                {t("plugin-veto-expired")}
+              </p>
+            )}
+          </>
+        }
+        action={t("common-send-anyway")}
+        onConfirm={() => void sendAnyway()}
+        canConfirm={!expired}
+        busy={busy}
+        error={problem === null ? null : t(problem.id, problem.args)}
+        cancel={{
+          onClick: () => {
+            close(null);
+          },
+        }}
+      />
+    </div>
   );
 }

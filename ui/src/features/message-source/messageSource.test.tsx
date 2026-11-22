@@ -106,6 +106,9 @@ describe("message source window", () => {
     await waitFor(() => {
       expect(within(win).getByText("Copied to the clipboard.")).toBeInTheDocument();
     });
+    // R6: a tool window — × closes it; no footer Close.
+    expect(root.querySelector('[data-part="form.button"][data-action="close"]')).toBeNull();
+    expect(root.querySelector('[data-part="dialog.footer"]')).toBeNull();
     const copied = await navigator.clipboard.readText();
     expect(copied).toContain(`Subject: ${body.headers.subject}\n`);
     expect(copied).not.toContain("\r");
@@ -130,5 +133,8 @@ describe("message source window", () => {
         "The message of this window is no longer known. Open its source again.",
       ),
     ).toBeInTheDocument();
+    // One Done closes it.
+    await userEvent.setup().click(screen.getByRole("button", { name: "Done" }));
+    expect(env.store.getState().windows).toEqual([]);
   });
 });

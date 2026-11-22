@@ -10,9 +10,9 @@
  * these exports into the app; see `../README.md`.
  *
  * M5c (WP172, ADR 0116): several composers, one window per draft
- * (`composer:<key>`, `./sessions.ts`), non-modal; the confirmations
- * `composer-close` / `composer-discard` are the only modal composer
- * windows. `windowTitles.composer` shows the subject in the title bar;
+ * (`composer:<key>`, `./sessions.ts`), non-modal; the confirmation
+ * `composer-discard` is the only modal composer window (R6: closing with
+ * unsaved changes asks with the window layer's shared prompt). `windowTitles.composer` shows the subject in the title bar;
  * `skin.ts` reflows the composer to its window's width.
  */
 import { useEffect } from "react";
@@ -20,17 +20,11 @@ import type { JsonValue } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
 import { useUiStoreApi, type UiState } from "../../state/uiStore";
 import type { Feature } from "../types";
-import { CloseConfirmDialog, DiscardConfirmDialog } from "./ConfirmDialogs";
+import { DiscardConfirmDialog } from "./ConfirmDialogs";
 import { switchMode } from "./flows";
 import { composerSubjectTitle } from "./Composer";
 import { COMPOSER_MODE_VALUES } from "../../api/generated";
-import {
-  CLOSE_CONFIRM_KIND,
-  composerOf,
-  composerSessions,
-  composerTarget,
-  DISCARD_CONFIRM_KIND,
-} from "./sessions";
+import { composerOf, composerSessions, composerTarget, DISCARD_CONFIRM_KIND } from "./sessions";
 import { COMPOSER_KIND, richStoreFor } from "./store";
 import { useComposerPopOutPreparer } from "./popOut";
 import { useComposeContext } from "../../state/hooks";
@@ -104,29 +98,20 @@ export const actions: Feature["actions"] = {
   },
 };
 
-/**
- * Named dialogs: the composer's confirmations, opened per composer as
- * `composer-close:<key>` / `composer-discard:<key>`.
- */
+/** Named dialogs: the composer's confirmation, opened per composer as `composer-discard:<key>`. */
 export const dialogs: NonNullable<Feature["dialogs"]> = {
-  [CLOSE_CONFIRM_KIND]: CloseConfirmDialog,
   [DISCARD_CONFIRM_KIND]: DiscardConfirmDialog,
 };
 
 /**
  * The window model (ADR 0116): composers are non-modal, resizable windows,
  * several at once (one per draft); the default layout's `window
- * "composer"` sets the same sizes. Only the confirmations are modal.
+ * "composer"` sets the same sizes. Only the confirmation is modal.
  */
 export const windows: NonNullable<Feature["windows"]> = {
   // Its size and minimum size come from defaults/layout.kdl (`window
   // "composer"`), the one source; several composers are this feature's own.
   [COMPOSER_KIND]: { modal: false, instances: "multiple" },
-  [CLOSE_CONFIRM_KIND]: {
-    confirmation: true,
-    size: { width: 480, height: 220 },
-    instances: "multiple",
-  },
   [DISCARD_CONFIRM_KIND]: {
     confirmation: true,
     size: { width: 440, height: 200 },

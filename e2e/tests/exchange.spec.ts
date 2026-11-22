@@ -254,7 +254,7 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
   await readerAction(page, "Categories…");
   const apply = page.getByRole("dialog", { name: "Apply categories" });
   await apply.getByRole("checkbox", { name: "Urgent" }).check();
-  await apply.getByRole("button", { name: "Apply" }).click();
+  await apply.getByRole("button", { name: "Save", exact: true }).click();
   await expect(apply).toBeHidden();
   await expect
     .poll(async () => (await graphMessage("Fabrikam newsletter, October"))?.categories)
@@ -436,7 +436,7 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
   await readerAction(page, "Categories…");
   const apply = page.getByRole("dialog", { name: "Apply categories" });
   await apply.getByRole("checkbox", { name: "Work" }).check();
-  await apply.getByRole("button", { name: "Apply" }).click();
+  await apply.getByRole("button", { name: "Save", exact: true }).click();
   await expect(apply).toBeHidden();
   await expect
     .poll(

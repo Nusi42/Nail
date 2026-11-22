@@ -157,10 +157,16 @@ describe("the move window", () => {
 
   it("asks before moving into Trash, with the count; Cancel moves nothing", async () => {
     const { user, env, question } = await askTrash();
-    expect(question).toHaveAttribute("data-role", "trash");
+    expect(question.closest('[data-part="folder-picker.confirm"]')).toHaveAttribute(
+      "data-role",
+      "trash",
+    );
     expect(question).toHaveTextContent("Move 1 message to Trash?");
     expect(question).toHaveTextContent("Messages in Trash may be deleted for good later.");
-    expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    // R6: a normal confirmation — its verb has the focus (Enter moves).
+    await waitFor(() => {
+      expect(within(question).getByRole("button", { name: "Move" })).toHaveFocus();
+    });
     expect(requestsOf(env, "ResolveMailTargets")).toEqual([
       {
         type: "ResolveMailTargets",
@@ -176,15 +182,26 @@ describe("the move window", () => {
     expect(env.store.getState().windows).toEqual(["move"]);
   });
 
-  it("gives the focus back to Cancel when the core refuses the move", async () => {
+  it("goes back to the picker on Escape instead of closing the window (R6)", async () => {
+    const { user, env } = await askTrash();
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(filterField()).toHaveFocus();
+    });
+    expect(screen.queryByRole("group", { name: /^Move \d+ messages? to / })).toBeNull();
+    expect(moves(env)).toEqual([]);
+    expect(env.store.getState().windows).toEqual(["move"]);
+  });
+
+  it("gives the focus back to Move when the core refuses the move", async () => {
     const { user, env, question } = await askTrash();
     // Gone meanwhile (another window): the core refuses the move.
     env.transport.data.messages = env.transport.data.messages.filter((m) => m.id !== `${INBOX}#2`);
     await user.click(within(question).getByRole("button", { name: "Move" }));
     await waitFor(() => {
-      expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+      expect(within(question).getByRole("button", { name: "Move" })).toHaveFocus();
     });
-    expect(question).toHaveAttribute("aria-busy", "false");
+    expect(question).not.toHaveAttribute("aria-busy");
     expect(env.store.getState().windows).toEqual(["move"]);
   });
 

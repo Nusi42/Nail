@@ -48,7 +48,7 @@ Under Settings → Agents (MCP), **What it may change** grants the writing permi
 
 ## When a plug-in stops a message
 
-A plug-in that checks outgoing mail can stop a message, for example when it mentions an attachment but nothing is attached. Nail then shows which plug-in stopped it and why. Choose **Keep editing** to fix the message, or **Send anyway** to send it as it is. If you wait too long, send the message again so it is checked once more.
+A plug-in that checks outgoing mail can stop a message, for example when it mentions an attachment but nothing is attached. Nail then shows which plug-in stopped it and why. Choose **Cancel** (it has the focus) to go back and fix the message, or the red **Send anyway** to send it as it is; `Enter` never sends it. If you wait too long, send the message again so it is checked once more.
 
 ## Plug-in activity
 

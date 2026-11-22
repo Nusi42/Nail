@@ -10,6 +10,7 @@ import type { ActionContext } from "../../actions/registry";
 import { WindowLayer } from "../../layout/WindowLayer";
 import { queryKeys } from "../../state/queries";
 import { outcomeOf } from "../../state/queuedOps";
+import { withCloseGuard } from "../../test/closeGuard";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
 import { must } from "../../test/must";
 import { appRegistry } from "../registry";
@@ -64,8 +65,17 @@ function withWindows() {
   const env = createEnv({ state: { activeAccountId: WORK, activeFolderId: RECEIPTS } });
   loaded(env);
   const user = userEvent.setup({ delay: null });
+  withCloseGuard(env);
   renderWithProviders(<WindowLayer layout={env.transport.data.layout} />, env);
   return { env, user };
+}
+
+/** Runs New folder… and returns its name window. */
+function newFolderWindow(env: Env): HTMLElement {
+  act(() => {
+    void must(appRegistry.actions[FOLDER_NEW_ACTION]).run(ctxOf(env), []);
+  });
+  return windowOf("folder-name");
 }
 
 function windowOf(name: string): HTMLElement {
@@ -135,10 +145,7 @@ describe("folder actions and windows", () => {
 
   it("creates and renames a folder, and shows the core's reason for a refusal", async () => {
     const { env, user } = withWindows();
-    act(() => {
-      void must(appRegistry.actions[FOLDER_NEW_ACTION]).run(ctxOf(env), []);
-    });
-    const create = windowOf("folder-name");
+    const create = newFolderWindow(env);
     expect(within(create).getByText("New folder in Work")).toBeInTheDocument();
     await user.type(within(create).getByRole("textbox", { name: "Name" }), "Archive");
     await user.click(within(create).getByRole("button", { name: "Create" }));
@@ -169,6 +176,33 @@ describe("folder actions and windows", () => {
     });
   });
 
+  it("asks before a typed folder name is lost (R6 close guard)", async () => {
+    const { env, user } = withWindows();
+    const create = newFolderWindow(env);
+    const footer = must(create.querySelector('[data-part="dialog.footer"]'));
+    expect([...footer.querySelectorAll("button")].map((b) => b.getAttribute("data-role"))).toEqual([
+      "primary",
+      "cancel",
+    ]);
+    // Nothing typed: Cancel closes at once.
+    await user.click(within(create).getByRole("button", { name: "Cancel" }));
+    expect(document.querySelector('[data-window="folder-name"]')).toBeNull();
+
+    const again = newFolderWindow(env);
+    await user.type(within(again).getByRole("textbox", { name: "Name" }), "Plans");
+    await user.click(within(again).getByRole("button", { name: "Cancel" }));
+    const prompt = await waitFor(() => windowOf("unsaved-changes:folder-name"));
+    expect(within(prompt).getByText("Save changes to “Plans”?")).toBeInTheDocument();
+    await user.click(within(prompt).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(mockFolder(env, "Plans")?.parent_id).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.querySelector('[data-window="folder-name"]')).toBeNull();
+    });
+    expect(document.querySelector('[data-window^="unsaved-changes:"]')).toBeNull();
+  });
+
   it("moves a folder and deletes it: into Trash, then for good after asking", async () => {
     const { env, user } = withWindows();
     act(() => {
@@ -191,12 +225,21 @@ describe("folder actions and windows", () => {
       void must(appRegistry.actions[FOLDER_DELETE_ACTION]).run(ctxOf(env), []);
     });
     const confirm = windowOf(FOLDER_DELETE_DIALOG);
+    expect(within(confirm).getByText("Delete the folder “Receipts” for good?")).toBeInTheDocument();
     expect(
       within(confirm).getByText(
-        "Delete “Receipts” with everything in it for good, on the server too? It holds 3 messages. This cannot be undone.",
+        "It holds 3 messages. It is deleted on the server too. This cannot be undone.",
       ),
     ).toBeInTheDocument();
-    await user.click(within(confirm).getByRole("button", { name: "Delete for good" }));
+    // R6: the red verb is never the default — Cancel has the focus, Enter deletes nothing.
+    const cancel = within(confirm).getByRole("button", { name: "Cancel" });
+    await waitFor(() => {
+      expect(cancel).toHaveFocus();
+    });
+    const verb = within(confirm).getByRole("button", { name: "Delete folder" });
+    expect(verb).toHaveAttribute("data-variant", "danger");
+    expect(verb).toHaveAttribute("type", "button");
+    await user.click(verb);
     await waitFor(() => {
       expect(env.transport.data.folders.some((f) => f.id === RECEIPTS)).toBe(false);
     });

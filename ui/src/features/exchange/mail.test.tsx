@@ -162,7 +162,7 @@ describe("categories", () => {
     expect(urgent).toBeChecked();
     await user.click(urgent);
     await user.click(screen.getByRole("checkbox", { name: "Customers" }));
-    await clickAndClose(user, "Apply", close);
+    await clickAndClose(user, "Save", close);
     expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [{ kind: "message", message_id: checklist.id }],
       action: { type: "tags", add: ["Customers"], remove: ["Urgent"] },

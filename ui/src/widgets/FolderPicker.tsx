@@ -8,8 +8,13 @@
  * that start with the text come before names that contain it and paths
  * that contain it. The folder the mail is already in is left out. Moving
  * into Drafts, Trash or Junk asks first in the window, with the number of
- * messages (`../features/mail-actions/move.ts`); after a failed move the
- * focus returns to Cancel (`./MailConfirm.tsx`).
+ * messages (`../features/mail-actions/move.ts`).
+ *
+ * R6 (ADR 0239): the picker has no footer (a pick moves, × cancels); the
+ * question before Drafts, Trash or Junk is a normal `ConfirmDialog` (Move
+ * focused, Enter moves; after a failed move the focus returns to Move),
+ * and its Cancel and Esc go back to the picker instead of closing the
+ * window.
  */
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../api/client";
@@ -29,7 +34,7 @@ import { useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { FolderRowLabel } from "./FolderList";
 import { flattenFolders } from "./FolderTree";
-import { MailConfirm } from "./MailConfirm";
+import { ConfirmDialog } from "./dialog";
 import { stepIndex } from "./messageListModel";
 import { listOptionId } from "./rovingFocus";
 
@@ -177,30 +182,41 @@ export function FolderPicker({ node }: WidgetProps) {
   };
 
   if (question !== null) {
+    /** Back to the picker (Cancel and Esc), the filter focused. */
+    const back = () => {
+      setQuestion(null);
+      queueMicrotask(() => input.current?.focus());
+    };
     return (
-      <MailConfirm
-        kind="move"
-        dataRole={question.role}
-        question={t("mail-actions-move-confirm", {
-          count: question.resolution.messages,
-          folder: question.folder.name,
-        })}
-        confirmLabel={t("mail-actions-move-confirm-yes")}
-        variant="primary"
-        busy={busy}
-        onConfirm={() => {
-          setBusy(true);
-          void finish(question.folder, question.resolution).finally(() => {
-            setBusy(false);
-          });
-        }}
-        onCancel={() => {
-          setQuestion(null);
-          queueMicrotask(() => input.current?.focus());
+      // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Esc from the question's buttons goes back to the picker instead of closing the window.
+      <div
+        data-part="folder-picker.confirm"
+        data-role={question.role}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          // Before the window's own Escape (`window.close`), which skips handled keys.
+          event.preventDefault();
+          if (!busy) back();
         }}
       >
-        <p data-part="mail-confirm.note">{t(`mail-actions-move-note-${question.role}`)}</p>
-      </MailConfirm>
+        <ConfirmDialog
+          kind="move"
+          question={t("mail-actions-move-confirm", {
+            count: question.resolution.messages,
+            folder: question.folder.name,
+          })}
+          detail={<p data-part="dialog.note">{t(`mail-actions-move-note-${question.role}`)}</p>}
+          action={t("mail-actions-move-confirm-yes")}
+          busy={busy}
+          onConfirm={() => {
+            setBusy(true);
+            void finish(question.folder, question.resolution).finally(() => {
+              setBusy(false);
+            });
+          }}
+          cancel={{ onClick: back }}
+        />
+      </div>
     );
   }
 

@@ -5,9 +5,12 @@
  *
  * Snoozing is a queued write (keyword `$Snoozed` + move to the hidden
  * Snoozed folder); the core wakes the message at its time, offline too.
+ *
+ * R6 (ADR 0239): a quick choice snoozes and closes at once; a custom time
+ * uses the shared footer (Snooze, Cancel; Enter in the field snoozes).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState, type SubmitEvent } from "react";
+import { useId, useMemo, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type { LocalizedMessage, SnoozedMessage } from "../../api/generated";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
@@ -31,6 +34,7 @@ import { useTriage } from "./store";
 import { formatDateTime } from "../../i18n/format";
 import { nonEmpty } from "../../text/empty";
 import { useBusyAction } from "../../state/busyAction";
+import { DialogFooter, DialogForm } from "../../widgets/dialog";
 
 /** Name of the snooze picker dialog and of the snoozed-list window. */
 export const SNOOZE_DIALOG = "snooze";
@@ -104,8 +108,7 @@ export function SnoozeDialog({ close }: DialogProps) {
     });
   };
 
-  const submit = (event: SubmitEvent) => {
-    event.preventDefault();
+  const submit = () => {
     const date = fromLocalInput(custom);
     if (date === null) setProblem({ id: "snooze-error-time" });
     else void run(date);
@@ -115,12 +118,13 @@ export function SnoozeDialog({ close }: DialogProps) {
     return (
       <div data-part="snooze" data-state="empty">
         <p data-part="snooze.empty">{t("snooze-nothing-selected")}</p>
+        <DialogFooter done={{ onDone: close }} />
       </div>
     );
   }
 
   return (
-    <form data-part="snooze" onSubmit={submit} aria-busy={busy} noValidate>
+    <DialogForm part="snooze" busy={busy} onSubmit={submit}>
       <p data-part="snooze.intro">
         {conversations > 0 && conversations === ids.length
           ? t("snooze-intro-conversations", { count: conversations })
@@ -162,15 +166,12 @@ export function SnoozeDialog({ close }: DialogProps) {
         />
       </div>
       <Problem message={problem} />
-      <div data-part="snooze.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("common-snooze")}
-        </button>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <DialogFooter
+        primary={{ label: t("common-snooze"), submit: true, action: "snooze" }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
+    </DialogForm>
   );
 }
 

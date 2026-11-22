@@ -55,6 +55,17 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   closing Settings asks the same way.
 - "Delete permanently?" and New / Rename theme follow the pattern; New theme
   asks before a typed name is lost.
+- The mail dialogs follow the pattern: closing a composer with unsaved
+  changes asks with the shared prompt (Save draft / Don't save / Cancel;
+  the composer's own close confirmation is gone), Discard asks "Discard
+  draft", `Enter` in Subject no longer sends (`Ctrl+Enter` does); folder,
+  Gmail label and Exchange category / mailbox editors ask before changes are
+  lost, and their deletes focus Cancel; "Apply" became "Save" in Apply
+  labels / categories; Automatic replies has one footer (Save closes);
+  Print offers Print, Save as PDF… and Cancel; the message source has no
+  footer Close; the move question before Trash, Drafts or Junk goes back to
+  the picker on Esc; an Outbox draft's Discard asks first; the plug-in send
+  veto's "Send anyway" is red and Cancel has the focus.
 
 ### Fixed — large selections (ADR 0235)
 

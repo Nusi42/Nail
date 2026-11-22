@@ -1,3 +1,9 @@
+/**
+ * The outbox (widget `outbox`): messages waiting to be sent (undo-send
+ * countdowns, send-later, failures) and the saved drafts. R6 (ADR 0239):
+ * a draft's Discard asks first, in the draft's row — a destructive
+ * `ConfirmDialog` ("Discard draft", the focus on Cancel).
+ */
 import { useState } from "react";
 import { errorMessageId, errorMessageIdOf } from "../api/client";
 import type { Draft, OutboxEntry } from "../api/generated";
@@ -9,6 +15,7 @@ import { useComposeContext } from "../state/hooks";
 import { sendPercent, useUi, type SendProgressState } from "../state/uiStore";
 import { queryKeys, useDrafts, useOutbox } from "../state/queries";
 import { DATE_TIME, formatDateTime } from "../i18n/format";
+import { ConfirmDialog } from "./dialog";
 
 /** Entries the user can still take back (edit) or send at once. */
 export function canTakeBack(entry: OutboxEntry): boolean {
@@ -38,6 +45,8 @@ export function Outbox({ node }: WidgetProps) {
   const drafts = useDrafts();
   const progress = useUi((s) => s.sendProgress);
   const [error, setError] = useState<string | null>(null);
+  /** The draft whose Discard asks (its id). */
+  const [discarding, setDiscarding] = useState<string | null>(null);
 
   const run = async (work: () => Promise<void>) => {
     setError(null);
@@ -57,6 +66,7 @@ export function Outbox({ node }: WidgetProps) {
     });
   const discardDraft = (draft: Draft) =>
     run(async () => {
+      setDiscarding(null);
       if (draft.id === null) return;
       await ctx.client.request({ type: "DeleteDraft", draft_id: draft.id }, "Done");
       await ctx.queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
@@ -159,24 +169,43 @@ export function Outbox({ node }: WidgetProps) {
                     recipients: [...draft.to, ...draft.cc].map((a) => displayName(a)).join(", "),
                   })}
                 </div>
-                <div data-part="outbox.item.actions">
-                  <button
-                    type="button"
-                    data-part="form.button"
-                    data-action="continue-draft"
-                    onClick={() => void continueDraft(draft)}
-                  >
-                    {t("outbox-draft-continue")}
-                  </button>
-                  <button
-                    type="button"
-                    data-part="form.button"
-                    data-action="discard-draft"
-                    onClick={() => void discardDraft(draft)}
-                  >
-                    {t("common-discard")}
-                  </button>
-                </div>
+                {draft.id !== null && discarding === draft.id ? (
+                  <ConfirmDialog
+                    kind="discard-draft"
+                    risk="destructive"
+                    question={t("outbox-discard-question", {
+                      subject: draft.subject || t("common-no-subject"),
+                    })}
+                    action={t("composer-discard-draft")}
+                    onConfirm={() => void discardDraft(draft)}
+                    cancel={{
+                      onClick: () => {
+                        setDiscarding(null);
+                      },
+                    }}
+                  />
+                ) : (
+                  <div data-part="outbox.item.actions">
+                    <button
+                      type="button"
+                      data-part="form.button"
+                      data-action="continue-draft"
+                      onClick={() => void continueDraft(draft)}
+                    >
+                      {t("outbox-draft-continue")}
+                    </button>
+                    <button
+                      type="button"
+                      data-part="form.button"
+                      data-action="discard-draft"
+                      onClick={() => {
+                        setDiscarding(draft.id);
+                      }}
+                    >
+                      {t("common-discard")}
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

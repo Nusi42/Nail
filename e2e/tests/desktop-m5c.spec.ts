@@ -173,7 +173,7 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   const discard = thrown.locator(windowSelector(`composer-discard:${first.split(":")[1] ?? ""}`));
   await expect(discard).toBeVisible();
   await clickClosingLast(
-    discard.getByRole("button", { name: "Discard", exact: true }),
+    discard.getByRole("button", { name: "Discard draft", exact: true }),
     thrown,
     page,
   );
@@ -189,7 +189,10 @@ test("a popped-out composer asks its questions in its own window (Discard, OS cl
   await expect(keptHost.getByRole("textbox", { name: "Subject" })).toHaveValue("Keep this");
   await keptHost.getByRole("textbox", { name: "Message" }).fill("The last words.");
   await shellControl(page, "close-pop-outs");
-  const question = kept.locator(windowSelector(`composer-close:${second.split(":")[1] ?? ""}`));
+  // R6: the window layer's shared prompt (`unsaved-changes:composer_<key>`).
+  const question = kept.locator(
+    windowSelector(`unsaved-changes:composer_${second.split(":")[1] ?? ""}`),
+  );
   await expect(question).toBeVisible();
   // Still open while it asks.
   expect((await popOuts(page)).map((p) => p.label)).toEqual([`popout-${second}`]);

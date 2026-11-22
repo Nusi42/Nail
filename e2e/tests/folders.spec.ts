@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { control, nailPerTest, screenshotFile, type NailServer } from "../support/nail";
-import { showView } from "../support/views";
+import { folderMenuItem as menuItem, showView, workFolderRow as folderRow } from "../support/views";
 
 /**
  * ADR 0196: folders are created, renamed, moved and deleted from the
@@ -9,19 +9,6 @@ import { showView } from "../support/views";
  */
 
 const server = nailPerTest({ seed: "demo-multi" });
-
-/** A folder row of the work account by its name. */
-function folderRow(page: Page, name: string): Locator {
-  return page
-    .locator('[data-part="folder-tree.item"][data-account="work"]')
-    .filter({ has: page.getByText(name, { exact: true }) })
-    .first();
-}
-
-async function menuItem(page: Page, row: Locator, item: string): Promise<void> {
-  await row.click({ button: "right" });
-  await page.getByRole("menu").getByRole("menuitem", { name: item }).click();
-}
 
 async function serverMailboxes(nail: NailServer): Promise<string[]> {
   const list = await control<{ name: string }[]>(nail, "imap-mailboxes", { account: "work" });
@@ -64,9 +51,10 @@ test("folders are created, renamed, moved and deleted on the server", async ({ p
   await expect.poll(() => serverMailboxes(server)).toContain("Trash/Customers");
   await menuItem(page, folderRow(page, "Customers"), "Delete folder");
   const confirm = page.locator('[data-part="window"][data-window="folder-delete"]');
-  await expect(confirm.getByText(/the empty folder “Customers” for good/)).toBeVisible();
+  await expect(confirm.getByText("Delete the folder “Customers” for good?")).toBeVisible();
+  await expect(confirm.getByText(/The folder is empty/)).toBeVisible();
   await page.screenshot({ path: screenshotFile("folders", "delete-for-good") });
-  await confirm.getByRole("button", { name: "Delete for good" }).click();
+  await confirm.getByRole("button", { name: "Delete folder" }).click();
   await expect(folderRow(page, "Customers")).toHaveCount(0);
   await expect.poll(() => serverMailboxes(server)).not.toContain("Trash/Customers");
 

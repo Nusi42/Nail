@@ -360,15 +360,21 @@ describe("before-send veto", () => {
     });
   }
 
-  it("names the plug-in and its reason; Keep editing sends nothing", async () => {
+  it("names the plug-in and its reason; Cancel (focused) and Esc send nothing", async () => {
     const { env, user, result } = await vetoedSend();
     const dialog = screen.getByRole("dialog", { name: "A plug-in stopped this message" });
     expect(within(dialog).getByText("Plug-in “Attachment check”:")).toBeInTheDocument();
     expect(
       within(dialog).getByText("The message mentions an attachment, but nothing is attached."),
     ).toBeInTheDocument();
-    const keep = within(dialog).getByRole("button", { name: "Keep editing" });
-    expect(keep).toHaveFocus();
+    // R6: Send anyway is red and never the default; Cancel has the focus.
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+    await waitFor(() => {
+      expect(cancel).toHaveFocus();
+    });
+    const sendAnyway = within(dialog).getByRole("button", { name: "Send anyway" });
+    expect(sendAnyway).toHaveAttribute("data-variant", "danger");
+    expect(sendAnyway).toHaveAttribute("type", "button");
     await user.keyboard("{Escape}");
     expect(await result).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -384,7 +390,7 @@ describe("before-send veto", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("explains an expired veto and offers only Keep editing", async () => {
+  it("explains an expired veto and can no longer send anyway", async () => {
     const { env, user, result } = await vetoedSend();
     env.transport.data.features.plugins.extensions.vetoes.clear();
     await user.click(screen.getByRole("button", { name: "Send anyway" }));
@@ -393,8 +399,10 @@ describe("before-send veto", () => {
         "This was too long ago. Send the message again to check it once more.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Send anyway" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Send anyway" })).toBeDisabled();
+    });
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(await result).toBeNull();
   });
 

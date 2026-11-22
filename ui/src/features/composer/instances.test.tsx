@@ -1,8 +1,8 @@
 /**
  * Several composers and non-modal windows (M5c WP172, ADR 0116): one window
  * per draft, the focused-composer mirror, editing two composers at once,
- * closing that asks only when something is unsaved, the discard
- * confirmation, each composer's sign / encrypt choice, window titles, and
+ * closing that asks only when something is unsaved (R6: the window layer's
+ * shared prompt), the discard confirmation, each composer's sign / encrypt choice, window titles, and
  * the modality rules of every registered window.
  */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -20,12 +20,13 @@ import {
   resolveWindowSpec,
   windowKind,
 } from "../../state/windows";
+import { withCloseGuard } from "../../test/closeGuard";
 import { createEnv, Providers, renderWithProviders, widget, type Env } from "../../test/harness";
 import { defaultLayout } from "../../api/mockData";
 import { appRegistry } from "../registry";
 import { composerCryptoStore } from "../security";
 import { ComposerWindowTitle, composerSubjectTitle } from "./Composer";
-import { CloseConfirmDialog, DiscardConfirmDialog } from "./ConfirmDialogs";
+import { DiscardConfirmDialog } from "./ConfirmDialogs";
 import {
   closeComposerNow,
   openRichDraft,
@@ -40,7 +41,6 @@ import { windowTitles } from "./index";
 import { acceptRichDrafts } from "./mock";
 import {
   activeComposer,
-  CLOSE_CONFIRM_KIND,
   composerOf,
   composerOfConfirm,
   composerSessions,
@@ -122,13 +122,17 @@ afterEach(() => {
   });
 });
 
-/** A new rich composer in its window (`composer:w1`). */
+/** A new rich composer in its window (`composer:w1`), the close guard installed. */
 async function composerWindow() {
   const env = setup();
+  withCloseGuard(env);
   await startRichCompose(env.ctx);
   renderWindows(env);
   return env;
 }
+
+/** The shared unsaved-changes prompt of `composer:w1`. */
+const PROMPT = `${UNSAVED_PROMPT}:composer_w1`;
 
 /** Waits until the composer took what it opened with as its baseline. */
 async function baselined(env: ReturnType<typeof setup>): Promise<void> {
@@ -194,7 +198,7 @@ describe("composer windows", () => {
     // Ids that are no instance keys get a generated one.
     expect(newComposerWindow(ui(env), "bad id!")).toBe("composer:w1");
     expect(newComposerWindow(ui(env), null)).toBe("composer:w1");
-    expect(confirmWindowFor(CLOSE_CONFIRM_KIND, "composer:d42")).toBe("composer-close:d42");
+    expect(confirmWindowFor(DISCARD_CONFIRM_KIND, "composer:d42")).toBe("composer-discard:d42");
     expect(composerOfConfirm("composer-discard:d42")).toBe("composer:d42");
     expect(composerOfConfirm(DISCARD_CONFIRM_KIND)).toBe("composer");
   });
@@ -336,18 +340,23 @@ describe("composer windows", () => {
     await user.type(region("composer:w1").getByRole("textbox", { name: "Subject" }), "Unsent");
     expect(isUnsaved(env.store, "composer:w1")).toBe(true);
 
-    // The title bar's close button (closeWindow): it stays, the confirmation asks.
+    // The title bar's close button (closeWindow): it stays, the shared prompt asks.
     act(() => {
       ui(env).closeWindow("composer:w1");
     });
-    expect(ui(env).windows).toEqual(["composer:w1", "composer-close:w1"]);
+    expect(ui(env).windows).toEqual(["composer:w1", PROMPT]);
     expect(ui(env).composers["composer:w1"]?.subject).toBe("Unsent");
-    const confirm = region("composer-close:w1");
-    expect(confirm.getByText(/“Unsent” has changes that are not saved yet/)).toBeInTheDocument();
-    await waitFor(() =>
-      expect(confirm.getByRole("button", { name: "Keep editing" })).toHaveFocus(),
+    expect(ui(env).composer?.subject).toBe("Unsent");
+    const prompt = region(PROMPT);
+    expect(prompt.getByText("Save changes to “Unsent”?")).toBeInTheDocument();
+    expect(prompt.getByText(/Save draft keeps the message in Drafts/)).toBeInTheDocument();
+    // Save draft is the verb and has the focus; Don't save is red.
+    await waitFor(() => expect(prompt.getByRole("button", { name: "Save draft" })).toHaveFocus());
+    expect(prompt.getByRole("button", { name: "Don't save" })).toHaveAttribute(
+      "data-variant",
+      "danger",
     );
-    await user.click(confirm.getByRole("button", { name: "Keep editing" }));
+    await user.click(prompt.getByRole("button", { name: "Cancel" }));
     expect(ui(env).windows).toEqual(["composer:w1"]);
     // The composer kept its state (and its form).
     expect(region("composer:w1").getByRole("textbox", { name: "Subject" })).toHaveValue("Unsent");
@@ -356,10 +365,8 @@ describe("composer windows", () => {
     act(() => {
       ui(env).closeWindow();
     });
-    expect(ui(env).windows).toEqual(["composer:w1", "composer-close:w1"]);
-    await user.click(
-      region("composer-close:w1").getByRole("button", { name: "Close without saving" }),
-    );
+    expect(ui(env).windows).toEqual(["composer:w1", PROMPT]);
+    await user.click(region(PROMPT).getByRole("button", { name: "Don't save" }));
     expect(ui(env).windows).toEqual([]);
     expect(ui(env).composers).toEqual({});
     // Nothing was saved: no autosave in between, and closing does not save.
@@ -373,8 +380,8 @@ describe("composer windows", () => {
     act(() => {
       requestClose(env.ctx, "composer:w1");
     });
-    expect(ui(env).windows).toEqual(["composer:w1", "composer-close:w1"]);
-    await user.click(region("composer-close:w1").getByRole("button", { name: "Save draft" }));
+    expect(ui(env).windows).toEqual(["composer:w1", PROMPT]);
+    await user.click(region(PROMPT).getByRole("button", { name: "Save draft" }));
     await waitFor(() => {
       expect(ui(env).windows).toEqual([]);
     });
@@ -404,7 +411,9 @@ describe("composer windows", () => {
     expect(
       dialog.getByText("Discard “Draft to drop”? Its saved draft is deleted too."),
     ).toBeVisible();
-    await user.click(dialog.getByRole("button", { name: "Discard" }));
+    // R6: a destructive confirmation — Keep editing (Cancel's role) has the focus.
+    await waitFor(() => expect(dialog.getByRole("button", { name: "Keep editing" })).toHaveFocus());
+    await user.click(dialog.getByRole("button", { name: "Discard draft" }));
     await waitFor(() => {
       expect(env.transport.data.drafts.has(draftId)).toBe(false);
     });
@@ -414,20 +423,39 @@ describe("composer windows", () => {
     expect(ui(env).windows).toEqual([]);
   });
 
-  it.each([
-    ["composer-close", CloseConfirmDialog],
-    ["composer-discard:gone", DiscardConfirmDialog],
-  ])("shows a note when %s has no composer left", (name, Dialog) => {
+  it("shows a note and one Done when composer-discard has no composer left", () => {
     const env = setup();
     const close = vi.fn();
     render(
       <Providers env={env}>
-        <Dialog name={name} close={close} />
+        <DiscardConfirmDialog name="composer-discard:gone" close={close} />
       </Providers>,
     );
     expect(screen.getByText("No message is being written.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(close).toHaveBeenCalled();
+  });
+
+  it("puts a closed composer back while its prompt asks, keeping the focused mirror", async () => {
+    const user = userEvent.setup();
+    const env = await composerWindow();
+    await user.type(region("composer:w1").getByRole("textbox", { name: "Subject" }), "Kept");
+    // The composer sessions catch up before and after the guard's change.
+    act(() => {
+      composerSessions(env.store);
+      ui(env).closeWindow("composer:w1");
+    });
+    expect(activeComposer(ui(env).windows)).toBe("composer:w1");
+    expect(ui(env).composer).toBe(ui(env).composers["composer:w1"]);
+    // Sending closes the composer and its prompt without asking.
+    act(() => {
+      ui(env).updateComposerOf("composer:w1", { to: "grace@navy.example" });
+    });
+    await act(() => sendRich(env.ctx, null, { window: "composer:w1" }));
+    await waitFor(() => {
+      expect(ui(env).windows).toEqual([]);
+    });
+    expect(ui(env).composers).toEqual({});
   });
 
   it("keeps each composer's sign / encrypt choice", async () => {
@@ -558,7 +586,6 @@ describe("composer windows", () => {
 describe("window model", () => {
   /** Confirmations: the only modal windows. */
   const CONFIRMATIONS = new Set([
-    "composer-close",
     "composer-discard",
     "exchange-mailbox-remove",
     "exchange-category-delete",
@@ -635,8 +662,8 @@ describe("window model", () => {
       instances: "multiple",
       size: DEFAULT_WINDOW_SPEC.size,
     });
-    // Its confirmations open per composer too.
-    expect(resolveWindowSpec("composer-close:w3", null, appRegistry.windows)).toMatchObject({
+    // Its confirmation opens per composer too.
+    expect(resolveWindowSpec("composer-discard:w3", null, appRegistry.windows)).toMatchObject({
       modal: true,
       instances: "multiple",
     });

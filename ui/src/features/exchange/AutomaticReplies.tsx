@@ -45,8 +45,8 @@ import { automaticRepliesIssues, repliesActive, repliesUpcoming } from "./model"
 import { AUTOMATIC_REPLIES_DIALOG } from "./names";
 import { setAutomaticReplies, useAutomaticReplies, useExchangeAccounts } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
-import { EmptyDialog } from "../../widgets/DialogStates";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
+import { EmptyDialog, useCloseNow } from "../../widgets/DialogStates";
 import { AccountChoiceField } from "../../widgets/pickers";
 
 const STATUSES: readonly AutomaticRepliesStatus[] = AUTOMATIC_REPLIES_STATUS_VALUES;
@@ -72,13 +72,26 @@ export function defaultSchedule(now: number): { start: string; end: string } {
   return { start: utcString(start), end: utcString(start + 7 * 24 * hour) };
 }
 
-/** The editor for one account's automatic replies. */
+/**
+ * In the dialog (R6, ADR 0239): the shared footer — Save (closes) and
+ * Cancel (× and Esc too, asking when the replies have unsaved changes).
+ */
+interface InDialog {
+  /** The dialog's close (through the close guard). */
+  cancel: () => void;
+  /** Closes after Save, without asking. */
+  done: () => void;
+}
+
+/** The editor for one account's automatic replies (alone, or in the dialog: `dialog`). */
 export function AutomaticRepliesEditor({
   accountId,
   onSaved,
+  dialog,
 }: {
   accountId: AccountId;
   onSaved?: () => void;
+  dialog?: InDialog;
 }) {
   const t = useT();
   const replies = useAutomaticReplies(accountId);
@@ -96,6 +109,7 @@ export function AutomaticRepliesEditor({
       accountId={accountId}
       replies={replies.data}
       {...(onSaved ? { onSaved } : {})}
+      {...(dialog ? { dialog } : {})}
     />
   );
 }
@@ -104,10 +118,12 @@ function RepliesForm({
   accountId,
   replies,
   onSaved,
+  dialog,
 }: {
   accountId: AccountId;
   replies: AutomaticReplies;
   onSaved?: () => void;
+  dialog?: InDialog;
 }) {
   const t = useT();
   const format = useDateFormat();
@@ -121,11 +137,12 @@ function RepliesForm({
     audience: useId(),
     problem: useId(),
   };
-  const [draft, setDraft] = useState<AutomaticRepliesSettings>(() => {
+  const [initial] = useState<AutomaticRepliesSettings>(() => {
     const s = replies.settings;
     if (s.start !== null && s.end !== null) return s;
     return { ...s, ...defaultSchedule(now) };
   });
+  const [draft, setDraft] = useState<AutomaticRepliesSettings>(initial);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [saved, setSaved] = useState<AutomaticReplies | null>(null);
   const [busy, setBusy] = useState(false);
@@ -140,23 +157,28 @@ function RepliesForm({
     problem?.id === "exchange-oof-issue-missing-schedule" ||
     problem?.id === "exchange-oof-issue-invalid-time";
 
-  const save = async () => {
-    // The schedule is only sent with `scheduled`.
-    const settings: AutomaticRepliesSettings = scheduled
-      ? draft
-      : { ...draft, start: null, end: null };
+  // The schedule is only sent with `scheduled`.
+  const settings: AutomaticRepliesSettings = scheduled
+    ? draft
+    : { ...draft, start: null, end: null };
+
+  /** Saves the replies (in the dialog: and closes); `false` when they have a problem. */
+  const save = async (): Promise<boolean> => {
     const issue = automaticRepliesIssues(settings)[0];
     if (issue) {
       setProblem({ id: `exchange-oof-issue-${issue}` });
-      return;
+      return false;
     }
     setBusy(true);
     setProblem(null);
     try {
       setSaved(await setAutomaticReplies(ctx, accountId, settings));
       onSaved?.();
+      dialog?.done();
+      return true;
     } catch (error) {
       setProblem(errorMessageOf(error));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -182,15 +204,15 @@ function RepliesForm({
   };
 
   return (
-    <form
-      data-part="exchange.oof"
-      data-status={draft.status}
-      aria-busy={busy}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save();
-      }}
-    >
+    <DialogForm part="exchange.oof" busy={busy} onSubmit={() => void save()}>
+      {dialog && (
+        <RepliesGuard
+          name={t("window-exchange-automatic-replies")}
+          isDirty={() => saved === null && JSON.stringify(draft) !== JSON.stringify(initial)}
+          canSave={() => automaticRepliesIssues(settings).length === 0}
+          save={save}
+        />
+      )}
       <fieldset data-part="form.section" data-section="status">
         <legend data-part="form.section.title">{t("window-exchange-automatic-replies")}</legend>
         {STATUSES.map((status) => (
@@ -289,13 +311,37 @@ function RepliesForm({
           {t("common-saved")}
         </p>
       )}
-      <div data-part="exchange.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("exchange-save")}
-        </button>
-      </div>
-    </form>
+      {dialog ? (
+        <DialogFooter
+          primary={{ label: t("exchange-save"), submit: true, action: "save" }}
+          cancel={{ onClick: dialog.cancel }}
+          busy={busy}
+        />
+      ) : (
+        <div data-part="exchange.actions">
+          <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
+            {t("exchange-save")}
+          </button>
+        </div>
+      )}
+    </DialogForm>
   );
+}
+
+/** The dialog's close guard over the replies form. */
+function RepliesGuard({
+  name,
+  isDirty,
+  canSave,
+  save,
+}: {
+  name: string;
+  isDirty: () => boolean;
+  canSave: () => boolean;
+  save: () => Promise<boolean>;
+}) {
+  useCloseGuard({ name: () => name, isDirty, canSave, save });
+  return null;
 }
 
 /** Dialog `exchange-automatic-replies`: the editor for a chosen Exchange account. */
@@ -305,6 +351,7 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
   const chosen = useExchangeUi((s) => s.repliesAccount);
   const activeAccountId = useUi((s) => s.activeAccountId);
   const accounts = useExchangeAccounts();
+  const closeNow = useCloseNow(close);
   const [picked, setPicked] = useState<string | null>(null);
   const account =
     accounts.find((a) => a.id === (picked ?? chosen)) ??
@@ -312,7 +359,7 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
     accounts[0];
   const finish = () => {
     exchangeStoreFor(store).getState().editReplies(null);
-    close();
+    closeNow();
   };
   if (!account) {
     return (
@@ -336,10 +383,11 @@ export function AutomaticRepliesDialog({ close }: DialogProps) {
           onChange={setPicked}
         />
       )}
-      <AutomaticRepliesEditor key={account.id} accountId={account.id} />
-      <div data-part="exchange.actions">
-        <CloseButton onClose={finish} />
-      </div>
+      <AutomaticRepliesEditor
+        key={account.id}
+        accountId={account.id}
+        dialog={{ cancel: close, done: finish }}
+      />
     </div>
   );
 }

@@ -4,9 +4,15 @@
  * before deleting one for good (`folder-delete`). Each sends its request
  * and stays open until the server confirmed the change (`runQueued`); a
  * refusal shows the core's text, and while the server cannot be reached
- * the window says the change waits.
+ * the window says the change waits (and shows one Done).
+ *
+ * R6 (ADR 0239): the name window is a `DialogForm` with the shared footer
+ * (Create / Save, Cancel) and a close guard (a changed name asks before it
+ * is lost); the move window is a picker (a pick moves, × cancels); the
+ * delete question is a destructive `ConfirmDialog` ("Delete folder", the
+ * focus on Cancel, Enter never deletes).
  */
-import { useState, type ReactNode, type SubmitEvent } from "react";
+import { useState, type ReactNode } from "react";
 import type { Folder, LocalizedMessage, Request } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
@@ -14,7 +20,8 @@ import { useBusyAction } from "../../state/busyAction";
 import { useAccounts, useClient, useFolders } from "../../state/queries";
 import { runQueued } from "../../state/queuedOps";
 import { useUiStoreApi } from "../../state/uiStore";
-import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { ConfirmDialog, DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
+import { EmptyDialog, LoadingDialog, useCloseNow } from "../../widgets/DialogStates";
 import { FolderList } from "../../widgets/FolderList";
 import { flattenFolders } from "../../widgets/FolderTree";
 import { TextField } from "../../widgets/forms";
@@ -26,19 +33,20 @@ import { foldersStoreFor, useFolderTask, type FolderTask } from "./store";
 function useFolderRequest(close: () => void) {
   const client = useClient();
   const store = useUiStoreApi();
+  const closeNow = useCloseNow(close);
   const { busy, problem, setProblem, run } = useBusyAction();
   const [waiting, setWaiting] = useState(false);
   const finish = () => {
     foldersStoreFor(store).getState().setTask(null);
-    close();
+    closeNow();
   };
-  const send = async (request: Request) => {
-    await run(async () => {
+  /** Sends `request`: `true` when it is done or waits for the server. */
+  const send = (request: Request) =>
+    run(async () => {
       const outcome = await runQueued(client, request);
       if (outcome === "done") finish();
       else setWaiting(true);
     });
-  };
   return { busy, problem, setProblem, waiting, send, finish };
 }
 
@@ -52,48 +60,16 @@ function Problem({ message }: { message: LocalizedMessage | null }) {
   );
 }
 
-/**
- * The window's buttons: `children` and Cancel; while the change waits for
- * the server, a note and Close instead.
- */
-function Actions({
-  waiting,
-  finish,
-  cancelPrimary = false,
-  children,
-}: {
-  waiting: boolean;
-  finish: () => void;
-  cancelPrimary?: boolean;
-  children?: ReactNode;
-}) {
+/** The change waits for the server: the note and one Done. */
+function Waiting({ finish }: { finish: () => void }) {
   const t = useT();
-  if (waiting) {
-    return (
-      <>
-        <p data-part="folder-dialog.note" role="status">
-          {t("folders-waiting")}
-        </p>
-        <div data-part="folder-dialog.actions">
-          <button type="button" data-part="form.button" data-variant="primary" onClick={finish}>
-            {t("common-close")}
-          </button>
-        </div>
-      </>
-    );
-  }
   return (
-    <div data-part="folder-dialog.actions">
-      {children}
-      <button
-        type="button"
-        data-part="form.button"
-        data-variant={cancelPrimary ? "primary" : undefined}
-        onClick={finish}
-      >
-        {t("common-cancel")}
-      </button>
-    </div>
+    <>
+      <p data-part="folder-dialog.note" role="status">
+        {t("folders-waiting")}
+      </p>
+      <DialogFooter done={{ onDone: finish }} />
+    </>
   );
 }
 
@@ -171,20 +147,27 @@ function NameForm({
   const t = useT();
   const accounts = useAccounts();
   const account = accounts.data?.find((a) => a.id === task.accountId);
-  const [name, setName] = useState(folder?.name ?? "");
+  const initial = folder?.name ?? "";
+  const [name, setName] = useState(initial);
   const { busy, problem, setProblem, waiting, send, finish } = useFolderRequest(close);
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
+  /** Sends the name: `true` when it is done or waits for the server. */
+  const save = async (): Promise<boolean> => {
     if (name.trim() === "") {
       setProblem({ id: "folder-issue-missing-name" });
-      return;
+      return false;
     }
-    await send(
+    return send(
       task.kind === "create"
         ? { type: "CreateFolder", account_id: task.accountId, parent_id: task.parentId, name }
         : { type: "RenameFolder", folder_id: task.folderId, name },
     );
   };
+  useCloseGuard({
+    name: () => name.trim(),
+    isDirty: () => !waiting && name.trim() !== initial.trim(),
+    canSave: () => name.trim() !== "",
+    save,
+  });
   const intro =
     task.kind === "rename"
       ? t("folders-rename-intro", { name: folder?.name ?? "" })
@@ -192,12 +175,7 @@ function NameForm({
         ? t("folders-create-intro", { parent: parent.name })
         : t("folders-create-top-intro", { account: account?.name ?? task.accountId });
   return (
-    <form
-      data-part={FOLDER_DIALOG_PART}
-      data-dialog="name"
-      aria-busy={busy}
-      onSubmit={(e) => void submit(e)}
-    >
+    <DialogForm part={FOLDER_DIALOG_PART} dialog="name" busy={busy} onSubmit={() => void save()}>
       <p data-part="folder-dialog.intro">{intro}</p>
       <TextField
         labelId="common-name"
@@ -209,12 +187,20 @@ function NameForm({
         onChange={setName}
       />
       <Problem message={problem} />
-      <Actions waiting={waiting} finish={finish}>
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {task.kind === "create" ? t("common-create") : t("common-save")}
-        </button>
-      </Actions>
-    </form>
+      {waiting ? (
+        <Waiting finish={finish} />
+      ) : (
+        <DialogFooter
+          primary={{
+            label: task.kind === "create" ? t("common-create") : t("common-save"),
+            submit: true,
+            action: task.kind,
+          }}
+          cancel={{ onClick: close }}
+          busy={busy}
+        />
+      )}
+    </DialogForm>
   );
 }
 
@@ -238,6 +224,7 @@ function folderDialog(kind: "move" | "delete", Form: (props: FolderFormProps) =>
   };
 }
 
+/** A picker: a pick moves the folder, × cancels (no footer until it waits). */
 function MoveForm({ folder, folders, close }: FolderFormProps) {
   const t = useT();
   const { busy, problem, waiting, send, finish } = useFolderRequest(close);
@@ -250,7 +237,9 @@ function MoveForm({ folder, folders, close }: FolderFormProps) {
     <div data-part={FOLDER_DIALOG_PART} data-dialog="move" aria-busy={busy}>
       <p data-part="folder-dialog.intro">{t("folders-move-intro", { name: folder.name })}</p>
       <Problem message={problem} />
-      {!waiting && (
+      {waiting ? (
+        <Waiting finish={finish} />
+      ) : (
         <>
           <button
             type="button"
@@ -266,7 +255,6 @@ function MoveForm({ folder, folders, close }: FolderFormProps) {
           <FolderList rows={rows} disabled={busy} onPick={move} />
         </>
       )}
-      <Actions waiting={waiting} finish={finish} />
     </div>
   );
 }
@@ -276,32 +264,33 @@ function DeleteForm({ folder, folders, close }: FolderFormProps) {
   const { busy, problem, waiting, send, finish } = useFolderRequest(close);
   const subfolders = subfoldersOf(folders, folder);
   const messages = [folder, ...subfolders].reduce((sum, f) => sum + f.total, 0);
+  if (waiting) {
+    return (
+      <div data-part={FOLDER_DIALOG_PART} data-dialog="delete">
+        <Waiting finish={finish} />
+      </div>
+    );
+  }
   return (
-    <div data-part={FOLDER_DIALOG_PART} data-dialog="delete" aria-busy={busy}>
-      <p data-part="folder-dialog.intro">
-        {messages === 0 && subfolders.length === 0
-          ? t("folders-delete-empty-intro", { name: folder.name })
-          : t("folders-delete-intro", {
-              name: folder.name,
-              messages,
-              subfolders: subfolders.length,
-            })}
-      </p>
-      <Problem message={problem} />
-      <Actions waiting={waiting} finish={finish} cancelPrimary>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="danger"
-          disabled={busy}
-          onClick={() => {
-            void send({ type: "DeleteFolder", folder_id: folder.id, permanent: true });
-          }}
-        >
-          {t("folders-delete-confirm")}
-        </button>
-      </Actions>
-    </div>
+    <ConfirmDialog
+      kind="folder-delete"
+      risk="destructive"
+      question={t("folders-delete-question", { name: folder.name })}
+      detail={
+        <p data-part="dialog.note">
+          {messages === 0 && subfolders.length === 0
+            ? t("folders-delete-empty-intro")
+            : t("folders-delete-intro", { messages, subfolders: subfolders.length })}
+        </p>
+      }
+      action={t("folders-delete-confirm")}
+      busy={busy}
+      error={problem === null ? null : t(problem.id, problem.args)}
+      onConfirm={() => {
+        void send({ type: "DeleteFolder", folder_id: folder.id, permanent: true });
+      }}
+      cancel={{ onClick: close }}
+    />
   );
 }
 

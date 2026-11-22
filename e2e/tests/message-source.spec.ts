@@ -67,7 +67,8 @@ test.describe("Show source (demo)", () => {
     expect(copied).toContain("Message-ID: <digest-2026-39@garden-weekly.example>");
     expect(copied).toContain("<h1>Autumn is here</h1>");
 
-    await win.locator('[data-part="form.button"][data-action="close"]').click();
+    // R6: no footer Close; × closes the tool window.
+    await win.locator('[data-part="window.close"]').click();
     await expect(win).toHaveCount(0);
     expect(remote).toEqual([]);
   });

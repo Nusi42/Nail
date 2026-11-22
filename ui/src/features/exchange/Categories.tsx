@@ -11,16 +11,15 @@
  * - mount point `MessageCategories`: the categories of one Exchange
  *   message as coloured chips (list rows, reader).
  */
-import { useId, useState, type SubmitEvent } from "react";
+import { useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type { CategoryColor, ExchangeCategory, MessageSummary } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { TagCheckbox } from "../mail-actions/TagCheckbox";
-import { useTagWindow } from "../mail-actions/tags";
 import { Icon } from "../../widgets/Icon";
-import { CategorySwatch, Problem, useWriteContext, DialogActions, DangerActions } from "./common";
+import { CategorySwatch, Problem, useProblemText, useWriteContext } from "./common";
 import { CATEGORY_COLORS } from "./messages";
 import { categoryIssues, categoryOfTag, tagQuery } from "./model";
 import { CATEGORY_DELETE_DIALOG, CATEGORY_EDITOR_DIALOG } from "./names";
@@ -32,7 +31,15 @@ import {
   useExchangeAccount,
 } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
-import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { ConfirmDialog, DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
+import {
+  EmptyDialog,
+  LoadingDialog,
+  useCloseNow,
+  useTagDialog,
+  TagDialogFooter,
+  useTagDialogGuard,
+} from "../../widgets/DialogStates";
 import { TextField } from "../../widgets/forms";
 import { useBusyAction } from "../../state/busyAction";
 import { useActiveMailView } from "../../state/hooks";
@@ -186,6 +193,9 @@ export function MessageCategories({ message }: { message: MessageSummary }) {
   );
 }
 
+/** The colour a new category starts with. */
+const DEFAULT_COLOR: CategoryColor = "preset7";
+
 /** One colour as a radio button. */
 function ColorOption({
   color,
@@ -258,44 +268,51 @@ function CategoryEditor({
   const ctx = useWriteContext();
   const ids = { colors: useId() };
   const [name, setName] = useState(category?.name ?? "");
-  const [color, setColor] = useState<CategoryColor>(category?.color ?? "preset7");
+  const [color, setColor] = useState<CategoryColor>(category?.color ?? DEFAULT_COLOR);
   const { busy, problem, setProblem, run } = useBusyAction();
+  const closeNow = useCloseNow(close);
   const renaming = category !== null && name.trim() !== category.name;
-
-  const finish = () => {
-    exchangeStoreFor(ctx.store).getState().editCategory(null);
-    close();
-  };
-
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const settings = { name: name.trim(), color };
-    const issue = categoryIssues(
+  const settings = { name: name.trim(), color };
+  const issueOf = () =>
+    categoryIssues(
       settings,
       categories.filter((c) => c.id !== category?.id),
     )[0];
+
+  /** Saves the category and closes; `false` when it has a problem or the core refused. */
+  const save = async (): Promise<boolean> => {
+    const issue = issueOf();
     if (issue) {
       setProblem({ id: `exchange-category-issue-${issue}` });
-      return;
+      return false;
     }
-    await run(async () => {
+    return run(async () => {
       await saveCategory(ctx, accountId, category?.id ?? null, settings);
-      finish();
+      exchangeStoreFor(ctx.store).getState().editCategory(null);
+      closeNow();
     });
   };
+  useCloseGuard({
+    name: () => settings.name,
+    isDirty: () =>
+      settings.name !== (category?.name ?? "") || color !== (category?.color ?? DEFAULT_COLOR),
+    canSave: () => issueOf() === undefined,
+    save,
+  });
 
   return (
-    <form
-      data-part="exchange.dialog"
-      data-dialog="category-editor"
-      aria-busy={busy}
-      onSubmit={(e) => void submit(e)}
+    <DialogForm
+      part="exchange.dialog"
+      dialog="category-editor"
+      busy={busy}
+      onSubmit={() => void save()}
     >
       <TextField
         labelId="common-name"
         name="name"
         value={name}
         maxLength={255}
+        focusOnMount
         invalid={problem !== null}
         onChange={setName}
       />
@@ -318,12 +335,17 @@ function CategoryEditor({
           />
         ))}
       </fieldset>
-      <DialogActions problem={problem} onCancel={finish}>
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t(category ? "exchange-save" : "exchange-category-create")}
-        </button>
-      </DialogActions>
-    </form>
+      <Problem message={problem} />
+      <DialogFooter
+        primary={{
+          label: t(category ? "exchange-save" : "exchange-category-create"),
+          submit: true,
+          action: category ? "save" : "create",
+        }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
+    </DialogForm>
   );
 }
 
@@ -333,6 +355,7 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
   const ctx = useWriteContext();
   const category = useExchangeUi((s) => s.deleting);
   const { busy, problem, run } = useBusyAction();
+  const problemText = useProblemText();
   const finish = () => {
     exchangeStoreFor(ctx.store).getState().deleteCategory(null);
     close();
@@ -354,21 +377,21 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
     });
   };
   return (
-    <div data-part="exchange.dialog" data-dialog="category-delete" aria-busy={busy}>
-      <p data-part="exchange.question">
-        {t("exchange-category-delete-question", { name: category.name })}
-      </p>
-      <p data-part="exchange.hint">
-        {t("exchange-category-delete-hint", { count: category.total })}
-      </p>
-      <DangerActions
-        problem={problem}
-        busy={busy}
-        onCancel={finish}
-        onConfirm={() => void remove()}
-        label={t("exchange-category-delete")}
-      />
-    </div>
+    <ConfirmDialog
+      kind="category-delete"
+      risk="destructive"
+      question={t("exchange-category-delete-question", { name: category.name })}
+      detail={
+        <p data-part="dialog.note">
+          {t("exchange-category-delete-hint", { count: category.total })}
+        </p>
+      }
+      action={t("exchange-category-delete")}
+      busy={busy}
+      error={problemText(problem)}
+      onConfirm={() => void remove()}
+      cancel={{ onClick: finish }}
+    />
   );
 }
 
@@ -379,9 +402,14 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
  */
 export function ApplyCategoriesDialog({ close }: DialogProps) {
   const t = useT();
-  const tags = useTagWindow("category", close);
+  const tags = useTagDialog("category", close);
   const { summary } = tags;
   const categories = useCategories(summary?.exchange ? summary.account_id : null);
+  const list = categories.data ?? [];
+  useTagDialogGuard(
+    tags,
+    list.map((c) => c.name),
+  );
   if (!summary?.exchange) {
     return (
       <EmptyDialog
@@ -392,17 +420,12 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
       />
     );
   }
-  const list = categories.data ?? [];
-
   return (
-    <form
-      data-part="exchange.dialog"
-      data-dialog="apply-categories"
-      aria-busy={tags.busy}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void tags.apply(list.map((c) => c.name));
-      }}
+    <DialogForm
+      part="exchange.dialog"
+      dialog="apply-categories"
+      busy={tags.busy}
+      onSubmit={() => void tags.apply(list.map((c) => c.name))}
     >
       <p data-part="exchange.intro">{t("exchange-apply-intro", { subject: summary.subject })}</p>
       <fieldset data-part="exchange.colors">
@@ -423,14 +446,7 @@ export function ApplyCategoriesDialog({ close }: DialogProps) {
         ))}
       </fieldset>
       <Problem message={tags.problem} />
-      <div data-part="exchange.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={tags.busy}>
-          {t("common-apply")}
-        </button>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("common-cancel")}
-        </button>
-      </div>
-    </form>
+      <TagDialogFooter busy={tags.busy} close={close} />
+    </DialogForm>
   );
 }

@@ -1,6 +1,6 @@
 /** Small shared pieces of the Exchange UI. */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, type ReactNode } from "react";
+import { useId } from "react";
 import type { CategoryColor, LocalizedMessage } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
@@ -26,57 +26,10 @@ export function Problem({
   );
 }
 
-/** A dialog's problem and its action row: Cancel first, then `children`. */
-export function DialogActions({
-  problem,
-  onCancel,
-  children,
-}: {
-  problem: LocalizedMessage | null;
-  onCancel: () => void;
-  children: ReactNode;
-}) {
+/** The localized text of a problem for a `ConfirmDialog`'s `error` (`null` = none). */
+export function useProblemText(): (message: LocalizedMessage | null) => string | null {
   const t = useT();
-  return (
-    <>
-      <Problem message={problem} />
-      <div data-part="exchange.actions">
-        <button type="button" data-part="form.button" onClick={onCancel}>
-          {t("common-cancel")}
-        </button>
-        {children}
-      </div>
-    </>
-  );
-}
-
-/** {@link DialogActions} with one danger button (delete, remove, hide). */
-export function DangerActions({
-  problem,
-  busy,
-  onCancel,
-  onConfirm,
-  label,
-}: {
-  problem: LocalizedMessage | null;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  label: string;
-}) {
-  return (
-    <DialogActions problem={problem} onCancel={onCancel}>
-      <button
-        type="button"
-        data-part="form.button"
-        data-variant="danger"
-        disabled={busy}
-        onClick={onConfirm}
-      >
-        {label}
-      </button>
-    </DialogActions>
-  );
+  return (message) => (message === null ? null : t(message.id, message.args));
 }
 
 /** Client, query client and UI store for the feature's writes. */

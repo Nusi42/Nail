@@ -31,6 +31,8 @@ outbox-recipients = To: { $recipients }
 outbox-send-at = Due { $time }
 outbox-send-now = Send now
 outbox-draft-continue = Continue writing
+# A saved draft's Discard asks first (its verb is composer-discard-draft).
+outbox-discard-question = Discard the draft “{ $subject }”? It cannot be restored.
 outbox-state-scheduled = { portability-phase-queued }
 outbox-state-sending = Sending
 outbox-state-sent = Sent

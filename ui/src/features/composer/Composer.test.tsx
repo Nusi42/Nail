@@ -160,7 +160,7 @@ describe("rich composer", () => {
       within(group).getByRole("textbox", { name: "Address" }),
       "https://nail.example",
     );
-    await user.click(within(group).getByRole("button", { name: "Apply" }));
+    await user.click(within(group).getByRole("button", { name: "Set link" }));
     expect(rich(env).html).toContain('href="https://nail.example"');
     expect(screen.queryByRole("group", { name: "Link" })).toBeNull();
   });

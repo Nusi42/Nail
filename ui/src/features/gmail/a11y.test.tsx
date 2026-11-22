@@ -95,7 +95,10 @@ describe("axe: Gmail dialogs", () => {
       const env = setup();
       prepare(env, name, existing);
       const container = await shownDialog(env, dialogs, name);
-      expect(container.querySelector('[data-part="gmail.dialog"]')).not.toBeNull();
+      // R6: the delete question is the shared confirmation.
+      expect(
+        container.querySelector('[data-part="gmail.dialog"], [data-part="dialog.confirm"]'),
+      ).not.toBeNull();
       expect(await violations(container)).toEqual([]);
     },
     30_000,

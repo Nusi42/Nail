@@ -5,7 +5,7 @@
  * one.
  *
  * Parts: `folder-dialog` (`data-dialog` = `name` / `move` / `delete`):
- * `.intro`, `.note`, `.actions`.
+ * `.intro`, `.note` (R6: the buttons are the shared `dialog.footer`).
  */
 import { p } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
@@ -19,5 +19,4 @@ export const FOLDERS_SKIN_CSS = `${p(FOLDER_DIALOG_PART)} {
 ${d("intro")} { margin: 0; overflow-wrap: anywhere; }
 ${d("note")} { margin: 0; color: ${T.muted}; font-size: ${T.small}; }
 ${p(FOLDER_DIALOG_PART)} ${p("folder-picker.list")} { flex: 1 1 auto; min-height: 0; overflow: auto; }
-${d("actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; margin-top: auto; }
 `;

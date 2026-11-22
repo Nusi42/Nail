@@ -16,6 +16,7 @@ import { formatBytes } from "../portability/model";
 import { isTruncated, sourceText, type OmittedLine } from "./model";
 import { SOURCE_PART, SOURCE_VIEWS, type SourceView } from "./names";
 import { useSourceState } from "./store";
+import { DialogFooter } from "../../widgets/dialog";
 
 /** Query keys of this feature. */
 export const sourceKeys = {
@@ -34,7 +35,8 @@ function useMessageSource(id: MessageId) {
   });
 }
 
-function Source({ id, close }: { id: MessageId; close: () => void }) {
+/** The source of message `id`: Copy all; × closes (R6: no footer Close). */
+function Source({ id }: { id: MessageId }) {
   const t = useT();
   const locale = useLocale();
   const source = useMessageSource(id);
@@ -131,15 +133,6 @@ function Source({ id, close }: { id: MessageId; close: () => void }) {
         >
           {t("source-copy")}
         </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="close"
-          onClick={close}
-        >
-          {t("common-close")}
-        </button>
       </div>
     </div>
   );
@@ -153,13 +146,9 @@ export function SourceWindow({ name, close }: DialogProps) {
     return (
       <div data-part={SOURCE_PART}>
         <p data-part="message-source.note">{t("source-gone")}</p>
-        <div data-part="message-source.actions">
-          <button type="button" data-part="form.button" data-action="close" onClick={close}>
-            {t("common-close")}
-          </button>
-        </div>
+        <DialogFooter done={{ onDone: close }} />
       </div>
     );
   }
-  return <Source id={id} close={close} />;
+  return <Source id={id} />;
 }

@@ -251,7 +251,7 @@ export function HtmlEditor({
             data-action="apply-link"
             onClick={applyLink}
           >
-            {t("common-apply")}
+            {t("composer-link-set")}
           </button>
           <button
             type="button"

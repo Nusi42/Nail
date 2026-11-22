@@ -204,7 +204,9 @@ describe("axe: Exchange dialogs", () => {
       prepare(env, name, existing);
       const container = await shownDialog(env, dialogs, name);
       expect(
-        container.querySelector('[data-part="exchange.dialog"], [data-part="exchange.oof"]'),
+        container.querySelector(
+          '[data-part="exchange.dialog"], [data-part="exchange.oof"], [data-part="dialog.confirm"]',
+        ),
       ).not.toBeNull();
       expect(container.querySelector('[data-state="empty"]')).toBeNull();
       expect(await violations(container)).toEqual([]);

@@ -11,11 +11,10 @@ import { TOOLBAR_IDS } from "./toolbar";
 export const prefixes: readonly string[] = ["composer-"];
 
 /**
- * Literals with those prefixes that are not message ids (part names, the
- * confirmation window kind `composer-close`; `composer-discard` is both a
- * window kind and the Discard button's text).
+ * Literals with those prefixes that are not message ids (part names;
+ * `composer-discard` is both a window kind and the Discard button's text).
  */
-export const notMessages: readonly string[] = ["composer-close"];
+export const notMessages: readonly string[] = [];
 
 /** Message ids built at runtime (e.g. `window-<name>` of dialogs). */
 export function runtimeIds(): string[] {
@@ -23,8 +22,7 @@ export function runtimeIds(): string[] {
     ...COMPOSER_MODE_VALUES.map((m) => `composer-mode-${m}`),
     ...TOOLBAR_IDS.flatMap((id) => [`composer-format-${id}`, `composer-format-${id}-short`]),
     "composer-field-subject",
-    // Titles of the confirmation windows (`window-<kind>`, M5c).
-    "window-composer-close",
+    // The title of the confirmation window (`window-<kind>`, M5c).
     "window-composer-discard",
   ];
 }

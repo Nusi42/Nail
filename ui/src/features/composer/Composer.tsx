@@ -28,6 +28,7 @@ import { useComposeContext } from "../../state/hooks";
 import { useChosenIdentity, useIdentities } from "../../state/queries";
 import { useStore } from "zustand";
 import { useUi, useUiStoreApi, type ComposerState, type UiState } from "../../state/uiStore";
+import { useCloseGuard } from "../../widgets/dialog";
 import { Icon } from "../../widgets/Icon";
 import { composerCryptoStore } from "../security";
 import { AddressField } from "./AddressField";
@@ -50,10 +51,19 @@ import { Preview } from "./Preview";
 import { useComposerWindowOf } from "./windowOf";
 import { useComposerPopOut } from "./popOut";
 import { needsReminder, parseKeywords } from "./reminder";
-import { composerOf, composerSessions, cryptoFor, patchComposer } from "./sessions";
+import { subjectOf } from "./ConfirmDialogs";
+import {
+  composerOf,
+  composerSessions,
+  cryptoFor,
+  isUnsaved,
+  markClosing,
+  patchComposer,
+} from "./sessions";
 import {
   autosaveDelay,
   ComposerWindowContext,
+  isComposerInstance,
   richStoreFor,
   useComposerWindow,
   useRich,
@@ -232,13 +242,36 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
 export function Composer(props: WidgetProps) {
   const window = useComposerWindowOf();
   const store = useUiStoreApi();
-  // The focused-composer mirror and the close guard (`./sessions.ts`).
+  // The focused-composer mirror and the closing rules (`./sessions.ts`).
   useEffect(() => void composerSessions(store), [store]);
   return (
     <ComposerWindowContext.Provider value={window}>
+      {isComposerInstance(window) && <ComposerCloseGuard window={window} />}
       <ComposerForm {...props} window={window} />
     </ComposerWindowContext.Provider>
   );
+}
+
+/**
+ * The close guard of a composer window (R6, ADR 0239): ×, Esc or a view
+ * switch with unsaved changes keeps the window and the shared prompt asks
+ * "Save changes to “subject”?" — Save draft (then it closes), Don't save
+ * (the last saved draft stays), Cancel (keep editing).
+ */
+function ComposerCloseGuard({ window }: { window: string }) {
+  const t = useT();
+  const ctx = useComposeContext();
+  useCloseGuard({
+    name: () => subjectOf(composerOf(ctx.store.getState(), window)?.subject ?? "", t),
+    isDirty: () => isUnsaved(ctx.store, window),
+    save: async () => (await saveRich(ctx, { window })) !== null,
+    discard: () => {
+      markClosing(ctx.store, window);
+    },
+    saveLabel: () => t("common-save-draft"),
+    detail: () => t("composer-close-detail"),
+  });
+  return null;
 }
 
 function ComposerForm({ node, window }: WidgetProps & { window: string }) {
@@ -333,9 +366,10 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
   const send = (force = false) =>
     void sendRich(ctx, later ? localToIso(sendAt) : null, { window, force });
 
+  // Enter in a single-line field (Subject) never sends (R6, ADR 0239):
+  // Send is a plain button; Ctrl+Enter sends (the layout's `composer.send`).
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    send();
   };
 
   // The layout's composer keys (send, save) run the rich flows here, before
@@ -689,11 +723,14 @@ function ComposerForm({ node, window }: WidgetProps & { window: string }) {
         )}
         <div data-part="composer.actions">
           <button
-            type="submit"
+            type="button"
             data-part="form.button"
             data-action="send"
             data-variant="primary"
             disabled={busy}
+            onClick={() => {
+              send();
+            }}
           >
             <Icon name="send" part="form.button.icon" />
             <span data-part="form.button.label">

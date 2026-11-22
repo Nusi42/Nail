@@ -42,7 +42,14 @@ closing a window.
   [Settings](settings.md#saving-your-changes).
 - **Questions that delete never default to it** — the red button names the
   action, Cancel has the focus, and `Enter` never deletes ("Delete
-  permanently?" first).
+  permanently?" first; also "Delete folder", "Delete label", the Exchange
+  deletes, "Discard draft" and a plug-in's "Send anyway").
+- **Mail dialogs in the same pattern** — closing a message with unsaved
+  changes asks **Save changes to “…”?** with **Save draft**; `Enter` in
+  **Subject** no longer sends (`Ctrl+Enter` does). Apply labels and
+  categories save with **Save**, Automatic replies closes on **Save**, Print
+  offers **Print**, **Save as PDF…** and **Cancel**, and discarding a draft
+  in the Outbox asks first. See [Composing mail](composer.md).
 
 ### Corrected in 0.8.10
 

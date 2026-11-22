@@ -41,7 +41,10 @@ words it forgets the ones seen in only one message.
 
 ## Snooze
 
-Snoozing hides a message until a time you pick. The message moves to a
+Snoozing hides a message until a time you pick. **Snooze…** offers quick
+choices (later today, tomorrow, next week, …): choosing one snoozes at once
+and closes the window. For another time, fill in the date and time and
+choose **Snooze** (or press `Enter`); **Cancel** snoozes nothing. The message moves to a
 hidden folder called **Snoozed** on your server, and it gets a `$Snoozed`
 mark so other mail programs can recognize it. At the time you picked, Nail
 moves it back to the folder it came from. If that folder no longer exists,

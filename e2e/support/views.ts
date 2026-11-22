@@ -61,11 +61,11 @@ export async function saveVacationReply(
   await vacation.getByRole("button", { name: "Save", exact: true }).click();
 }
 
-/** In the open "Apply labels" dialog: checks `label` and applies. */
+/** In the open "Apply labels" dialog: checks `label` and saves (R6: Save closes). */
 export async function applyLabel(page: Page, label: string): Promise<void> {
   const apply = page.getByRole("dialog", { name: "Apply labels" });
   await apply.getByRole("checkbox", { name: label }).check();
-  await apply.getByRole("button", { name: "Apply" }).click();
+  await apply.getByRole("button", { name: "Save", exact: true }).click();
   await expect(apply).toBeHidden();
 }
 
@@ -247,7 +247,7 @@ export const composerWindows = (scope: Page | Locator) =>
 
 /**
  * Discards a composer: its Discard button, then — when the message has a
- * saved draft or changes (M5c) — "Discard" in the modal confirmation.
+ * saved draft or changes (M5c) — "Discard draft" in the modal confirmation.
  */
 export async function discardComposer(page: Page, composer: Locator): Promise<void> {
   const window = await composer.getAttribute("data-window");
@@ -260,10 +260,24 @@ export async function discardComposer(page: Page, composer: Locator): Promise<vo
     .catch(() => undefined);
   await expect(async () => {
     if (await confirm.isVisible()) {
-      await confirm.getByRole("button", { name: "Discard" }).click({ timeout: 1000 });
+      await confirm.getByRole("button", { name: "Discard draft" }).click({ timeout: 1000 });
     }
     await expect(gone).toHaveCount(0, { timeout: 1000 });
   }).toPass({ timeout: 10_000 });
+}
+
+/** A folder row of demo-multi's "work" account (IMAP) by its name. */
+export function workFolderRow(page: Page, name: string): Locator {
+  return page
+    .locator('[data-part="folder-tree.item"][data-account="work"]')
+    .filter({ has: page.getByText(name, { exact: true }) })
+    .first();
+}
+
+/** Runs `item` of a folder row's right-click menu. */
+export async function folderMenuItem(page: Page, row: Locator, item: string): Promise<void> {
+  await row.click({ button: "right" });
+  await page.getByRole("menu").getByRole("menuitem", { name: item }).click();
 }
 
 /** The New message button on top of the folder pane. */

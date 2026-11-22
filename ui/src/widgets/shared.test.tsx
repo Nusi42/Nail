@@ -10,7 +10,7 @@ import type { IncomingServer } from "../api/generated";
 import { createEnv, renderWithProviders } from "../test/harness";
 import { must } from "../test/must";
 import { CloseButton } from "./CloseButton";
-import { EmptyDialog, LoadingDialog } from "./DialogStates";
+import { EmptyDialog, LoadingDialog, useCloseNow } from "./DialogStates";
 import { LabelledField, SaveRow, withOptions } from "./forms";
 import { RefreshButton } from "./RefreshButton";
 import { RemoveButton } from "./RemoveButton";
@@ -51,7 +51,7 @@ describe("common buttons", () => {
 });
 
 describe("dialog states", () => {
-  it("shows the empty state's hint with a Close button, and the loading state", () => {
+  it("shows the empty state's hint with one Done (R6), and the loading state", () => {
     const close = vi.fn();
     const { container } = renderWithProviders(
       <>
@@ -68,7 +68,27 @@ describe("dialog states", () => {
     expect(loading).toHaveAttribute("data-state", "loading");
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(container.querySelectorAll('[data-part$=".hint"]')).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(container.querySelector('[data-part="dialog.footer"]')).toHaveAttribute(
+      "data-state",
+      "done",
+    );
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes a dialog outside any window with its own close (useCloseNow)", () => {
+    const close = vi.fn();
+    function Saver() {
+      const closeNow = useCloseNow(close);
+      return (
+        <button type="button" onClick={closeNow}>
+          save
+        </button>
+      );
+    }
+    renderWithProviders(<Saver />, createEnv());
+    fireEvent.click(screen.getByRole("button", { name: "save" }));
     expect(close).toHaveBeenCalledOnce();
   });
 });

@@ -2842,7 +2842,6 @@ theme "default" mode="system" {
     part "snooze.preset:hover" { background-color "$color.bg-raised"; }
     part "snooze.preset:focus-visible" { outline "2px solid $color.focus-ring"; }
     part "snooze.preset.time" { color "$color.fg-muted"; }
-    part "snooze.actions" { display "flex"; gap "$space.sm"; }
     part "snooze.error" { margin 0; color "$color.danger"; }
     part "snooze-list" {
         display "flex"
@@ -3676,7 +3675,6 @@ theme "default" mode="system" {
     part "gmail.color.name" { font-size "$font-size.sm"; }
     part "gmail.dialog" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 360; max-width 640; padding "$space.md"; }
     part "gmail.dialog.intro" { margin 0; }
-    part "gmail.dialog.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "gmail.apply.labels" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
     part "gmail.problem" { margin 0; color "$color.danger"; }
     part "gmail.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
@@ -3930,11 +3928,9 @@ theme "default" mode="system" {
     part "plugin-block.caption" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "plugin-block.source" { font-family "$font.mono"; font-size "$font-size.sm"; white-space "pre-wrap"; }
     part "plugin-veto" { display "flex"; flex-direction "column"; gap "$space.md"; }
-    part "plugin-veto.intro" { margin 0; color "$color.fg-muted"; }
     part "plugin-veto.list" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
     part "plugin-veto.plugin" { font-weight "$font-weight.bold"; }
     part "plugin-veto.reason" { margin 0; }
-    part "plugin-veto.buttons" { display "flex"; justify-content "flex-end"; gap "$space.sm"; }
     part "plugin-veto.error" { color "$color.danger"; }
     part "plugin-activity" { display "flex"; flex-direction "column"; gap "$space.sm"; }
     part "plugin-activity.heading" { margin 0; font-size "$font-size.md"; }

@@ -328,10 +328,10 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   await messageRows(page).first().click();
   const { id, own } = await openComposer(page);
   await own.getByRole("textbox", { name: "Subject" }).fill("Unsaved thoughts");
-  // Closed with unsaved changes (the autosave is lengthened): the composer asks.
+  // Closed with unsaved changes (the autosave is lengthened): the shared prompt asks.
   await own.locator('[data-part="window.close"]').click();
   const key = id.split(":")[1] ?? "";
-  const confirm = win(page, `composer-close:${key}`);
+  const confirm = win(page, `unsaved-changes:composer_${key}`);
   await expect(confirm).toBeVisible();
   await expect(confirm).toHaveAttribute("data-owner", id);
   await expect(own).toHaveAttribute("data-blocked", "");
@@ -343,7 +343,7 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   await other.click();
   await expect(other).toHaveAttribute("aria-selected", "true");
 
-  await confirm.getByRole("button", { name: "Keep editing" }).click();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(confirm).toBeHidden();
   await expect(own).not.toHaveAttribute("inert", "");
   await expect(own.getByRole("textbox", { name: "Subject" })).toHaveValue("Unsaved thoughts");
@@ -394,7 +394,7 @@ test("Escape closes the focused window, not windows behind the main window", asy
   const { id, own } = await openComposer(page);
   await own.getByRole("textbox", { name: "Subject" }).fill("Not yet");
   await own.getByRole("textbox", { name: "Subject" }).press("Escape");
-  const confirm = win(page, `composer-close:${id.split(":")[1] ?? ""}`);
+  const confirm = win(page, `unsaved-changes:composer_${id.split(":")[1] ?? ""}`);
   await expect(confirm).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(confirm).toBeHidden();

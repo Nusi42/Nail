@@ -303,7 +303,12 @@ Where shared things live (Q2, ADRs 0172–0177):
   `useCloseGuard`, `askToLeave`). Vitest renders windows with the guard
   through `withCloseGuard` (`ui/src/test/closeGuard.ts`); e2e checks a
   footer's order and focus with `emulateViewerOs` / `expectDialogFooter`
-  (`e2e/support/windowTour.ts`).
+  (`e2e/support/windowTour.ts`). A dialog's empty state (`EmptyDialog`: one
+  Done), its close after its own Save without asking (`useCloseNow`) and the
+  tag windows' guard and footer (`useTagDialog`, `useTagDialogGuard`,
+  `TagDialogFooter`) are in `ui/src/widgets/DialogStates.tsx` (ADR 0240);
+  demo-multi's work folders in e2e: `workFolderRow` / `folderMenuItem`
+  (`e2e/support/views.ts`).
 
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`

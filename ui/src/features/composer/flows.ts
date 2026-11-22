@@ -32,6 +32,7 @@ import {
   type ComposeContext,
   type ReplyMode,
 } from "../../state/compose";
+import { closeWindowNow } from "../../layout/closeGuard";
 import { queryKeys } from "../../state/queries";
 import { createUiStore, type ComposerState } from "../../state/uiStore";
 import { sendDraftChecked } from "../plugins/SendVeto";
@@ -40,7 +41,6 @@ import { bodyOf, draftKey, fromDraft, richDraftOf } from "./draft";
 import { needsReminder, parseKeywords } from "./reminder";
 import { loadInlinePreviews } from "./inlineImages";
 import {
-  CLOSE_CONFIRM_KIND,
   composerOf,
   composerSessions,
   composerTarget,
@@ -159,7 +159,7 @@ function finish(ctx: Pick<ComposeContext, "store">, window: string): void {
   const ui = ctx.store.getState();
   if (isComposerInstance(window)) {
     markClosing(ctx.store, window);
-    ui.closeWindow(window);
+    closeWindowNow(ctx.store, window);
     setComposerFor(ctx.store, window, null);
     dropRichStore(ctx.store, window);
   } else {
@@ -499,22 +499,19 @@ export async function requestDiscard(ctx: ComposeContext, window?: string | null
 }
 
 /**
- * Closes a composer window: at once when everything is saved, else after
- * the modal confirmation `composer-close` (save, close without saving,
- * keep editing). Closing keeps the saved draft (Drafts in the outbox).
+ * Closes a composer window like its × does: at once when everything is
+ * saved, else the window layer's close guard keeps it open and the shared
+ * prompt asks (R6: Save draft, Don't save, Cancel). Closing keeps the
+ * saved draft (Drafts in the outbox).
  */
 export function requestClose(ctx: Pick<ComposeContext, "store">, window: string): void {
-  if (isComposerInstance(window) && isUnsaved(ctx.store, window)) {
-    ctx.store.getState().openWindow(confirmWindowFor(CLOSE_CONFIRM_KIND, window));
-  } else {
-    closeComposerNow(ctx, window);
-  }
+  ctx.store.getState().closeWindow(window);
 }
 
 /** Closes a composer window without asking (its last saved draft stays). */
 export function closeComposerNow(ctx: Pick<ComposeContext, "store">, window: string): void {
   if (isComposerInstance(window)) markClosing(ctx.store, window);
-  ctx.store.getState().closeWindow(window);
+  closeWindowNow(ctx.store, window);
 }
 
 function applyConverted(

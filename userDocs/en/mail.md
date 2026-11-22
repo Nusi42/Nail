@@ -363,8 +363,10 @@ in Nail (POP3 and local accounts):
 - Renaming or moving keeps the folder's messages and settings; rules that
   file mail into it follow the new name.
 - **Delete folder** moves the folder with its subfolders into the
-  account's Trash. Deleting a folder that is in Trash asks first and then
-  deletes it with all its messages, on the server too.
+  account's Trash. Deleting a folder that is in Trash asks first ("Delete
+  the folder “…” for good?") and then deletes it with all its messages, on
+  the server too. **Cancel** has the focus, so `Enter` deletes nothing; only
+  the red **Delete folder** button deletes.
 - Inbox, Sent, Drafts, Trash and the other special folders cannot be
   renamed, moved or deleted. Gmail accounts have labels instead (**New
   label** in the same menu). Exchange accounts on your own server (EWS)
@@ -372,7 +374,9 @@ in Nail (POP3 and local accounts):
 
 The window stays open until the server has made the change. When the
 server cannot be reached, Nail says so and makes the change as soon as it
-can.
+can; **Done** closes the window. Closing the name window after typing a
+name asks whether to save it. **Move folder to…** is a list: choosing a
+place moves the folder, × closes it without moving.
 
 ## Show source
 
@@ -394,7 +398,7 @@ read, select and copy:
 the view you are looking at. Nothing is loaded from the internet to show
 the source, and a message larger than 4 MB shows only its beginning. Each
 message gets its own window; showing the source again brings it to the
-front.
+front. × closes it.
 
 ## Snooze
 

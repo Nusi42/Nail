@@ -32,7 +32,9 @@ async function closeComposer(page: Page) {
     await dialog.getByRole("button", { name: "Discard" }).click();
     // A message with a saved draft or changes asks first (M5c).
     const confirm = page.locator('[data-part="window"][data-window^="composer-discard"]');
-    if (await confirm.isVisible()) await confirm.getByRole("button", { name: "Discard" }).click();
+    if (await confirm.isVisible()) {
+      await confirm.getByRole("button", { name: "Discard draft" }).click();
+    }
     await expect(page.locator('[data-part="window"][data-window^="composer"]')).toHaveCount(0);
   }
 }

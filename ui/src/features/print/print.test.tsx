@@ -105,6 +105,15 @@ describe("printing", () => {
     await user.click(screen.getByRole("button", { name: `run ${PRINT_MESSAGE_ACTION}` }));
     const dialog = await screen.findByRole("dialog", { name: "Print" });
     expect(await within(dialog).findByText(/^Message: /)).toBeVisible();
+    // R6: one footer — Print (primary), Save as PDF… (secondary), Cancel.
+    const roles = [...dialog.querySelectorAll('[data-part="dialog.footer.end"] > button')].map(
+      (b) => [b.getAttribute("data-role"), b.textContent],
+    );
+    expect(roles).toEqual([
+      ["primary", "Print"],
+      ["secondary", "Save as PDF…"],
+      ["cancel", "Cancel"],
+    ]);
     await user.selectOptions(within(dialog).getByLabelText("Paper size"), "letter");
     await user.selectOptions(within(dialog).getByLabelText("Headers"), "full");
     await user.click(within(dialog).getByRole("button", { name: "Print" }));
@@ -191,10 +200,25 @@ describe("printing", () => {
     expect(within(dialog).getByLabelText("PDF file")).toHaveValue(
       "C:\\Users\\Ada\\Documents\\mail.pdf",
     );
+    // The PDF step: Save PDF is the primary, Print the second choice.
+    expect(within(dialog).getByRole("button", { name: "Save PDF" })).toHaveAttribute(
+      "data-role",
+      "primary",
+    );
+    expect(within(dialog).getByRole("button", { name: "Print" })).toHaveAttribute(
+      "data-role",
+      "secondary",
+    );
     await user.click(within(dialog).getByRole("button", { name: "Save PDF" }));
     expect(
       await within(dialog).findByText(/Saved to C:\\Users\\Ada\\Documents\\mail\.pdf/),
     ).toBeVisible();
+    // Finished: one Done, which closes the dialog.
+    expect(within(dialog).queryByRole("button", { name: "Cancel" })).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Print" })).toBeNull();
+    });
     expect(env.transport.data.features.print.pdfs).toHaveLength(1);
     // The Save dialog asked before replacing an existing file.
     expect(env.transport.requests.find((r) => r.type === "SavePrintPdf")).toMatchObject({

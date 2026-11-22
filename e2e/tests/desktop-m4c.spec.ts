@@ -43,8 +43,8 @@ test("print to PDF writes a PDF file of the message", async () => {
 
   // Post-M4c: a typed path never replaces an existing file — only the
   // Save dialog's confirmation (`overwrite`) would.
-  // The footer's Close (the title bar has a Close button too).
-  await dialog.locator('[data-part="form.button"][data-action="close"]').click();
+  // R6: a saved PDF shows one Done in the footer.
+  await dialog.getByRole("button", { name: "Done" }).click();
   await expect(dialog).toBeHidden();
   await page.keyboard.press("Control+p");
   await expect(dialog).toBeVisible();

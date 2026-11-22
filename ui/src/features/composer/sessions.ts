@@ -20,12 +20,15 @@
  * save their kept choice (`cryptoFor`).
  *
  * **Closing.** A composer closed by a flow (sent, discarded, closed after
- * the confirmation) goes away. Closed any other way (its title bar's close
+ * the prompt) goes away. Closed any other way (its title bar's close
  * button, Escape, a view switch) it goes away too when nothing is unsaved;
- * with unsaved changes it stays open and the modal confirmation
- * `composer-close:<key>` asks (save, close without saving, keep editing).
+ * with unsaved changes the window layer's close guard keeps it open and
+ * the shared prompt asks (R6, ADR 0239: Save draft, Don't save, Cancel;
+ * `ComposerCloseGuard` in `./Composer.tsx`), so its state stays here until
+ * it really closes.
  */
 import type { DraftId, SendCrypto } from "../../api/generated";
+import { promptWindowFor } from "../../layout/closeGuard";
 import type { ComposerState, UiState, UiStore } from "../../state/uiStore";
 import {
   isWindowInstance,
@@ -48,8 +51,6 @@ import {
 
 export { composerOf };
 
-/** The modal "close with unsaved changes?" confirmation (`composer-close:<key>`). */
-export const CLOSE_CONFIRM_KIND = "composer-close";
 /** The modal "discard this message?" confirmation (`composer-discard:<key>`). */
 export const DISCARD_CONFIRM_KIND = "composer-discard";
 
@@ -120,7 +121,7 @@ export function confirmWindowFor(kind: string, composer: string): string {
   return windowId(kind, parseWindowId(composer)?.instance ?? null);
 }
 
-/** The composer a confirmation window (`composer-close:<key>`, …) belongs to. */
+/** The composer a confirmation window (`composer-discard:<key>`) belongs to. */
 export function composerOfConfirm(confirm: string): string {
   return windowId(COMPOSER_KIND, parseWindowId(confirm)?.instance ?? null);
 }
@@ -133,6 +134,8 @@ interface Session {
   /** Windows a flow is closing (no confirmation). */
   closing: Set<string>;
   applying: boolean;
+  /** The store state the composers were last made consistent with. */
+  seen: UiState;
 }
 
 const sessions = new WeakMap<UiStore, Session>();
@@ -144,11 +147,37 @@ const sessions = new WeakMap<UiStore, Session>();
 export function composerSessions(ui: UiStore): Session {
   const existing = sessions.get(ui);
   if (existing) return existing;
-  const session: Session = { active: null, crypto: new Map(), closing: new Set(), applying: false };
+  const session: Session = {
+    active: null,
+    crypto: new Map(),
+    closing: new Set(),
+    applying: false,
+    // A store that already has instance windows (restored state, tests).
+    seen: { ...ui.getState(), windows: [] },
+  };
   sessions.set(ui, session);
-  ui.subscribe((next, prev) => {
-    if (session.applying) return;
+  ui.subscribe(() => {
+    if (!session.applying) catchUp(ui, session);
+  });
+  catchUp(ui, session);
+  return session;
+}
+
+/**
+ * Makes the composers consistent with the store's current state, from the
+ * state they were last consistent with. Another listener may change the
+ * store while it notifies (the close guard puts a closing window back), so
+ * a notification can be stale: the current state counts, not the
+ * notification's pair.
+ */
+function catchUp(ui: UiStore, session: Session): void {
+  // Each round applies one patch; a patch settles in the next round.
+  for (let round = 0; round < 4; round += 1) {
+    const next = ui.getState();
+    const prev = session.seen;
+    if (next === prev) return;
     const patch = reconcile(ui, session, prev, next);
+    session.seen = patch === null ? next : { ...next, ...patch };
     if (patch === null) return;
     session.applying = true;
     try {
@@ -156,11 +185,7 @@ export function composerSessions(ui: UiStore): Session {
     } finally {
       session.applying = false;
     }
-  });
-  // A store that already has instance windows (restored state, tests).
-  const patch = reconcile(ui, session, { ...ui.getState(), windows: [] }, ui.getState());
-  if (patch !== null) ui.setState(patch);
-  return session;
+  }
 }
 
 /** Marks a composer window as closed by a flow: no "unsaved" confirmation. */
@@ -222,21 +247,17 @@ function reconcile(
     dropRichStore(ui, id);
     session.crypto.delete(id);
     session.closing.delete(id);
-    // Its confirmations have nothing left to ask about.
-    const confirms = [CLOSE_CONFIRM_KIND, DISCARD_CONFIRM_KIND].map((k) => confirmWindowFor(k, id));
-    windows = windows.filter((w) => !confirms.includes(w));
+    // Its questions have nothing left to ask about.
+    const questions = [confirmWindowFor(DISCARD_CONFIRM_KIND, id), promptWindowFor(id)];
+    windows = windows.filter((w) => !questions.includes(w));
   };
 
-  // 1. Instance composers whose window closed.
+  // 1. Instance composers whose window closed. An unsaved one keeps its
+  // state: the close guard puts its window back and asks.
   if (windows !== prev.windows) {
     for (const id of composerInstances(prev.windows)) {
       if (windows.includes(id)) continue;
-      if (session.closing.has(id) || !isUnsaved(ui, id)) {
-        drop(id);
-      } else {
-        // Unsaved: it stays open, and the confirmation asks.
-        windows = [...windows, id, confirmWindowFor(CLOSE_CONFIRM_KIND, id)];
-      }
+      if (session.closing.has(id) || !isUnsaved(ui, id)) drop(id);
     }
   }
 
@@ -294,5 +315,5 @@ function reconcile(
 /** Window kinds this feature owns (for `windowKind` checks in tests). */
 export function isComposerWindow(window: string): boolean {
   const kind = windowKind(window);
-  return kind === COMPOSER_KIND || kind === CLOSE_CONFIRM_KIND || kind === DISCARD_CONFIRM_KIND;
+  return kind === COMPOSER_KIND || kind === DISCARD_CONFIRM_KIND;
 }

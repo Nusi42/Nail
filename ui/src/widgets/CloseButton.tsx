@@ -1,4 +1,10 @@
-/** "Close": the button that ends a dialog, a wizard or a view. */
+/**
+ * "Close": the button that ends a view (the print view's toolbar) or a
+ * dialog that has not moved to the shared footer yet. R6 (ADR 0239): a
+ * dialog's finished state shows one Done (`DialogFooter`'s `done`), and
+ * tool windows have no footer Close (× is enough); new dialogs do not use
+ * this button.
+ */
 import { useT } from "../i18n/I18nProvider";
 
 export function CloseButton({

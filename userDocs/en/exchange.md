@@ -110,7 +110,8 @@ counts; choose one to see its messages in every folder. **New category**,
 
 **Categories…** in the message toolbar (and in its right-click menu) sets
 the categories of the selected conversation (every message of it; **Undo**
-reverts them): they are written to the server as the messages' categories.
+reverts them): **Save** writes them to the server as the messages'
+categories.
 A category only some of the messages have shows as a mixed box: leave it,
 tick it for all, or clear it for all.
 
@@ -126,8 +127,9 @@ server).
 
 ## Automatic replies (out of office)
 
-**Automatic replies…** opens the editor. Exchange answers for you even
-while Nail is closed:
+**Automatic replies…** opens the editor. **Save** sends the replies to
+Exchange and closes the window; **Cancel** (or ×) asks first when you
+changed something. Exchange answers for you even while Nail is closed:
 
 - **Send automatic replies**, or **only during this time** with a start
   and end (in your time zone).

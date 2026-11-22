@@ -23,6 +23,7 @@ import { POP_OUT_CLOSE_EVENT, WINDOW_KEYBOARD_STEP, resolveWindowSpec } from "./
 import { setAutosaveDelay } from "./features/composer/store";
 import { WindowLayer } from "./layout/WindowLayer";
 import { applyPopOuts } from "./state/windowState";
+import { withCloseGuard } from "./test/closeGuard";
 import { createEnv, renderWithProviders, stubElementSizes, type Env } from "./test/harness";
 import { must } from "./test/must";
 import { geometry } from "./test/env";
@@ -92,6 +93,8 @@ function popOutPage(main: Env, id: string): Env {
   page.transport = main.transport;
   page.client = main.client;
   window.location.hash = `#/window/${id}`;
+  // The app's windows feature installs the close guard on every page (R6).
+  withCloseGuard(page);
   renderWithComposerEffects(page, <PopOutHost layout={main.transport.data.layout} window={id} />);
   return page;
 }
@@ -352,7 +355,7 @@ describe("composers in pop-out windows", () => {
       // The pop-out page is the main window behind it.
       expect(question).toHaveAttribute("data-owner", "main");
       expect(page.store.getState().windows).toEqual([id, `composer-discard:${key}`]);
-      await user.click(within(question).getByRole("button", { name: "Discard" }));
+      await user.click(within(question).getByRole("button", { name: "Discard draft" }));
       // Discarded: the composer closes, and with it the OS window.
       await waitFor(() => {
         expect(closes()).toEqual([{ type: "ClosePopOut", window: id }]);
@@ -368,11 +371,13 @@ describe("composers in pop-out windows", () => {
       const { page, id, key, subject, closes } = await poppedOutComposer();
       await user.type(subject, " again");
       await user.keyboard("{Escape}");
-      const question = await findWindow(`composer-close:${key}`);
-      expect(within(question).getByText(/has changes that are not saved yet/)).toBeVisible();
-      await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+      // R6: the window layer's shared prompt.
+      const prompt = `unsaved-changes:composer_${key}`;
+      const question = await findWindow(prompt);
+      expect(within(question).getByText("Save changes to “Popped again”?")).toBeVisible();
+      await user.click(within(question).getByRole("button", { name: "Cancel" }));
       await waitFor(() => {
-        expect(windowEl(`composer-close:${key}`)).toBeNull();
+        expect(windowEl(prompt)).toBeNull();
       });
       expect(page.store.getState().windows).toEqual([id]);
       expect(closes()).toEqual([]);
@@ -381,12 +386,12 @@ describe("composers in pop-out windows", () => {
       act(() => {
         globalThis.dispatchEvent(new Event(POP_OUT_CLOSE_EVENT));
       });
-      const again = await findWindow(`composer-close:${key}`);
+      const again = await findWindow(prompt);
       // Asked again while the question is open: nothing more happens.
       act(() => {
         globalThis.dispatchEvent(new Event(POP_OUT_CLOSE_EVENT));
       });
-      expect(page.store.getState().windows).toEqual([id, `composer-close:${key}`]);
+      expect(page.store.getState().windows).toEqual([id, prompt]);
       expect(closes()).toEqual([]);
       // "Save draft": saved, then the composer and the OS window close.
       await user.click(within(again).getByRole("button", { name: "Save draft" }));

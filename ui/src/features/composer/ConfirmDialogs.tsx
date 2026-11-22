@@ -1,168 +1,61 @@
 /**
- * The composer's confirmations (M5c WP172) — the only modal composer
- * windows (`{ confirmation: true }` in `./index.ts`), one per composer
- * (`composer-close:<key>`, `composer-discard:<key>`; the plain names ask
- * about the plain composer):
+ * The composer's confirmation (M5c WP172; R6, ADR 0239): the modal window
+ * `composer-discard:<key>` (the plain name asks about the plain composer),
+ * opened by the Discard button of a message with a saved draft or changes —
+ * a destructive `ConfirmDialog`: "Discard draft" (red, the draft is
+ * deleted) and "Keep editing" (Cancel's role, focused; ×, Esc too).
  *
- * - `composer-close`: the composer has unsaved changes and is being closed —
- *   "Save draft" (then close), "Close without saving" (the last saved draft
- *   stays), "Keep editing" (the default).
- * - `composer-discard`: the Discard button of a message with a saved draft
- *   or changes — "Discard" (the draft is deleted), "Keep editing".
+ * Closing a composer with unsaved changes asks with the window layer's
+ * shared prompt instead (`ComposerCloseGuard` in `./Composer.tsx`).
  */
-import { useEffect, useRef, useState } from "react";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useT } from "../../i18n/I18nProvider";
 import { useComposeContext } from "../../state/hooks";
 import { useUi } from "../../state/uiStore";
-import { closeComposerNow, discardRich, saveRich } from "./flows";
+import { ConfirmDialog, DialogFooter } from "../../widgets/dialog";
+import { discardRich } from "./flows";
 import { composerOf, composerOfConfirm } from "./sessions";
 
-function useComposerOfDialog(name: string) {
-  const window = composerOfConfirm(name);
-  const composer = useUi((s) => composerOf(s, window));
-  return { window, composer };
-}
-
-/**
- * Focuses the safe choice ("Keep editing") when the confirmation opens
- * (after the window frame focused its first button).
- */
-function useSafeFocus() {
-  const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    queueMicrotask(() => ref.current?.focus());
-  }, []);
-  return ref;
-}
-
-/** "Keep editing": closes the question and brings the composer back (focused first). */
-function KeepEditing({
-  window,
-  close,
-  disabled = false,
-}: {
-  window: string;
-  close: () => void;
-  disabled?: boolean;
-}) {
-  const t = useT();
-  const ctx = useComposeContext();
-  const keep = useSafeFocus();
-  return (
-    <button
-      ref={keep}
-      type="button"
-      data-part="form.button"
-      data-action="keep-editing"
-      disabled={disabled}
-      onClick={() => {
-        close();
-        ctx.store.getState().focusWindow(window);
-      }}
-    >
-      {t("common-keep-editing")}
-    </button>
-  );
-}
-
-function Gone({ close }: { close: () => void }) {
-  const t = useT();
-  return (
-    <div data-part="composer.confirm" data-state="empty">
-      <p data-part="composer.confirm.question">{t("composer-empty")}</p>
-      <div data-part="composer.confirm.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("common-ok")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function subjectOf(subject: string, t: ReturnType<typeof useT>): string {
+/** The subject of a composer's message, or "New message". */
+export function subjectOf(subject: string, t: ReturnType<typeof useT>): string {
   return subject.trim() === "" ? t("window-composer") : subject.trim();
-}
-
-/** `composer-close`: closing a composer with unsaved changes. */
-export function CloseConfirmDialog({ name, close }: DialogProps) {
-  const t = useT();
-  const ctx = useComposeContext();
-  const { window, composer } = useComposerOfDialog(name);
-  const [busy, setBusy] = useState(false);
-  if (!composer) return <Gone close={close} />;
-
-  const save = async () => {
-    setBusy(true);
-    const saved = await saveRich(ctx, { window });
-    setBusy(false);
-    close();
-    if (saved !== null) closeComposerNow(ctx, window);
-    else ctx.store.getState().focusWindow(window);
-  };
-
-  return (
-    <div data-part="composer.confirm" data-confirm="close" aria-busy={busy}>
-      <p data-part="composer.confirm.question">
-        {t("composer-close-question", { subject: subjectOf(composer.subject, t) })}
-      </p>
-      <div data-part="composer.confirm.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="save-close"
-          data-variant="primary"
-          disabled={busy}
-          onClick={() => void save()}
-        >
-          {t("common-save-draft")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="close-unsaved"
-          disabled={busy}
-          onClick={() => {
-            close();
-            closeComposerNow(ctx, window);
-          }}
-        >
-          {t("composer-close-discard")}
-        </button>
-        <KeepEditing window={window} close={close} disabled={busy} />
-      </div>
-    </div>
-  );
 }
 
 /** `composer-discard`: the Discard button of a message worth keeping. */
 export function DiscardConfirmDialog({ name, close }: DialogProps) {
   const t = useT();
   const ctx = useComposeContext();
-  const { window, composer } = useComposerOfDialog(name);
-  if (!composer) return <Gone close={close} />;
-  return (
-    <div data-part="composer.confirm" data-confirm="discard">
-      <p data-part="composer.confirm.question">
-        {t(composer.draftId === null ? "composer-discard-question" : "composer-discard-saved", {
-          subject: subjectOf(composer.subject, t),
-        })}
-      </p>
-      <div data-part="composer.confirm.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="discard"
-          data-variant="danger"
-          onClick={() => {
-            close();
-            void discardRich(ctx, window);
-          }}
-        >
-          {t("composer-discard")}
-        </button>
-        <KeepEditing window={window} close={close} />
+  const window = composerOfConfirm(name);
+  const composer = useUi((s) => composerOf(s, window));
+  if (!composer) {
+    return (
+      <div data-part="dialog.confirm" data-confirm="discard" data-state="empty">
+        <p data-part="dialog.question">{t("composer-empty")}</p>
+        <DialogFooter done={{ onDone: close }} />
       </div>
-    </div>
+    );
+  }
+  return (
+    <ConfirmDialog
+      kind="discard"
+      risk="destructive"
+      question={t(
+        composer.draftId === null ? "composer-discard-question" : "composer-discard-saved",
+        { subject: subjectOf(composer.subject, t) },
+      )}
+      action={t("composer-discard-draft")}
+      onConfirm={() => {
+        close();
+        void discardRich(ctx, window);
+      }}
+      cancel={{
+        label: t("common-keep-editing"),
+        action: "keep-editing",
+        onClick: () => {
+          close();
+          ctx.store.getState().focusWindow(window);
+        },
+      }}
+    />
   );
 }

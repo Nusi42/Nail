@@ -21,11 +21,12 @@ import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { findSummary } from "../../state/mailOps";
 import { useFolders } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
-import { DialogActions, useWriteContext } from "./common";
+import { useProblemText, useWriteContext } from "./common";
 import { focusOfQuery } from "./model";
 import { CLASSIFY_DIALOG } from "./names";
 import { classifyFocused, showFocus, useExchangeAccount, useExchangeStatus } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
+import { ConfirmDialog } from "../../widgets/dialog";
 import { EmptyDialog } from "../../widgets/DialogStates";
 import { useBusyAction } from "../../state/busyAction";
 import { useActiveMailView } from "../../state/hooks";
@@ -165,6 +166,7 @@ export function ClassifyDialog({ close }: DialogProps) {
   const target = useExchangeUi((s) => s.classify);
   const [always, setAlways] = useState(false);
   const { busy, problem, run } = useBusyAction();
+  const problemText = useProblemText();
   const finish = () => {
     exchangeStoreFor(ctx.store).getState().classifyMessages(null);
     close();
@@ -193,36 +195,33 @@ export function ClassifyDialog({ close }: DialogProps) {
     });
   };
   return (
-    <div data-part="exchange.dialog" data-dialog="classify" aria-busy={busy}>
-      <p data-part="exchange.question">
-        {t(`exchange-classify-question-${target.to}`, { count: target.messageIds.length })}
-      </p>
-      <label data-part="form.check" data-field="always">
-        <input
-          data-part="form.checkbox"
-          type="checkbox"
-          checked={always}
-          onChange={(e) => {
-            setAlways(e.target.checked);
-          }}
-        />
-        <span data-part="form.check.label">
-          {senders.length === 1
-            ? t("exchange-classify-always-sender", { sender: senders[0] ?? "" })
-            : t("exchange-classify-always")}
-        </span>
-      </label>
-      <DialogActions problem={problem} onCancel={finish}>
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          disabled={busy}
-          onClick={() => void move()}
-        >
-          {t(`exchange-move-to-${target.to}`)}
-        </button>
-      </DialogActions>
-    </div>
+    <ConfirmDialog
+      kind="classify"
+      question={t(`exchange-classify-question-${target.to}`, {
+        count: target.messageIds.length,
+      })}
+      detail={
+        <label data-part="form.check" data-field="always">
+          <input
+            data-part="form.checkbox"
+            type="checkbox"
+            checked={always}
+            onChange={(e) => {
+              setAlways(e.target.checked);
+            }}
+          />
+          <span data-part="form.check.label">
+            {senders.length === 1
+              ? t("exchange-classify-always-sender", { sender: senders[0] ?? "" })
+              : t("exchange-classify-always")}
+          </span>
+        </label>
+      }
+      action={t(`exchange-move-to-${target.to}`)}
+      busy={busy}
+      error={problemText(problem)}
+      onConfirm={() => void move()}
+      cancel={{ onClick: finish }}
+    />
   );
 }

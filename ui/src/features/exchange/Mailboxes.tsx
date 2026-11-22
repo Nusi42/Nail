@@ -14,7 +14,7 @@
  *   mailbox's root, its kind and (when not synced) its state.
  */
 import { EXCHANGE_MAILBOX_KIND_VALUES } from "../../api/generated";
-import { useId, useState, type SubmitEvent } from "react";
+import { useId, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
   ExchangeMailbox,
@@ -27,7 +27,7 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccounts } from "../../state/queries";
 import { Icon } from "../../widgets/Icon";
-import { Problem, useWriteContext, DialogActions, DangerActions } from "./common";
+import { Problem, useProblemText, useWriteContext } from "./common";
 import {
   mailboxIssues,
   mailboxName,
@@ -39,7 +39,8 @@ import {
 import { MAILBOX_EDITOR_DIALOG, MAILBOX_REMOVE_DIALOG } from "./names";
 import { removeMailbox, saveMailbox, useExchangeAccount, useMailboxes } from "./queries";
 import { exchangeStoreFor, useExchangeUi } from "./store";
-import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
+import { ConfirmDialog, DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
+import { EmptyDialog, LoadingDialog, useCloseNow } from "../../widgets/DialogStates";
 import { useBusyAction } from "../../state/busyAction";
 import { useActiveMailView } from "../../state/hooks";
 
@@ -249,44 +250,50 @@ function MailboxEditor({
   );
   const [name, setName] = useState(mailbox?.settings.name ?? "");
   const { busy, problem, setProblem, run } = useBusyAction();
+  const closeNow = useCloseNow(close);
+  const [initial] = useState(() => ({ settings, name }));
   const change = (patch: Partial<ExchangeMailboxSettings>) => {
     setSettings({ ...settings, ...patch });
   };
-
-  const finish = () => {
-    exchangeStoreFor(ctx.store).getState().editMailbox(null);
-    close();
+  const next: ExchangeMailboxSettings = {
+    ...settings,
+    address: settings.address.trim(),
+    // An empty name field = the server's name.
+    name: name.trim() === "" ? null : name.trim(),
   };
-
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const next: ExchangeMailboxSettings = {
-      ...settings,
-      address: settings.address.trim(),
-      // An empty name field = the server's name.
-      name: name.trim() === "" ? null : name.trim(),
-    };
-    const issue = mailboxIssues(
+  const issueOf = () =>
+    mailboxIssues(
       next,
       own,
       mailboxes.filter((m) => m !== mailbox),
     )[0];
+
+  /** Saves the mailbox and closes; `false` when it has a problem or the core refused. */
+  const save = async (): Promise<boolean> => {
+    const issue = issueOf();
     if (issue) {
       setProblem({ id: `exchange-mailbox-issue-${issue}` });
-      return;
+      return false;
     }
-    await run(async () => {
+    return run(async () => {
       await saveMailbox(ctx, accountId, next, mailbox !== null);
-      finish();
+      exchangeStoreFor(ctx.store).getState().editMailbox(null);
+      closeNow();
     });
   };
+  useCloseGuard({
+    name: () => next.name ?? next.address,
+    isDirty: () => JSON.stringify({ settings, name }) !== JSON.stringify(initial),
+    canSave: () => issueOf() === undefined,
+    save,
+  });
 
   return (
-    <form
-      data-part="exchange.dialog"
-      data-dialog="mailbox-editor"
-      aria-busy={busy}
-      onSubmit={(e) => void submit(e)}
+    <DialogForm
+      part="exchange.dialog"
+      dialog="mailbox-editor"
+      busy={busy}
+      onSubmit={() => void save()}
     >
       <p data-part="exchange.intro">{t("exchange-mailbox-intro")}</p>
       <div data-part="form.field" data-field="address">
@@ -355,12 +362,17 @@ function MailboxEditor({
           </label>
         ))}
       </fieldset>
-      <DialogActions problem={problem} onCancel={finish}>
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t(mailbox ? "exchange-save" : "exchange-mailbox-open")}
-        </button>
-      </DialogActions>
-    </form>
+      <Problem message={problem} />
+      <DialogFooter
+        primary={{
+          label: t(mailbox ? "exchange-save" : "exchange-mailbox-open"),
+          submit: true,
+          action: mailbox ? "save" : "open",
+        }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
+    </DialogForm>
   );
 }
 
@@ -370,6 +382,7 @@ export function MailboxRemoveDialog({ close }: DialogProps) {
   const ctx = useWriteContext();
   const mailbox = useExchangeUi((s) => s.removing);
   const { busy, problem, run } = useBusyAction();
+  const problemText = useProblemText();
   const finish = () => {
     exchangeStoreFor(ctx.store).getState().removeMailbox(null);
     close();
@@ -397,22 +410,23 @@ export function MailboxRemoveDialog({ close }: DialogProps) {
     });
   };
   return (
-    <div data-part="exchange.dialog" data-dialog="mailbox-remove" aria-busy={busy}>
-      <p data-part="exchange.question">
-        {t(automapped ? "exchange-mailbox-hide-question" : "exchange-mailbox-remove-question", {
-          name: mailboxName(mailbox),
-        })}
-      </p>
-      <p data-part="exchange.hint">
-        {t(automapped ? "exchange-mailbox-hide-hint" : "exchange-mailbox-remove-hint")}
-      </p>
-      <DangerActions
-        problem={problem}
-        busy={busy}
-        onCancel={finish}
-        onConfirm={() => void remove()}
-        label={t(automapped ? "exchange-mailbox-hide" : "exchange-mailbox-remove-confirm")}
-      />
-    </div>
+    <ConfirmDialog
+      kind={automapped ? "mailbox-hide" : "mailbox-remove"}
+      risk="destructive"
+      question={t(
+        automapped ? "exchange-mailbox-hide-question" : "exchange-mailbox-remove-question",
+        { name: mailboxName(mailbox) },
+      )}
+      detail={
+        <p data-part="dialog.note">
+          {t(automapped ? "exchange-mailbox-hide-hint" : "exchange-mailbox-remove-hint")}
+        </p>
+      }
+      action={t(automapped ? "exchange-mailbox-hide" : "exchange-mailbox-remove-confirm")}
+      busy={busy}
+      error={problemText(problem)}
+      onConfirm={() => void remove()}
+      cancel={{ onClick: finish }}
+    />
   );
 }

@@ -57,6 +57,21 @@ describe("composer", () => {
     expect(screen.getByText("No message is being written.")).toBeInTheDocument();
   });
 
+  it("never sends on Enter in Subject; Ctrl+Enter sends (R6)", async () => {
+    const user = userEvent.setup();
+    const env = composerEnv({ to: "Grace <grace@navy.example>" });
+    renderNode(widget("composer"), env);
+    const subject = screen.getByRole("textbox", { name: "Subject" });
+    await user.type(subject, "Plans{Enter}");
+    expect(subject).toHaveValue("Plans");
+    expect(screen.getByRole("button", { name: "Send" })).toHaveAttribute("type", "button");
+    expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(false);
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => {
+      expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(true);
+    });
+  });
+
   it("explains what keeps a message from being sent", async () => {
     const user = userEvent.setup();
     const env = composerEnv({ to: "grace@navy.example, nope" });
@@ -106,7 +121,7 @@ describe("composer", () => {
       />,
       env,
     );
-    await user.click(within(confirm.container).getByRole("button", { name: "Discard" }));
+    await user.click(within(confirm.container).getByRole("button", { name: "Discard draft" }));
     await waitFor(() => {
       expect(env.transport.data.drafts.has(id)).toBe(false);
     });
@@ -225,6 +240,17 @@ describe("outbox", () => {
     const drafts = await screen.findByRole("region", { name: "Drafts" });
     const abandoned = within(drafts).getByText("Abandoned").closest("li") as HTMLElement;
     await user.click(within(abandoned).getByRole("button", { name: "Discard" }));
+    // R6: it asks first, in the row — Cancel focused, nothing deleted yet.
+    const question = within(abandoned).getByRole("group", {
+      name: "Discard the draft “Abandoned”? It cannot be restored.",
+    });
+    await waitFor(() => {
+      expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await user.click(within(question).getByRole("button", { name: "Cancel" }));
+    expect(within(drafts).getByText("Abandoned")).toBeInTheDocument();
+    await user.click(within(abandoned).getByRole("button", { name: "Discard" }));
+    await user.click(within(abandoned).getByRole("button", { name: "Discard draft" }));
     await waitFor(() => {
       expect(within(drafts).queryByText("Abandoned")).toBeNull();
     });

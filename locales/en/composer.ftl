@@ -56,6 +56,8 @@ composer-format-image-short = Image
 composer-format-source = { composer-html-source }
 composer-format-source-short = Source
 composer-link-url = Address
+# Sets the typed address on the selected text (R6: a verb, not "Apply").
+composer-link-set = Set link
 composer-html-source = HTML source
 
 ## Markdown editor
@@ -102,12 +104,13 @@ composer-editor-failed = The editor could not be loaded. Reload Nail and try aga
 
 ## Several composers and their confirmations (M5c WP172)
 
-# Titles of the modal confirmations (the composer's own title is its subject).
-window-composer-close = { common-unsaved-changes }
-window-composer-discard = Discard message
-# { $subject }: the message's subject, or "New message".
-composer-close-question = “{ $subject }” has changes that are not saved yet. Save them as a draft before closing?
-composer-close-discard = Close without saving
+# The title of the modal confirmation (the composer's own title is its subject).
+window-composer-discard = { composer-discard-draft }
+# The shared unsaved-changes prompt of a composer (R6): the note under
+# "Save changes to “…”?" (Save draft, Don't save, Cancel).
+composer-close-detail = Save draft keeps the message in Drafts. Don't save keeps only the draft saved last.
+# The Discard confirmation's verb (red).
+composer-discard-draft = Discard draft
 
 ## Pop-out windows (desktop, M5c): why a message stays in the main window
 

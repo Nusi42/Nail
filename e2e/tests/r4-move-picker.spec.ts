@@ -18,8 +18,8 @@ import { LAB, LAB_INBOX } from "../support/demo";
  * - The move window never moves to a partial match on Enter: the arrow
  *   keys highlight an option (visibly), Enter takes the highlighted one,
  *   all from the keyboard.
- * - Moving into Drafts asks first, with the message count; Cancel moves
- *   nothing.
+ * - Moving into Drafts asks first, with the message count; Esc (R6: back
+ *   to the picker) moves nothing.
  * - A received message in Drafts (no `\Draft` flag) opens in the reader,
  *   not in the composer, and "Move out of Drafts" takes it to the Inbox.
  */
@@ -84,7 +84,7 @@ test("Enter moves only to the highlighted folder, all from the keyboard", async 
   await expect.poll(() => labIn("Archive"), { timeout: 20_000 }).toBe(LAB_INBOX);
 });
 
-test("moving into Drafts asks first with the count; Cancel moves nothing", async ({ page }) => {
+test("moving into Drafts asks first with the count; Esc moves nothing", async ({ page }) => {
   const { move, filter } = await openMoveForLab(page);
   // The exact name is highlighted at once.
   await page.keyboard.type("drafts");
@@ -97,18 +97,19 @@ test("moving into Drafts asks first with the count; Cancel moves nothing", async
     name: `Move ${String(LAB_INBOX)} messages to Drafts?`,
   });
   await expect(question).toContainText("opens in the reader");
-  const cancel = question.getByRole("button", { name: "Cancel" });
-  await expect(cancel).toBeFocused();
-  await page.keyboard.press("Enter");
+  // R6: a normal confirmation — Move has the focus; Esc goes back to the picker.
+  const verb = question.getByRole("button", { name: "Move", exact: true });
+  await expect(verb).toBeFocused();
+  await page.keyboard.press("Escape");
   await expect(question).toBeHidden();
+  await expect(move).toBeVisible();
   await expect(filter).toBeFocused();
   expect(await labIn("Drafts")).toBe(0);
 
-  // Asked again, Move moves exactly the counted messages.
+  // Asked again, Enter on Move moves exactly the counted messages.
   await page.keyboard.press("Enter");
   await expect(question).toBeVisible();
-  await page.keyboard.press("Shift+Tab");
-  await expect(question.getByRole("button", { name: "Move", exact: true })).toBeFocused();
+  await expect(verb).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(move).toBeHidden();
   await expect.poll(() => labIn("Drafts"), { timeout: 20_000 }).toBe(LAB_INBOX);

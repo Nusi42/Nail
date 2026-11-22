@@ -20,9 +20,13 @@
   (see below). New messages start in the identity's format (`composer=` in
   the [accounts reference](accounts-reference.md#identities)).
 
-**Save draft** (`Ctrl+S`) keeps the message as a draft; **Discard** throws
-it away. A message that has a saved draft or changes asks first ("Discard
-…? Its saved draft is deleted too."); an untouched new message goes at once.
+**Send** sends the message; `Ctrl+Enter` does the same from any field.
+`Enter` in **Subject** never sends. **Save draft** (`Ctrl+S`) keeps the
+message as a draft; **Discard** throws it away. A message that has a saved
+draft or changes asks first ("Discard …? Its saved draft is deleted too."):
+**Discard draft** deletes it, **Keep editing** (which has the focus, so
+`Enter` deletes nothing) goes back to the message. An untouched new message
+goes at once.
 
 ## Several messages at once
 
@@ -42,9 +46,11 @@ left it.
   work on the composer you are using — the one in front.
 - `Esc` or the × button closes a composer. When everything is saved (Nail
   saves a moment after you stop typing) it just closes; the message stays
-  under **Drafts**. If it still has changes that are not saved, Nail asks:
-  **Save draft** (then close), **Close without saving** (the last saved
-  version stays) or **Keep editing**.
+  under **Drafts**. If it still has changes that are not saved, Nail asks
+  "Save changes to “…”?": **Save draft** (then close), **Don't save** (the
+  last saved version stays) or **Cancel** (keep editing). It is the same
+  question every window with unsaved changes asks (see
+  [Windows](windows.md)).
 - When the window is narrow, the composer rearranges itself: field labels
   move above the fields, the Markdown preview moves below the text and the
   buttons wrap. **Send**, **Save draft** and **Discard** always stay at the
@@ -116,7 +122,9 @@ message removes it.
 
 Drafts survive closing Nail: open **Outbox** (`g` then `o`, or the command
 palette); under **Drafts** each saved
-message has **Continue writing** and **Discard**.
+message has **Continue writing** and **Discard**. **Discard** asks first,
+in the draft's row: **Discard draft** deletes it for good, **Cancel** keeps
+it.
 
 You can also continue a draft from the **Drafts** favorite or an account's
 Drafts folder: double-click it, press `Enter`, or choose **Continue writing**

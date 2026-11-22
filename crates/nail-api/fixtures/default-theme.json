@@ -8104,17 +8104,6 @@
       "source": null
     },
     {
-      "selector": "snooze.actions",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-sm)"
-      },
-      "source": null
-    },
-    {
       "selector": "snooze.error",
       "states": [],
       "conditions": [],
@@ -13547,18 +13536,6 @@
       "source": null
     },
     {
-      "selector": "gmail.dialog.actions",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-sm)",
-        "justify-content": "flex-end"
-      },
-      "source": null
-    },
-    {
       "selector": "gmail.apply.labels",
       "states": [],
       "conditions": [],
@@ -16214,17 +16191,6 @@
       "source": null
     },
     {
-      "selector": "plugin-veto.intro",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
       "selector": "plugin-veto.list",
       "states": [],
       "conditions": [],
@@ -16255,18 +16221,6 @@
       "ancestors": [],
       "declarations": {
         "margin": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "plugin-veto.buttons",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "justify-content": "flex-end",
-        "gap": "var(--nail-space-sm)"
       },
       "source": null
     },

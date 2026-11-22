@@ -14,6 +14,10 @@
  *   elsewhere (and when the core answers `unsupported` all the same) the
  *   dialog says to use the print dialog's PDF printer instead, without a
  *   path to pick.
+ *
+ * R6 (ADR 0239): one shared footer — Print (the primary), Save as PDF…
+ * (the PDF step, where Save PDF becomes the primary and Print the second
+ * choice) and Cancel; a saved PDF shows where it went and one Done.
  */
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
@@ -37,7 +41,7 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import { usePlatformFeature } from "../../state/platform";
 import { useClient, useMessage, useThread } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
-import { Check, CheckGroup, SelectField, WizardButtons } from "../portability/Fields";
+import { Check, CheckGroup, SelectField } from "../portability/Fields";
 import { formatBytes, isAbsolutePath, plainText } from "../portability/model";
 import { PathField, useSavePath } from "../portability/PathField";
 import { useCalendars } from "../portability/queries";
@@ -46,7 +50,7 @@ import { defaultAgenda, defaultPrintOptions, targetIssue } from "./model";
 import { openPrintView } from "./PrintView";
 import { printStoreFor, usePrintState } from "./store";
 import { nonEmpty } from "../../text/empty";
-import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter, type FooterButton } from "../../widgets/dialog";
 
 const PDF_FILTERS = [{ label_id: "print-filter-pdf", extensions: ["pdf"] }];
 
@@ -292,6 +296,8 @@ export function PrintSetup({ close }: { close: () => void }) {
   const title = useTargetTitle(target);
   const issue = target ? targetIssue(target) : null;
   const mail = target?.type === "message" || target?.type === "thread";
+  /** The PDF step with a file to write (else Print and the printer's PDF). */
+  const writesPdf = pdfStep && !noPdf;
 
   const createJob = async () => {
     if (!target) throw new Error("nothing to print");
@@ -330,6 +336,38 @@ export function PrintSetup({ close }: { close: () => void }) {
       setBusy(false);
     }
   };
+
+  const printButton: FooterButton = {
+    label: t("common-print"),
+    action: "print",
+    disabled: issue !== null,
+    onClick: () => void print(),
+  };
+  const footer = (): FooterButton[] => {
+    if (writesPdf) {
+      return [
+        {
+          label: t("print-pdf-save"),
+          action: "save-pdf",
+          disabled: issue !== null || !isAbsolutePath(path),
+          onClick: () => void savePdf(),
+        },
+        printButton,
+      ];
+    }
+    if (pdfStep) return [printButton];
+    return [
+      printButton,
+      {
+        label: t("print-pdf"),
+        action: "pdf",
+        onClick: () => {
+          setPdfStep(true);
+        },
+      },
+    ];
+  };
+  const [primary, secondary] = footer();
 
   return (
     <div data-part="print-setup" data-target={target?.type ?? "none"}>
@@ -382,51 +420,19 @@ export function PrintSetup({ close }: { close: () => void }) {
               {t(problem.id, problem.args)}
             </p>
           )}
-          <WizardButtons>
-            {saved ? (
-              <CloseButton onClose={close} action="close" />
-            ) : (
-              <>
-                <button
-                  type="button"
-                  data-part="form.button"
-                  data-variant={pdfStep && !noPdf ? undefined : "primary"}
-                  data-action="print"
-                  disabled={busy || issue !== null}
-                  onClick={() => void print()}
-                >
-                  {t("common-print")}
-                </button>
-                {!(pdfStep && noPdf) &&
-                  (pdfStep ? (
-                    <button
-                      type="button"
-                      data-part="form.button"
-                      data-variant="primary"
-                      data-action="save-pdf"
-                      disabled={busy || issue !== null || !isAbsolutePath(path)}
-                      onClick={() => void savePdf()}
-                    >
-                      {t("print-pdf-save")}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      data-part="form.button"
-                      data-action="pdf"
-                      disabled={busy}
-                      onClick={() => {
-                        setPdfStep(true);
-                      }}
-                    >
-                      {t("print-pdf")}
-                    </button>
-                  ))}
-              </>
-            )}
-          </WizardButtons>
+          {saved ? (
+            <DialogFooter done={{ onDone: close }} />
+          ) : (
+            <DialogFooter
+              {...(primary ? { primary } : {})}
+              {...(secondary ? { secondary } : {})}
+              cancel={{ onClick: close }}
+              busy={busy}
+            />
+          )}
         </>
       )}
+      {target === null && <DialogFooter cancel={{ onClick: close }} />}
     </div>
   );
 }

@@ -66,7 +66,9 @@ test("the before-send example vetoes a mail without its attachment and Send anyw
   await expect(veto).toContainText("Plug-in “Attachment check”:");
   await expect(veto).toContainText("You mention “see the file”, but nothing is attached.");
   expect(await axeViolations(page, '[data-part="plugin-veto"]'), "veto dialog").toEqual([]);
-  await veto.getByRole("button", { name: "Keep editing" }).click();
+  // R6: Send anyway is red and never the default; Cancel keeps editing.
+  await expect(veto.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await veto.getByRole("button", { name: "Cancel" }).click();
   await expect(veto).toBeHidden();
   await expect(composer.getByRole("textbox", { name: "Subject" })).toHaveValue("Quarterly report");
   expect(await control<unknown[]>(nail, "smtp-messages")).toEqual([]);

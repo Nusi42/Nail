@@ -49,13 +49,10 @@ export const DIALOG_BUTTON_ROWS = [
   "account-setup.actions",
   "plugin-install.actions",
   "remote-pair.actions",
-  "gmail.dialog.actions",
   "scheduling.dialog.actions",
   "merge-dialog.actions",
-  "snooze.actions",
   "mail-confirm.actions",
   "confirmation.buttons",
-  "composer.confirm.actions",
 ] as const;
 
 /** A part inside a window's body. */

@@ -220,6 +220,14 @@ describe("label dialogs", () => {
     const close = vi.fn();
     renderWithProviders(<Delete name={LABEL_DELETE_DIALOG} close={close} />, env);
     expect(screen.getByText(/Delete the label “Travel”\? Its 2 messages/)).toBeInTheDocument();
+    // R6: the focus starts on Cancel; the red verb is never a submit button.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    expect(screen.getByRole("button", { name: "Delete label" })).toHaveAttribute(
+      "data-variant",
+      "danger",
+    );
     await user.click(screen.getByRole("button", { name: "Delete label" }));
     await waitFor(() => {
       expect(close).toHaveBeenCalled();
@@ -243,7 +251,7 @@ describe("label dialogs", () => {
     await user.click(screen.getByRole("checkbox", { name: "Receipts" }));
     await user.clear(screen.getByLabelText("Find a label"));
     await user.click(screen.getByRole("checkbox", { name: "Travel" }));
-    await clickAndClose(user, "Apply", close);
+    await clickAndClose(user, "Save", close);
     expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [{ kind: "message", message_id: summary.id }],
       action: { type: "tags", add: ["Receipts"], remove: ["Travel"] },
@@ -267,7 +275,7 @@ describe("label dialogs", () => {
     await actions["gmail.apply-labels"]?.run(actionContext(env), []);
     const close = renderApplyLabels(env);
     await user.click(await screen.findByRole("checkbox", { name: "Receipts" }));
-    await clickAndClose(user, "Apply", close);
+    await clickAndClose(user, "Save", close);
     expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [
         { kind: "conversation", thread_id: summary.thread_id, folder_id: summary.folder_id },
@@ -315,7 +323,7 @@ describe("label dialogs", () => {
     await user.click(receipts);
     expect(travel).toBeChecked();
     expect(receipts).not.toBeChecked();
-    await clickAndClose(user, "Apply", close);
+    await clickAndClose(user, "Save", close);
     expect(requestsOf(env, "ApplyMailAction")[0]).toMatchObject({
       targets: [
         { kind: "message", message_id: lisbon.id },

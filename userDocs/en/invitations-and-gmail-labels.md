@@ -173,7 +173,8 @@ widget):
 
 - Choose a label to see all its messages, in every folder.
 - **New label** creates a label; **Edit** and **Delete** next to a
-  label edit or delete it.
+  label edit or delete it. Deleting asks first; **Cancel** has the focus
+  and only the red **Delete label** button deletes.
 - Labels nest with `/` (`Work/Projects`), or choose **Nest under** in the
   label editor. Renaming a label renames the labels nested under it.
 - The colours offered are the ones Gmail accepts.
@@ -184,8 +185,10 @@ In Nail, Gmail labels are tags with the same name: rules, search
 (`tag:Travel`) and the tag commands work with them. A new tag on a Gmail
 message creates the label in Gmail. The command `gmail.apply-labels`
 (**Labels…** in the reader's toolbar, key `l`) lets you tick the labels of
-the selected conversation, like Gmail: every message of it gets them, and
-**Undo** takes them off again. A label only some of its messages (or of the
+the selected conversation, like Gmail: **Save** gives every message of it
+the ticked labels, and **Undo** takes them off again; closing the window
+after changing a tick asks whether to save. **New label** in the window
+opens the label editor. A label only some of its messages (or of the
 picked conversations) have shows as a mixed box: leave it to keep it as it
 is, tick it to give it to all, clear it to take it off all. Label changes made while offline are sent when the
 account is back online.

@@ -153,7 +153,7 @@ export async function deletePermanentlyStep(tour: WindowTour, subject: string): 
 export async function discardComposerStep(tour: WindowTour): Promise<void> {
   await tour.window("composer").getByRole("button", { name: "Discard" }).click();
   await tour.visit("composer-discard");
-  await tour.window("composer-discard").getByRole("button", { name: "Discard" }).click();
+  await tour.window("composer-discard").getByRole("button", { name: "Discard draft" }).click();
   await expect(tour.page.locator('[data-part="window"][data-window^="composer"]')).toHaveCount(0);
 }
 
