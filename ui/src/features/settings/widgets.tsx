@@ -7,6 +7,12 @@
  * over the labels each feature registers) with highlighted matches and
  * deep links to the setting. The shown section is the core's UI state
  * (`settings.section`), so the page opens where it was left.
+ *
+ * R6 (ADR 0239): nothing in a section applies until Save. The widgets
+ * register their unsaved changes (`useSettingsDraft`); the page shows the
+ * pinned save bar (`SettingsSaveBar`) while any is dirty, and asks with the
+ * shared prompt before another section shows or Settings closes (its
+ * close guard, `askToLeave`).
  */
 import {
   Fragment,
@@ -32,6 +38,14 @@ import { usePlatform } from "../../state/platform";
 import { UI_STATE_SETTINGS_SECTION, useSetUiState, useUiStateValue } from "../../state/uiState";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
+import { askToLeave, useCloseGuard, useGuardKey } from "../../layout/closeGuard";
+import {
+  SettingsSaveBar,
+  discardSettingsDrafts,
+  saveSettingsDrafts,
+  settingsCanSave,
+  settingsDirty,
+} from "../../widgets/dialog";
 import { appRegistry } from "../registry";
 import { currentSection, findSection, highlightText, rankSettingsHits } from "./model";
 import { settingsStoreFor, useSettingsState, type RevealRequest } from "./store";
@@ -266,8 +280,29 @@ export function SettingsPage({ node }: WidgetProps) {
   const hits = useMemo(() => rankSettingsHits(searchSettings(index, query), query), [index, query]);
   const searching = showSearch && query.trim() !== "";
 
+  const guardKey = useGuardKey();
+  useEffect(() => {
+    settingsStore.getState().setGuardKey(guardKey);
+    return () => {
+      if (settingsStore.getState().guardKey === guardKey)
+        settingsStore.getState().setGuardKey(null);
+    };
+  }, [settingsStore, guardKey]);
+  const sectionName = section ? label(sectionLabelOf(section)) : "";
+  useCloseGuard({
+    name: () => sectionName,
+    isDirty: () => settingsDirty(uiStore),
+    save: () => saveSettingsDrafts(uiStore),
+    canSave: () => settingsCanSave(uiStore),
+    discard: () => {
+      discardSettingsDrafts(uiStore);
+    },
+  });
   const go = (id: string) => {
-    if (id !== sectionId) setUiState.mutate({ key: UI_STATE_SETTINGS_SECTION, value: id });
+    if (id === sectionId) return;
+    askToLeave(uiStore, guardKey, () => {
+      setUiState.mutate({ key: UI_STATE_SETTINGS_SECTION, value: id });
+    });
   };
   const open = (id: string, entry: SettingsIndexEntry | null) => {
     go(id);
@@ -452,6 +487,7 @@ export function SettingsPage({ node }: WidgetProps) {
         <div data-part="settings-page.body" ref={body}>
           {section && <SectionCards key={section.id} section={section} />}
         </div>
+        <SettingsSaveBar name={sectionName} />
       </div>
     </div>
   );

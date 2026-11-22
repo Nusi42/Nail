@@ -17,6 +17,7 @@ import { isThemeName, themeIdFromName } from "./model";
 import { useAppearance } from "./queries";
 import { useThemeName } from "./ThemeEditor";
 import { CloseButton } from "../../widgets/CloseButton";
+import { DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
 
 function NameField({
   id,
@@ -54,7 +55,12 @@ function NameField({
   );
 }
 
-/** Window `theme-new`. */
+/**
+ * Window `theme-new`. R6 (ADR 0239): the reference editor of the shared
+ * pattern — `DialogForm` (Enter creates), `DialogFooter` (Create, Cancel in
+ * the viewer's system's order) and the close guard: ×, Esc or Cancel after
+ * typing a name asks with the shared prompt.
+ */
 export function NewThemeDialog({ close }: DialogProps) {
   const t = useT();
   const id = useId();
@@ -68,29 +74,42 @@ export function NewThemeDialog({ close }: DialogProps) {
   const [base, setBase] = useState<string | null>(null);
   const [use, setUse] = useState(true);
   const [invalid, setInvalid] = useState(false);
+  /** Created: closing no longer asks. */
+  const created = useRef(false);
   const themes = (appearance.data?.themes ?? []).filter((th) => th.problem === undefined);
   const from = base ?? requested ?? appearance.data?.active ?? "";
-  const submit = (event: SubmitEvent) => {
-    event.preventDefault();
+  /** Creates the theme and closes; `false` when the name or the core refused it. */
+  const create = async (): Promise<boolean> => {
     if (!isThemeName(name)) {
       setInvalid(true);
-      return;
+      return false;
     }
     setInvalid(false);
-    duplicate.mutate(
-      { themeId: from, name: name.trim() },
-      {
-        onSuccess: (newId) => {
-          if (use) pick.mutate(newId);
-          close();
-          openThemeEditor(ui, newId);
-        },
-      },
-    );
+    try {
+      const newId = await duplicate.mutateAsync({ themeId: from, name: name.trim() });
+      if (use) pick.mutate(newId);
+      created.current = true;
+      close();
+      openThemeEditor(ui, newId);
+      return true;
+    } catch {
+      return false;
+    }
   };
+  useCloseGuard({
+    name: () => name.trim(),
+    isDirty: () => !created.current && name.trim() !== "",
+    canSave: () => isThemeName(name) && from !== "",
+    save: create,
+  });
   const failure = duplicate.error;
   return (
-    <form data-part="theme-dialog" data-dialog="new" noValidate onSubmit={submit}>
+    <DialogForm
+      part="theme-dialog"
+      dialog="new"
+      busy={duplicate.isPending}
+      onSubmit={() => void create()}
+    >
       <p data-part="form.hint">{t("theme-dialog-new-hint")}</p>
       <NameField id={`${id}-name`} value={name} onChange={setName} invalid={invalid} />
       <div data-part="form.field" data-field="base">
@@ -129,7 +148,7 @@ export function NewThemeDialog({ close }: DialogProps) {
         submitLabel={t("common-create")}
         disabled={duplicate.isPending || from === ""}
       />
-    </form>
+    </DialogForm>
   );
 }
 
@@ -264,7 +283,10 @@ export function DeleteThemeDialog({ close }: DialogProps) {
   );
 }
 
-/** The name problem (or the core's refusal) and Cancel / submit of a theme dialog. */
+/**
+ * The name problem (or the core's refusal) and the footer of a theme
+ * dialog: the verb (the form's submit button) and Cancel, by role (R6).
+ */
 function NameDialogFooter({
   invalid,
   failure,
@@ -289,14 +311,10 @@ function NameDialogFooter({
             : t(refusal.id, refusal.args)}
         </p>
       )}
-      <div data-part="theme-dialog.actions">
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("common-cancel")}
-        </button>
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={disabled}>
-          {submitLabel}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{ label: submitLabel, submit: true, disabled }}
+        cancel={{ onClick: close }}
+      />
     </>
   );
 }

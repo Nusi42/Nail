@@ -10,9 +10,13 @@
  * Confirming deletes exactly those messages: one that reached Trash or Junk
  * while the question was open (a sync, another window) was not counted and
  * stays.
+ *
+ * R6 (ADR 0239): the reference confirmation of the shared pattern — a
+ * `ConfirmDialog` with a destructive verb ("Delete permanently"), the focus
+ * on Cancel, Enter never deleting; ×, Esc and Cancel forget the question.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ActionTargets } from "../actions/mailTargets";
 import type { MailTargetResolution } from "../api/generated";
 import { errorMessageOf } from "../api/client";
@@ -23,7 +27,7 @@ import type { DialogProps } from "../layout/dialogRegistry";
 import type { WriteContext } from "../state/mailOps";
 import { useClient } from "../state/queries";
 import { useUiStoreApi, type UiStore } from "../state/uiStore";
-import { MailConfirm } from "./MailConfirm";
+import { ConfirmDialog } from "./dialog";
 
 /** The confirmation's window kind (dialog name). */
 export const DELETE_PERMANENTLY_DIALOG = "mail-delete-permanently";
@@ -93,17 +97,26 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
   const queryClient = useQueryClient();
   const [what] = useState(() => pendingPermanentDelete(store));
   const [busy, setBusy] = useState(false);
+  // However the question ends (Cancel, ×, Esc, the deletion), it is forgotten.
+  useEffect(
+    () => () => {
+      if (what !== null && pending.get(store) === what) pending.delete(store);
+    },
+    [store, what],
+  );
   const messages = what?.resolution.messages ?? 0;
   const conversations = what?.resolution.conversations ?? 0;
   return (
-    <MailConfirm
+    <ConfirmDialog
       kind="delete-permanently"
+      risk="destructive"
       question={
         conversations > 0 && messages > 1
           ? t("mail-actions-delete-permanently-conversations", { messages, conversations })
           : t("mail-delete-permanently-question", { count: messages })
       }
-      confirmLabel={t("mail-action-delete-permanently")}
+      detail={<p data-part="dialog.note">{t("mail-delete-permanently-note")}</p>}
+      action={t("mail-action-delete-permanently")}
       canConfirm={messages > 0}
       busy={busy}
       onConfirm={() => {
@@ -112,12 +125,7 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
           setBusy(false);
         });
       }}
-      onCancel={() => {
-        pending.delete(store);
-        close();
-      }}
-    >
-      <p data-part="mail-confirm.note">{t("mail-delete-permanently-note")}</p>
-    </MailConfirm>
+      cancel={{ onClick: close }}
+    />
   );
 }

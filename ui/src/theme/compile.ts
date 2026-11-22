@@ -43,6 +43,7 @@ import { CONNLOG_SKIN_CSS } from "../features/connlog/skin";
 import { SOURCE_SKIN_CSS } from "../features/message-source/skin";
 import { FOLDERS_SKIN_CSS } from "../features/folders/skin";
 import { RULES_SKIN_CSS } from "../features/rules/skin";
+import { DIALOG_SKIN_CSS } from "../widgets/dialog/skin";
 import { RESPONSIVE_SKIN_CSS } from "./skinResponsive";
 import { POPOUT_BASE_CSS } from "../features/popout/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
@@ -373,6 +374,8 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
       FOLDERS_SKIN_CSS,
       // ADR 0219: the rules window's run panel and problem list.
       RULES_SKIN_CSS,
+      // ADR 0239: the shared dialog footer, confirmation and settings save bar.
+      DIALOG_SKIN_CSS,
       RESPONSIVE_SKIN_CSS,
     ].filter((css) => css !== ""),
     ...tokenRules(theme, warnings),

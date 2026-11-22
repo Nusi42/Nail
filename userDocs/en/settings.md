@@ -62,6 +62,17 @@ Earlier versions of Nail showed the settings as tabs. Every tab is now in a sect
 | MCP clients, Confirmations                                           | Agents (MCP)              |
 | Plug-ins                                                             | Plug-ins                  |
 
+## Saving your changes
+
+Changes in a section take effect when you save them. As soon as you change
+something, a bar appears at the bottom of the section: **Unsaved changes to
+“…”** with **Save** and **Discard**. Save keeps every change of the section;
+Discard puts the saved values back.
+
+If you open another section or close Settings with unsaved changes, Nail
+asks first: **Save changes to “…”?** with **Save**, **Don't save** and
+**Cancel** (stay in the section).
+
 ## Searching
 
 Type into **Search settings** at the top of the navigation (or press the

@@ -41,6 +41,21 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   that arrives after you confirm a Delete or a move is left alone.
   Archiving and moving many messages is about four times faster (ADR 0236).
 
+### Added — one dialog pattern (ADR 0239)
+
+- Shared dialog pieces in `ui/src/widgets/dialog/`: `DialogFooter` orders
+  buttons by role for the viewer's system (Windows / Linux primary first,
+  macOS mirrored), `ConfirmDialog` (a destructive verb is red, never focused,
+  never run by Enter), `DialogForm` (Ctrl+Enter in multi-line fields),
+  `SettingsSaveBar` (Save / Discard while a settings section has unsaved
+  changes).
+- The window layer's close guard (`ui/src/layout/closeGuard.ts`): ×, Esc and
+  Cancel of a window with unsaved changes ask with one prompt ("Save changes
+  to “X”?" — Save / Don't save / Cancel); leaving a settings section or
+  closing Settings asks the same way.
+- "Delete permanently?" and New / Rename theme follow the pattern; New theme
+  asks before a typed name is lost.
+
 ### Fixed — large selections (ADR 0235)
 
 - Acting on more than 500 selected conversations failed with "Too many

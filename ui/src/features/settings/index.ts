@@ -24,6 +24,7 @@ import type { ActionContext } from "../../actions/registry";
 import type { SettingsWidgetInfo } from "../../layout/settingsIndex";
 import { SETTINGS_SEARCH_ACTION, SETTINGS_SECTION_ACTION, viewDef } from "../../layout/views";
 import { UI_STATE_SETTINGS_SECTION, applyUiStateChange } from "../../state/uiState";
+import { askToLeave } from "../../layout/closeGuard";
 import { showView } from "../shell";
 import type { Feature } from "../types";
 import { BUILTIN_SETTINGS } from "./builtins";
@@ -70,16 +71,22 @@ export const actions: Feature["actions"] = {
       if (typeof id !== "string") return;
       const target = resolveSettingsTarget(ctx.layout, id);
       if (target === null) return;
-      rememberSection(ctx, target.section);
-      if (target.node !== null || target.widget !== null) {
-        settingsStoreFor(ctx.store).getState().requestReveal({
-          section: target.section,
-          node: target.node,
-          widget: target.widget,
-          text: null,
-        });
-      }
-      openSettingsPage(ctx);
+      // R6 (ADR 0239): unsaved changes of the shown section ask first.
+      const page = settingsStoreFor(ctx.store).getState().guardKey;
+      const proceed = () => {
+        rememberSection(ctx, target.section);
+        if (target.node !== null || target.widget !== null) {
+          settingsStoreFor(ctx.store).getState().requestReveal({
+            section: target.section,
+            node: target.node,
+            widget: target.widget,
+            text: null,
+          });
+        }
+        openSettingsPage(ctx);
+      };
+      if (page === null) proceed();
+      else askToLeave(ctx.store, page, proceed);
     },
     enabled: (ctx, args) =>
       typeof args[0] === "string" && resolveSettingsTarget(ctx.layout, args[0]) !== null,

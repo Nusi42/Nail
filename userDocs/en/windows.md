@@ -88,6 +88,29 @@ answers it the safe way (keep editing, cancel).
 A new window of a kind that is already open (a second message, say) opens a
 little lower and to the right, never exactly on top of an open one.
 
+## Buttons, Esc and unsaved changes
+
+Every dialog works the same way:
+
+- **The buttons say what they do** — "Save", "Create", "Delete folder",
+  "Send" — never "OK", "Yes" or "No". When a task is finished, the only
+  button left is **Done**.
+- **The order follows your system.** On Windows and Linux the main button
+  comes first and **Cancel** last; on macOS Cancel comes first and the main
+  button sits at the right. In a browser, the order follows the system of the
+  computer you are using. An editor's **Delete…** sits on its own at the left.
+- **×, `Esc` and Cancel are the same.** None of them saves or deletes
+  anything. If you changed something, Nail asks first: **Save changes to
+  “…”?** with **Save**, **Don't save** and **Cancel** (back to the window).
+  When what you entered cannot be saved yet, it offers **Discard changes** and
+  **Keep editing** instead.
+- **`Enter`** runs the main button — unless that button deletes or removes
+  something. In a text field with several lines, `Enter` starts a new line and
+  `Ctrl+Enter` runs the main button.
+- **Questions that lose something** have a red button that names the action
+  ("Delete folder"). Cancel has the focus, so pressing `Enter` by accident
+  never deletes.
+
 ## Pop-out windows (desktop app)
 
 In the desktop app, a window can leave Nail's main window and become a
@@ -126,7 +149,11 @@ page.
 ## For theme authors
 
 The window manager's look is made of parts you can style in `theme.kdl`;
-see [the theme reference](theme-reference.md#parts). A window's size and
+see [the theme reference](theme-reference.md#parts). Every dialog's button
+row is the part `dialog.footer` (with `dialog.footer.start` and
+`dialog.footer.end`; each button carries `data-role`: `primary`,
+`secondary`, `cancel`, `start` or `done`), so one rule styles them all. A
+window's size and
 place are not theme properties: set a window's default and smallest size in
 `layout.kdl` with `size=` and `min-size=` (see
 [the layout reference](layout-reference.md)).

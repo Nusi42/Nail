@@ -6,6 +6,7 @@
  * the modality rules of every registered window.
  */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { UNSAVED_PROMPT } from "../../layout/closeGuard";
 import userEvent from "@testing-library/user-event";
 import type { ActionContext } from "../../actions/registry";
 import { NodeView } from "../../layout/LayoutRenderer";
@@ -577,6 +578,8 @@ describe("window model", () => {
     "pim-remove-calendar",
     "scheduling-cancel-meeting",
     "smartcard-pin",
+    // R6 (ADR 0239): the close guard's shared unsaved-changes prompt.
+    UNSAVED_PROMPT,
   ]);
 
   it("makes only confirmations modal", () => {

@@ -296,6 +296,14 @@ Where shared things live (Q2, ADRs 0172–0177):
   uses `ui/src/widgets/pickers` (`Picker` / `PickerField`), a menu button the
   shared `features/pim/PimMenu` (`showLabel` for visible text). The rules
   scenarios share `e2e/support/rules.ts`.
+- Dialogs (R6, ADR 0239) build on `ui/src/widgets/dialog`: `DialogFooter`
+  (buttons by role, ordered for the viewer's system), `ConfirmDialog`,
+  `DialogForm`, `SettingsSaveBar` / `useSettingsDraft`; unsaved changes go
+  through the window layer's close guard (`ui/src/layout/closeGuard.ts`,
+  `useCloseGuard`, `askToLeave`). Vitest renders windows with the guard
+  through `withCloseGuard` (`ui/src/test/closeGuard.ts`); e2e checks a
+  footer's order and focus with `emulateViewerOs` / `expectDialogFooter`
+  (`e2e/support/windowTour.ts`).
 
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`

@@ -6,6 +6,8 @@ preview versions) are summarized in the project's `CHANGELOG.md`.
 ## Nail 0.8.10 (`0.8.10`)
 
 Select a whole message list and act on it at once, however large it is.
+Every dialog now works the same way, and nothing you typed is lost by
+closing a window.
 
 ### New in 0.8.10
 
@@ -26,6 +28,21 @@ Select a whole message list and act on it at once, however large it is.
   messages as when you pick the rows one by one (only the folder you are
   looking at). **Select
   all** is also in the command palette.
+
+- **One way for every dialog** — buttons name what they do ("Save",
+  "Delete folder"; never "OK" or "Yes"), sit in the order your system uses
+  (on macOS the main button is at the right), and a finished task offers one
+  **Done**. ×, `Esc` and **Cancel** always mean the same and never save or
+  delete. See [Windows](windows.md#buttons-esc-and-unsaved-changes).
+- **Unsaved changes are no longer lost** — closing an editor, the New theme
+  window or Settings with changes asks **Save changes to “…”?** (Save, Don't
+  save, Cancel) instead of dropping them.
+- **Settings save when you say so** — a section with changes shows a bar
+  with **Save** and **Discard**; leaving the section asks first. See
+  [Settings](settings.md#saving-your-changes).
+- **Questions that delete never default to it** — the red button names the
+  action, Cancel has the focus, and `Enter` never deletes ("Delete
+  permanently?" first).
 
 ### Corrected in 0.8.10
 

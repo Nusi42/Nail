@@ -27,6 +27,13 @@ export interface SettingsUiState {
   /** Grows with every `settings.search`; the page focuses its search box. */
   focusSearch: number;
   reveal: RevealRequest | null;
+  /**
+   * The close-guard key of the shown settings page (its window, or the
+   * main window's; R6, ADR 0239): actions that change the section ask
+   * there first. `null` while no page is shown.
+   */
+  guardKey: string | null;
+  setGuardKey: (key: string | null) => void;
   setQuery: (query: string) => void;
   requestSearchFocus: () => void;
   requestReveal: (request: Omit<RevealRequest, "seq">) => void;
@@ -41,6 +48,10 @@ export function createSettingsStore(): StoreApi<SettingsUiState> {
     query: "",
     focusSearch: 0,
     reveal: null,
+    guardKey: null,
+    setGuardKey: (guardKey) => {
+      set({ guardKey });
+    },
     setQuery: (query) => {
       set({ query });
     },

@@ -313,7 +313,7 @@ rules-confirm-run-many = Of these { $rules } rules, some move or delete mail. To
    *[other] { $count } matches
 } in { $target }. Run them now?
 rules-confirm-discard = Discard your changes to “{ $name }”?
-rules-discard = Discard changes
+rules-discard = { common-discard-changes }
 rules-no-message = Select a message in the list first.
 rules-starters = Start from a template
 rules-starter-newsletters-name = Newsletters to a folder

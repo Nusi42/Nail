@@ -756,6 +756,11 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        the open message), widgets/FolderPicker.tsx (Move window combobox; matchRank, ASKS_BEFORE_MOVE
                        in features/mail-actions/move.ts), R5 (ADR 0237): select all (features/mail-actions/
                        bulk.ts + BulkConfirm.tsx, the list selection's `all` in actions/mailTargets.ts),
+                       R6 (ADR 0239): widgets/dialog/ (DialogFooter by role + order.ts footerOrder / viewerOs,
+                       dialogOs.ts DialogOsContext, ConfirmDialog, DialogForm, UnsavedPrompt, SettingsSaveBar +
+                       settingsDrafts.ts useSettingsDraft, skin.ts DIALOG_SKIN_CSS), layout/closeGuard.ts (the window
+                       layer's close guard: useCloseGuard, askToLeave, closeWindowNow, prompt window
+                       `unsaved-changes:<key>`; installed by features/windows CloseGuardEffect),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
@@ -1654,3 +1659,18 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   question and "Delete permanently?", both counting `MailTargetResolution::messages`); `applyInChunks` is gone,
   `RunOptions.resolution` / `confirmedTargets` send the counted ids or the list with its mark. E2e
   `r5-select-all.spec.ts`; numbered bulk mail on the IMAP mock for R4 / R5 specs: `e2e/support/bulkMail.ts`.
+
+### R6
+
+- Contract (ADR 0239): one dialog pattern. `ui/src/widgets/dialog/`: `DialogFooter` (roles `primary` /
+  `secondary` / `cancel` / `start` / `done`; `footerOrder(os)`: Windows / Linux primary first, macOS mirrored; the
+  viewer's system from the browser, `viewerOs`; `DialogOsContext` pins one), `ConfirmDialog` (`risk`: a destructive
+  verb is red, never focused, never on Enter; a normal one is focused and runs on Enter), `DialogForm`
+  (Ctrl+Enter in a text area), `UnsavedPrompt`, `SettingsSaveBar` + `settingsDrafts.ts`. The close guard
+  `ui/src/layout/closeGuard.ts`: guarded windows that leave `UiState.windows` while dirty come back and the prompt
+  window `unsaved-changes:<window id with _ for :>` opens over them (`modalOwner`); `askToLeave` for moving on
+  inside a window; the settings page registers a guard and shows the save bar (`features/settings/widgets.tsx`,
+  the page's guard key in the settings store for `settings.section`). Parts `dialog.*` and `settings-save-bar`
+  (`DIALOG_SKIN_CSS`; `dialog.footer` in `DIALOG_BUTTON_ROWS`; one rule set in `defaults/theme.kdl`). Texts
+  `locales/*/dialog.ftl`. Reference migrations: `widgets/DeletePermanently.tsx`, `features/appearance/ThemeDialogs.tsx`.
+  E2e `r6-dialog-pattern.spec.ts`; helpers `emulateViewerOs` / `expectDialogFooter` in `e2e/support/windowTour.ts`.

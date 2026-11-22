@@ -55,6 +55,7 @@ import { WindowFrame, tabbables, trapTab, type WindowFrameHandle } from "./Windo
 import { useDialogRegistry } from "./dialogRegistry";
 import { useWindowSpecs, useWindowTitles } from "./windowSpecs";
 import { nonEmpty } from "../text/empty";
+import { MAIN_GUARD, guardedWindowOf } from "./closeGuard";
 
 export { tabbables, trapTab };
 
@@ -86,11 +87,13 @@ const TITLE_SEPARATOR = String.fromCharCode(0);
 /** The scrim over the main window: below every window. */
 const SCRIM_Z = 1;
 
-/** What a modal window blocks: the main window. */
-export const MAIN_OWNER = "main";
+/** What a modal window blocks: the main window (whose close guard has the same key). */
+export const MAIN_OWNER = MAIN_GUARD;
 
 /**
- * The flow a modal window blocks: an open non-modal window with the same
+ * The flow a modal window blocks: the window an unsaved-changes prompt asks
+ * about (`unsaved-changes:composer_w1` → `composer:w1`, `./closeGuard.ts`),
+ * else an open non-modal window with the same
  * instance key (`composer-close:w1` → `composer:w1`), else `focused` (the
  * window that had the focus when the modal opened, if it is still open
  * and not modal), else the main window (`MAIN_OWNER`).
@@ -101,6 +104,10 @@ export function modalOwner(
   isModal: (id: string) => boolean,
   focused: string | null,
 ): string {
+  const guarded = guardedWindowOf(modal);
+  if (guarded !== null) {
+    return open.includes(guarded) && !isModal(guarded) ? guarded : MAIN_OWNER;
+  }
   const parts = parseWindowId(modal);
   if (parts?.instance) {
     const sibling = open.find(

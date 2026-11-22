@@ -6,6 +6,10 @@
  * {@link WindowTour}: it says what it does with each window (`visit`) and
  * with states that are no windows of their own (`state`); the steps below
  * open the windows the same way for both.
+ *
+ * R6 (ADR 0239): `emulateViewerOs` and `expectDialogFooter` check the
+ * shared dialog footer of any dialog — its buttons in the order of the
+ * viewer's system and the button that has the focus.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -24,6 +28,8 @@ import {
   toolbarAction,
 } from "./views";
 import { windowSelector } from "./views";
+import type { Os } from "../../ui/src/api/generated";
+import { footerOrder, type FooterRole } from "../../ui/src/widgets/dialog/order";
 
 /**
  * Dialogs features register by name (`window.open "<name>"`) that are not
@@ -366,5 +372,75 @@ export async function toolbarWindowsStep(
   for (const [button, name] of windows) {
     await toolbarAction(tour.page, toolbar, button);
     await tour.visitAndClose(name);
+  }
+}
+
+/** The systems whose footer order a test can check (R6, ADR 0239). */
+export type ViewerOs = Exclude<Os, "other">;
+
+/** What each system's browser reports: its client hint and `navigator.platform`. */
+const PLATFORM_OF: Readonly<Record<ViewerOs, readonly [string, string]>> = {
+  windows: ["Windows", "Win32"],
+  macos: ["macOS", "MacIntel"],
+  linux: ["Linux", "Linux x86_64"],
+};
+
+/**
+ * Makes every page of `page`'s context report `os` as the viewer's system
+ * (client hint and `navigator.platform`), so dialogs order their footers
+ * for it. Call it before the page loads.
+ */
+export async function emulateViewerOs(page: Page, os: ViewerOs): Promise<void> {
+  await page.addInitScript(([hint, legacy]) => {
+    Object.defineProperty(Navigator.prototype, "platform", {
+      configurable: true,
+      get: () => legacy,
+    });
+    Object.defineProperty(Navigator.prototype, "userAgentData", {
+      configurable: true,
+      get: () => ({ platform: hint, mobile: false, brands: [] }),
+    });
+  }, PLATFORM_OF[os]);
+}
+
+/** What a dialog's shared footer must show. */
+export interface FooterExpectation {
+  /** The system the page reports (`emulateViewerOs`). */
+  os: ViewerOs;
+  /** The roles the footer's end group has, in any order; the helper orders them for `os`. */
+  roles: readonly FooterRole[];
+  /** The role of the button that must have the focus, if checked. */
+  focused?: FooterRole | "start";
+  /** Whether an editor's Delete… sits at the start (default: none). */
+  start?: boolean;
+}
+
+/**
+ * Checks the shared footer of `dialog` (its last `dialog.footer`): the
+ * system it follows, its end group's buttons in that system's order by
+ * role, the start button and the focused button.
+ */
+export async function expectDialogFooter(
+  dialog: Locator,
+  expected: FooterExpectation,
+): Promise<void> {
+  const footer = dialog.locator('[data-part="dialog.footer"]').last();
+  await expect(footer).toBeVisible();
+  await expect(footer).toHaveAttribute("data-os", expected.os);
+  const order: readonly FooterRole[] = expected.roles.includes("done")
+    ? ["done"]
+    : footerOrder(expected.os).filter((role) => expected.roles.includes(role));
+  await expect
+    .poll(() =>
+      footer
+        .locator('[data-part="dialog.footer.end"] > button')
+        .evaluateAll((buttons) => buttons.map((b) => b.getAttribute("data-role"))),
+    )
+    .toEqual(order);
+  await expect(footer.locator('[data-part="dialog.footer.start"] > button')).toHaveCount(
+    expected.start === true ? 1 : 0,
+  );
+  if (expected.focused !== undefined) {
+    await expect(footer.locator(`button[data-role="${expected.focused}"]`)).toBeFocused();
   }
 }

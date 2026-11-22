@@ -43,6 +43,8 @@ export const FIELDS_CONTAINER = "nail-fields";
  * body or the dialog itself scrolls.
  */
 export const DIALOG_BUTTON_ROWS = [
+  // ADR 0239: the shared footer; the rows below go as their dialogs move to it.
+  "dialog.footer",
   "wizard.buttons",
   "account-setup.actions",
   "plugin-install.actions",

@@ -1383,6 +1383,109 @@ message); a 1 200-row e2e variant of the gate; a note in ADR
 `ResolveMailTargets`, no limit on conversations or messages (parts and `as_of` follow in WT1), `list-selection.ftl`
 slot, 0.8.10 notes prepared. Next: WT1 and WT2 in parallel.
 
+### Wave R6 (one dialog pattern everywhere)
+
+A design review of every dialog (about 90 places that confirm, save or close something) found six different
+behaviours: the button order flips, Save does not always close, focus can land on Delete, unsaved changes are lost
+silently outside the rules window and the composer, bare "OK" / "Apply", destructive actions without a question or
+Undo, three models in Settings, and about 45 `*.actions` / `*.buttons` theme parts. The maintainer approved one
+pattern with the decisions below. Release 0.8.10. Contract ADR 0239.
+
+#### Scope decisions for R6
+
+- **Footer order per system, by role:** Windows and Linux primary, secondary, Cancel (left to right,
+  right-aligned); macOS Cancel, secondary, primary; web mode follows the viewer's system; an editor's `Delete…` sits
+  alone at the start. Code names roles, never places (`DialogFooter`).
+- **× = Esc = Cancel** everywhere, never commits; with unsaved changes the one shared prompt asks: "Save changes to
+  “X”?" Save / Don't save / Cancel; when saving is impossible: Discard changes / Keep editing.
+- **Verbs, not OK / Yes / No / Apply;** a finished task shows one Done.
+- **The primary saves and closes** (an inline error keeps it open). Tool windows (rules, theme editor, toolbar
+  customizer, logs) stay open and have no footer Close.
+- **Destructive:** a red verb button ("Delete folder"), never the default, focus on Cancel, Enter never runs it;
+  prefer Undo where the action is undoable; destructive actions that ask nothing today get a `ConfirmDialog` or
+  Undo.
+- **Enter** runs the primary only when it is not destructive; Ctrl+Enter in multi-line fields.
+- **Wizards:** Cancel on every step, Done on the result step.
+- **Settings: nothing applies until Save** (maintainer's decision, deviating from the review's "apply at once"):
+  every settings section gets the pinned "Unsaved changes" bar (Save / Discard); leaving a section, closing Settings
+  or its window asks with the shared prompt. Theme editor and toolbar customizer (outside Settings, apply at once
+  with Undo) stay as they are.
+- Pickers (Move to folder, palette) and information windows (About Nail, Configuration errors, confirmation
+  center) keep × only. The OS window's own close is not guarded in this wave. No new crates, no new UI feature
+  folders; new locale slot `locales/*/dialog.ftl` (contract).
+- **Release:** the R6 items go into "Nail 0.8.10" of the release notes and `CHANGELOG.md` `[Unreleased]` (slots
+  prepared by the contract); packages add their user-visible items, the integrator merges them.
+
+#### Packages of R6
+
+Every package migrates only its own feature dialogs to the shared pieces and must not change them
+(`ui/src/widgets/dialog/`, `ui/src/layout/closeGuard.ts`, the window layer, the footer helpers of
+`e2e/support/windowTour.ts`); a needed change goes into the report for the integrator. Each package also owns: the
+`locales/en` files of its features (new texts; `common.ftl` / `dialog.ftl` only through the integrator), the
+removal of its own features' `*.actions` / `*.buttons` parts from `defaults/theme.kdl` (and the
+`DIALOG_BUTTON_ROWS` entries of its dialogs in `ui/src/theme/skinResponsive.ts`), the userDocs/en pages of its
+features, and the e2e specs of its features (labels that change: "Delete" → "Delete folder", "OK" → "Unlock", …)
+plus `e2e/tests/r6-<package>-*.spec.ts` using `expectDialogFooter`.
+
+- **Contract (done):** ADR 0239; `ui/src/widgets/dialog/` — `DialogFooter` (roles, per-system order
+  `footerOrder` / `viewerOs` / `DialogOsContext`, parts `dialog.footer` / `.start` / `.end`, `data-role`),
+  `ConfirmDialog` (`risk` normal | destructive), `DialogForm` (Ctrl+Enter), `UnsavedPrompt`, `SettingsSaveBar` +
+  `useSettingsDraft`; the close guard `ui/src/layout/closeGuard.ts` (`useCloseGuard`, `askToLeave`,
+  `closeWindowNow`, prompt window `unsaved-changes:<key>`, owner rule in `modalOwner`); the settings page shows the
+  bar and asks before another section and on close; `dialog.ftl`, `DIALOG_SKIN_CSS`, the `dialog.*` rule set in
+  `defaults/theme.kdl`; Vitest + axe for each piece; e2e helpers `emulateViewerOs` / `expectDialogFooter`; reference
+  migrations "Delete permanently?" (`ConfirmDialog`) and New / Rename theme (`DialogFooter`, New theme guarded),
+  e2e `r6-dialog-pattern.spec.ts`.
+- **WD1 — mail and composer (parallel):** `ui/src/features/{composer,folders,gmail,exchange,print,message-source}`,
+  `features/triage` (Snooze only), `features/plugins` (SendVeto only),
+  `ui/src/widgets/{FolderPicker,DeletePermanently,Outbox,DialogStates,CloseButton}.tsx`: composer close → the shared
+  prompt (`useCloseGuard` with "Save draft"; `composer-close` goes), "Discard draft", the gone state's Done,
+  Ctrl+Enter sends and Enter in Subject does not; the move confirmation as `ConfirmDialog` (Esc back to the
+  picker); Outbox Discard asks or offers Undo; folder / label / category / mailbox editors and deletes
+  (`ConfirmDialog`, focus on Cancel; "Apply" → "Save"), Automatic replies with one footer, Focused / Other; Snooze;
+  Print (Print, Save as PDF…, Cancel); Message source (no primary Close); Send veto (Send anyway red, Cancel
+  focused); `EmptyDialog` / `CloseButton` → Done or ×.
+- **WD2 — rules, appearance, customization, PIM, scheduling (parallel):**
+  `ui/src/features/{rules,appearance,customization,toolbar-editor,pim,scheduling}`: the rules window's guard moves
+  to the shared close guard and prompt (`features/rules/closeGuard.ts` and the inline discard question go; rule
+  delete / run as `ConfirmDialog`; the footer's start / end slots, Save stays open); Delete theme ("Delete theme");
+  the merge wizard (Next / Back / Apply theme / Cancel; Revert, Done); Appearance's accent without "Apply" (a
+  settings section: the save bar) and the column / toolbar editors' settings (`customization/Editors.tsx`); event /
+  task / contact editors with the pinned footer, `Delete…` at the start (asks) and the guard; edit scope verbs;
+  contact groups (tool window, Delete… asks); merge contacts and import wizards; Calendars and address books
+  (Remove asks or Undo, no Close); calendar dialogs; Cancel meeting (red "Cancel meeting", "Keep meeting" focused,
+  no Enter submit); invitation settings; Find a time (one footer).
+- **WD3 — settings (parallel):** the settings shell (`ui/src/features/settings`, except the contract's bar and
+  guard wiring) and every settings section: `features/sync`, `features/triage` (Junk, Notifications),
+  `features/sieve`, `features/mcp`, `features/remote` (RemoteSettings), `features/security` (IdentityCrypto,
+  Smartcards, KeyDetail, SecuritySettings), `features/system` (DesktopSettings and the other settings widgets),
+  `ui/src/widgets/{AccountSettings,AccountSetup,VirtualAccountEditor}.tsx`: each widget registers
+  `useSettingsDraft` and applies nothing before Save (switches and selects included); `SaveRow` and the per-widget
+  Save / Undo rows go; Remove account… / Delete virtual account / the inline "Are you sure" rows → `ConfirmDialog`;
+  Add account wizard: Cancel on every step, the guard after the first field, Done at the end.
+- **WD4 — data, security, plug-ins, system (parallel):** `ui/src/features/portability`, `features/security`
+  (RecoveryKey, PinPrompt, Autocrypt), `features/remote` (PairDevice, Login), `features/plugins` (InstallDialog,
+  PluginManager, PluginDialogs), `features/{connlog,agents,palette}`, `features/system` (AboutNail, FirstRun):
+  import / export / backup / restore and diagnostics wizards (Cancel on every step, Done; Restore now red, never
+  default); recovery key; PIN prompt "Unlock"; Autocrypt import; Pair a device (Create code, Revoke code, Done);
+  re-authenticate; the plug-in install wizard, manager (Remove… asks) and plug-in dialogs through `DialogFooter`
+  (roles from the plug-in, Nail orders them and adds Cancel); connection log Clear asks or Undo, Error details /
+  application log without Close; First run: one Get started, × skips.
+- **Integration:** rebase, renumber ADRs, the theme.kdl part removals, shared ftl files, `DIALOG_BUTTON_ROWS`, the
+  R6 items in the 0.8.10 release notes and `CHANGELOG.md`, a footer-order pass of the window sweeps
+  (`a11y-windows.spec.ts` / `p1-windows.spec.ts` with `expectDialogFooter`), the full suite incl. `npm run visual`
+  (baselines change), memory `r6-status`.
+
+Gates: every suite green; every dialog of the window sweeps shows its footer in the Windows order on Windows and the
+mirrored order with `emulateViewerOs(page, "macos")`; no "OK", "Yes", "No" or "Apply" button label left in
+`locales/en`; every destructive confirmation focuses Cancel and Enter does not run it; ×, Esc and Cancel of every
+editor with changes ask with the shared prompt; every settings section applies nothing before Save and asks when
+left; the maintainer's human gate on the 0.8.10 installer, then release.
+
+*Status (contract):* done (ADR 0239). Shared pieces in `ui/src/widgets/dialog/` and `ui/src/layout/closeGuard.ts`,
+the settings page's save bar and guard, `dialog.ftl`, the `dialog.*` theme rules, e2e helpers, reference
+migrations (Delete permanently, New / Rename theme). Next: WD1–WD4 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

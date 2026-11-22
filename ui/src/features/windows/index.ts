@@ -20,7 +20,11 @@
  * Only WP171 edits the files in this directory. The central registry
  * (`../registry.ts`) merges these exports into the app; see `../README.md`.
  */
+import { useEffect } from "react";
 import type { ActionInfo } from "../../actions/palette";
+import { UNSAVED_PROMPT, installCloseGuard } from "../../layout/closeGuard";
+import { useUiStoreApi } from "../../state/uiStore";
+import { UnsavedPrompt } from "../../widgets/dialog/UnsavedPrompt";
 import { windowStatesKey } from "../../state/windowState";
 import type { Feature } from "../types";
 import { runWindowCommand } from "./commands";
@@ -92,3 +96,27 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
     icon: "app-window",
   },
 };
+
+/** R6 (ADR 0239): the shared unsaved-changes prompt of the close guard. */
+export const dialogs: NonNullable<Feature["dialogs"]> = {
+  [UNSAVED_PROMPT]: UnsavedPrompt,
+};
+
+/** One prompt per guarded window (`unsaved-changes:<key>`), modal over it. */
+export const windows: NonNullable<Feature["windows"]> = {
+  [UNSAVED_PROMPT]: {
+    confirmation: true,
+    size: { width: 480, height: 220 },
+    instances: "multiple",
+  },
+};
+
+/** Installs the close guard on the app's UI store. */
+function CloseGuardEffect() {
+  const ui = useUiStoreApi();
+  useEffect(() => installCloseGuard(ui) ?? undefined, [ui]);
+  return null;
+}
+
+/** Background components. */
+export const effects: NonNullable<Feature["effects"]> = [CloseGuardEffect];

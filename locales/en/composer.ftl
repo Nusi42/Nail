@@ -103,7 +103,7 @@ composer-editor-failed = The editor could not be loaded. Reload Nail and try aga
 ## Several composers and their confirmations (M5c WP172)
 
 # Titles of the modal confirmations (the composer's own title is its subject).
-window-composer-close = Unsaved changes
+window-composer-close = { common-unsaved-changes }
 window-composer-discard = Discard message
 # { $subject }: the message's subject, or "New message".
 composer-close-question = “{ $subject }” has changes that are not saved yet. Save them as a draft before closing?

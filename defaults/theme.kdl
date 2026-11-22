@@ -4267,4 +4267,16 @@ theme "default" mode="system" {
     part "pin-prompt.token" { margin 0; color "$color.fg-muted"; }
     part "pin-prompt.key" { margin 0; font-family "$font.mono"; font-size "$font-size.sm"; }
     part "pin-prompt.text" { margin 0; }
+
+    // R6 (ADR 0239): the shared dialog pattern. One footer for every editor,
+    // wizard and confirmation (its buttons ordered by role for the viewer's
+    // system: `dialog.footer.start` holds an editor's Delete…, `.end` the
+    // rest), the confirmation's question and note, and the settings save bar
+    // that shows while a section has unsaved changes.
+    part "dialog.footer" { gap "$space.sm"; }
+    part "dialog.footer.end" { gap "$space.sm"; justify-content "flex-end"; }
+    part "dialog.question" { font-weight "$font-weight.medium"; }
+    part "dialog.note" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "settings-save-bar" { border-top "$border.thin"; background-color "$color.bg-raised"; }
+    part "settings-save-bar.text" { font-weight "$font-weight.medium"; }
 }
