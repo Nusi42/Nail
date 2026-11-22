@@ -24,8 +24,8 @@ mail-action-kind-not-junk = Marked as not junk
 ## Why an action or an undo was refused (MailActionIssue)
 
 mail-action-issue-no-targets = Nothing is selected.
-mail-action-issue-too-many-targets = Too many conversations at once; select fewer.
-mail-action-issue-too-many-messages = Too many messages at once; select fewer conversations.
+mail-action-issue-too-many-targets = Too many rows picked one by one. To act on the whole list, select all.
+mail-action-issue-nested-list = A list cannot be left out of a selected list.
 mail-action-issue-no-messages = There is nothing to do for this selection.
 mail-action-issue-nothing-to-change = Choose at least one tag to add or remove.
 mail-action-issue-not-in-trash = Only messages in Trash or Junk can be deleted permanently.

@@ -24,19 +24,21 @@ use std::collections::BTreeSet;
 
 use nail_api::agents::ActionActor;
 use nail_api::mail_actions::{
-    MAIL_UNDO_SECS, MAX_MAIL_ACTION_MESSAGES, MAX_MAIL_ACTION_TARGETS, MailActionIssue,
-    MailActionKind, MailActionResult, MailTargetResolution,
+    MAIL_UNDO_SECS, MAX_MAIL_ACTION_TARGETS, MailActionIssue, MailActionKind, MailActionResult,
+    MailTargetResolution, explicit_target_count, has_list, has_nested_list,
 };
 use nail_api::{
     AccountId, ApiError, ErrorCode, Event, FolderRole, LocalizedMessage, MailAction, MailBatchId,
     MessageId, MessageTarget, MoveTarget, OpId,
 };
 use nail_store::{
-    MailBatchPlan, MailBatchUndo, Operation, TargetMessage, mail_batch_id, parse_mail_batch_id,
+    MailBatchPlan, MailBatchUndo, Operation, OwnAddresses, TargetMessage, mail_batch_id,
+    parse_mail_batch_id,
 };
 
 use crate::conversations::{FolderFilter, as_keep};
 use crate::error::Result;
+use crate::mail_lists::within;
 use crate::service::Service;
 
 /// How many of a Sent folder's newest messages tell which addresses the
@@ -96,7 +98,10 @@ impl Service {
     }
 
     /// Resolves `targets` for `action` within `filter` (a remote session's
-    /// grant; `None` = everything).
+    /// grant; `None` = everything). A list target (R5, ADR 0235) stands for
+    /// its rows, each resolved like the target it stands for, minus the
+    /// messages its exceptions resolve to. No limit on the messages: large
+    /// actions run in parts (`nail_api::mail_actions::MAIL_ACTION_PART_MESSAGES`).
     async fn resolve_targets(
         &self,
         targets: &[MessageTarget],
@@ -106,73 +111,62 @@ impl Service {
         if targets.is_empty() {
             return Err(issue(MailActionIssue::NoTargets, "no targets").into());
         }
-        if targets.len() > MAX_MAIL_ACTION_TARGETS {
+        if explicit_target_count(targets) > MAX_MAIL_ACTION_TARGETS {
             return Err(issue(
                 MailActionIssue::TooManyTargets,
-                &format!("at most {MAX_MAIL_ACTION_TARGETS} targets"),
+                &format!("at most {MAX_MAIL_ACTION_TARGETS} rows named one by one"),
+            )
+            .into());
+        }
+        if has_nested_list(targets) {
+            return Err(issue(
+                MailActionIssue::NestedList,
+                "a list among a list's exceptions",
             )
             .into());
         }
         if action.is_empty() {
             return Err(issue(MailActionIssue::NothingToChange, "nothing to change").into());
         }
-        let reach = action.reach();
         let own = self.own_addresses_by_account().await?;
         let mut out = Resolved {
             messages: Vec::new(),
             conversations: 0,
         };
         let mut seen = BTreeSet::new();
-        for target in targets {
-            let picked = match target {
-                MessageTarget::Message { message_id } => {
-                    vec![self.message_target(message_id).await?]
-                }
-                MessageTarget::Conversation(conversation) => {
-                    let scope = match &conversation.folder_id {
-                        Some(folder) => Some(self.conversation_scope(folder, filter).await?),
-                        None => None,
-                    };
-                    let (thread, own, keep) =
-                        (conversation.thread_id.clone(), own.clone(), filter.cloned());
-                    let picked = self
-                        .inner
-                        .store
-                        .call(move |s| {
-                            s.conversation_targets(
-                                &thread,
-                                scope.as_ref(),
-                                &own,
-                                as_keep(keep.as_ref()),
-                                reach,
-                            )
-                        })
-                        .await?;
-                    let reached = picked
-                        .iter()
-                        .any(|m| !(matches!(action, MailAction::Trash) && m.role == "trash"));
-                    if reached {
-                        out.conversations += 1;
-                    }
-                    picked
-                }
-            };
+        let mut push = |out: &mut Resolved, picked: Vec<TargetMessage>| {
             for message in picked {
-                // Trash never deletes for good: messages already in Trash
-                // stay (Delete permanently has its own scope and question).
-                if matches!(action, MailAction::Trash) && message.role == "trash" {
-                    continue;
-                }
                 if seen.insert(message.id.clone()) {
                     out.messages.push(message);
                 }
             }
-            if out.messages.len() > MAX_MAIL_ACTION_MESSAGES {
-                return Err(issue(
-                    MailActionIssue::TooManyMessages,
-                    &format!("at most {MAX_MAIL_ACTION_MESSAGES} messages"),
-                )
-                .into());
+        };
+        for target in targets {
+            match target {
+                MessageTarget::List(list) => {
+                    let mut except = BTreeSet::new();
+                    for row in &list.except {
+                        let (picked, _) = self.resolve_row(row, action, filter, &own).await?;
+                        except.extend(picked.into_iter().map(|m| m.id));
+                    }
+                    for row in self.mail_list_rows(&list.list, filter).await? {
+                        let (mut picked, _) = self.resolve_row(&row, action, filter, &own).await?;
+                        picked.retain(|m| {
+                            !except.contains(&m.id) && within(filter, &m.folder_id, &m.account_id)
+                        });
+                        if matches!(row, MessageTarget::Conversation(_)) && !picked.is_empty() {
+                            out.conversations += 1;
+                        }
+                        push(&mut out, picked);
+                    }
+                }
+                MessageTarget::Message { .. } | MessageTarget::Conversation(_) => {
+                    let (picked, reached) = self.resolve_row(target, action, filter, &own).await?;
+                    if reached {
+                        out.conversations += 1;
+                    }
+                    push(&mut out, picked);
+                }
             }
         }
         // Grouped by account and folder (stable), so the queue hands each
@@ -195,6 +189,58 @@ impl Service {
         Ok(out)
     }
 
+    /// The messages one row target (a message or a conversation) reaches,
+    /// and whether it is a conversation that reached one. Trash never
+    /// deletes for good: for Trash, messages already in Trash are left out
+    /// (Delete permanently has its own scope and question).
+    async fn resolve_row(
+        &self,
+        target: &MessageTarget,
+        action: &MailAction,
+        filter: Option<&FolderFilter>,
+        own: &OwnAddresses,
+    ) -> Result<(Vec<TargetMessage>, bool)> {
+        let (mut picked, conversation) = match target {
+            MessageTarget::Message { message_id } => {
+                (vec![self.message_target(message_id).await?], false)
+            }
+            MessageTarget::Conversation(conversation) => {
+                let scope = match &conversation.folder_id {
+                    Some(folder) => Some(self.conversation_scope(folder, filter).await?),
+                    None => None,
+                };
+                let (thread, own, keep, reach) = (
+                    conversation.thread_id.clone(),
+                    own.clone(),
+                    filter.cloned(),
+                    action.reach(),
+                );
+                let picked = self
+                    .inner
+                    .store
+                    .call(move |s| {
+                        s.conversation_targets(
+                            &thread,
+                            scope.as_ref(),
+                            &own,
+                            as_keep(keep.as_ref()),
+                            reach,
+                        )
+                    })
+                    .await?;
+                (picked, true)
+            }
+            MessageTarget::List(_) => {
+                return Err(issue(MailActionIssue::NestedList, "a list is not a row").into());
+            }
+        };
+        if matches!(action, MailAction::Trash) {
+            picked.retain(|m| m.role != "trash");
+        }
+        let reached = conversation && !picked.is_empty();
+        Ok((picked, reached))
+    }
+
     /// `ResolveMailTargets`.
     pub(crate) async fn resolve_mail_targets(
         &self,
@@ -208,10 +254,15 @@ impl Service {
             .iter()
             .map(|m| m.account_id.clone())
             .collect();
+        let list = has_list(targets);
         Ok(MailTargetResolution {
-            message_ids: resolved.ids(),
+            // A list's ids can be many: the count only (ADR 0235).
+            message_ids: if list { Vec::new() } else { resolved.ids() },
+            messages: u32::try_from(resolved.messages.len()).unwrap_or(u32::MAX),
             account_ids: accounts.into_iter().collect(),
             conversations: resolved.conversations,
+            // The `as_of` mark comes with the core's R5 package.
+            as_of: None,
         })
     }
 

@@ -269,6 +269,131 @@
       ],
       "fn": "kindOf",
       "out": "not-junk"
+    },
+    {
+      "args": [
+        []
+      ],
+      "fn": "explicitTargetCount",
+      "out": 0
+    },
+    {
+      "args": [
+        [
+          {
+            "kind": "message",
+            "message_id": "m1"
+          },
+          {
+            "folder_id": null,
+            "kind": "conversation",
+            "thread_id": "t1"
+          }
+        ]
+      ],
+      "fn": "explicitTargetCount",
+      "out": 2
+    },
+    {
+      "args": [
+        [
+          {
+            "kind": "message",
+            "message_id": "m1"
+          },
+          {
+            "except": [],
+            "kind": "list",
+            "list": {
+              "folder_id": "f1",
+              "source": "messages"
+            }
+          }
+        ]
+      ],
+      "fn": "explicitTargetCount",
+      "out": 1
+    },
+    {
+      "args": [
+        [
+          {
+            "folder_id": null,
+            "kind": "conversation",
+            "thread_id": "t1"
+          },
+          {
+            "except": [
+              {
+                "kind": "message",
+                "message_id": "m1"
+              },
+              {
+                "folder_id": null,
+                "kind": "conversation",
+                "thread_id": "t1"
+              }
+            ],
+            "kind": "list",
+            "list": {
+              "folder_id": "f1",
+              "source": "messages"
+            }
+          }
+        ]
+      ],
+      "fn": "explicitTargetCount",
+      "out": 3
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f1",
+          "source": "conversations"
+        }
+      ],
+      "fn": "listFolderOf",
+      "out": "f1"
+    },
+    {
+      "args": [
+        {
+          "folder_id": "f2",
+          "source": "messages"
+        }
+      ],
+      "fn": "listFolderOf",
+      "out": "f2"
+    },
+    {
+      "args": [
+        {
+          "conversations": true,
+          "query": {
+            "folder_id": "f3",
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        }
+      ],
+      "fn": "listFolderOf",
+      "out": "f3"
+    },
+    {
+      "args": [
+        {
+          "conversations": false,
+          "query": {
+            "folder_id": null,
+            "limit": 50,
+            "text": "a"
+          },
+          "source": "search"
+        }
+      ],
+      "fn": "listFolderOf",
+      "out": null
     }
   ]
 }

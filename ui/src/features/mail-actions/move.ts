@@ -8,7 +8,7 @@
  * messages the core resolved the targets to (`ResolveMailTargets`);
  * confirming moves exactly those messages.
  */
-import { currentTargets, type ActionTargets } from "../../actions/mailTargets";
+import { currentTargets, listFolderOf, type ActionTargets } from "../../actions/mailTargets";
 import type {
   Folder,
   FolderId,
@@ -75,7 +75,9 @@ export function sourceFolderOf(
     targets.map((target) =>
       target.kind === "conversation"
         ? target.folder_id
-        : (findSummary(ctx.queryClient, target.message_id)?.folder_id ?? null),
+        : target.kind === "list"
+          ? listFolderOf(target.list)
+          : (findSummary(ctx.queryClient, target.message_id)?.folder_id ?? null),
     ),
   );
   const [only] = folders;

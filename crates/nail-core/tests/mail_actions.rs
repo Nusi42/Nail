@@ -13,11 +13,13 @@ use common::{NIGHTINGALE as SUBJECT, demo_folder, eventually, remote_session};
 use nail_core::testing::{TempService, error_of};
 
 use nail_api::agents::{ActionActor, ActionAttribution};
-use nail_api::mail_actions::{MailActionKind, MailActionResult};
+use nail_api::mail_actions::{
+    MAX_MAIL_ACTION_TARGETS, MailActionKind, MailActionResult, MailList, MailTargetResolution,
+};
 use nail_api::remote::RemoteAccessPreset;
 use nail_api::{
     AccountId, ErrorCode, Folder, FolderId, FolderRole, MailAction, MessageId, MessageTarget,
-    MoveTarget, Request, Response, ThreadSummary,
+    MoveTarget, Request, Response, SearchQuery, ThreadSummary,
 };
 use nail_core::demo::{DEMO_ACCOUNT_ID, DemoMail, MULTI_WORK_ID, start_demo_multi_with};
 use nail_core::{McpCore, Service, ServiceOptions};
@@ -212,6 +214,15 @@ async fn apply(f: &Fixture, targets: Vec<MessageTarget>, action: MailAction) -> 
     }
 }
 
+/// Undoes `batch` as the user; the undo must be queued.
+async fn undo(f: &Fixture, batch: nail_api::MailBatchId) {
+    let undone = f
+        .service
+        .handle(Request::UndoMailAction { batch_id: batch })
+        .await;
+    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+}
+
 /// The folders the thread's messages are in now, by folder id.
 fn where_are(f: &Fixture, thread: &nail_api::ThreadId) -> Vec<(FolderId, usize)> {
     let store = f.service.store();
@@ -329,13 +340,7 @@ async fn delete_reaches_the_replies_in_sent_and_undo_returns_each() {
     };
     assert_eq!(resolution.message_ids.len(), 7);
     // Undo the trash first: everything is back where it was.
-    let undone = f
-        .service
-        .handle(Request::UndoMailAction {
-            batch_id: result.batch_id.unwrap(),
-        })
-        .await;
-    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    undo(&f, result.batch_id.unwrap()).await;
     assert_eq!(where_are(&f, &row.id), before);
 }
 
@@ -389,13 +394,7 @@ async fn snooze_and_junk_undo_their_side_effects() {
     )
     .await;
     assert_eq!(f.service.store().list_snoozed(None).unwrap().len(), 4);
-    let undone = f
-        .service
-        .handle(Request::UndoMailAction {
-            batch_id: snoozed.batch_id.unwrap(),
-        })
-        .await;
-    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    undo(&f, snoozed.batch_id.unwrap()).await;
     assert_eq!(f.service.store().list_snoozed(None).unwrap().len(), 0);
     assert_eq!(where_are(&f, &row.id), before);
     let tags = |f: &Fixture| -> Vec<String> {
@@ -406,13 +405,7 @@ async fn snooze_and_junk_undo_their_side_effects() {
 
     let junk = apply(&f, target, MailAction::Junk { junk: true }).await;
     assert!(where_are(&f, &row.id).iter().all(|(id, _)| *id != inbox.id));
-    let undone = f
-        .service
-        .handle(Request::UndoMailAction {
-            batch_id: junk.batch_id.unwrap(),
-        })
-        .await;
-    assert!(matches!(undone, Response::Queued { .. }), "{undone:?}");
+    undo(&f, junk.batch_id.unwrap()).await;
     assert_eq!(where_are(&f, &row.id), before);
     let stats = f
         .service
@@ -832,4 +825,223 @@ async fn delete_takes_the_whole_thread_and_a_restore_returns_replies_to_sent() {
         },
         "the user's replies go back to Sent"
     );
+}
+
+// ---------------------------------------------------------------------------
+// R5 (ADR 0235): a whole list except some rows
+
+async fn resolve(
+    f: &Fixture,
+    targets: Vec<MessageTarget>,
+    action: MailAction,
+) -> MailTargetResolution {
+    match f
+        .service
+        .handle(Request::ResolveMailTargets { targets, action })
+        .await
+    {
+        Response::MailTargets { resolution } => resolution,
+        other => panic!("{other:?}"),
+    }
+}
+
+/// Every conversation row of `folder`.
+async fn rows_of(f: &Fixture, folder: &Folder) -> Vec<ThreadSummary> {
+    match f
+        .service
+        .handle(Request::ListThreads {
+            folder_id: folder.id.clone(),
+            offset: 0,
+            limit: 1000,
+        })
+        .await
+    {
+        Response::Threads { threads, .. } => threads,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_list_target_is_every_row_but_the_deselected_ones() {
+    let f = setup();
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let read = MailAction::MarkRead { read: false };
+    let rows: Vec<MessageTarget> = rows_of(&f, &inbox)
+        .await
+        .into_iter()
+        .map(|t| MessageTarget::conversation(t.id, Some(inbox.id.clone())))
+        .collect();
+    let one_by_one = resolve(&f, rows.clone(), read.clone()).await;
+    let conversations = MailList::Conversations {
+        folder_id: inbox.id.clone(),
+    };
+    let all = resolve(
+        &f,
+        vec![MessageTarget::list(conversations.clone(), vec![])],
+        read.clone(),
+    )
+    .await;
+    assert_eq!(all.conversations, one_by_one.conversations);
+    assert_eq!(all.messages, one_by_one.messages);
+    assert_eq!(
+        usize::try_from(one_by_one.messages).unwrap(),
+        one_by_one.message_ids.len()
+    );
+    assert_eq!(
+        all.message_ids,
+        Vec::<MessageId>::new(),
+        "a list answers with the count"
+    );
+    assert_eq!(all.account_ids, one_by_one.account_ids);
+
+    // Deselecting the Nightingale row leaves out its seven messages.
+    let but_one = resolve(
+        &f,
+        vec![MessageTarget::list(conversations, whole(&row, &inbox))],
+        read,
+    )
+    .await;
+    assert_eq!(but_one.conversations, all.conversations - 1);
+    assert_eq!(but_one.messages, all.messages - 7);
+
+    // A list without conversations: one row per message of the folder.
+    let messages = resolve(
+        &f,
+        vec![MessageTarget::list(
+            MailList::Messages {
+                folder_id: inbox.id.clone(),
+            },
+            vec![],
+        )],
+        MailAction::Archive,
+    )
+    .await;
+    assert_eq!(messages.conversations, 0);
+    assert_eq!(messages.messages, inbox_total(&f, &inbox));
+}
+
+fn inbox_total(f: &Fixture, inbox: &Folder) -> u32 {
+    f.service
+        .store()
+        .list_messages(&inbox.id, 0, 1)
+        .unwrap()
+        .total
+}
+
+#[tokio::test]
+async fn a_search_list_is_every_local_hit() {
+    let f = setup();
+    f.service.rebuild_search_index().unwrap();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let mut query = SearchQuery::new("subject:Nightingale", 1000);
+    query.folder_id = Some(inbox.id.clone());
+    let hits = match f
+        .service
+        .handle(Request::Search {
+            query: query.clone(),
+        })
+        .await
+    {
+        Response::SearchResults { hits, .. } => hits,
+        other => panic!("{other:?}"),
+    };
+    assert!(hits.len() > 1, "{hits:?}");
+    // The list's own page size does not matter: every hit is a row.
+    query.limit = 1;
+    let list = |conversations| {
+        vec![MessageTarget::list(
+            MailList::Search {
+                query: query.clone(),
+                conversations,
+            },
+            vec![],
+        )]
+    };
+    let as_messages = resolve(&f, list(false), MailAction::Archive).await;
+    assert_eq!(usize::try_from(as_messages.messages).unwrap(), hits.len());
+    assert_eq!(as_messages.conversations, 0);
+    // As conversations: each hit stands for its conversation without a
+    // folder, as the row acts on its own.
+    let read = MailAction::MarkRead { read: true };
+    let rows = hits
+        .iter()
+        .map(|h| MessageTarget::conversation(h.message.thread_id.clone().unwrap(), None))
+        .collect();
+    let one_by_one = resolve(&f, rows, read.clone()).await;
+    let as_conversations = resolve(&f, list(true), read).await;
+    assert_eq!(as_conversations.messages, one_by_one.messages);
+    assert_eq!(as_conversations.conversations, one_by_one.conversations);
+}
+
+#[tokio::test]
+async fn rows_named_one_by_one_are_capped_and_lists_never_nest() {
+    let f = setup();
+    let inbox = demo_folder(&f.service, FolderRole::Inbox);
+    let list = MessageTarget::list(
+        MailList::Conversations {
+            folder_id: inbox.id.clone(),
+        },
+        vec![],
+    );
+    let issue_of = |response: Response| match response {
+        Response::Error { localized, .. } => localized.map(|l| l.id),
+        other => panic!("{other:?}"),
+    };
+    let too_many = (0..=MAX_MAIL_ACTION_TARGETS)
+        .map(|n| MessageTarget::message(format!("m{n}")))
+        .collect::<Vec<_>>();
+    let MessageTarget::List(mut nested) = list.clone() else {
+        unreachable!()
+    };
+    nested.except = too_many;
+    assert_eq!(
+        issue_of(
+            f.service
+                .handle(Request::ResolveMailTargets {
+                    targets: vec![MessageTarget::List(nested)],
+                    action: MailAction::Archive,
+                })
+                .await
+        ),
+        Some("mail-action-issue-too-many-targets".to_owned()),
+        "exceptions count as rows named one by one"
+    );
+    assert_eq!(
+        issue_of(
+            f.service
+                .handle(Request::ApplyMailAction {
+                    targets: vec![MessageTarget::list(
+                        MailList::Messages {
+                            folder_id: inbox.id
+                        },
+                        vec![list]
+                    )],
+                    action: MailAction::Archive,
+                })
+                .await
+        ),
+        Some("mail-action-issue-nested-list".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn archiving_a_whole_list_is_one_batch_with_one_undo() {
+    let f = setup();
+    let (inbox, row) = inbox_nightingale(&f).await;
+    let before = inbox_total(&f, &inbox);
+    let result = apply(
+        &f,
+        vec![MessageTarget::list(
+            MailList::Conversations {
+                folder_id: inbox.id.clone(),
+            },
+            whole(&row, &inbox),
+        )],
+        MailAction::Archive,
+    )
+    .await;
+    assert_eq!(inbox_total(&f, &inbox), 4, "only the deselected row stays");
+    assert_eq!(u32::try_from(result.message_ids.len()).unwrap(), before - 4);
+    undo(&f, result.batch_id.unwrap()).await;
+    assert_eq!(inbox_total(&f, &inbox), before);
 }

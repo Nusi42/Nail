@@ -23,8 +23,8 @@ use tokio::sync::{broadcast, mpsc, watch};
 /// request re-checks it too). An open socket counts as activity.
 const REFRESH_EVERY: Duration = Duration::from_mins(1);
 
-/// Largest accepted request frame. Requests are small JSON objects.
-const MAX_FRAME: usize = 1 << 20;
+/// Largest accepted request frame (`nail_api::MAX_REQUEST_BYTES`).
+const MAX_FRAME: usize = nail_api::MAX_REQUEST_BYTES;
 /// Frames queued for one client before request handlers wait.
 const OUTBOX: usize = 256;
 

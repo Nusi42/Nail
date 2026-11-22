@@ -287,8 +287,8 @@ export const INVITATION_RESPONSE_VALUES = ["accept","tentative","decline"] as co
 /** The default port of each protocol for each TLS mode (`default_port`). */
 export const DEFAULT_PORTS = {"ews":{"implicit":443,"plaintext":80,"starttls":80},"gmail":{"implicit":443,"plaintext":80,"starttls":80},"graph":{"implicit":443,"plaintext":80,"starttls":80},"imap":{"implicit":993,"plaintext":143,"starttls":143},"pop3":{"implicit":995,"plaintext":110,"starttls":110},"smtp":{"implicit":465,"plaintext":587,"starttls":587}} as const satisfies Readonly<Record<MailProtocol, Readonly<Record<TlsMode, number>>>>;
 
-/** Most targets one `ApplyMailAction` may name. */
-export const MAX_MAIL_ACTION_TARGETS = 500 as const;
+/** Most rows one `ApplyMailAction` / `ResolveMailTargets` may name one by one (`explicit_target_count`; a whole list is one `list` target). */
+export const MAX_MAIL_ACTION_TARGETS = 4096 as const;
 
 /** How long a mail action can be undone, in seconds. */
 export const MAIL_UNDO_SECS = 3600 as const;
@@ -1086,10 +1086,10 @@ export const MAIL_ACTION_KIND_VALUES = ["archive","trash","delete-permanently","
 export const MAIL_ACTION_KIND_MESSAGE_IDS = {"archive":"mail-action-kind-archive","delete-permanently":"mail-action-kind-delete-permanently","flag":"mail-action-kind-flag","junk":"mail-action-kind-junk","mark-read":"mail-action-kind-mark-read","mark-unread":"mail-action-kind-mark-unread","move":"mail-action-kind-move","not-junk":"mail-action-kind-not-junk","snooze":"mail-action-kind-snooze","tags":"mail-action-kind-tags","trash":"mail-action-kind-trash","unflag":"mail-action-kind-unflag"} as const satisfies Readonly<Record<MailActionKind, string>>;
 
 /** Every `MailActionIssue`, in the contract's order. */
-export const MAIL_ACTION_ISSUE_VALUES = ["no-targets","too-many-targets","too-many-messages","no-messages","nothing-to-change","not-in-trash","undo-expired","undone-already","not-undoable"] as const satisfies readonly MailActionIssue[];
+export const MAIL_ACTION_ISSUE_VALUES = ["no-targets","too-many-targets","nested-list","no-messages","nothing-to-change","not-in-trash","undo-expired","undone-already","not-undoable"] as const satisfies readonly MailActionIssue[];
 
 /** The Fluent id of each `MailActionIssue`'s label. */
-export const MAIL_ACTION_ISSUE_MESSAGE_IDS = {"no-messages":"mail-action-issue-no-messages","no-targets":"mail-action-issue-no-targets","not-in-trash":"mail-action-issue-not-in-trash","not-undoable":"mail-action-issue-not-undoable","nothing-to-change":"mail-action-issue-nothing-to-change","too-many-messages":"mail-action-issue-too-many-messages","too-many-targets":"mail-action-issue-too-many-targets","undo-expired":"mail-action-issue-undo-expired","undone-already":"mail-action-issue-undone-already"} as const satisfies Readonly<Record<MailActionIssue, string>>;
+export const MAIL_ACTION_ISSUE_MESSAGE_IDS = {"nested-list":"mail-action-issue-nested-list","no-messages":"mail-action-issue-no-messages","no-targets":"mail-action-issue-no-targets","not-in-trash":"mail-action-issue-not-in-trash","not-undoable":"mail-action-issue-not-undoable","nothing-to-change":"mail-action-issue-nothing-to-change","too-many-targets":"mail-action-issue-too-many-targets","undo-expired":"mail-action-issue-undo-expired","undone-already":"mail-action-issue-undone-already"} as const satisfies Readonly<Record<MailActionIssue, string>>;
 
 /** Every `ActionAvailability`, in the contract's order. */
 export const ACTION_AVAILABILITY_VALUES = ["global","list","reader","composer","calendar","contacts","tasks","desktop"] as const satisfies readonly ActionAvailability[];

@@ -19,6 +19,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { NailClient } from "../api/client";
 import type {
   FolderId,
+  MailList,
   MessageId,
   MessageSummary,
   MessageTarget,
@@ -83,6 +84,14 @@ export function listSelectionFor(ui: UiStore): StoreApi<ListSelectionState> {
 
 export function useListSelection<T>(selector: (state: ListSelectionState) => T): T {
   return useStore(listSelectionFor(useUiStoreApi()), selector);
+}
+
+/**
+ * The folder a whole list is in (`MailList::folder_id`, pinned by the
+ * `mail-actions` ts-vectors); `null` for a search without a folder.
+ */
+export function listFolderOf(list: MailList): FolderId | null {
+  return list.source === "search" ? list.query.folder_id : list.folder_id;
 }
 
 /** The target that names one message. */
@@ -186,6 +195,8 @@ export async function expandTargets(
 ): Promise<TargetMessage[]> {
   const out = new Map<MessageId, TargetMessage>();
   for (const target of targets) {
+    // A whole list is resolved by the core only (ADR 0235).
+    if (target.kind === "list") continue;
     if (target.kind === "message") {
       if (!out.has(target.message_id))
         out.set(target.message_id, { id: target.message_id, summary: null });

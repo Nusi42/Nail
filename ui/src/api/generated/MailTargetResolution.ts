@@ -8,14 +8,28 @@ import type { MessageId } from "./MessageId";
  */
 export type MailTargetResolution = { 
 /**
- * Every message the action would touch.
+ * Every message the action would touch; empty when a target is a
+ * [`MessageTarget::List`] (the count is in `messages`; the UI then
+ * applies the same list targets with `as_of`).
  */
 message_ids: Array<MessageId>, 
+/**
+ * How many messages the action would touch (with or without
+ * `message_ids`): the confirmation's true count.
+ */
+messages: number, 
 /**
  * Their accounts.
  */
 account_ids: Array<AccountId>, 
 /**
- * How many conversation targets resolve to at least one message.
+ * How many conversation targets (a list's conversation rows included)
+ * resolve to at least one message.
  */
-conversations: number, };
+conversations: number, 
+/**
+ * An opaque mark of the core's mail at the time of this answer, for
+ * [`ListTarget::as_of`]; `null` when no target is a list (or from a
+ * core without the mark: the list then means the list at apply time).
+ */
+as_of: string | null, };

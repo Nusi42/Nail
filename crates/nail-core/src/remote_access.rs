@@ -782,7 +782,13 @@ impl Service {
         action: &MailAction,
     ) -> Result<()> {
         let mut messages = Vec::new();
-        for target in targets {
+        // A list's exceptions are checked like targets; its rows resolve
+        // within the grant only (R5, ADR 0235).
+        let rows = targets.iter().flat_map(|target| match target {
+            MessageTarget::List(list) => list.except.iter().collect::<Vec<_>>(),
+            MessageTarget::Message { .. } | MessageTarget::Conversation(_) => vec![target],
+        });
+        for target in rows {
             match target {
                 MessageTarget::Message { message_id } => messages.push(message_id.clone()),
                 MessageTarget::Conversation(conversation) => {
@@ -790,6 +796,14 @@ impl Service {
                         self.check_folder(access, folder).await?;
                     }
                 }
+                MessageTarget::List(_) => {}
+            }
+        }
+        for target in targets {
+            if let MessageTarget::List(list) = target
+                && let Some(folder) = list.list.folder_id()
+            {
+                self.check_folder(access, folder).await?;
             }
         }
         let folder = match action {

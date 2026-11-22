@@ -4,4 +4,4 @@
  * Why an action or an undo was refused (`mail-action-issue-*`, the
  * `localized` id of the error).
  */
-export type MailActionIssue = "no-targets" | "too-many-targets" | "too-many-messages" | "no-messages" | "nothing-to-change" | "not-in-trash" | "undo-expired" | "undone-already" | "not-undoable";
+export type MailActionIssue = "no-targets" | "too-many-targets" | "nested-list" | "no-messages" | "nothing-to-change" | "not-in-trash" | "undo-expired" | "undone-already" | "not-undoable";

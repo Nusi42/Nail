@@ -34,7 +34,9 @@ export function triageStoreFor(ui: UiStore): StoreApi<TriageState> {
     setSnoozeTargets: (targets) => {
       set({
         targets,
-        snoozing: targets.targets.map((t) => (t.kind === "message" ? t.message_id : t.thread_id)),
+        snoozing: targets.targets.flatMap((t) =>
+          t.kind === "message" ? [t.message_id] : t.kind === "conversation" ? [t.thread_id] : [],
+        ),
       });
     },
   }));

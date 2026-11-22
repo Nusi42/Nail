@@ -52,6 +52,7 @@ mod links;
 pub mod logs;
 mod mail;
 mod mail_actions;
+mod mail_lists;
 mod mcp;
 mod message_source;
 mod notify;

@@ -7,8 +7,10 @@ import { TransportClient } from "./client";
 import { MockTransport } from "./mock";
 import { addMockConversation, MOCK_CONVERSATION_ID } from "./mockConversations";
 import { createMockData } from "./mockData";
-import { kindOf, reachOf } from "./mockMailActions";
+import { explicitTargetCount, kindOf, reachOf } from "./mockMailActions";
+import { listFolderOf } from "../actions/mailTargets";
 import type { MessageTarget } from "./generated";
+import { MAX_MAIL_ACTION_TARGETS } from "./generated/constants";
 import { must } from "../test/must";
 import { INBOX, SENT, TRASH } from "../test/mockIds";
 import { describeVectors } from "../test/vectors";
@@ -136,4 +138,112 @@ describe("mail actions on conversations in the mock core", () => {
   });
 });
 
-describeVectors("mail actions", mailActionVectors, { reachOf, kindOf });
+describeVectors("mail actions", mailActionVectors, {
+  reachOf,
+  kindOf,
+  explicitTargetCount,
+  listFolderOf,
+});
+
+describe("whole lists in the mock core (R5, ADR 0235)", () => {
+  const inboxList = (except: MessageTarget[] = []): Extract<MessageTarget, { kind: "list" }> => ({
+    kind: "list",
+    list: { source: "conversations", folder_id: INBOX },
+    except,
+    as_of: null,
+  });
+
+  async function resolution(client: TransportClient, targets: MessageTarget[]) {
+    return (
+      await client.request(
+        { type: "ResolveMailTargets", targets, action: { type: "mark-read", read: true } },
+        "MailTargets",
+      )
+    ).resolution;
+  }
+
+  it("counts every row of the list but the deselected ones, without ids", async () => {
+    const { client } = setup();
+    const threads = (
+      await client.request(
+        { type: "ListThreads", folder_id: INBOX, offset: 0, limit: 1000 },
+        "Threads",
+      )
+    ).threads;
+    const oneByOne = await resolution(
+      client,
+      threads.map((t) => ({ kind: "conversation", thread_id: t.id, folder_id: INBOX })),
+    );
+    const all = await resolution(client, [inboxList()]);
+    expect(all.message_ids).toEqual([]);
+    expect(all.messages).toBe(oneByOne.messages);
+    expect(all.conversations).toBe(threads.length);
+    expect(all.as_of).not.toBeNull();
+    const butOne = await resolution(client, [inboxList([row])]);
+    expect(butOne.conversations).toBe(threads.length - 1);
+    expect(butOne.messages).toBe(all.messages - 6);
+  });
+
+  it("acts only on what the confirmation counted (as_of)", async () => {
+    const { client, transport } = setup();
+    const { as_of: asOf, messages } = await resolution(client, [inboxList()]);
+    // Mail that arrives after the confirmation stays untouched.
+    const newcomer = {
+      ...must(transport.data.messages[0]),
+      id: `${INBOX}#late`,
+      thread_id: "t-late",
+    };
+    transport.data.messages.push(newcomer);
+    const { result } = await client.request(
+      {
+        type: "ApplyMailAction",
+        targets: [{ ...inboxList(), as_of: asOf }],
+        action: { type: "archive" },
+      },
+      "MailActionQueued",
+    );
+    expect(result.message_ids).not.toContain(newcomer.id);
+    expect(result.message_ids.length).toBeLessThanOrEqual(messages);
+    expect(must(transport.data.messages.find((m) => m.id === newcomer.id)).folder_id).toBe(INBOX);
+    expect(result.batch_id).not.toBeNull();
+  });
+
+  it("lists a search's hits and refuses nested lists and too many rows", async () => {
+    const { client } = setup();
+    const search = await resolution(client, [
+      {
+        kind: "list",
+        list: {
+          source: "search",
+          query: {
+            text: "",
+            account_id: null,
+            folder_id: INBOX,
+            offset: 0,
+            limit: 1,
+            sort: "date",
+          },
+          conversations: false,
+        },
+        except: [],
+        as_of: null,
+      },
+    ]);
+    expect(search.conversations).toBe(0);
+    expect(
+      await client.call({
+        type: "ResolveMailTargets",
+        targets: [inboxList([inboxList()])],
+        action: { type: "archive" },
+      }),
+    ).toMatchObject({ localized: { id: "mail-action-issue-nested-list" } });
+    const many: MessageTarget[] = Array.from({ length: MAX_MAIL_ACTION_TARGETS + 1 }, () => row);
+    expect(
+      await client.call({
+        type: "ResolveMailTargets",
+        targets: [inboxList(many)],
+        action: { type: "archive" },
+      }),
+    ).toMatchObject({ localized: { id: "mail-action-issue-too-many-targets" } });
+  });
+});

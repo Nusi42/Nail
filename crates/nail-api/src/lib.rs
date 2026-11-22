@@ -237,8 +237,8 @@ pub use launch::{LaunchRequest, MailtoLink};
 pub use links::LinkOutcome;
 pub use localized::{LocalizedMessage, MessageArg};
 pub use mail_actions::{
-    ConversationReach, ConversationRef, MailAction, MailActionKind, MailActionResult,
-    MailTargetResolution, MessageTarget,
+    ConversationReach, ConversationRef, ListTarget, MailAction, MailActionKind, MailActionResult,
+    MailList, MailTargetResolution, MessageTarget,
 };
 pub use mapi::{MapiMessage, MapiResult};
 pub use mcp::{McpClient, McpGrant, McpRateLimits, McpScope, McpSettings};
@@ -254,8 +254,8 @@ pub use plugins::{PluginGrant, PluginInfo, PluginManifest, PluginPermission, Plu
 pub use portability::{ImportSource, JobReport, JobStatus};
 pub use print::{PrintJob, PrintTarget};
 pub use protocol::{
-    Event, MAX_ATTACHMENT_DOWNLOAD, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse,
-    ServerMessage,
+    Event, MAX_ATTACHMENT_DOWNLOAD, MAX_REQUEST_BYTES, PROTOCOL_VERSION, Request, Response,
+    RpcRequest, RpcResponse, ServerMessage,
 };
 pub use remote::{
     RemoteAuditEntry, RemoteDevice, RemoteGrant, RemoteSession, RemoteUiSettings, RemoteUiStatus,

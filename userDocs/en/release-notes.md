@@ -3,6 +3,29 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.10 (`0.8.10`)
+
+Select a whole message list and act on it at once, however large it is.
+
+### New in 0.8.10
+
+- **Select all with `Ctrl+A`** — in the message list, `Ctrl+A` (`Cmd+A` on
+  macOS) selects the whole list: every conversation or message of the
+  folder, the unified inbox, a search or a filter, including rows that are
+  not loaded yet. The list shows how many are selected. `Ctrl`+click or
+  `Shift`+click leaves single rows out again, and `Esc` clears the
+  selection.
+
+### Corrected in 0.8.10
+
+- **No more "Too many conversations at once"** — acting on many selected
+  conversations (for example archiving or deleting several hundred) could
+  fail with "Too many conversations at once; select fewer", although they
+  held far fewer messages than Nail can handle. There is no limit on the
+  number of conversations any more: a very large action runs in parts in
+  the background and is still undone as one, and its confirmation shows the
+  true number of messages.
+
 ## Nail 0.8.9 (`0.8.9`)
 
 Moving or deleting hundreds of messages at once is reliable again: the

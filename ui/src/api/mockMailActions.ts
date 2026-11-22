@@ -16,6 +16,7 @@ import type {
   MailActionKind,
   MailActionResult,
   MailBatchId,
+  MailList,
   MessageId,
   MessageSummary,
   MessageTarget,
@@ -26,10 +27,13 @@ import type {
 import {
   deleteMessages,
   errorResponse,
+  folderMessages,
   getConversation,
+  listThreads,
   moveMessages,
   queue,
   resolveFolder,
+  search,
   updateFlags,
   type MockCore,
 } from "./mockMail";
@@ -137,7 +141,107 @@ interface Resolved {
   conversations: number;
 }
 
-/** Resolves targets like the core: per message, or per conversation by reach. */
+/** A target that is one row (`MessageTarget::List` aside). */
+type RowTarget = Exclude<MessageTarget, { kind: "list" }>;
+
+/** `nail_api::mail_actions::explicit_target_count`: rows named one by one. */
+export function explicitTargetCount(targets: readonly MessageTarget[]): number {
+  return targets.reduce((n, t) => n + (t.kind === "list" ? explicitTargetCount(t.except) : 1), 0);
+}
+
+/** The message ids each `as_of` mark of this mock knew (`MailTargetResolution::as_of`). */
+const marks = new WeakMap<MockData, Map<string, ReadonlySet<MessageId>>>();
+
+/** A new `as_of` mark: the messages the mock holds now. */
+function markNow(d: MockData): string {
+  const known = marks.get(d) ?? new Map<string, ReadonlySet<MessageId>>();
+  marks.set(d, known);
+  const mark = `mock-mark-${String(known.size + 1)}`;
+  known.set(mark, new Set(d.messages.map((m) => m.id)));
+  return mark;
+}
+
+/** The rows of a whole list as the targets they stand for (`Service::mail_list_rows`). */
+function listRows(d: MockData, list: MailList): RowTarget[] | Response {
+  switch (list.source) {
+    case "conversations": {
+      const threads = listThreads(d, list.folder_id);
+      if (!threads) return errorResponse("not_found", `folder ${list.folder_id} not found`);
+      return threads.map((t) => ({
+        kind: "conversation",
+        thread_id: t.id,
+        folder_id: list.folder_id,
+      }));
+    }
+    case "messages": {
+      const messages = folderMessages(d, list.folder_id);
+      if (!messages) return errorResponse("not_found", `folder ${list.folder_id} not found`);
+      return messages.map((m) => ({ kind: "message", message_id: m.id }));
+    }
+    case "search": {
+      const answer = search(d, { ...list.query, offset: 0, limit: Number.MAX_SAFE_INTEGER });
+      if (answer.type === "InvalidQuery") {
+        return errorResponse("invalid_request", `invalid query: ${answer.error.message}`);
+      }
+      if (answer.type !== "SearchResults") return answer;
+      return answer.hits
+        .filter((h) => h.from_server !== true)
+        .map((h): RowTarget =>
+          list.conversations && h.message.thread_id !== null
+            ? { kind: "conversation", thread_id: h.message.thread_id, folder_id: null }
+            : { kind: "message", message_id: h.message.id },
+        );
+    }
+  }
+}
+
+interface Row {
+  messages: MessageSummary[];
+  /** A conversation that reached at least one message. */
+  reached: boolean;
+}
+
+/** The messages one row reaches (Trash's own messages left out for Trash). */
+function resolveRow(d: MockData, target: RowTarget, action: MailAction): Row | Response {
+  if (target.kind === "message") {
+    const m = d.messages.find((x) => x.id === target.message_id);
+    if (!m) return errorResponse("not_found", `message ${target.message_id} not found`);
+    const keep = action.type !== "trash" || roleOf(d, m.folder_id) !== "trash";
+    return { messages: keep ? [m] : [], reached: false };
+  }
+  const answer = getConversation(d, target.thread_id, target.folder_id);
+  if (answer.type !== "Conversation") return answer;
+  const sources = target.folder_id === null ? null : (resolveFolder(d, target.folder_id) ?? []);
+  const reach = reachOf(action);
+  const picked: MessageSummary[] = answer.messages.filter((m) => {
+    if (reach === "whole" || reach === "thread") return true;
+    if (reach === "newest") return m.id === answer.thread.latest_message_id;
+    return sources === null ? roleOf(d, m.folder_id) !== "sent" : sources.includes(m.folder_id);
+  });
+  if (reach === "thread") {
+    // Gmail's Delete: the thread's messages in every other folder of the
+    // listed accounts but Drafts, Trash and Junk.
+    const accounts =
+      sources === null
+        ? null
+        : new Set(sources.map((f) => d.folders.find((x) => x.id === f)?.account_id));
+    for (const m of d.messages) {
+      if (m.thread_id !== target.thread_id || picked.some((p) => p.id === m.id)) continue;
+      if (["drafts", "trash", "junk"].includes(roleOf(d, m.folder_id) ?? "")) continue;
+      if (accounts === null || accounts.has(m.account_id)) picked.push(m);
+    }
+  }
+  // Trash never deletes for good: messages in Trash stay.
+  const messages = picked
+    .filter((m) => action.type !== "trash" || roleOf(d, m.folder_id) !== "trash")
+    .flatMap((p) => d.messages.filter((x) => x.id === p.id));
+  return { messages, reached: messages.length > 0 };
+}
+
+/**
+ * Resolves targets like the core: per message, per conversation by reach,
+ * or per row of a whole list minus its exceptions (R5, ADR 0235).
+ */
 function resolve(
   core: MockCore,
   targets: MessageTarget[],
@@ -145,8 +249,11 @@ function resolve(
 ): Resolved | Response {
   const d = core.data;
   if (targets.length === 0) return issue("no-targets", "no targets", "invalid_request");
-  if (targets.length > MAX_MAIL_ACTION_TARGETS) {
+  if (explicitTargetCount(targets) > MAX_MAIL_ACTION_TARGETS) {
     return issue("too-many-targets", "too many targets", "invalid_request");
+  }
+  if (targets.some((t) => t.kind === "list" && t.except.some((e) => e.kind === "list"))) {
+    return issue("nested-list", "a list among a list's exceptions", "invalid_request");
   }
   if (action.type === "tags" && action.add.length === 0 && action.remove.length === 0) {
     return issue("nothing-to-change", "nothing to change", "invalid_request");
@@ -154,49 +261,38 @@ function resolve(
   const out: MessageSummary[] = [];
   const seen = new Set<MessageId>();
   let conversations = 0;
-  const add = (m: MessageSummary) => {
-    if (!seen.has(m.id)) {
-      seen.add(m.id);
-      out.push(m);
+  const add = (messages: readonly MessageSummary[]) => {
+    for (const m of messages) {
+      if (!seen.has(m.id)) {
+        seen.add(m.id);
+        out.push(m);
+      }
     }
   };
   for (const target of targets) {
-    if (target.kind === "message") {
-      const m = d.messages.find((x) => x.id === target.message_id);
-      if (!m) return errorResponse("not_found", `message ${target.message_id} not found`);
-      if (action.type !== "trash" || roleOf(d, m.folder_id) !== "trash") add(m);
+    if (target.kind !== "list") {
+      const row = resolveRow(d, target, action);
+      if ("type" in row) return row;
+      if (row.reached) conversations += 1;
+      add(row.messages);
       continue;
     }
-    const answer = getConversation(d, target.thread_id, target.folder_id);
-    if (answer.type !== "Conversation") return answer;
-    const sources = target.folder_id === null ? null : (resolveFolder(d, target.folder_id) ?? []);
-    const reach = reachOf(action);
-    const picked: MessageSummary[] = answer.messages.filter((m) => {
-      if (reach === "whole" || reach === "thread") return true;
-      if (reach === "newest") return m.id === answer.thread.latest_message_id;
-      return sources === null ? roleOf(d, m.folder_id) !== "sent" : sources.includes(m.folder_id);
-    });
-    if (reach === "thread") {
-      // Gmail's Delete: the thread's messages in every other folder of the
-      // listed accounts but Drafts, Trash and Junk.
-      const accounts =
-        sources === null
-          ? null
-          : new Set(sources.map((f) => d.folders.find((x) => x.id === f)?.account_id));
-      for (const m of d.messages) {
-        if (m.thread_id !== target.thread_id || picked.some((p) => p.id === m.id)) continue;
-        if (["drafts", "trash", "junk"].includes(roleOf(d, m.folder_id) ?? "")) continue;
-        if (accounts === null || accounts.has(m.account_id)) picked.push(m);
-      }
+    const except = new Set<MessageId>();
+    for (const e of target.except) {
+      if (e.kind === "list") continue;
+      const row = resolveRow(d, e, action);
+      if ("type" in row) return row;
+      for (const m of row.messages) except.add(m.id);
     }
-    // Trash never deletes for good: messages in Trash stay.
-    const reached = picked.filter(
-      (m) => action.type !== "trash" || roleOf(d, m.folder_id) !== "trash",
-    );
-    if (reached.length > 0) conversations += 1;
-    for (const p of reached) {
-      const m = d.messages.find((x) => x.id === p.id);
-      if (m) add(m);
+    const known = target.as_of === null ? null : marks.get(d)?.get(target.as_of);
+    const rows = listRows(d, target.list);
+    if ("type" in rows) return rows;
+    for (const r of rows) {
+      const row = resolveRow(d, r, action);
+      if ("type" in row) return row;
+      const left = row.messages.filter((m) => !except.has(m.id) && (known?.has(m.id) ?? true));
+      if (r.kind === "conversation" && left.length > 0) conversations += 1;
+      add(left);
     }
   }
   if (action.type === "delete-permanently") {
@@ -399,12 +495,16 @@ export function answerMailAction(core: MockCore, request: MailActionRequest): Re
     case "ResolveMailTargets": {
       const resolved = resolve(core, request.targets, request.action);
       if ("type" in resolved) return resolved;
+      const list = request.targets.some((t) => t.kind === "list");
       return {
         type: "MailTargets",
         resolution: {
-          message_ids: resolved.messages.map((m) => m.id),
+          // A list answers with the count and a mark (ADR 0235).
+          message_ids: list ? [] : resolved.messages.map((m) => m.id),
+          messages: resolved.messages.length,
           account_ids: [...new Set(resolved.messages.map((m) => m.account_id))],
           conversations: resolved.conversations,
+          as_of: list ? markNow(core.data) : null,
         },
       };
     }

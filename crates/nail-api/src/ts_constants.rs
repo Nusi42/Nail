@@ -268,7 +268,7 @@ fn mail(c: Constants) -> Result<Constants, serde_json::Error> {
     )?
     .add(
         "MAX_MAIL_ACTION_TARGETS",
-        "Most targets one `ApplyMailAction` may name.",
+        "Most rows one `ApplyMailAction` / `ResolveMailTargets` may name one by one (`explicit_target_count`; a whole list is one `list` target).",
         &mail_actions::MAX_MAIL_ACTION_TARGETS,
     )?
     .add(

@@ -1295,6 +1295,73 @@ of Drafts moves only the selected message; one confirmation body (`MailConfirm`,
 failure) and the other single definitions the reviews asked for; e2e `r4-status-failures.spec.ts` (Retry, Dismiss).
 Next: the maintainer's human gate on the 0.8.9 installer.
 
+### Wave R5 (select all and large mail actions)
+
+Maintainer report on 0.8.9 (generic): acting on many selected conversations often fails with "Too many
+conversations at once; select fewer" although they hold far fewer than 10 000 messages, and `Ctrl+A` does not work
+in the message list. Causes: `MAX_MAIL_ACTION_TARGETS` (500 rows per request) and the confirmations
+(`ResolveMailTargets`), which sent every selected row in one request; the UI split `ApplyMailAction` into requests
+of 500 rows and lost the single undo; the list pages its rows, so the UI cannot name rows not loaded yet. The
+maintainer agreed the decisions below. Release 0.8.10. Contract ADR 0235.
+
+#### Scope decisions for R5
+
+- **Select all (WT2):** `Ctrl+A` in the message list selects the whole list (the current folder, unified view,
+  search or filter chips), rows not loaded yet included; `Ctrl` / `Shift` + click deselects single rows; the list
+  shows "All N selected" with the true count; `Esc` clears; another folder, search or filter clears it.
+- **List target (contract):** `MessageTarget::List(ListTarget { list: MailList, except, as_of })` — the same query
+  the list pages with (`conversations` / `messages` of a folder, or a `search` with `conversations`), resolved in
+  the core, minus the rows in `except`; the UI never sends thousands of ids.
+- **No limit on conversations or messages (contract + WT1):** `MAX_MAIL_ACTION_TARGETS` only caps rows named one by
+  one (4 096 = `MAX_REQUEST_BYTES` / `MAIL_TARGET_BYTES`, the web socket's frame size); actions above
+  `MAIL_ACTION_PART_MESSAGES` (10 000) messages run in parts inside the core as **one** batch with one undo;
+  `too-many-messages` is gone, `nested-list` is new.
+- **One confirmation with the true count (contract + WT2):** `ResolveMailTargets` answers a list with `messages`,
+  `conversations` and an `as_of` mark instead of the ids; the apply passes the mark back, so mail that arrived
+  after the confirmation is never touched unasked.
+- Hits found only by the server search are not part of a selected search list. No new crates. New slot:
+  `locales/*/list-selection.ftl`.
+- **Release:** "Nail 0.8.10" in the release notes and `CHANGELOG.md` `[Unreleased]` are prepared by the contract;
+  packages add their user-visible items, the integrator merges them.
+
+#### Packages of R5
+
+- **Contract (done):** ADR 0235; `nail-api` `ListTarget`, `MailList` (`folder_id`), `MessageTarget::List`,
+  `explicit_target_count`, `has_list`, `has_nested_list`, `MAX_REQUEST_BYTES` (the web socket derives its frame
+  limit), `MAIL_TARGET_BYTES`, `MAX_MAIL_ACTION_TARGETS` = 4 096, `MAIL_ACTION_PART_MESSAGES`,
+  `MailTargetResolution::{messages, as_of}`, `MailActionIssue::NestedList` (TS regenerated, Fluent texts); core
+  `nail-core/src/mail_lists.rs` (the rows of a list page by page) and list targets in `resolve_targets` (one
+  transaction, `as_of` still `null`), the remote check; mock list targets with `as_of` marks
+  (`ui/src/api/mockMailActions.ts`); ts-vectors `explicitTargetCount`, `listFolderOf`; tests in `nail-api`,
+  `nail-core` `tests/mail_actions.rs`, the mock; the `list-selection` locale slot; release notes 0.8.10 and the
+  changelog prepared.
+- **WT1 — core (parallel):** `crates/nail-core`, `crates/nail-store`, `crates/nail-api` (bodies only, not the
+  contract's types), `crates/nail-mcp` (if mail actions are exposed there): actions above
+  `MAIL_ACTION_PART_MESSAGES` in parts with one batch and one undo (store: a batch that grows by parts, or
+  equivalent; undo of every part; a failure in a later part leaves the batch consistent and undoable); the
+  `as_of` mark (made by `ResolveMailTargets` for list targets, honoured by `ApplyMailAction`); listing a large
+  list without one store hop per row where it matters (a 25 000-message folder resolves within a few seconds in
+  release); `OpsChanged` stays one event per part, never per message; tests: 25 000 messages archived and undone as
+  one batch, `as_of` excludes a message ingested after the confirmation, remote sessions stay within the grant.
+- **WT2 — UI (parallel):** `ui/src/widgets/MessageList.tsx`, `ui/src/actions/`, `ui/src/state/`,
+  `ui/src/features/mail-actions/`, the list's ftl files (`locales/en/list-selection.ftl`, the list's `app.ftl`
+  texts), userDocs/en mail pages, e2e specs `e2e/tests/r5-select-*.spec.ts`: `Ctrl+A` / `Cmd+A` selects the list
+  (the list's state: "all except these"), deselect with `Ctrl` / `Shift` + click, `Esc`, "All N selected"; every
+  action on the selection sends one list target (no `applyInChunks`); the confirmations use
+  `messages` / `conversations` and pass `as_of` back; rows removed by the action leave the list, the list refetches.
+- **Integration:** rebase, renumber ADRs, shared ftl files, the R5 items in the 0.8.10 release notes and
+  `CHANGELOG.md`, the full suite incl. `npm run visual`, memory `r5-status`.
+
+Gates: every suite green; `Ctrl+A` in a folder of 1 200 conversations with 50 loaded, Archive as one action of
+1 200 conversations, and one Undo bringing every message back (e2e on the mock); Delete permanently of a
+selected Trash shows the true count; a core test archives 25 000 messages in parts and undoes them as one batch;
+the maintainer's human gate on the 0.8.10 installer (select all in a large real IMAP folder, archive, undo), then
+release.
+
+*Status (contract):* done (ADR 0235). List targets resolved in the core and the mock, the true count in
+`ResolveMailTargets`, no limit on conversations or messages (parts and `as_of` follow in WT1), `list-selection.ftl`
+slot, 0.8.10 notes prepared. Next: WT1 and WT2 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

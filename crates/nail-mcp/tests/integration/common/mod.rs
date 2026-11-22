@@ -483,8 +483,12 @@ impl McpData for FakeData {
                                     .message_ids
                                     .extend(found.into_iter().map(|m| m.id.clone()));
                             }
+                            // MCP tools never name a whole list.
+                            nail_api::MessageTarget::List(_) => {}
                         }
                     }
+                    resolution.messages =
+                        u32::try_from(resolution.message_ids.len()).unwrap_or(u32::MAX);
                     Ok(Response::MailTargets { resolution })
                 }
                 other => pim_answer(other),
@@ -521,7 +525,8 @@ impl McpData for FakeData {
                             .into_iter()
                             .filter_map(|t| match t {
                                 nail_api::MessageTarget::Message { message_id } => Some(message_id),
-                                nail_api::MessageTarget::Conversation(_) => None,
+                                nail_api::MessageTarget::Conversation(_)
+                                | nail_api::MessageTarget::List(_) => None,
                             })
                             .collect(),
                         conversations: 0,

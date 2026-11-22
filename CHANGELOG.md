@@ -8,6 +8,33 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Added — select all and large mail actions (ADR 0235)
+
+- A mail action can name a whole message list except some rows: the new
+  target kind `list` (`ListTarget` with `MailList`: a folder's
+  conversations or messages, or a search with the filter chips' terms) is
+  resolved in the core, so selecting all never sends thousands of ids.
+  `ResolveMailTargets` answers with the true count (`messages`) and an
+  `as_of` mark that keeps mail arriving after the confirmation out of the
+  action.
+- `Ctrl+A` in the message list selects the whole list, rows not loaded yet
+  included; `Ctrl` / `Shift` + click deselects rows, `Esc` clears.
+
+### Changed — no limit on mail actions (ADR 0235)
+
+- No limit on the conversations or messages one mail action touches:
+  `MAX_MAIL_ACTION_TARGETS` (now 4 096, derived from the largest request
+  the web socket accepts, `MAX_REQUEST_BYTES`) only caps the rows named one
+  by one, and actions above `MAIL_ACTION_PART_MESSAGES` (10 000) messages
+  run in parts with one undo. The issue `too-many-messages` is gone; the
+  new issue `nested-list` refuses a list among a list's exceptions.
+
+### Fixed — large selections (ADR 0235)
+
+- Acting on more than 500 selected conversations failed with "Too many
+  conversations at once" (confirmations asked the core about every row at
+  once).
+
 ## [0.8.9] — 2026-11-22
 
 ### Fixed — bulk actions (ADR 0230)

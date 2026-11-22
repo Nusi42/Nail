@@ -22,7 +22,7 @@ pub const MAX_QUERY_BYTES: usize = 4096;
 pub const MAX_QUERY_NESTING: usize = 64;
 
 /// A search request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub struct SearchQuery {
     /// The query text in the query language.
     pub text: String,

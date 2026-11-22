@@ -112,7 +112,8 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        listed folder, MailAction, ConversationReach listed / whole / newest = MailAction::reach,
                        MailActionKind / MailActionIssue, MailActionResult + MailBatchId undo); ApplyMailAction /
                        ResolveMailTargets / UndoMailAction; MCP `conversations` args; remote_content FRAME_HEIGHT_MESSAGE /
-                       RENDER_PARENT_PARAM / MAX_FRAME_HEIGHT
+                       RENDER_PARENT_PARAM / MAX_FRAME_HEIGHT; R5 (ADR 0235): MessageTarget list = ListTarget / MailList,
+                       MAX_REQUEST_BYTES
                        Q2 (ADRs 0172, 0175): testing.rs (feature `testing`: sample contract values, test instants such as
                        TUESDAY_NOON), request_groups (macros), Request / Response::wire_type, hosts.rs (is_loopback_host,
                        authority_host, url_host, DNS-name checks), ActionItem (shared by toolbar / menu items),
@@ -517,7 +518,7 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        grouped IMAP UID STORE / MOVE per folder, gmail.rs + exchange/sync.rs grouped writes,
                        exchange/batch.rs (RunningEngine.batch = the concrete Graph / EWS engine for write_many);
                        tests/mail_actions.rs; R4 (ADR 0230): ops_summary.rs (GetOpsSummary, coalesced OpsChanged,
-                       RetryFailedOps / DismissFailedOps)
+                       RetryFailedOps / DismissFailedOps); R5 (ADR 0235): mail_lists.rs (the rows of a list target)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -1604,3 +1605,16 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   back to Cancel after a failure), `FolderRowLabel`, `listOptionId` (`rovingFocus.ts`), `errorReason`
   (`api/client.ts`), `messageTarget` / `runOptionsOf`. E2e `r4-status-failures.spec.ts` (Retry and Dismiss with the
   mock's `imap-deny`).
+
+### R5
+
+- Contract (ADR 0235): select all and large mail actions. `nail_api::mail_actions` `MessageTarget::List` /
+  `ListTarget { list, except, as_of }` / `MailList` (`conversations`, `messages`, `search`; `folder_id`),
+  `explicit_target_count`, `has_list`, `has_nested_list`, `MAX_MAIL_ACTION_TARGETS` = `MAX_REQUEST_BYTES` /
+  `MAIL_TARGET_BYTES` (rows named one by one), `MAIL_ACTION_PART_MESSAGES` (was `MAX_MAIL_ACTION_MESSAGES`),
+  `MailTargetResolution::{messages, as_of}`, issue `nested-list` (`too-many-messages` removed).
+  `nail_api::MAX_REQUEST_BYTES` is the single definition of the largest request frame (`nail-server` `ws.rs`
+  `MAX_FRAME`). Core `mail_lists.rs` (`Service::mail_list_rows`, `within`) and `mail_actions.rs` `resolve_row`;
+  `remote_access.rs` checks a list's folder and exceptions. Mock: `mockMailActions.ts` (`explicitTargetCount`,
+  `listRows`, `as_of` marks); `listFolderOf` in `actions/mailTargets.ts`; both pinned by the `mail-actions`
+  ts-vectors. Locale slot `locales/*/list-selection.ftl`.

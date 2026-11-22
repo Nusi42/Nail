@@ -677,7 +677,7 @@ fn recovery_result(
 
 #[test]
 fn mail_actions_vectors() {
-    use nail_api::mail_actions::MailAction;
+    use nail_api::mail_actions::{MailAction, MailList, MessageTarget, explicit_target_count};
     let mut v = Vectors::default();
     for action in [
         json!({ "type": "archive" }),
@@ -697,6 +697,34 @@ fn mail_actions_vectors() {
         let parsed: MailAction = from(&action);
         v.case("reachOf", json!([action]), parsed.reach());
         v.case("kindOf", json!([action]), parsed.kind());
+    }
+    // R5 (ADR 0235): the rows a request names one by one, a list's folder.
+    let row = json!({ "kind": "message", "message_id": "m1" });
+    let conversation = json!({ "kind": "conversation", "thread_id": "t1", "folder_id": null });
+    let messages = json!({ "source": "messages", "folder_id": "f1" });
+    let list = |except: &Value| json!({ "kind": "list", "list": messages, "except": except });
+    for targets in [
+        json!([]),
+        json!([row, conversation]),
+        json!([row, list(&json!([]))]),
+        json!([conversation, list(&json!([row, conversation]))]),
+    ] {
+        let parsed: Vec<MessageTarget> = from(&targets);
+        v.case(
+            "explicitTargetCount",
+            json!([targets]),
+            explicit_target_count(&parsed),
+        );
+    }
+    let search = |folder: Option<&str>| json!({ "text": "a", "folder_id": folder, "limit": 50 });
+    for list in [
+        json!({ "source": "conversations", "folder_id": "f1" }),
+        json!({ "source": "messages", "folder_id": "f2" }),
+        json!({ "source": "search", "query": search(Some("f3")), "conversations": true }),
+        json!({ "source": "search", "query": search(None), "conversations": false }),
+    ] {
+        let parsed: MailList = from(&list);
+        v.case("listFolderOf", json!([list]), parsed.folder_id());
     }
     v.check("mail-actions");
 }

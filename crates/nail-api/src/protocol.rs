@@ -135,6 +135,12 @@ use crate::smartcard::{
 /// [`Response::Pong`] so clients can detect a mismatched core.
 pub const PROTOCOL_VERSION: u32 = 1;
 
+/// Largest request frame a transport accepts (the web socket of the web
+/// server and the remote UI): requests are small JSON objects; the largest
+/// legitimate one is a mail action naming
+/// [`crate::mail_actions::MAX_MAIL_ACTION_TARGETS`] rows (ADR 0235).
+pub const MAX_REQUEST_BYTES: usize = 1 << 20;
+
 /// A request from a client to the core.
 ///
 /// Every request may also be answered with [`Response::Error`]. Requests
@@ -333,21 +339,27 @@ pub enum Request {
     /// Apply one action to messages and conversations as list rows show
     /// them (Gmail-like: [`crate::mail_actions::MailAction::reach`] picks a
     /// conversation's messages). Applied locally at once, queued per account
-    /// as one batch with one undo. Answered with
+    /// as one batch with one undo. A whole message list is one
+    /// [`MessageTarget::List`] (R5, ADR 0235); an action of any size runs
+    /// in parts of [`crate::mail_actions::MAIL_ACTION_PART_MESSAGES`]
+    /// messages, still one batch. Answered with
     /// [`Response::MailActionQueued`]; `invalid_request` with a
-    /// `mail-action-issue-*` id for no / too many targets, nothing to change
-    /// or delete permanently outside Trash and Junk; `not_found` for an
-    /// unknown message, thread or folder. Remote sessions: the targets
-    /// resolve within the grant only (ADR 0164).
+    /// `mail-action-issue-*` id for no targets, too many rows named one by
+    /// one, a nested list, nothing to change or delete permanently outside
+    /// Trash and Junk; `not_found` for an unknown message, thread or folder.
+    /// Remote sessions: the targets resolve within the grant only (ADR
+    /// 0164).
     ApplyMailAction {
         /// What to act on (at most
-        /// [`crate::mail_actions::MAX_MAIL_ACTION_TARGETS`]).
+        /// [`crate::mail_actions::MAX_MAIL_ACTION_TARGETS`] rows named one
+        /// by one, [`crate::mail_actions::explicit_target_count`]).
         targets: Vec<MessageTarget>,
         /// What to do.
         action: MailAction,
     },
     /// The messages [`Self::ApplyMailAction`] would touch, changing nothing
-    /// (confirmations show the count). Answered with
+    /// (confirmations show the count; for a list target the true count and
+    /// an `as_of` mark instead of the ids). Answered with
     /// [`Response::MailTargets`]; errors as for `ApplyMailAction`.
     ResolveMailTargets {
         /// What to act on.

@@ -408,6 +408,8 @@ export async function undoLast(ctx: WriteContext, batchId?: MailBatchId): Promis
 /** Whether any of the targets has unread mail (toggle read = mark read then). */
 export function anyUnread(ctx: WriteContext, targets: readonly MessageTarget[]): boolean {
   return targets.some((target) => {
+    // A whole list (ADR 0235) is not known row by row: unknown counts as unread.
+    if (target.kind === "list") return true;
     if (target.kind === "conversation") {
       const thread = findThread(ctx.queryClient, target.thread_id);
       if (thread) return thread.unread_count > 0;
@@ -423,6 +425,7 @@ export function allFlagged(ctx: WriteContext, targets: readonly MessageTarget[])
   return (
     targets.length > 0 &&
     targets.every((target) => {
+      if (target.kind === "list") return false;
       if (target.kind === "conversation") {
         const thread = findThread(ctx.queryClient, target.thread_id);
         if (thread) return thread.flagged;
@@ -441,6 +444,7 @@ export function allFlagged(ctx: WriteContext, targets: readonly MessageTarget[])
  */
 export function canMark(ctx: WriteContext, targets: readonly MessageTarget[], read: boolean) {
   return targets.some((target) => {
+    if (target.kind === "list") return true;
     if (target.kind === "conversation") {
       const thread = findThread(ctx.queryClient, target.thread_id);
       if (!thread) return true;

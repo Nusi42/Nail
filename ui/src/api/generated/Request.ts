@@ -290,7 +290,8 @@ message_ids: Array<MessageId>,
 permanent: boolean, } | { "type": "ApplyMailAction", 
 /**
  * What to act on (at most
- * [`crate::mail_actions::MAX_MAIL_ACTION_TARGETS`]).
+ * [`crate::mail_actions::MAX_MAIL_ACTION_TARGETS`] rows named one
+ * by one, [`crate::mail_actions::explicit_target_count`]).
  */
 targets: Array<MessageTarget>, 
 /**

@@ -19,6 +19,14 @@
 //! * [`crate::Request::UndoMailAction`] queues a batch's inverse operations
 //!   (moves back to where each message was, flags and tags as they were).
 //!
+//! * R5 (ADR 0235): a [`MessageTarget::List`] names a whole message list
+//!   (a folder's conversations or messages, or a search with the filter
+//!   chips) except some rows, resolved in the core, so "select all" never
+//!   sends the ids of thousands of rows. There is no limit on the number of
+//!   conversations or messages an action touches: the core applies a large
+//!   action in parts of at most [`MAIL_ACTION_PART_MESSAGES`] messages as
+//!   one batch with one undo.
+//!
 //! The older per-message requests (`UpdateFlags`, `MoveMessages`,
 //! `DeleteMessages`, `MarkJunk`, `SnoozeMessages`) stay as they are, without
 //! undo.
@@ -29,13 +37,26 @@ use ts_rs::TS;
 use crate::agents::ActionKind;
 use crate::ids::{AccountId, FolderId, MailBatchId, MessageId, OpId, ThreadId};
 use crate::ops::MoveTarget;
+use crate::search::SearchQuery;
 
-/// Most targets one [`crate::Request::ApplyMailAction`] /
-/// [`crate::Request::ResolveMailTargets`] may name.
-pub const MAX_MAIL_ACTION_TARGETS: usize = 500;
-/// Most messages the targets of one action may resolve to; more fail with
-/// `invalid_request` ([`MailActionIssue::TooManyMessages`]).
-pub const MAX_MAIL_ACTION_MESSAGES: usize = 10_000;
+/// Most rows one [`crate::Request::ApplyMailAction`] /
+/// [`crate::Request::ResolveMailTargets`] may name one by one
+/// ([`explicit_target_count`]: message and conversation targets, the
+/// exceptions of list targets included). Not a limit on what an action
+/// touches — a whole list is one [`MessageTarget::List`] — but a sanity cap
+/// on the request's size: [`crate::MAX_REQUEST_BYTES`] (the largest request
+/// the web socket accepts) shared out at [`MAIL_TARGET_BYTES`] per target
+/// (ADR 0235; 4 096 rows). More fail with `invalid_request`
+/// ([`MailActionIssue::TooManyTargets`]).
+pub const MAX_MAIL_ACTION_TARGETS: usize = crate::MAX_REQUEST_BYTES / MAIL_TARGET_BYTES;
+/// The request bytes [`MAX_MAIL_ACTION_TARGETS`] grants one target: a
+/// conversation target with a thread and a folder id of 64 bytes each and
+/// its JSON keys fits with room to spare (a test pins it).
+pub const MAIL_TARGET_BYTES: usize = 256;
+/// Most messages the core plans, applies locally and queues in one store
+/// transaction; a larger action runs in parts of this size, recorded as one
+/// batch with one undo (ADR 0235). Not a limit on the action.
+pub const MAIL_ACTION_PART_MESSAGES: usize = 10_000;
 /// How long a batch can be undone (seconds).
 pub const MAIL_UNDO_SECS: u64 = 3600;
 /// How many batches the core keeps for undo per actor (the oldest go
@@ -59,8 +80,9 @@ pub struct ConversationRef {
 
 /// What a mail action acts on.
 ///
-/// JSON: `{"kind": "message", "message_id": "…"}` or
-/// `{"kind": "conversation", "thread_id": "…", "folder_id": "…" | null}`.
+/// JSON: `{"kind": "message", "message_id": "…"}`,
+/// `{"kind": "conversation", "thread_id": "…", "folder_id": "…" | null}` or
+/// `{"kind": "list", "list": {…}, "except": […], "as_of": "…" | null}`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum MessageTarget {
@@ -72,6 +94,113 @@ pub enum MessageTarget {
     },
     /// A conversation as listed ([`MailAction::reach`] picks its messages).
     Conversation(ConversationRef),
+    /// Every row of a message list except some (R5, ADR 0235: Ctrl+A in
+    /// the message list, rows not loaded yet included).
+    List(ListTarget),
+}
+
+/// A whole message list except some rows ([`MessageTarget::List`]).
+///
+/// The core lists the rows exactly as the message list pages them and
+/// treats each row as the target it stands for in the list: a conversation
+/// row as [`MessageTarget::Conversation`] (with the listed folder; without
+/// a folder in a search), a message row as [`MessageTarget::Message`]. The
+/// action reaches the rows' messages minus the messages the `except`
+/// targets resolve to; a conversation counts when one of its messages is
+/// left.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+pub struct ListTarget {
+    /// Which list.
+    pub list: MailList,
+    /// Rows deselected after "select all" (Ctrl / Shift + click), as the
+    /// targets those rows stand for. Never a list target
+    /// ([`MailActionIssue::NestedList`]); they count toward
+    /// [`MAX_MAIL_ACTION_TARGETS`].
+    #[serde(default)]
+    pub except: Vec<MessageTarget>,
+    /// [`MailTargetResolution::as_of`] of the confirmation that counted
+    /// this list, passed back unchanged: only messages the core held then
+    /// are acted on, so nothing that arrived meanwhile is touched unasked.
+    /// `null` = the list as it is when the request runs.
+    #[serde(default)]
+    pub as_of: Option<String>,
+}
+
+/// A message list as the message list widget pages it: the same query, so
+/// "select all" means exactly the rows the user would see by scrolling.
+///
+/// JSON: `{"source": "conversations", "folder_id": "…"}`,
+/// `{"source": "messages", "folder_id": "…"}` or
+/// `{"source": "search", "query": {…}, "conversations": true}`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(tag = "source", rename_all = "kebab-case")]
+pub enum MailList {
+    /// A folder's conversation rows ([`crate::Request::ListThreads`]; real
+    /// or virtual, e.g. the unified inbox).
+    Conversations {
+        /// The folder.
+        folder_id: FolderId,
+    },
+    /// A folder's message rows ([`crate::Request::ListMessages`]: a list
+    /// without conversations).
+    Messages {
+        /// The folder.
+        folder_id: FolderId,
+    },
+    /// The hits of a search ([`crate::Request::Search`]): the typed search
+    /// and the filter chips' terms, as the list runs it. Every local hit:
+    /// `offset`, `limit` and `sort` are ignored, and hits found only by the
+    /// server search (`from_server`) are not part of the list.
+    Search {
+        /// The query the list runs.
+        query: SearchQuery,
+        /// The rows stand for their conversations without a folder (a list
+        /// with conversations) instead of the hit messages.
+        #[serde(default)]
+        conversations: bool,
+    },
+}
+
+impl MailList {
+    /// The folder the list is in (a search's folder scope; `None` for a
+    /// search without one).
+    pub fn folder_id(&self) -> Option<&FolderId> {
+        match self {
+            Self::Conversations { folder_id } | Self::Messages { folder_id } => Some(folder_id),
+            Self::Search { query, .. } => query.folder_id.as_ref(),
+        }
+    }
+}
+
+/// How many rows `targets` name one by one (checked against
+/// [`MAX_MAIL_ACTION_TARGETS`]): every message and conversation target,
+/// the exceptions of list targets included; a list target itself counts
+/// nothing.
+pub fn explicit_target_count(targets: &[MessageTarget]) -> usize {
+    targets
+        .iter()
+        .map(|target| match target {
+            MessageTarget::List(list) => explicit_target_count(&list.except),
+            MessageTarget::Message { .. } | MessageTarget::Conversation(_) => 1,
+        })
+        .sum()
+}
+
+/// Whether a list target names another list among its exceptions
+/// ([`MailActionIssue::NestedList`]).
+pub fn has_nested_list(targets: &[MessageTarget]) -> bool {
+    targets.iter().any(|target| match target {
+        MessageTarget::List(list) => list
+            .except
+            .iter()
+            .any(|e| matches!(e, MessageTarget::List(_))),
+        MessageTarget::Message { .. } | MessageTarget::Conversation(_) => false,
+    })
+}
+
+/// Whether one of `targets` is a whole list.
+pub fn has_list(targets: &[MessageTarget]) -> bool {
+    targets.iter().any(|t| matches!(t, MessageTarget::List(_)))
 }
 
 impl MessageTarget {
@@ -87,6 +216,15 @@ impl MessageTarget {
         Self::Conversation(ConversationRef {
             thread_id: thread.into(),
             folder_id: folder,
+        })
+    }
+
+    /// A whole list except some rows, without an `as_of` mark.
+    pub fn list(list: MailList, except: Vec<MessageTarget>) -> Self {
+        Self::List(ListTarget {
+            list,
+            except,
+            as_of: None,
         })
     }
 }
@@ -286,10 +424,11 @@ labeled_enum! {
     pub enum MailActionIssue : "mail-action-issue" {
         /// No targets.
         NoTargets = "no-targets",
-        /// More than [`MAX_MAIL_ACTION_TARGETS`] targets.
+        /// More than [`MAX_MAIL_ACTION_TARGETS`] rows named one by one
+        /// ([`explicit_target_count`]).
         TooManyTargets = "too-many-targets",
-        /// The targets resolve to more than [`MAX_MAIL_ACTION_MESSAGES`].
-        TooManyMessages = "too-many-messages",
+        /// A list target among a list target's exceptions.
+        NestedList = "nested-list",
         /// The targets resolve to no message.
         NoMessages = "no-messages",
         /// A tag change without tags.
@@ -330,12 +469,23 @@ pub struct MailActionResult {
 /// ([`crate::Response::MailTargets`]).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 pub struct MailTargetResolution {
-    /// Every message the action would touch.
+    /// Every message the action would touch; empty when a target is a
+    /// [`MessageTarget::List`] (the count is in `messages`; the UI then
+    /// applies the same list targets with `as_of`).
     pub message_ids: Vec<MessageId>,
+    /// How many messages the action would touch (with or without
+    /// `message_ids`): the confirmation's true count.
+    pub messages: u32,
     /// Their accounts.
     pub account_ids: Vec<AccountId>,
-    /// How many conversation targets resolve to at least one message.
+    /// How many conversation targets (a list's conversation rows included)
+    /// resolve to at least one message.
     pub conversations: u32,
+    /// An opaque mark of the core's mail at the time of this answer, for
+    /// [`ListTarget::as_of`]; `null` when no target is a list (or from a
+    /// core without the mark: the list then means the list at apply time).
+    #[serde(default)]
+    pub as_of: Option<String>,
 }
 
 #[cfg(test)]
@@ -357,6 +507,85 @@ mod tests {
         let parsed: MessageTarget =
             serde_json::from_value(json!({"kind": "conversation", "thread_id": "t1"})).unwrap();
         assert_eq!(parsed, MessageTarget::conversation("t1", None));
+    }
+
+    #[test]
+    fn list_targets_name_the_list_and_its_exceptions() {
+        let list = MessageTarget::list(
+            MailList::Conversations {
+                folder_id: "f-in".into(),
+            },
+            vec![MessageTarget::conversation("t1", Some("f-in".into()))],
+        );
+        assert_eq!(
+            serde_json::to_value(&list).unwrap(),
+            json!({
+                "kind": "list",
+                "list": {"source": "conversations", "folder_id": "f-in"},
+                "except": [{"kind": "conversation", "thread_id": "t1", "folder_id": "f-in"}],
+                "as_of": null
+            })
+        );
+        // `except`, `as_of` and `conversations` may be left out.
+        let parsed: MessageTarget = serde_json::from_value(json!({
+            "kind": "list",
+            "list": {"source": "search", "query": {"text": "is:unread", "limit": 50}}
+        }))
+        .unwrap();
+        let MessageTarget::List(parsed) = parsed else {
+            panic!("a list target");
+        };
+        assert_eq!(parsed.except, vec![]);
+        assert_eq!(parsed.as_of, None);
+        assert!(matches!(
+            parsed.list,
+            MailList::Search { ref query, conversations: false } if query.text == "is:unread"
+        ));
+        assert_eq!(
+            serde_json::to_value(MailList::Messages {
+                folder_id: "f".into()
+            })
+            .unwrap(),
+            json!({"source": "messages", "folder_id": "f"})
+        );
+    }
+
+    #[test]
+    fn rows_named_one_by_one_are_counted_and_lists_never_nest() {
+        let row = MessageTarget::message("m1");
+        let inbox = MailList::Messages {
+            folder_id: "f-in".into(),
+        };
+        let list = MessageTarget::list(inbox.clone(), vec![row.clone(), row.clone()]);
+        assert_eq!(explicit_target_count(&[]), 0);
+        assert_eq!(explicit_target_count(&[row.clone(), list.clone()]), 3);
+        assert_eq!(
+            explicit_target_count(&[MessageTarget::list(inbox.clone(), vec![])]),
+            0
+        );
+        assert!(has_list(&[row.clone(), list.clone()]));
+        assert!(!has_list(std::slice::from_ref(&row)));
+        assert!(!has_nested_list(&[row.clone(), list.clone()]));
+        assert_eq!(inbox.folder_id().map(FolderId::as_str), Some("f-in"));
+        assert!(has_nested_list(&[MessageTarget::list(inbox, vec![list])]));
+    }
+
+    #[test]
+    fn the_largest_request_fits_the_transport() {
+        // The longest ids the request may reasonably carry.
+        let id = "x".repeat(64);
+        let request = crate::Request::ApplyMailAction {
+            targets: (0..MAX_MAIL_ACTION_TARGETS)
+                .map(|_| MessageTarget::conversation(id.as_str(), Some(id.as_str().into())))
+                .collect(),
+            action: MailAction::Archive,
+        };
+        let bytes = serde_json::to_vec(&crate::RpcRequest { id: 1, request }).unwrap();
+        assert!(
+            bytes.len() < crate::MAX_REQUEST_BYTES,
+            "{} bytes for {MAX_MAIL_ACTION_TARGETS} targets",
+            bytes.len()
+        );
     }
 
     #[test]
