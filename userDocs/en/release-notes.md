@@ -63,7 +63,10 @@ closing a window.
   in the Outbox asks first. See [Composing mail](composer.md).
 - **Calendars, contacts and tasks ask before deleting** — the event and task
   editors keep their buttons in view, **Delete…** asks first, and so do
-  deleting a contact group and removing a calendar source. **Cancel
+  deleting contacts (from the card, the list, the `Delete` key and the
+  contact editor), deleting a contact group and removing a calendar source.
+  Calendar settings, New calendar and a contact group's edits ask before
+  they are lost. **Cancel
   meeting** is red and **Keep meeting** has the focus. The editors and the
   rules window ask before unsaved changes are lost. See [Calendar, contacts
   and tasks](calendar-contacts-tasks.md#the-event-task-and-contact-editors).
@@ -81,6 +84,16 @@ closing a window.
   default).
 - **Plug-in dialogs look like Nail's** — their buttons sit in Nail's footer
   in your system's order, with a **Cancel** of their own.
+- **Shortcuts, plug-ins and server rules save with the bar too** — new,
+  removed and reset shortcuts, turning a plug-in on or off, its permissions
+  and settings, and the Exchange inbox rule switches wait for **Save**;
+  deleting an inbox rule on the server asks first.
+- **Your own window keeps your changes** — opening Settings or the rules
+  window in a window of its own, or returning it to the main window, asks
+  first when it has unsaved changes.
+- **Screen readers hear the save bar** — Settings announces unsaved, saved
+  and discarded changes, and the focus moves to the section's title after
+  **Save** or **Discard**.
 
 ### Corrected in 0.8.10
 

@@ -33,6 +33,8 @@ common-folders = Folders
 common-disk-folder = Folder
 common-folder = Folder
 common-choose = Choose…
+# A Delete button that asks first.
+common-delete-ask = Delete…
 common-create = Create
 common-choose-account = Choose at least one account.
 common-confirmations = Confirmations

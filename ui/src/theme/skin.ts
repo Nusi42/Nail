@@ -398,12 +398,8 @@ ${p("window")} { border: 1px solid ${T.border}; border-radius: ${T.rLg}; color: 
 ${p("window.header")} { gap: ${T.sm}; min-height: calc(${T.control} + 3 * ${T.xs}); padding: 0 ${T.sm} 0 ${T.pane}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
 ${p("window.title")} { font-size: ${T.heading}; font-weight: ${T.semibold}; }
 ${p("window.body")} { padding: ${T.pane}; }
-${p("mail-confirm")} { display: grid; gap: ${T.md}; align-content: start; }
-${p("mail-confirm.question")}, ${p("mail-confirm.note")} { margin: 0; overflow-wrap: anywhere; }
-${p("mail-confirm.note")} { color: ${T.muted}; }
 ${p("mail-confirm.warning")} { margin: 0; padding-inline-start: ${T.sm}; border-inline-start: ${ACCENT_BAR} solid ${T.warning}; font-weight: ${T.medium}; overflow-wrap: anywhere; }
 ${p("mail-confirm.target")} { margin: 0; font-family: ${T.fontMono}; font-size: ${T.small}; color: ${T.muted}; overflow-wrap: anywhere; }
-${p("mail-confirm.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
 ${p("pim.editor.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }`;
 
 const MESSAGE_LIST = `${p("message-list")} { background-color: ${T.bg}; }

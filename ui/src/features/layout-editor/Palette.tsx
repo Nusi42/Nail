@@ -26,6 +26,7 @@ import {
 import { usePaletteTexts, usePresetName } from "./names";
 import { setMoving, useEditor } from "./store";
 import { useLayoutEdit } from "./useLayoutEdit";
+import { sameJson } from "../../text/json";
 
 export interface PaletteProps {
   window: string;
@@ -159,7 +160,7 @@ function PaletteWidget({
   const picked =
     current?.kind === "widget" &&
     current.widget.kind === moving.widget.kind &&
-    JSON.stringify(current.widget.options) === JSON.stringify(moving.widget.options);
+    sameJson(current.widget.options, moving.widget.options);
   const { onPointerDown, isDragClick } = useDragSource(() => moving);
   return (
     <button

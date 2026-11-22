@@ -15,6 +15,7 @@
  *   section content is a column; the body scrolls above it).
  */
 import { p } from "../../theme/selectors";
+import { VISUALLY_HIDDEN } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 
 export const DIALOG_SKIN_CSS = `${p("dialog.confirm")} { display: flex; flex-direction: column; gap: ${T.md}; min-height: 100%; }
@@ -28,6 +29,7 @@ ${p("settings-save-bar")} {
   display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm} ${T.md}; flex: 0 0 auto;
   padding: ${T.sm} ${T.xxl}; border-top: 1px solid ${T.border}; background-color: ${T.subtle};
 }
+${p("settings-save-bar.status")} { ${VISUALLY_HIDDEN} }
 ${p("settings-save-bar.text")} { margin: 0; font-weight: ${T.medium}; overflow-wrap: anywhere; }
 ${p("settings-save-bar")} > ${p("dialog.footer")} { margin-inline-start: auto; }
 ${p("window.body")} ${p("settings-save-bar")} > ${p("dialog.footer")}:last-child {

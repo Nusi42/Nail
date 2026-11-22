@@ -8729,6 +8729,18 @@
       "source": null
     },
     {
+      "selector": "key-binding-editor.unsaved",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding-left": "var(--nail-space-xs)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
       "selector": "toolbar-editor.status",
       "states": [
         "error"
@@ -12049,31 +12061,6 @@
       "source": null
     },
     {
-      "selector": "scheduling.answer.confirm",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": "var(--nail-space-sm)",
-        "padding": "var(--nail-space-sm)",
-        "border": "1px solid var(--nail-color-accent)",
-        "border-radius": "var(--nail-radius-md)"
-      },
-      "source": null
-    },
-    {
-      "selector": "scheduling.answer.confirm.text",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0"
-      },
-      "source": null
-    },
-    {
       "selector": "scheduling.propose",
       "states": [],
       "conditions": [],
@@ -12099,18 +12086,6 @@
       "source": null
     },
     {
-      "selector": "scheduling.propose.actions",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-sm)",
-        "justify-content": "flex-end"
-      },
-      "source": null
-    },
-    {
       "selector": "scheduling.forward",
       "states": [],
       "conditions": [],
@@ -12122,18 +12097,6 @@
         "padding": "var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)"
-      },
-      "source": null
-    },
-    {
-      "selector": "scheduling.forward.actions",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-sm)",
-        "justify-content": "flex-end"
       },
       "source": null
     },
@@ -14062,18 +14025,6 @@
       "source": null
     },
     {
-      "selector": "exchange-rules.server.confirm",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "align-items": "center",
-        "gap": "var(--nail-space-xs)"
-      },
-      "source": null
-    },
-    {
       "selector": "exchange-rules.empty",
       "states": [],
       "conditions": [],
@@ -14730,17 +14681,6 @@
       "ancestors": [],
       "declarations": {
         "margin": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "exchange.question",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0",
-        "font-weight": "var(--nail-font-weight-medium)"
       },
       "source": null
     },

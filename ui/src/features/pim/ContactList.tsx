@@ -36,14 +36,9 @@ import { gestureOf, pick, stepFrom, type SelectGesture } from "../../widgets/lis
 import { Problem, problemOf, useChangeContext, BookOptions } from "./common";
 import { CONTACT_DIALOG, GROUPS_DIALOG, MERGE_DIALOG } from "./names";
 import { PimMenu, type PimMenuEntry } from "./PimMenu";
-import {
-  pimWrite,
-  useAddressBooks,
-  useContactGroups,
-  useContactSearch,
-  useContacts,
-} from "./queries";
+import { useAddressBooks, useContactGroups, useContactSearch, useContacts } from "./queries";
 import { usePim, usePimStore } from "./store";
+import { askDeleteContacts } from "./contactDelete";
 import { nonEmpty } from "../../text/empty";
 
 /** Initials for the avatar placeholder. */
@@ -52,6 +47,11 @@ export function initialsOf(name: string): string {
   const first = words[0]?.[0] ?? "";
   const last = words.length > 1 ? (words[words.length - 1]?.[0] ?? "") : "";
   return (first + last).toUpperCase();
+}
+
+/** The name a contact is listed by: its display name, else its address. */
+function contactLabel(c: ContactSummary): string | undefined {
+  return nonEmpty(c.display_name) ?? nonEmpty(c.email);
 }
 
 export function ContactList({ node }: WidgetProps) {
@@ -67,7 +67,6 @@ export function ContactList({ node }: WidgetProps) {
   const [book, setBook] = useState<string>("");
   const [group, setGroup] = useState<string>("");
   const [limit, setLimit] = useState(pageSize);
-  const [problem, setProblem] = useState<ReturnType<typeof problemOf> | null>(null);
   const books = useAddressBooks();
   const groups = useContactGroups();
   const shownBooks = book ? [book] : fixedBooks.length > 0 ? fixedBooks : null;
@@ -115,17 +114,18 @@ export function ContactList({ node }: WidgetProps) {
     show(id, gestureOf(event));
   };
 
-  const removeSelection = async () => {
+  /** Delete (the button, the Delete key): asks first, then deletes the selection. */
+  const removeSelection = () => {
     const targets = selection.length > 0 ? selection : active ? [active] : [];
-    if (targets.length === 0) return;
-    setProblem(null);
-    try {
-      await pimWrite(ctx, { type: "DeleteContacts", contact_ids: targets }, "PimDeleted");
-      pim.getState().setSelectedContacts([]);
-      pim.getState().showContact(null);
-    } catch (error) {
-      setProblem(problemOf(error));
-    }
+    const one = contacts.find((c) => c.id === targets[0]);
+    askDeleteContacts(ctx, t, {
+      ids: targets,
+      name: (one && contactLabel(one)) ?? t("pim-contact-unnamed"),
+      onDeleted: () => {
+        pim.getState().setSelectedContacts([]);
+        pim.getState().showContact(null);
+      },
+    });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
@@ -155,7 +155,7 @@ export function ContactList({ node }: WidgetProps) {
         return;
       case "Delete":
         event.preventDefault();
-        void removeSelection();
+        removeSelection();
         return;
       default:
         return;
@@ -201,7 +201,7 @@ export function ContactList({ node }: WidgetProps) {
             label: t("pim-contacts-delete", { count: Math.max(1, selection.length) }),
             icon: "trash",
             danger: true,
-            onSelect: () => void removeSelection(),
+            onSelect: removeSelection,
           },
         ] satisfies PimMenuEntry[])
       : []),
@@ -301,7 +301,7 @@ export function ContactList({ node }: WidgetProps) {
                 data-part="form.button"
                 data-variant="danger"
                 data-action="delete"
-                onClick={() => void removeSelection()}
+                onClick={removeSelection}
               >
                 {t("pim-contacts-delete", { count: Math.max(1, selection.length) })}
               </button>
@@ -309,7 +309,6 @@ export function ContactList({ node }: WidgetProps) {
           </div>
         )}
       </div>
-      <Problem message={problem} />
       {(listed.isError || searched.isError) && (
         <Problem message={problemOf(listed.error ?? searched.error)} />
       )}
@@ -363,7 +362,7 @@ export function ContactList({ node }: WidgetProps) {
                   {initialsOf(nonEmpty(c.display_name) ?? c.email ?? "")}
                 </span>
                 <span data-part="contact-list.name">
-                  {nonEmpty(c.display_name) ?? nonEmpty(c.email) ?? t("pim-contact-unnamed")}
+                  {contactLabel(c) ?? t("pim-contact-unnamed")}
                 </span>
                 {c.email && <span data-part="contact-list.email">{c.email}</span>}
                 {c.organization && (

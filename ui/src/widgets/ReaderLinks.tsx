@@ -23,7 +23,7 @@ import type { DialogProps } from "../layout/dialogRegistry";
 import type { ComposeContext } from "../state/compose";
 import { useComposeContext } from "../state/hooks";
 import type { UiStore } from "../state/uiStore";
-import { MailConfirm, pendingSlot } from "./MailConfirm";
+import { ConfirmDialog, pendingSlot } from "./dialog";
 import { shortenMiddle, type MailLink, type MailLinkReport } from "./mailLinks";
 
 /** The confirmation's window kind (dialog name). */
@@ -171,26 +171,31 @@ export function OpenLinkDialog({ close }: DialogProps) {
     close();
   };
   return (
-    <MailConfirm
+    <ConfirmDialog
       kind="open-link"
+      risk="destructive"
       question={t("mail-open-link-question")}
+      detail={
+        <>
+          {texts.map((text) => (
+            <p key={text} data-part="mail-confirm.warning">
+              {text}
+            </p>
+          ))}
+          {what !== null && (
+            <p data-part="mail-confirm.target">
+              {t("security-warning-real-target", { href: what.link.href })}
+            </p>
+          )}
+        </>
+      }
+      action={t("mail-open-link-open")}
       canConfirm={what !== null}
       onConfirm={() => {
         done();
         if (what !== null) void openMailLink(ctx, what.link.href);
       }}
-      onCancel={done}
-    >
-      {texts.map((text) => (
-        <p key={text} data-part="mail-confirm.warning">
-          {text}
-        </p>
-      ))}
-      {what !== null && (
-        <p data-part="mail-confirm.target">
-          {t("security-warning-real-target", { href: what.link.href })}
-        </p>
-      )}
-    </MailConfirm>
+      cancel={{ onClick: done }}
+    />
   );
 }

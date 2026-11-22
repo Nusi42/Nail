@@ -12,7 +12,8 @@
  *   `server-rules` option), where each Nail rule runs, and every inbox rule
  *   on the server — the user's own ones can be switched on / off or deleted
  *   (rules with conditions Nail does not model only that), broken ones are
- *   marked.
+ *   marked. R6 (ADR 0239): the switches are settings drafts (written with
+ *   the section's Save); Delete… asks in the shared question window.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useId, useState } from "react";
@@ -44,6 +45,9 @@ import {
   useExchangeRules,
 } from "./queries";
 import { PlacementTable } from "../rules/PlacementTable";
+import { useFormNotice, useSettingsForm } from "../settings/draft";
+import { askQuestion } from "../../widgets/dialog";
+import { SERVER_RULE_DELETE_DIALOG } from "./names";
 import { Icon } from "../../widgets/Icon";
 
 /** One account's line of the badge: where the rule runs there, and why. */
@@ -174,43 +178,52 @@ export function ExchangeRuleBadges({ ruleId }: { ruleId: RuleId }) {
   );
 }
 
+/** The account's `server_rules` option, switched (R6: a settings draft, written with Save). */
+function withServerRules(config: AccountConfig, on: boolean): AccountConfig {
+  const incoming = config.incoming;
+  if (incoming.protocol !== "exchange") return config;
+  return {
+    ...config,
+    incoming: { ...incoming, options: { ...incoming.options, server_rules: on ? null : false } },
+  };
+}
+
 function ServerSwitch({ config }: { config: AccountConfig }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const incoming = config.incoming;
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  if (incoming.protocol !== "exchange") return null;
-  const on = incoming.options.server_rules !== false;
-  const toggle = async (value: boolean) => {
-    setProblem(null);
-    const next: AccountConfig = {
-      ...config,
-      incoming: {
-        ...incoming,
-        options: { ...incoming.options, server_rules: value ? null : false },
+  const { failed, problems, clear } = useFormNotice();
+  const form = useSettingsForm(
+    incoming.protocol === "exchange" && incoming.options.server_rules !== false,
+    {
+      save: async (on) => {
+        await client.request(
+          { type: "UpdateAccount", config: withServerRules(config, on), secrets: [] },
+          "AccountSaved",
+        );
+        await queryClient.invalidateQueries({ queryKey: queryKeys.accountsConfig });
+        void queryClient.invalidateQueries({ queryKey: exchangeKeys.area(config.id, "rules") });
       },
-    };
-    try {
-      await client.request({ type: "UpdateAccount", config: next, secrets: [] }, "AccountSaved");
-      void queryClient.invalidateQueries({ queryKey: queryKeys.accountsConfig });
-      void queryClient.invalidateQueries({ queryKey: exchangeKeys.area(config.id, "rules") });
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    }
-  };
+      onError: failed,
+    },
+  );
+  if (incoming.protocol !== "exchange") return null;
   return (
     <>
       <label data-part="form.check" data-field="exchange-server-rules">
         <input
           data-part="form.checkbox"
           type="checkbox"
-          checked={on}
-          onChange={(e) => void toggle(e.target.checked)}
+          checked={form.value}
+          onChange={(e) => {
+            clear();
+            form.set(e.target.checked);
+          }}
         />
         <span data-part="form.check.label">{t("exchange-rules-server-switch")}</span>
       </label>
-      <Problem message={problem} />
+      <Problem message={problems([])[0] ?? null} />
     </>
   );
 }
@@ -240,15 +253,23 @@ function Placements({ status }: { status: ExchangeRulesStatus }) {
 function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInboxRule }) {
   const t = useT();
   const ctx = useWriteContext();
-  const [confirm, setConfirm] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const run = async (work: () => Promise<void>) => {
-    setProblem(null);
-    try {
-      await work();
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    }
+  const { failed, problems, clear } = useFormNotice();
+  // On / off waits for the settings page's Save (R6); deleting asks first.
+  const enabled = useSettingsForm(rule.enabled, {
+    save: (on) => setServerRuleEnabled(ctx, accountId, rule.id, on),
+    onError: failed,
+  });
+  const askDelete = () => {
+    askQuestion(ctx.store, SERVER_RULE_DELETE_DIALOG, {
+      question: t(
+        rule.nail_rule_id
+          ? "exchange-rules-delete-placed-question"
+          : "exchange-rules-delete-question",
+        { name: rule.name },
+      ),
+      action: t("exchange-rules-delete-rule"),
+      run: () => deleteServerRule(ctx, accountId, rule.id),
+    });
   };
   return (
     <li
@@ -260,11 +281,12 @@ function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInbo
         <input
           data-part="form.checkbox"
           type="checkbox"
-          checked={rule.enabled}
+          checked={enabled.value}
           disabled={rule.in_error}
-          onChange={(e) =>
-            void run(() => setServerRuleEnabled(ctx, accountId, rule.id, e.target.checked))
-          }
+          onChange={(e) => {
+            clear();
+            enabled.set(e.target.checked);
+          }}
         />
         <span data-part="form.check.label">{rule.name}</span>
       </label>
@@ -279,48 +301,16 @@ function ServerRule({ accountId, rule }: { accountId: string; rule: ExchangeInbo
           {t("exchange-rules-in-error")}
         </span>
       )}
-      {confirm ? (
-        <span data-part="exchange-rules.server.confirm">
-          <span data-part="exchange.question">
-            {t(
-              rule.nail_rule_id
-                ? "exchange-rules-delete-placed-question"
-                : "exchange-rules-delete-question",
-              { name: rule.name },
-            )}
-          </span>
-          <button
-            type="button"
-            data-part="form.button"
-            onClick={() => {
-              setConfirm(false);
-            }}
-          >
-            {t("common-cancel")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="danger"
-            onClick={() => void run(() => deleteServerRule(ctx, accountId, rule.id))}
-          >
-            {t("common-delete")}
-          </button>
-        </span>
-      ) : (
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="delete"
-          aria-label={t("exchange-rules-delete-named", { name: rule.name })}
-          onClick={() => {
-            setConfirm(true);
-          }}
-        >
-          {t("common-delete")}
-        </button>
-      )}
-      <Problem message={problem} />
+      <button
+        type="button"
+        data-part="form.button"
+        data-action="delete"
+        aria-label={t("exchange-rules-delete-named", { name: rule.name })}
+        onClick={askDelete}
+      >
+        {t("common-delete-ask")}
+      </button>
+      <Problem message={problems([])[0] ?? null} />
     </li>
   );
 }

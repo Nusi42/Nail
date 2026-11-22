@@ -181,8 +181,12 @@ customize-keys-press-hint = Press a key or a chord like Ctrl+Shift+M; press more
 customize-keys-conflict = Replaces the shortcut for { $action } here.
 customize-keys-add = Add shortcut
 customize-keys-clear = Clear keys
-customize-keys-added = Shortcut saved to layout.kdl.
-customize-keys-removed = Shortcut removed.
+# A shortcut changed in the table but not saved yet (Settings saves with the bar).
+customize-keys-unsaved =
+    { $change ->
+        [add] New, not saved
+       *[reset] Default on save
+    }
 customize-keys-remove = Remove { $key } ({ $action })
 customize-keys-reset = Restore the default for { $key }
 customize-keys-reset-short = Default

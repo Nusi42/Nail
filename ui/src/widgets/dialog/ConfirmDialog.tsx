@@ -129,3 +129,25 @@ export function ConfirmDialog({
     </div>
   );
 }
+
+/**
+ * A confirmation window opened without a question (it was answered
+ * elsewhere, or the window was left over): the text and one Done.
+ */
+export function ConfirmGone({
+  kind,
+  text,
+  close,
+}: {
+  kind: string;
+  /** Why there is nothing to ask, localized. */
+  text: string;
+  close: () => void;
+}) {
+  return (
+    <div data-part="dialog.confirm" data-confirm={kind} data-state="empty">
+      <p data-part="dialog.question">{text}</p>
+      <DialogFooter done={{ onDone: close }} />
+    </div>
+  );
+}

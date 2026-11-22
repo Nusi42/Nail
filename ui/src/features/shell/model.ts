@@ -14,6 +14,7 @@ import type {
   ViewDef,
 } from "../../api/generated";
 import { VIEW_SHOW_ACTION, hostsViews, viewDef } from "../../layout/views";
+import { sameJson } from "../../text/json";
 
 /** Badges show at most this number, then `99+`. */
 export const BADGE_CAP = 99;
@@ -86,7 +87,7 @@ export function actionShortcuts(
   action: string,
   args: readonly JsonValue[],
 ): string[] {
-  const same = (a: readonly JsonValue[]) => JSON.stringify(a) === JSON.stringify(args);
+  const same = (a: readonly JsonValue[]) => sameJson(a, args);
   return [
     ...new Set(layout.keys.filter((b) => b.action === action && same(b.args)).map((b) => b.key)),
   ];

@@ -1,12 +1,14 @@
 /**
  * The window of the confirmation before an action on a whole list
- * (`./bulk.ts`): the true count, the action as the button's text, and
- * Cancel focused (`MailConfirm`).
+ * (`./bulk.ts`): the true count and the action as the verb, in the shared
+ * `ConfirmDialog` (R6, ADR 0239). Deleting or moving to Trash is
+ * destructive (red, the focus on Cancel, Enter never runs it); every other
+ * action is a normal confirmation (the verb has the focus, Enter runs it).
  */
 import { useState } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import { useUiStoreApi } from "../../state/uiStore";
-import { MailConfirm } from "../../widgets/MailConfirm";
+import { ConfirmDialog } from "../../widgets/dialog";
 import { answerBulk, bulkLabelArgs, pendingBulk } from "./bulk";
 
 /** The confirmation window's content. */
@@ -20,27 +22,27 @@ export function BulkConfirmDialog() {
   const type = question?.action.type;
   const destructive = type === "delete-permanently" || type === "trash";
   return (
-    <MailConfirm
+    <ConfirmDialog
       kind="bulk"
-      {...(type === undefined ? {} : { dataRole: type })}
-      variant={destructive ? "danger" : "primary"}
+      risk={destructive ? "destructive" : "normal"}
       question={
         conversations > 0
           ? t("mail-bulk-question-conversations", { conversations, messages })
           : t("mail-bulk-question-messages", { messages })
       }
-      confirmLabel={t("mail-bulk-confirm", label ?? { action: "other", on: "yes" })}
+      {...(type === "delete-permanently"
+        ? { detail: <p data-part="dialog.note">{t("mail-delete-permanently-note")}</p> }
+        : {})}
+      action={t("mail-bulk-confirm", label ?? { action: "other", on: "yes" })}
       canConfirm={messages > 0}
       onConfirm={() => {
         answerBulk(store, true);
       }}
-      onCancel={() => {
-        answerBulk(store, false);
+      cancel={{
+        onClick: () => {
+          answerBulk(store, false);
+        },
       }}
-    >
-      {type === "delete-permanently" && (
-        <p data-part="mail-confirm.note">{t("mail-delete-permanently-note")}</p>
-      )}
-    </MailConfirm>
+    />
   );
 }

@@ -34,6 +34,7 @@ import { exchangeCandidate } from "./model";
 import { EXCHANGE_ACCOUNT, EXCHANGE_CALENDARS, SHARED_ROOT } from "./mockSeed";
 import {
   APPLY_CATEGORIES_DIALOG,
+  SERVER_RULE_DELETE_DIALOG,
   AUTOMATIC_REPLIES_DIALOG,
   CATEGORY_DELETE_DIALOG,
   CATEGORY_EDITOR_DIALOG,
@@ -44,6 +45,7 @@ import {
 } from "./names";
 import { exchangeStoreFor } from "./store";
 import { setup } from "./testing";
+import { askQuestion } from "../../widgets/dialog";
 import { must } from "../../test/must";
 import { messageWithSubject, cacheList, selectCached } from "../../test/env";
 
@@ -188,6 +190,13 @@ describe("axe: Exchange dialogs", () => {
     if (name === APPLY_CATEGORIES_DIALOG) {
       const summary = messageWithSubject(env, "Phoenix launch checklist");
       selectCached(env, summary);
+    }
+    if (name === SERVER_RULE_DELETE_DIALOG) {
+      askQuestion(env.store, name, {
+        question: "Delete the inbox rule “Invoices” from the server?",
+        action: "Delete rule",
+        run: () => undefined,
+      });
     }
   }
 

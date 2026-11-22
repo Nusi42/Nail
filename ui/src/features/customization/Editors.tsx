@@ -12,10 +12,12 @@
  * - `column-editor`: the column order of a message list
  *   (`column-order`).
  *
- * R6 (ADR 0239): the toolbar and column drafts are settings drafts
- * (`useSettingsDraft`): the section's "Unsaved changes" bar saves or
+ * R6 (ADR 0239): the toolbar, column and key-binding drafts are settings
+ * drafts (`useSettingsDraft`): the section's "Unsaved changes" bar saves or
  * discards them, and picking another toolbar or list with unsaved changes
- * asks first with the shared prompt.
+ * asks first with the shared prompt. The key-binding editor keeps its
+ * added, removed and reset shortcuts as changes (shown in the table, marked
+ * "not saved") and writes them all with Save.
  */
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import { askToLeave, useGuardKey, useSettingsDraft } from "../../widgets/dialog";
@@ -23,7 +25,6 @@ import { useUiStoreApi } from "../../state/uiStore";
 import { errorMessageOf } from "../../api/client";
 import type {
   JsonValue,
-  KeyBinding,
   LayoutNode,
   LayoutNodeRef,
   LocalizedMessage,
@@ -38,15 +39,16 @@ import { useClient } from "../../state/queries";
 import { COLUMN_IDS } from "../../widgets/MessageList";
 import { keyLabel } from "../menus";
 import { ReorderList, moved, type ReorderEntry } from "./ReorderList";
-import {
-  updateLayout,
-  writeColumnOrder,
-  writeKeyBinding,
-  writeToolbar,
-  removeKeyBinding,
-} from "./writeBack";
+import { updateLayout, writeColumnOrder, writeToolbar } from "./writeBack";
 
-import { KEY_CONTEXTS, isKnownKeyContext } from "./editorModel";
+import {
+  KEY_CONTEXTS,
+  isKnownKeyContext,
+  previewKeyBindings,
+  type KeyBindingChange,
+  type PreviewBinding,
+} from "./editorModel";
+import { sameJson } from "../../text/json";
 
 export { KEY_CONTEXTS };
 
@@ -160,7 +162,10 @@ function ToolbarDraft({
     setDraft([...draft, { key: `n${String(counter)}`, item }]);
     setCounter(counter + 1);
   };
-  const changed = JSON.stringify(draft.map((d) => d.item)) !== JSON.stringify(items);
+  const changed = !sameJson(
+    draft.map((d) => d.item),
+    items,
+  );
   useSettingsDraft(draftKey, {
     dirty: changed,
     save: () =>
@@ -388,28 +393,72 @@ export function KeyBindingEditor({ node }: WidgetProps) {
   const [action, setAction] = useState(choices[0]?.value ?? "");
   const [arg, setArg] = useState("");
   const [key, setKey] = useState("");
+  const [changes, setChanges] = useState<KeyBindingChange[]>([]);
   const [status, write] = useWrite();
 
-  const shown = layout.keys.filter((k) => filter === "" || k.context === filter);
-  const conflict = layout.keys.find((k) => k.context === context && k.key === key);
+  const preview = previewKeyBindings(layout.keys, changes);
+  const shown = preview.filter((p) => filter === "" || p.binding.context === filter);
+  const conflict = preview.find((p) => p.binding.context === context && p.binding.key === key);
+  /** The shortcut typed into the form, as a change (`null`: no keys recorded). */
+  const typed = (): KeyBindingChange | null =>
+    key === "" || action === ""
+      ? null
+      : {
+          op: "add-key-binding",
+          context,
+          key,
+          action,
+          args: arg.trim() === "" ? [] : [arg.trim()],
+        };
+  const stage = (change: KeyBindingChange) => {
+    setChanges((all) => [...all, change]);
+  };
+  const clearForm = () => {
+    setKey("");
+    setArg("");
+  };
+  const add = () => {
+    const change = typed();
+    if (change === null) return;
+    stage(change);
+    clearForm();
+  };
+  // R6 (ADR 0239): nothing is written before the section's Save; a recorded
+  // but not yet added shortcut counts as unsaved too (Save adds it).
+  useSettingsDraft(node.id ?? "key-binding-editor", {
+    dirty: changes.length > 0 || key !== "",
+    canSave: key === "" || action !== "",
+    save: async () => {
+      const pending = [...changes, ...[typed()].filter((c) => c !== null)];
+      const saved = await write(() => updateLayout(client, pending), "customize-saved");
+      if (saved) {
+        setChanges([]);
+        clearForm();
+      }
+      return saved;
+    },
+    discard: () => {
+      setChanges([]);
+      clearForm();
+    },
+  });
 
-  const add = () =>
-    void write(async () => {
-      await writeKeyBinding(client, context, key, action, arg.trim() === "" ? [] : [arg.trim()]);
-      setKey("");
-      setArg("");
-    }, "customize-keys-added");
-
-  const row = (binding: KeyBinding, index: number) => {
+  const row = ({ binding, change }: PreviewBinding, index: number) => {
     const name = keyLabel(binding.key, t);
     const what = actionText(layout, binding.action, label);
     return (
       <tr
         key={`${binding.context}:${binding.key}:${String(index)}`}
         data-part="key-binding-editor.row"
+        data-state={change ?? undefined}
       >
         <td data-part="key-binding-editor.key">
           <kbd data-part="key-binding-editor.kbd">{name}</kbd>
+          {change !== null && (
+            <span data-part="key-binding-editor.unsaved">
+              {t("customize-keys-unsaved", { change })}
+            </span>
+          )}
         </td>
         <td data-part="key-binding-editor.action">
           {what}
@@ -424,12 +473,9 @@ export function KeyBindingEditor({ node }: WidgetProps) {
             data-part="form.button"
             data-action="remove"
             aria-label={t("customize-keys-remove", { key: name, action: what })}
-            onClick={() =>
-              void write(
-                () => removeKeyBinding(client, binding.context, binding.key),
-                "customize-keys-removed",
-              )
-            }
+            onClick={() => {
+              stage({ op: "remove-key-binding", context: binding.context, key: binding.key });
+            }}
           >
             {t("common-remove")}
           </button>
@@ -437,16 +483,11 @@ export function KeyBindingEditor({ node }: WidgetProps) {
             type="button"
             data-part="form.button"
             data-action="reset"
+            disabled={change === "reset"}
             aria-label={t("customize-keys-reset", { key: name })}
-            onClick={() =>
-              void write(
-                () =>
-                  updateLayout(client, [
-                    { op: "reset-key-binding", context: binding.context, key: binding.key },
-                  ]),
-                "customize-reset-done",
-              )
-            }
+            onClick={() => {
+              stage({ op: "reset-key-binding", context: binding.context, key: binding.key });
+            }}
           >
             {t("customize-keys-reset-short")}
           </button>
@@ -519,7 +560,9 @@ export function KeyBindingEditor({ node }: WidgetProps) {
         <KeyRecorder value={key} onChange={setKey} />
         {conflict && key !== "" && (
           <p data-part="key-binding-editor.conflict" role="status">
-            {t("customize-keys-conflict", { action: actionText(layout, conflict.action, label) })}
+            {t("customize-keys-conflict", {
+              action: actionText(layout, conflict.binding.action, label),
+            })}
           </p>
         )}
         <div data-part="key-binding-editor.add-actions">
@@ -627,7 +670,7 @@ function ColumnDraft({
   const [columns, setColumns] = useState(initial);
   const available = COLUMN_IDS.filter((c) => !columns.includes(c));
   const [adding, setAdding] = useState<string>(available[0] ?? "");
-  const changed = JSON.stringify(columns) !== JSON.stringify(initial);
+  const changed = !sameJson(columns, initial);
   useSettingsDraft(draftKey, {
     dirty: changed,
     canSave: columns.length > 0,

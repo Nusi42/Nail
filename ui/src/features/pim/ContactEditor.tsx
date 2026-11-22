@@ -35,6 +35,7 @@ import {
   EditorFooter,
 } from "./common";
 import { CONTACT_KINDS } from "./constants";
+import { askDeleteContacts } from "./contactDelete";
 import { DateTimeInput } from "./DateTimeInput";
 import { emptyContactFields } from "./defaults";
 import { pimWrite, useAddressBooks, useContact } from "./queries";
@@ -231,8 +232,9 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
       ctx.pim.getState().showContact(saved.contact.id);
     }
   };
-  const { busy, problem, setProblem, submit } = useEditorSave({
-    name: cleanContact(fields).display_name || t("pim-contact-unnamed"),
+  const name = cleanContact(fields).display_name || t("pim-contact-unnamed");
+  const { busy, problem, setProblem, submit, finish } = useEditorSave({
+    name,
     state: { fields, bookId },
     readOnly,
     canSave: bookId !== "",
@@ -536,7 +538,21 @@ export function ContactEditor({ target, contact, books, close }: EditorProps) {
 
       <Problem message={problem} />
       <EditorFooter
-        onDelete={null}
+        onDelete={
+          contact
+            ? () => {
+                askDeleteContacts(ctx, t, {
+                  ids: [contact.id],
+                  name,
+                  onDeleted: () => {
+                    finish();
+                    ctx.pim.getState().showContact(null);
+                    close();
+                  },
+                });
+              }
+            : null
+        }
         readOnly={readOnly}
         saveDisabled={bookId === ""}
         busy={busy}

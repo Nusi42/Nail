@@ -14,6 +14,7 @@ import {
   workFolderRow,
 } from "../support/views";
 import { WELCOME as SUBJECT } from "../support/rules";
+import { lengthenAutosave } from "../support/compose";
 import {
   emulateViewerOs,
   expectDialogFooter,
@@ -48,9 +49,7 @@ test.describe.configure({ timeout: 120_000 });
 /** The page as a viewer on `os` (the composer's autosave lengthened), the mail view loaded. */
 async function openAs(page: Page, os: ViewerOs): Promise<void> {
   await emulateViewerOs(page, os);
-  await page.addInitScript(() => {
-    (globalThis as Record<string, unknown>).__nailAutosaveMs = 10 * 60 * 1000;
-  });
+  await lengthenAutosave(page);
   await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
 }
 

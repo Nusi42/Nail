@@ -9,9 +9,11 @@
  * - The changes cannot be saved (invalid): "Discard changes to “X”?" —
  *   Discard changes (red, never the default), Keep editing (focused).
  *
- * Save that fails leaves the window open with its inline error.
+ * Save that fails leaves the window open with its inline error; Cancel
+ * while Save runs keeps the window too (it does not close or move on when
+ * the save ends).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import {
   MAIN_GUARD,
@@ -23,8 +25,7 @@ import {
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useUiStoreApi } from "../../state/uiStore";
 import { nonEmpty } from "../../text/empty";
-import { ConfirmDialog } from "./ConfirmDialog";
-import { DialogFooter } from "./DialogFooter";
+import { ConfirmDialog, ConfirmGone } from "./ConfirmDialog";
 
 /** Window `unsaved-changes:<key>`. */
 export function UnsavedPrompt({ name, close }: DialogProps) {
@@ -34,6 +35,8 @@ export function UnsavedPrompt({ name, close }: DialogProps) {
   const [question] = useState(() => unsavedQuestionOf(ui, target));
   const guard = closeGuardOf(ui, target);
   const [busy, setBusy] = useState(false);
+  /** Cancel (or ×, Esc) was chosen: a save still running must not move on. */
+  const cancelled = useRef(false);
   useEffect(
     () => () => {
       if (question) forgetUnsavedQuestion(ui, question);
@@ -41,15 +44,11 @@ export function UnsavedPrompt({ name, close }: DialogProps) {
     [ui, question],
   );
   if (question === null || guard === null) {
-    return (
-      <div data-part="dialog.confirm" data-confirm="unsaved" data-state="empty">
-        <p data-part="dialog.question">{t("dialog-unsaved-gone")}</p>
-        <DialogFooter done={{ onDone: close }} />
-      </div>
-    );
+    return <ConfirmGone kind="unsaved" text={t("dialog-unsaved-gone")} close={close} />;
   }
   /** Back to the window, which keeps its changes. */
   const keepEditing = () => {
+    cancelled.current = true;
     close();
     if (target !== MAIN_GUARD) ui.getState().focusWindow(target);
   };
@@ -82,6 +81,8 @@ export function UnsavedPrompt({ name, close }: DialogProps) {
       .then(() => guard.save?.() ?? false)
       .catch(() => false);
     setBusy(false);
+    // Cancelled while saving: the window stays (saved or not).
+    if (cancelled.current) return;
     if (saved) goOn();
     else keepEditing();
   };

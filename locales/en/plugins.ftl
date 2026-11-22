@@ -111,7 +111,6 @@ plugin-manager-show-permissions = { common-permissions }
 plugin-manager-show-settings = { common-settings }
 plugin-manager-show-log = Log
 plugin-manager-show-layout = Place in layout
-plugin-manager-grants-save = Save permissions
 plugin-manager-grants-saved = Permissions saved.
 # Remove… in the manager asks first (a confirmation window).
 plugin-manager-remove = Remove plug-in…
@@ -146,7 +145,6 @@ plugin-log-source-api = API call
 
 plugin-settings-label = Plug-in settings
 plugin-settings-none = This plug-in has no settings.
-plugin-settings-save = Save settings
 
 ## Window titles of plug-in dialogs (M5c: windows of the window manager;
 ## the dialog's own title is shown when it has one)

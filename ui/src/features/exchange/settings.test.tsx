@@ -31,10 +31,13 @@ import { defaultSchedule, utcOf, wallOf } from "./AutomaticReplies";
 import { badgeSummary } from "./Rules";
 import { exchangeCandidate } from "./model";
 import { EXCHANGE_ACCOUNT } from "./mockSeed";
-import { AUTOMATIC_REPLIES_DIALOG } from "./names";
+import { AUTOMATIC_REPLIES_DIALOG, SERVER_RULE_DELETE_DIALOG } from "./names";
+import { questionOf, SettingsSaveBar } from "../../widgets/dialog";
+import { confirmQuestion } from "../../widgets/dialog/testing";
 import { exchangeStoreFor } from "./store";
 import { dialog, setup } from "./testing";
 import { requestsOf, actionContext, wireEvents } from "../../test/env";
+import { must } from "../../test/must";
 
 describe("automatic replies", () => {
   it("converts schedule times between UTC and the viewer's zone", () => {
@@ -164,6 +167,20 @@ describe("automatic replies", () => {
   });
 });
 
+/** The Server rules widget with the section's save bar. */
+function renderRules(env: Env) {
+  renderWithProviders(
+    <>
+      <NodeView node={widget("exchange-rules")} path="t/0" />
+      <SettingsSaveBar name="Server rules" />
+    </>,
+    env,
+  );
+}
+
+/** The section's "Unsaved changes" bar. */
+const rulesBar = () => screen.queryByRole("group", { name: "Unsaved changes to “Server rules”" });
+
 describe("rules", () => {
   it("badges a Nail rule once, with every Exchange account's line", async () => {
     const env = setup();
@@ -203,7 +220,7 @@ describe("rules", () => {
   it("lists placements and server rules; switches and deletes the user's own", async () => {
     const env = setup();
     const user = userEvent.setup();
-    renderWithProviders(<NodeView node={widget("exchange-rules")} path="t/0" />, env);
+    renderRules(env);
     const table = await screen.findByRole("table", { name: "Where your Nail rules run" });
     expect(
       await within(table).findByRole("rowheader", { name: "Rust announcements" }),
@@ -215,7 +232,11 @@ describe("rules", () => {
     const outlook = screen.getByRole("checkbox", { name: "Move newsletters (created in Outlook)" });
     expect(outlook).not.toBeChecked();
     expect(screen.getByText(/Nail cannot show all of this rule/)).toBeInTheDocument();
+    // R6: the switch waits for the section's Save.
     await user.click(outlook);
+    expect(outlook).toBeChecked();
+    expect(requestsOf(env, "SetExchangeInboxRuleEnabled")).toHaveLength(0);
+    await user.click(within(must(rulesBar())).getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(requestsOf(env, "SetExchangeInboxRuleEnabled")).toHaveLength(1);
     });
@@ -223,13 +244,15 @@ describe("rules", () => {
       server_rule_id: "inbox-rule-3",
       enabled: true,
     });
+    // Delete… asks in the shared question window (red "Delete rule", Cancel focused).
     await user.click(
       screen.getByRole("button", { name: "Delete inbox rule Invoices to accounting" }),
     );
-    expect(
-      screen.getByText("Delete the inbox rule “Invoices to accounting” from the server?"),
-    ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(requestsOf(env, "DeleteExchangeInboxRule")).toHaveLength(0);
+    expect(questionOf(env.store, SERVER_RULE_DELETE_DIALOG)?.question).toBe(
+      "Delete the inbox rule “Invoices to accounting” from the server?",
+    );
+    await confirmQuestion(env, user, SERVER_RULE_DELETE_DIALOG, "Delete rule");
     await waitFor(() => {
       expect(requestsOf(env, "DeleteExchangeInboxRule")).toHaveLength(1);
     });
@@ -242,12 +265,18 @@ describe("rules", () => {
   it("switches running rules on the server through the account settings", async () => {
     const env = setup();
     const user = userEvent.setup();
-    renderWithProviders(<NodeView node={widget("exchange-rules")} path="t/0" />, env);
+    renderRules(env);
     const toggle = await screen.findByRole("checkbox", {
       name: "Run rules on the server where Exchange can",
     });
     expect(toggle).toBeChecked();
     await user.click(toggle);
+    // Nothing is written before Save (R6); Discard puts it back.
+    expect(requestsOf(env, "UpdateAccount")).toHaveLength(0);
+    await user.click(within(must(rulesBar())).getByRole("button", { name: "Discard" }));
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    await user.click(within(must(rulesBar())).getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(requestsOf(env, "UpdateAccount")).toHaveLength(1);
     });

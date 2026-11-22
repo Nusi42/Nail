@@ -21,6 +21,7 @@ import { makePimTime, pimTimeIn, splitPimTime, toCalendarDate } from "../pim/tim
 import { RESPONSES, responseOfStatus, splitAddresses } from "./model";
 import { plausibleEmail } from "../../state/addresses";
 import { TextAreaField } from "../../widgets/forms";
+import { ConfirmDialog, DialogFooter } from "../../widgets/dialog";
 
 export interface AnswerFormProps {
   /** The user's current answer (pressed button). */
@@ -56,49 +57,36 @@ export function AnswerForm({
   };
 
   if (pending !== null) {
+    // "Send the answer?" — the shared confirmation (R6): Send, Don't send,
+    // Back in the order of the viewer's system.
     return (
-      <div data-part="scheduling.answer.confirm" role="group" aria-labelledby={ids.send}>
-        <p id={ids.send} data-part="scheduling.answer.confirm.text">
-          {t("scheduling-answer-confirm", {
-            answer: t(`scheduling-answer-${pending}`),
-            organizer: organizer ?? t("scheduling-organizer-unknown"),
-          })}
-        </p>
-        <div data-part="scheduling.answer.buttons">
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="primary"
-            disabled={busy}
-            onClick={() => {
-              setPending(null);
-              onAnswer(pending, comment.trim() || null, true);
-            }}
-          >
-            {t("common-send")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            disabled={busy}
-            onClick={() => {
-              setPending(null);
-              onAnswer(pending, comment.trim() || null, false);
-            }}
-          >
-            {t("scheduling-answer-confirm-no-send")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            onClick={() => {
-              setPending(null);
-            }}
-          >
-            {t("common-back")}
-          </button>
-        </div>
-      </div>
+      <ConfirmDialog
+        kind="send-answer"
+        question={t("scheduling-answer-confirm", {
+          answer: t(`scheduling-answer-${pending}`),
+          organizer: organizer ?? t("scheduling-organizer-unknown"),
+        })}
+        action={t("common-send")}
+        onConfirm={() => {
+          setPending(null);
+          onAnswer(pending, comment.trim() || null, true);
+        }}
+        secondary={{
+          label: t("scheduling-answer-confirm-no-send"),
+          action: "dont-send",
+          onClick: () => {
+            setPending(null);
+            onAnswer(pending, comment.trim() || null, false);
+          },
+        }}
+        cancel={{
+          label: t("common-back"),
+          onClick: () => {
+            setPending(null);
+          },
+        }}
+        busy={busy}
+      />
     );
   }
 
@@ -259,19 +247,16 @@ export function ProposeTimeForm({
         }}
       />
       <Problem message={problem} part="scheduling.problem" />
-      <div data-part="scheduling.propose.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          disabled={busy || invalid}
-        >
-          {t("scheduling-propose-send")}
-        </button>
-        <button type="button" data-part="form.button" onClick={onCancel}>
-          {t("common-cancel")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{
+          label: t("scheduling-propose-send"),
+          submit: true,
+          action: "propose",
+          disabled: invalid,
+        }}
+        cancel={{ onClick: onCancel }}
+        busy={busy}
+      />
     </form>
   );
 }
@@ -336,14 +321,11 @@ export function ForwardForm({ busy, problem, onSubmit, onCancel }: ForwardFormPr
         }}
       />
       <Problem message={problem} part="scheduling.problem" />
-      <div data-part="scheduling.forward.actions">
-        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
-          {t("common-forward")}
-        </button>
-        <button type="button" data-part="form.button" onClick={onCancel}>
-          {t("common-cancel")}
-        </button>
-      </div>
+      <DialogFooter
+        primary={{ label: t("common-forward"), submit: true, action: "forward" }}
+        cancel={{ onClick: onCancel }}
+        busy={busy}
+      />
     </form>
   );
 }

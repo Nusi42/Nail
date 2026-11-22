@@ -241,7 +241,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
         subtasks.length > 0
           ? t("pim-task-delete-with-subtasks", { count: subtasks.length })
           : t("pim-delete-task"),
-      go: async () => {
+      run: async () => {
         await pimWrite(
           ctx,
           { type: "DeleteTask", task_id: task.id, with_subtasks: true },

@@ -294,7 +294,10 @@ test("a rebound key is written to layout.kdl and works", async ({ page }) => {
   await page.keyboard.press("Control+Shift+Y");
   await expect(capture).toHaveValue("Ctrl+Shift+Y");
   await keys.getByRole("button", { name: "Add shortcut" }).click();
-  await expect(keys.getByText("Shortcut saved to layout.kdl.")).toBeVisible();
+  // R6: shortcuts are written with the section's Save.
+  await expect(keys.getByText("New, not saved")).toBeVisible();
+  await saveSettings(page);
+  await expect(keys.getByText("Saved to layout.kdl.")).toBeVisible();
   const layout = readFileSync(path.join(server.configDir, "layout.kdl"), "utf8");
   expect(layout).toContain("ctrl+shift+y");
   await showView(page, "Mail");

@@ -23,6 +23,7 @@ import { queryKeys, useAccountsConfig, useClient } from "../../state/queries";
 import { CheckField, SelectField } from "../../widgets/forms";
 import { PREFERENCES, defaultIdentityCrypto, formatFingerprint, ownKeysFor } from "./model";
 import { useOwnKeys } from "./queries";
+import { sameJson } from "../../text/json";
 
 /** `Ada Lovelace <ada@example.org>`. */
 export function identityText(identity: Pick<Identity, "name" | "email">): string {
@@ -169,7 +170,7 @@ function AccountCrypto({ account, ownKeys }: { account: AccountConfig; ownKeys: 
   const [message, setMessage] = useState<{ id: string; error: boolean } | null>(null);
   // R6 (ADR 0239): the edits wait for the settings page's Save.
   const form = useSettingsForm<AccountConfig>(account, {
-    equal: (a, b) => JSON.stringify(a.identities) === JSON.stringify(b.identities),
+    equal: (a, b) => sameJson(a.identities, b.identities),
     save: async (draft) => {
       setMessage(null);
       // Only the identities' crypto changes; everything else is sent as loaded.

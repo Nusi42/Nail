@@ -11,6 +11,7 @@ import {
   MAX_UI_STATE_VALUE_BYTES,
   UI_STATE_ISSUE_MESSAGE_IDS,
 } from "./generated";
+import { sameJson } from "../text/json";
 
 /** The requests answered here. */
 export const UI_STATE_REQUESTS = [
@@ -78,7 +79,7 @@ export function answerUiState(core: MockCore, request: UiStateRequest): Response
       };
     }
     const before = Object.hasOwn(state, request.key) ? state[request.key] : null;
-    if (JSON.stringify(before) !== JSON.stringify(value)) {
+    if (!sameJson(before, value)) {
       const rest = Object.entries(state).filter(([k]) => k !== request.key);
       states.set(
         core,

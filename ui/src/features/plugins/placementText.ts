@@ -26,6 +26,7 @@ import type {
   ToolbarItem,
 } from "../../api/generated";
 import { pluginCommandId } from "./ids";
+import { sameJson } from "../../text/json";
 
 function quote(text: string): string {
   return JSON.stringify(text);
@@ -133,12 +134,10 @@ export function placementText(layout: ResolvedLayout, plugin: PluginInfo): strin
     keys.set(context, list);
   }
   const changedToolbars = [...toolbars].filter(
-    ([name, items]) =>
-      JSON.stringify(items) !== JSON.stringify(toolbarItems(layout.toolbars[name] ?? [])),
+    ([name, items]) => !sameJson(items, toolbarItems(layout.toolbars[name] ?? [])),
   );
   const changedMenus = [...menus].filter(
-    ([name, items]) =>
-      JSON.stringify(items) !== JSON.stringify(menuItems(layout.menus[name] ?? [])),
+    ([name, items]) => !sameJson(items, menuItems(layout.menus[name] ?? [])),
   );
   if (
     changedToolbars.length === 0 &&

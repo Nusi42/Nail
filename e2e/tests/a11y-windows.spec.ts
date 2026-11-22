@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { axeViolations } from "../support/axe";
+import { lengthenAutosave } from "../support/compose";
 import { nailPerTest } from "../support/nail";
 import { createUser, rpcOk } from "../support/remote";
 import {
@@ -132,6 +133,8 @@ for (const mode of MODES) {
       };
       const sweep = new Sweep(page, mode.name, mode.os);
       await emulateViewerOs(page, mode.os);
+      // The composer step closes it with unsaved changes: no autosave race.
+      await lengthenAutosave(page);
 
       await page.goto(new URL(mode.query, server.url).toString());
       const rows = messageRows(page);

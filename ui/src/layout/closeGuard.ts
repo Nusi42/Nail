@@ -135,6 +135,40 @@ export function askToLeave(ui: UiStore, window: string, proceed: () => void): vo
   ask(ui, window, proceed);
 }
 
+/**
+ * `askToLeave` as a promise: `true` at once when `window` has nothing
+ * unsaved, else once the shared prompt's Save or Don't save let it go;
+ * `false` when the prompt was cancelled (Cancel, ×, Esc) or a save failed.
+ * For moves that happen outside the window (popping it out of the page or
+ * back), which must not run before the answer.
+ */
+export function confirmLeave(ui: UiStore, window: string): Promise<boolean> {
+  if (closeGuardOf(ui, window)?.isDirty() !== true) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const prompt = promptWindowFor(window);
+    let answered = false;
+    let shown = false;
+    const unsubscribe = ui.subscribe((state) => {
+      if (state.windows.includes(prompt)) {
+        shown = true;
+        return;
+      }
+      if (!shown) return;
+      unsubscribe();
+      // Save and Don't save close the prompt, then go on in the same task.
+      queueMicrotask(() => {
+        if (!answered) resolve(false);
+      });
+    });
+    ask(ui, window, () => {
+      answered = true;
+      unsubscribe();
+      resolve(true);
+    });
+    shown ||= ui.getState().windows.includes(prompt);
+  });
+}
+
 /** Closes `window` without asking (after its own Save, or an answer of the prompt). */
 export function closeWindowNow(ui: UiStore, window: string): void {
   const state = stateOf(ui);

@@ -2970,6 +2970,11 @@ theme "default" mode="system" {
         color "$color.fg-muted"
     }
     part "key-binding-editor.conflict" { margin 0; color "$color.warning"; }
+    part "key-binding-editor.unsaved" {
+        padding-left "$space.xs"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
     part "toolbar-editor.status:error" { color "$color.danger"; }
     part "key-binding-editor.status:error" { color "$color.danger"; }
     part "column-editor.status:error" { color "$color.danger"; }
@@ -3492,13 +3497,9 @@ theme "default" mode="system" {
     part "invitation.done" { margin 0; color "$color.success"; }
     part "scheduling.answer" { display "flex"; flex-direction "column"; gap "$space.sm"; }
     part "scheduling.answer.buttons" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
-    part "scheduling.answer.confirm" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "1px solid $color.accent"; border-radius "$radius.md"; }
-    part "scheduling.answer.confirm.text" { margin 0; }
     part "scheduling.propose" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
     part "scheduling.propose.intro" { margin 0; }
-    part "scheduling.propose.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "scheduling.forward" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
-    part "scheduling.forward.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "scheduling.scope" { display "flex"; flex-wrap "wrap"; gap "$space.md"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
     part "scheduling.attendees" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
     part "scheduling.attendee-list" { display "flex"; flex-direction "column"; gap "$space.xs"; }
@@ -3656,7 +3657,6 @@ theme "default" mode="system" {
     part "exchange-rules.server.item" { display "flex"; align-items "center"; gap "$space.sm"; }
     part "exchange-rules.server.origin" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "exchange-rules.server.note" { font-size "$font-size.xs"; color "$color.warning"; }
-    part "exchange-rules.server.confirm" { display "flex"; align-items "center"; gap "$space.xs"; }
     part "exchange-rules.empty" { margin 0; color "$color.fg-muted"; }
     part "exchange.categories" { gap "$space.xxs"; margin "$space.xxs" 0; }
     part "exchange.chip" { display "inline-flex"; align-items "center"; gap "$space.xxs"; padding 0 "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; }
@@ -3710,7 +3710,6 @@ theme "default" mode="system" {
     part "exchange.status.warning" { color "$color.warning"; }
     part "exchange.dialog" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 360; max-width 640; padding "$space.md"; }
     part "exchange.intro" { margin 0; }
-    part "exchange.question" { margin 0; font-weight "$font-weight.medium"; }
     part "exchange.notice" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
     part "exchange.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "exchange.problem" { margin 0; color "$color.danger"; }

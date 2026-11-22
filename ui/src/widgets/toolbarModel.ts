@@ -17,6 +17,7 @@ import type {
 import { DEFAULT_TOOLBAR_SETTINGS } from "../api/normalize";
 import { normalizeCombo } from "../actions/keys";
 import { resolveMenu } from "../features/menus";
+import { sameJson } from "../text/json";
 
 /** What a toolbar without its own settings does (`ToolbarSettings::default()`). */
 export { DEFAULT_TOOLBAR_SETTINGS };
@@ -34,10 +35,6 @@ export function displayOf(item: Extract<ToolbarItem, { type: "action" }>): ItemD
   return item.display ?? "icon-label";
 }
 
-function sameArgs(a: readonly JsonValue[], b: readonly JsonValue[]): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 /**
  * The key bound to `action` + `args` in `keyContext`, else in `global`
  * (the last binding wins, like the key matcher), `null` when none.
@@ -51,7 +48,7 @@ export function bindingOf(
   const find = (context: string) => {
     for (let i = layout.keys.length - 1; i >= 0; i--) {
       const k = layout.keys[i];
-      if (k?.context === context && k.action === action && sameArgs(k.args, args)) {
+      if (k?.context === context && k.action === action && sameJson(k.args, args)) {
         return k.key;
       }
     }

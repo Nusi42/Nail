@@ -9,6 +9,17 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { control, type NailServer } from "./nail";
 import { composerWindow } from "./views";
 
+/**
+ * Lengthens the composer's autosave (`__nailAutosaveMs`, read by the UI) for
+ * the pages `page` opens: scenarios that close a composer with unsaved
+ * changes must not race it.
+ */
+export async function lengthenAutosave(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    (globalThis as Record<string, unknown>).__nailAutosaveMs = 10 * 60 * 1000;
+  });
+}
+
 /** The recipient most scenarios write to (a contact of the demo data). */
 export const GRACE = "grace@navy.example";
 

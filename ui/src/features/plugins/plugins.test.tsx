@@ -20,7 +20,9 @@ import { permissionMessageId } from "./messages";
 import { crashPlugin } from "./mockHost";
 import { PluginDialogs, footerButtons } from "./PluginDialogs";
 import { PluginNotifications, TOAST_MS } from "./PluginNotifications";
-import { UNINSTALL_DIALOG, UninstallDialog } from "./PluginManager";
+import { PluginManagerDialog, UNINSTALL_DIALOG, UninstallDialog } from "./PluginManager";
+import { closeGuardOf } from "../../layout/closeGuard";
+import { WindowInstanceContext } from "../../state/windows";
 import { pluginsStoreFor } from "./store";
 import {
   ALL_GRANTS,
@@ -33,6 +35,8 @@ import {
 } from "./testUtil";
 import { PluginTree } from "./tree/PluginTree";
 import { WindowLayer } from "../../layout/WindowLayer";
+import { NodeView } from "../../layout/LayoutRenderer";
+import { SettingsSaveBar } from "../../widgets/dialog";
 import { requestsOf } from "../../test/env";
 
 function openDialog(env: Env, dialog: Partial<PluginDialog> & { spec: PluginDialog["spec"] }) {
@@ -810,12 +814,21 @@ describe("install dialog", () => {
   });
 });
 
+/** The "Unsaved changes" bar (R6: the manager's drafts save through it). */
+const saveBar = () => screen.queryByRole("group", { name: "Unsaved changes to “Plug-ins”" });
+
 describe("plug-in manager", () => {
   async function renderManager() {
     const env = createEnv();
     await installFollowUp(env);
     const unsubscribe = wireEvents(env);
-    renderNode(widget("plugin-manager"), env);
+    renderWithProviders(
+      <>
+        <NodeView node={widget("plugin-manager")} path="t" />
+        <SettingsSaveBar name="Plug-ins" />
+      </>,
+      env,
+    );
     const row = must(
       (await screen.findByRole("heading", { name: "Follow-up 1.0.0" })).closest("li"),
     );
@@ -831,9 +844,38 @@ describe("plug-in manager", () => {
     ).toBeInTheDocument();
     const toggle = within(row).getByRole("switch", { name: "Follow-up is on" });
     expect(toggle).toBeChecked();
+    expect(saveBar()).toBeNull();
+    // R6: the switch is a settings draft, written with the bar's Save.
     await user.click(toggle);
+    expect(toggle).not.toBeChecked();
+    expect(requestsOf(env, "DisablePlugin")).toHaveLength(0);
+    await user.click(within(must(saveBar())).getByRole("button", { name: "Save" }));
     expect(requestsOf(env, "DisablePlugin")).toHaveLength(1);
     await waitFor(() => expect(within(row).getByText("Off")).toBeInTheDocument());
+    unsubscribe();
+  });
+
+  it("gives the manager's own window the save bar and asks before it closes (R6 review)", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    await installFollowUp(env);
+    const unsubscribe = wireEvents(env);
+    renderWithProviders(
+      <WindowInstanceContext.Provider value={MANAGER_DIALOG}>
+        <PluginManagerDialog />
+      </WindowInstanceContext.Provider>,
+      env,
+    );
+    const row = must(
+      (await screen.findByRole("heading", { name: "Follow-up 1.0.0" })).closest("li"),
+    );
+    await user.click(within(row).getByRole("switch", { name: "Follow-up is on" }));
+    expect(must(closeGuardOf(env.store, MANAGER_DIALOG)).isDirty()).toBe(true);
+    await user.click(within(must(saveBar())).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(requestsOf(env, "DisablePlugin")).toHaveLength(1);
+    });
+    expect(must(closeGuardOf(env.store, MANAGER_DIALOG)).isDirty()).toBe(false);
     unsubscribe();
   });
 
@@ -843,11 +885,11 @@ describe("plug-in manager", () => {
     const show = within(row).getByRole("button", { name: "Permissions" });
     await user.click(show);
     expect(show).toHaveAttribute("aria-expanded", "true");
-    const save = within(row).getByRole("button", { name: "Save permissions" });
-    expect(save).toBeDisabled();
+    expect(saveBar()).toBeNull();
     const notifications = within(row).getByRole("group", { name: "Show notifications" });
     await user.click(within(notifications).getByRole("radio", { name: "Deny" }));
-    await user.click(save);
+    expect(requestsOf(env, "UpdatePluginGrants")).toHaveLength(0);
+    await user.click(within(must(saveBar())).getByRole("button", { name: "Save" }));
     expect(must(requestsOf(env, "UpdatePluginGrants")[0]).grants.map((g) => g.permission)).toEqual([
       "mail.read",
       "ui.dialogs",
@@ -897,13 +939,16 @@ describe("plug-in manager", () => {
     expect(days).toHaveValue(1);
     await user.clear(days);
     await user.type(days, "99");
-    await user.click(within(row).getByRole("button", { name: "Save settings" }));
+    expect(requestsOf(env, "UpdatePluginSettings")).toHaveLength(0);
+    await user.click(within(must(saveBar())).getByRole("button", { name: "Save" }));
     expect(await within(row).findByRole("alert")).toHaveTextContent(
       "These settings have invalid values: days",
     );
+    // A refused save keeps the bar (and the edits).
+    expect(saveBar()).not.toBeNull();
     await user.clear(days);
     await user.type(days, "3");
-    await user.click(within(row).getByRole("button", { name: "Save settings" }));
+    await user.click(within(must(saveBar())).getByRole("button", { name: "Save" }));
     expect(await within(row).findByText("Settings saved.")).toBeInTheDocument();
     expect(requestsOf(env, "UpdatePluginSettings").at(-1)?.values).toEqual({ days: 3 });
     unsubscribe();

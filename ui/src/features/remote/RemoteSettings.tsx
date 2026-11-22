@@ -21,7 +21,7 @@ import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { NumberField, SelectField, TextAreaField } from "../../widgets/forms";
-import { sameJson, useSettingsForm } from "../settings/draft";
+import { useSettingsForm } from "../settings/draft";
 import { ConfirmButton, InputField, Toggle } from "./fields";
 import {
   ALL_INTERFACES,
@@ -37,6 +37,7 @@ import {
   type BindChoice,
 } from "./model";
 import { remoteKeys, useRemoteUi, type RemoteUi } from "./queries";
+import { sameJson } from "../../text/json";
 
 /** The allowed networks as the text area shows them (one per line). */
 export function networksText(networks: readonly string[]): string {

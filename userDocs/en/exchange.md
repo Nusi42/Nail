@@ -153,9 +153,11 @@ Exchange can run them, so they work while Nail is closed; the others run in
 Nail. The rule list shows for each rule where it runs on each Exchange
 account, and why it stays in Nail (for example "uses a search query").
 **Settings → Server rules & vacation** shows every inbox rule on the server:
-rules created in Outlook can be switched on or off or deleted there, and
+rules created in Outlook can be switched on or off (with the section's
+**Save**) or deleted there (**Delete…** asks first: **Delete rule**), and
 **Sync now** writes your rules again. **Run rules on the server where
-Exchange can** switches the placing off for an account.
+Exchange can** switches the placing off for an account; it waits for
+**Save** too.
 
 ## Booking a room
 

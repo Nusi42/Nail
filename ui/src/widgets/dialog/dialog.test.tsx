@@ -5,7 +5,8 @@
  */
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { NailError } from "../../api/client";
 import type { Os } from "../../api/generated";
 import { violations } from "../../test/axe";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
@@ -15,6 +16,8 @@ import { DialogFooter } from "./DialogFooter";
 import { DialogForm, isMultilineSubmit } from "./DialogForm";
 import { DialogOsContext } from "./dialogOs";
 import { footerOrder, osOfNavigator, viewerOs } from "./order";
+import { askInWindow, pendingSlot } from "./pending";
+import { askQuestion, questionOf, QuestionWindow } from "./QuestionWindow";
 import { SettingsSaveBar } from "./SettingsSaveBar";
 import {
   discardSettingsDrafts,
@@ -459,5 +462,132 @@ describe("SettingsSaveBar (R6)", () => {
     expect(draft.discard).toHaveBeenCalledOnce();
     view.unmount();
     expect(settingsDirty(env.store)).toBe(false);
+  });
+});
+
+describe("SettingsSaveBar for screen readers (R6 review)", () => {
+  /** One draft widget, its save failing while `fail` is set, and the section's title. */
+  function Section({ fail }: { fail: () => boolean }) {
+    const [saved, setSaved] = useState("a");
+    const [value, setValue] = useState("a");
+    const title = useRef<HTMLHeadingElement>(null);
+    useSettingsDraft("probe", {
+      dirty: value !== saved,
+      save: () => {
+        if (fail()) return false;
+        setSaved(value);
+        return true;
+      },
+      discard: () => {
+        setValue(saved);
+      },
+    });
+    return (
+      <>
+        <h2 ref={title} tabIndex={-1}>
+          Mail
+        </h2>
+        <label>
+          probe
+          <input
+            value={value}
+            onChange={(event) => {
+              setValue(event.target.value);
+            }}
+          />
+        </label>
+        <SettingsSaveBar name="Mail" focusAfter={title} />
+      </>
+    );
+  }
+
+  const status = (container: HTMLElement) =>
+    must(container.querySelector('[data-part="settings-save-bar.status"]'));
+
+  it("announces unsaved, saved and discarded changes politely", async () => {
+    const user = userEvent.setup();
+    const { container } = renderOn("windows", <Section fail={() => false} />);
+    expect(status(container)).toHaveAttribute("aria-live", "polite");
+    expect(status(container)).toHaveTextContent("");
+    await user.type(screen.getByRole("textbox", { name: "probe" }), "b");
+    expect(status(container)).toHaveTextContent("Unsaved changes to “Mail”");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(status(container)).toHaveTextContent("Changes saved.");
+    });
+    await user.type(screen.getByRole("textbox", { name: "probe" }), "c");
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    expect(status(container)).toHaveTextContent("Changes discarded.");
+  });
+
+  it("moves the focus to the section's title when the bar goes, back to Save when it fails", async () => {
+    const user = userEvent.setup();
+    let failing = true;
+    renderOn("windows", <Section fail={() => failing} />);
+    await user.type(screen.getByRole("textbox", { name: "probe" }), "b");
+    const save = screen.getByRole("button", { name: "Save" });
+    save.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();
+    });
+    failing = false;
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Mail" })).toHaveFocus();
+    });
+    await user.type(screen.getByRole("textbox", { name: "probe" }), "c");
+    screen.getByRole("button", { name: "Discard" }).focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("heading", { name: "Mail" })).toHaveFocus();
+  });
+});
+
+describe("pending questions (R6 review)", () => {
+  it("keep one question per kind and store, and forget only their own", () => {
+    const env = createEnv();
+    const other = createEnv();
+    const slot = pendingSlot<{ id: number }>();
+    const first = { id: 1 };
+    askInWindow(slot, env.store, "probe-question", first);
+    expect(env.store.getState().windows).toContain("probe-question");
+    expect(slot.get(env.store)).toBe(first);
+    expect(slot.get(other.store)).toBeNull();
+    // A newer question stays when the window of the older one goes.
+    const second = { id: 2 };
+    slot.set(env.store, second);
+    slot.forget(env.store, first);
+    expect(slot.get(env.store)).toBe(second);
+    slot.forget(env.store, second);
+    expect(slot.get(env.store)).toBeNull();
+  });
+
+  it("a question window runs the verb, keeps the window with the reason when it fails, and forgets on close", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    let fails = true;
+    const run = vi.fn(() => {
+      if (fails) throw new NailError("conflict", "busy", { id: "common-cancel" });
+    });
+    askQuestion(env.store, "probe-question", { question: "Drop it?", action: "Drop it", run });
+    const close = vi.fn();
+    const { unmount } = renderOn(
+      "windows",
+      <QuestionWindow name="probe-question" close={close} />,
+      env,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await user.click(screen.getByRole("button", { name: "Drop it" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Cancel");
+    expect(close).not.toHaveBeenCalled();
+    fails = false;
+    await user.click(screen.getByRole("button", { name: "Drop it" }));
+    await waitFor(() => {
+      expect(close).toHaveBeenCalledOnce();
+    });
+    unmount();
+    expect(questionOf(env.store, "probe-question")).toBeNull();
   });
 });

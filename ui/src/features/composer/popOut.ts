@@ -69,7 +69,12 @@ export function useComposerPopOutPreparer(ctx: ComposeContext): void {
   });
   useEffect(
     () =>
-      registerPopOutPreparer(COMPOSER_KIND, (window) => prepareComposerPopOut(ref.current, window)),
+      registerPopOutPreparer(
+        COMPOSER_KIND,
+        (window) => prepareComposerPopOut(ref.current, window),
+        // The draft is saved and the pop-out loads it.
+        { handsOverChanges: true },
+      ),
     [],
   );
 }

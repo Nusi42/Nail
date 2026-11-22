@@ -666,8 +666,7 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        (`searchValueText`, the query language's one quoting rule),
                        widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download; name /
                        badge / Open button → OpenAttachment, else download; ADR 0211) + OpenAttachment.tsx (the
-                       `mail-open-attachment` confirmation for flagged files) + MailConfirm.tsx (shared body of the
-                       link and attachment confirmations); widgets/plainTextLinks.ts + LinkedText.tsx (URLs of a
+                       `mail-open-attachment` confirmation for flagged files; both are `ConfirmDialog`s since R6); widgets/plainTextLinks.ts + LinkedText.tsx (URLs of a
                        plain-text body as anchors → OpenLink);
                        M5b (ADR 0109): features/shell/ (WP161: nav-rail, view-host, view.show / next / previous with
                        the open-the-window fallback), features/settings/ (WP163: settings-page, settings.section),
@@ -758,7 +757,9 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        bulk.ts + BulkConfirm.tsx, the list selection's `all` in actions/mailTargets.ts),
                        R6 (ADR 0239): widgets/dialog/ (DialogFooter by role + order.ts footerOrder / viewerOs,
                        dialogOs.ts DialogOsContext, ConfirmDialog, DialogForm, UnsavedPrompt, SettingsSaveBar +
-                       settingsDrafts.ts useSettingsDraft, skin.ts DIALOG_SKIN_CSS), layout/closeGuard.ts (the window
+                       settingsDrafts.ts useSettingsDraft, skin.ts DIALOG_SKIN_CSS, QuestionWindow.tsx askQuestion /
+                       QuestionWindow and pending.ts pendingSlot / usePendingQuestion, ADR 0244), text/json.ts
+                       (sameJson, the one plain-data equality), layout/closeGuard.ts (the window
                        layer's close guard: useCloseGuard, askToLeave, closeWindowNow, prompt window
                        `unsaved-changes:<key>`; installed by features/windows CloseGuardEffect),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
@@ -1608,14 +1609,14 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `page.routeWebSocket`).
 - WS3 (ADR 0232): `widgets/FolderPicker.tsx` is a combobox / listbox (`matchRank`, `filterFolders` uses it;
   `sourceFolderOf` and `ASKS_BEFORE_MOVE` in `features/mail-actions/move.ts`; part `folder-picker.notice`); the
-  confirmation is a `mail-confirm` group in the window. `isDraftMessage` = the `\Draft` flag; `isMisplacedInDrafts`
+  confirmation is a `ConfirmDialog` in the window (R6). `isDraftMessage` = the `\Draft` flag; `isMisplacedInDrafts`
   and action `mail.move-out-of-drafts` (`{role: "inbox"}`, in `layout.kdl`'s reader toolbar and menus). Core
   `draft_edit.rs`: `EditDraftMessage` on a non-`\Draft` message makes a draft without a server copy (the mock
   `mockDrafts.ts` likewise). E2e `r4-move-picker.spec.ts`.
 - Review fixes (ADR 0233): a draft's server copy is removed only when it is Nail's own copy or flagged `\Draft`
   (`composer.rs` `draft_copy_removal_in`); `DismissFailedOps` puts dismissed moves / deletes back
-  (`queue.rs` `revert_move_out`, `DismissedOps`). Shared UI pieces: `MailConfirm` (every mail confirmation, focus
-  back to Cancel after a failure), `FolderRowLabel`, `listOptionId` (`rovingFocus.ts`), `errorReason`
+  (`queue.rs` `revert_move_out`, `DismissedOps`). Shared UI pieces: the mail confirmations (since R6 the shared
+  `ConfirmDialog`, focus back to the same button after a failure), `FolderRowLabel`, `listOptionId` (`rovingFocus.ts`), `errorReason`
   (`api/client.ts`), `messageTarget` / `runOptionsOf`. E2e `r4-status-failures.spec.ts` (Retry and Dismiss with the
   mock's `imap-deny`).
 
@@ -1708,3 +1709,12 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`e2e/tests/a11y-windows.spec.ts`) reports Windows, Linux and macOS in its three modes and checks each window with
   `expectDialogPattern` (`e2e/support/windowTour.ts`: ×, no focused destructive button, the footer order, the
   roles and focus in `TOUR_FOOTERS`) and closes it with Esc; `openMailAs` / `unsavedPrompt` there serve the R6 specs.
+- R6 review (ADR 0244): `MailConfirm` removed; questions go through `askQuestion` / `QuestionWindow`
+  (`widgets/dialog/QuestionWindow.tsx`; `askSettingsQuestion` and `askPim` are that) or, for windows with their own
+  content, `pendingSlot` / `askInWindow` / `usePendingQuestion` (`widgets/dialog/pending.ts`). Contacts delete
+  through `features/pim/contactDelete.ts` (`pim-delete-contacts`). The key-binding editor keeps
+  `KeyBindingChange`s (`previewKeyBindings` in `features/customization/editorModel.ts`) until Save; the plug-in
+  manager, its window (save bar + settings guard) and the Exchange inbox-rule switches are settings drafts
+  (`exchange-server-rule-delete` asks). `popOutWindow` / the pop-out page's return await `mayMoveWindow` →
+  `confirmLeave` (`layout/closeGuard.ts`) unless the preparer was registered with `handsOverChanges` (the composer).
+  `SettingsSaveBar` has a polite `settings-save-bar.status` and `focusAfter`. E2e `r6-review-dialogs.spec.ts`.

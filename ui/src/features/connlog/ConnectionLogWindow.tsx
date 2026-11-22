@@ -16,7 +16,7 @@ import { TIME_MILLIS, formatDateTime } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useAccounts, useClient } from "../../state/queries";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
-import { ConfirmDialog } from "../../widgets/dialog";
+import { askInWindow, ConfirmDialog, pendingSlot, usePendingQuestion } from "../../widgets/dialog";
 import { SelectField } from "../../widgets/forms";
 import { downloadText, saveThroughPicker } from "../../widgets/attachmentSave";
 import {
@@ -64,12 +64,11 @@ interface PendingClear {
   title: string;
 }
 
-const pendingClear = new WeakMap<UiStore, PendingClear>();
+const pendingClear = pendingSlot<PendingClear>();
 
 /** Asks before clearing the log of `scope` (`connection-log-clear`). */
 export function askClear(ui: UiStore, scope: ConnectionLogScope, title: string): void {
-  pendingClear.set(ui, { scope, title });
-  ui.getState().openWindow(CLEAR_KIND);
+  askInWindow(pendingClear, ui, CLEAR_KIND, { scope, title });
 }
 
 /** Window `connection-log-clear`: "Clear the connection log of X?". */
@@ -78,16 +77,10 @@ export function ClearLogDialog({ close }: DialogProps) {
   const ui = useUiStoreApi();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [what] = useState(() => pendingClear.get(ui) ?? null);
+  // However the question ends (Cancel, ×, Esc, clearing), it is forgotten.
+  const what = usePendingQuestion(pendingClear, ui);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // However the question ends (Cancel, ×, Esc, clearing), it is forgotten.
-  useEffect(
-    () => () => {
-      if (what !== null && pendingClear.get(ui) === what) pendingClear.delete(ui);
-    },
-    [ui, what],
-  );
   const clear = async () => {
     if (what === null) return;
     setBusy(true);

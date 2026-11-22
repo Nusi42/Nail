@@ -34,6 +34,7 @@ import { contextTarget, type ContextTarget } from "../features/menus";
 import { messageTarget, rowTarget, type ListScope } from "./rowTargets";
 import { searchQueryOf, type SearchScope } from "../state/queries";
 import { useUiStoreApi, type UiStore } from "../state/uiStore";
+import { sameJson } from "../text/json";
 
 export {
   listRowTarget,
@@ -105,7 +106,7 @@ export function listSelectionFor(ui: UiStore): StoreApi<ListSelectionState> {
       }
     },
     setList: (list) => {
-      if (sameList(get().list, list)) return;
+      if (sameJson(get().list, list)) return;
       // Another folder, search or filter: "select all" meant the old list.
       set({ list, all: null });
     },
@@ -168,11 +169,6 @@ export function mailListOf(view: ListView): MailList | null {
   return view.threadRows
     ? { source: "conversations", folder_id: view.folderId }
     : { source: "messages", folder_id: view.folderId };
-}
-
-/** Whether two lists are the same query. */
-export function sameList(a: MailList | null, b: MailList | null): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /**

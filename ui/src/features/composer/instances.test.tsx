@@ -627,6 +627,9 @@ describe("window model", () => {
     "switch-vault-encryption",
     "delete-key",
     "remote-confirm",
+    // R6 review: deleting contacts, an Exchange server rule.
+    "pim-delete-contacts",
+    "exchange-server-rule-delete",
   ]);
 
   it("makes only confirmations modal", () => {

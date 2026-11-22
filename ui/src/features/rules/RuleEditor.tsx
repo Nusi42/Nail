@@ -76,6 +76,7 @@ import { TextView } from "./TextView";
 import { RuleGuard } from "./RulesGuard";
 import { RULE_DELETE_DIALOG, RULE_RUN_DIALOG } from "./windows";
 import type { ExplainedMatch } from "./types";
+import { sameJson } from "../../text/json";
 
 /** Maximum number of matches a test shows. */
 export const TEST_LIMIT = 50;
@@ -101,7 +102,7 @@ function editable(rule: Rule): Rule {
 
 /** Whether the editor's rule differs from the saved one. */
 export function ruleChanged(edited: Rule, saved: Rule): boolean {
-  return JSON.stringify(edited) !== JSON.stringify(saved);
+  return !sameJson(edited, saved);
 }
 
 /** A text-view error with its position. */

@@ -78,6 +78,30 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   with "Keep meeting" focused; the recurring-event question names its verb
   ("Save changes" / "Delete events").
 
+### Fixed — dialog pattern review (ADR 0244)
+
+- Deleting contacts asks (`pim-delete-contacts`: the card, the list, the
+  Delete key, and the contact editor's new `Delete…`).
+- `MailConfirm` is gone: the bulk, open-link and open-attachment questions
+  are `ConfirmDialog`s (a normal bulk action's verb has the focus); the
+  window sweep fails on a confirmation outside `ConfirmDialog` and on a
+  modal window without the shared footer.
+- The key-binding editor, the plug-in manager (on / off, permissions,
+  settings; its own window has the save bar) and the Exchange inbox-rule
+  switches are settings drafts; deleting an inbox rule asks in a question
+  window.
+- Calendar settings, New calendar and the contact group editor ask before
+  unsaved changes are lost; the invitation answer's confirmation and the
+  Propose / Forward forms use the shared footer.
+- Popping a window out or returning it asks first while it has unsaved
+  changes (the composer hands its draft over); Cancel during the prompt's
+  Save keeps the window.
+- One question window (`askQuestion` / `QuestionWindow`) and one pending
+  slot (`pendingSlot`) for every confirmation; one `sameJson` for plain-data
+  equality.
+- The settings save bar announces its state politely and moves the focus to
+  the section's title after Save or Discard.
+
 ### Changed — settings save with the bar (ADR 0242)
 
 - Every settings section applies nothing before the bar's Save, switches and

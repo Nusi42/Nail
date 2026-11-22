@@ -8,16 +8,21 @@
  * background jobs, CPU time, what the plug-in adds).
  *
  * Remove… asks first in the modal confirmation `plugin-uninstall` (a
- * destructive `ConfirmDialog`, R6 / ADR 0239).
+ * destructive `ConfirmDialog`, R6 / ADR 0239). On / off, the permissions,
+ * the confirmation policy and a plug-in's settings are settings drafts:
+ * nothing is written before the save bar's Save (the settings section's,
+ * or the dialog's own).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { errorMessageOf } from "../../api/client";
-import type { LocalizedMessage, PluginGrant, PluginInfo } from "../../api/generated";
+import type { PluginGrant, PluginInfo } from "../../api/generated";
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccounts, useClient } from "../../state/queries";
+import { sameJson } from "../../text/json";
+import { useFormNotice, useSettingsForm, useSettingsGuard } from "../settings/draft";
 import { useUi, useUiStoreApi, type UiStore } from "../../state/uiStore";
 import { PolicyEditor } from "../agents/PolicyEditor";
 import { Activity } from "./Activity";
@@ -32,7 +37,13 @@ import { Settings } from "./Settings";
 import { pluginsStoreFor, type InstallMode } from "./store";
 import { hasText } from "../../text/empty";
 import { useBusyAction } from "../../state/busyAction";
-import { ConfirmDialog } from "../../widgets/dialog";
+import {
+  askInWindow,
+  ConfirmDialog,
+  pendingSlot,
+  SettingsSaveBar,
+  usePendingQuestion,
+} from "../../widgets/dialog";
 
 /** Dialog name. */
 export const MANAGER_DIALOG = "plugin-manager";
@@ -45,12 +56,14 @@ interface PendingUninstall {
   name: string;
 }
 
-const pendingUninstall = new WeakMap<UiStore, PendingUninstall>();
+const pendingUninstall = pendingSlot<PendingUninstall>();
 
 /** Asks before removing `plugin` (`plugin-uninstall`). */
 export function askUninstall(store: UiStore, plugin: PluginInfo): void {
-  pendingUninstall.set(store, { id: plugin.id, name: plugin.manifest.name });
-  store.getState().openWindow(UNINSTALL_DIALOG);
+  askInWindow(pendingUninstall, store, UNINSTALL_DIALOG, {
+    id: plugin.id,
+    name: plugin.manifest.name,
+  });
 }
 
 /** Dialog `plugin-uninstall`: "Remove “X”?" — Remove plug-in (red), Cancel. */
@@ -59,15 +72,9 @@ export function UninstallDialog({ close }: DialogProps) {
   const store = useUiStoreApi();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [what] = useState(() => pendingUninstall.get(store) ?? null);
-  const { busy, problem, run } = useBusyAction();
   // However the question ends (Cancel, ×, Esc, the removal), it is forgotten.
-  useEffect(
-    () => () => {
-      if (what !== null && pendingUninstall.get(store) === what) pendingUninstall.delete(store);
-    },
-    [store, what],
-  );
+  const what = usePendingQuestion(pendingUninstall, store);
+  const { busy, problem, run } = useBusyAction();
   const uninstall = async () => {
     if (what === null) return;
     await run(async () => {
@@ -122,63 +129,55 @@ function sourceText(plugin: PluginInfo): { id: string; args: Record<string, stri
   }
 }
 
+/**
+ * A plug-in's permissions (R6, ADR 0239): a settings draft, written with the
+ * section's Save (`UpdatePluginGrants`); Discard drops the edits.
+ */
 function GrantsEditor({ plugin }: { plugin: PluginInfo }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
-  const [grants, setGrants] = useState<PluginGrant[]>(plugin.grants);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [saved, setSaved] = useState(false);
   const permissions = plugin.manifest.permissions ?? [];
-  const next = orderedGrants(permissions, grants);
-  const dirty = JSON.stringify(next) !== JSON.stringify(orderedGrants(permissions, plugin.grants));
-  const save = async () => {
-    setProblem(null);
-    setSaved(false);
-    try {
+  const { notice, outcome, clear, problems } = useFormNotice();
+  const form = useSettingsForm<PluginGrant[]>(plugin.grants, {
+    equal: (a, b) => sameJson(orderedGrants(permissions, a), orderedGrants(permissions, b)),
+    canSave: grantsValid,
+    save: async (grants) => {
       await client.request(
-        { type: "UpdatePluginGrants", plugin_id: plugin.id, grants: next },
+        {
+          type: "UpdatePluginGrants",
+          plugin_id: plugin.id,
+          grants: orderedGrants(permissions, grants),
+        },
         "Plugin",
       );
-      setSaved(true);
-      void queryClient.invalidateQueries({ queryKey: pluginKeys.all });
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    }
-  };
+      await queryClient.invalidateQueries({ queryKey: pluginKeys.all });
+    },
+    ...outcome("plugin-manager-grants-saved"),
+  });
+  const failure = problems([])[0];
   return (
     <div data-part="plugin-manager.grants">
-      {problem && (
+      {failure && (
         <p data-part="plugin-manager.error" role="alert">
-          {t(problem.id, problem.args)}
+          {t(failure.id, failure.args)}
         </p>
       )}
-      {saved && (
+      {notice !== null && !form.dirty && (
         <p data-part="plugin-manager.status" role="status">
-          {t("plugin-manager-grants-saved")}
+          {t(notice)}
         </p>
       )}
       <Permissions
         permissions={permissions}
-        grants={grants}
+        grants={form.value}
         accounts={accounts.data ?? []}
         onChange={(g) => {
-          setSaved(false);
-          setGrants(g);
+          clear();
+          form.set(g);
         }}
       />
-      {permissions.length > 0 && (
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="save-grants"
-          disabled={!dirty || !grantsValid(grants)}
-          onClick={() => void save()}
-        >
-          {t("plugin-manager-grants-save")}
-        </button>
-      )}
     </div>
   );
 }
@@ -195,20 +194,17 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
   const source = sourceText(plugin);
   const sectionId = `plugin-${plugin.id}-section`;
 
-  const run = async (work: () => Promise<unknown>) => {
-    await busyAction.run(async () => {
-      await work();
-      void queryClient.invalidateQueries({ queryKey: pluginKeys.all });
-    });
-  };
-
-  const toggle = () =>
-    run(() =>
-      client.request(
-        { type: plugin.enabled ? "DisablePlugin" : "EnablePlugin", plugin_id: plugin.id },
-        "Plugin",
-      ),
-    );
+  // On / off is a settings draft too (R6): written with the section's Save.
+  const enabled = useSettingsForm(plugin.enabled, {
+    save: (on) =>
+      busyAction.run(async () => {
+        await client.request(
+          { type: on ? "EnablePlugin" : "DisablePlugin", plugin_id: plugin.id },
+          "Plugin",
+        );
+        await queryClient.invalidateQueries({ queryKey: pluginKeys.all });
+      }),
+  });
 
   return (
     <li
@@ -232,9 +228,11 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
             type="checkbox"
             role="switch"
             data-action="toggle"
-            checked={plugin.enabled}
+            checked={enabled.value}
             disabled={busy}
-            onChange={() => void toggle()}
+            onChange={(event) => {
+              enabled.set(event.target.checked);
+            }}
           />
           {t("plugin-manager-enabled", { name: plugin.manifest.name })}
         </label>
@@ -381,11 +379,19 @@ export function PluginManager({ node }: WidgetProps) {
   );
 }
 
-/** Dialog `plugin-manager`. */
+/**
+ * Dialog `plugin-manager`: the same drafts as the settings section (R6), so
+ * the window has the section's save bar and asks before it closes with
+ * unsaved changes.
+ */
 export function PluginManagerDialog() {
+  const t = useT();
+  const name = t("plugin-manager-label");
+  useSettingsGuard(name);
   return (
     <div data-part="plugin-manager">
       <ManagerContent />
+      <SettingsSaveBar name={name} />
     </div>
   );
 }

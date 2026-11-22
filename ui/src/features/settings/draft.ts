@@ -19,6 +19,7 @@ import { errorMessageOf } from "../../api/client";
 import type { LocalizedMessage } from "../../api/generated";
 import { askToLeave, useCloseGuard, useGuardKey } from "../../layout/closeGuard";
 import { useUiStoreApi } from "../../state/uiStore";
+import { sameJson } from "../../text/json";
 import {
   discardSettingsDrafts,
   saveSettingsDrafts,
@@ -57,11 +58,6 @@ export interface SettingsForm<T> {
    * their own (typed lists), so they start again from the value.
    */
   revision: number;
-}
-
-/** Equal as JSON: settings values are plain data. */
-export function sameJson(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /** A settings form whose edits wait for the page's Save (see the module comment). */

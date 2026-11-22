@@ -53,6 +53,7 @@ import { useBusyAction } from "../../state/busyAction";
 import { EmptyDialog, LoadingDialog } from "../../widgets/DialogStates";
 import { ConfirmDialog, DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
 import { TextAreaField } from "../../widgets/forms";
+import { sameJson } from "../../text/json";
 
 export interface MeetingPanelProps {
   event: CalendarEvent;
@@ -455,7 +456,7 @@ export function SchedulingSettingsDialog({ close }: DialogProps) {
   const current = draft ?? settings.data ?? null;
   /** Saved: closing no longer asks. */
   const stored = useRef(false);
-  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(settings.data ?? null);
+  const dirty = draft !== null && !sameJson(draft, settings.data ?? null);
   /** Saves the settings: `true` when saved. */
   const persist = async (): Promise<boolean> => {
     if (current === null) return false;

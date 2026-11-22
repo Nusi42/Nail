@@ -480,7 +480,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           ? t("pim-scope-delete-intro", { title })
           : t("pim-delete-event-question", { title }),
       action: occurrence !== null ? t(`pim-delete-scope-${form.scope}`) : t("pim-delete-event"),
-      go: async () => {
+      run: async () => {
         await deleteEvent(ctx, event.id, occurrence === null ? "all" : form.scope, occurrence);
         finish();
         close();

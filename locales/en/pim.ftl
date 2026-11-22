@@ -25,6 +25,7 @@ pim-calendar-remove-task-list = Remove task list
 # The questions before something is lost (R6: modal confirmations).
 window-pim-delete-event = { pim-delete-event }
 window-pim-delete-task = { pim-delete-task }
+window-pim-delete-contacts = Delete contacts
 window-pim-delete-group = { pim-group-delete }
 window-pim-remove-source = { pim-remove-source }
 
@@ -32,13 +33,11 @@ window-pim-remove-source = { pim-remove-source }
 
 pim-delete = { common-delete }
 # An editor's Delete… (it asks first).
-pim-delete-ask = Delete…
+pim-delete-ask = { common-delete-ask }
 pim-delete-event = Delete event
 pim-delete-event-question = Delete the event “{ $title }”?
 pim-delete-task = Delete task
 pim-delete-task-question = Delete the task “{ $title }”?
-# The question's window was opened without a question (it was answered elsewhere).
-pim-confirm-gone = There is nothing to confirm any more.
 pim-editor-nothing = Nothing to edit.
 pim-editor-read-only = This item is read-only.
 pim-categories = Categories (separated by commas)
@@ -408,6 +407,17 @@ pim-contacts-delete =
        *[other] Delete { $count }
     }
 pim-contact-unnamed = (No name)
+# The question before contacts are deleted (card, list, editor); $name is the one contact's name.
+pim-delete-contacts-question =
+    { $count ->
+        [one] Delete the contact “{ $name }”?
+       *[other] Delete { $count } contacts?
+    }
+pim-delete-contacts-action =
+    { $count ->
+        [one] Delete contact
+       *[other] Delete { $count } contacts
+    }
 pim-contact-linked-count =
     { $count ->
         [one] Linked with one more contact

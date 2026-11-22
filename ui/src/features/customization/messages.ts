@@ -66,8 +66,6 @@ export function runtimeIds(): string[] {
     ...KEY_CONTEXTS.map((c) => `customize-keys-context-${c}`),
     "customize-saved",
     "customize-reset-done",
-    "customize-keys-added",
-    "customize-keys-removed",
     "inspector-hint",
     "inspector-hint-pinned",
     "customize-open-unsupported",

@@ -43,6 +43,7 @@ import { ConfirmDialog, DialogFooter, DialogForm, useCloseGuard } from "../../wi
 import { EmptyDialog, LoadingDialog, useCloseNow } from "../../widgets/DialogStates";
 import { useBusyAction } from "../../state/busyAction";
 import { useActiveMailView } from "../../state/hooks";
+import { sameJson } from "../../text/json";
 
 const KINDS: readonly ExchangeMailboxKind[] = EXCHANGE_MAILBOX_KIND_VALUES;
 const SHOWS = MAILBOX_SHOW_KEYS;
@@ -283,7 +284,7 @@ function MailboxEditor({
   };
   useCloseGuard({
     name: () => next.name ?? next.address,
-    isDirty: () => JSON.stringify({ settings, name }) !== JSON.stringify(initial),
+    isDirty: () => !sameJson({ settings, name }, initial),
     canSave: () => issueOf() === undefined,
     save,
   });

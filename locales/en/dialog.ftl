@@ -19,3 +19,8 @@ dialog-untitled = Untitled
 dialog-unsaved-gone = There are no unsaved changes any more.
 # The pinned bar of a settings section with unsaved changes; $name is the section.
 dialog-unsaved-bar = Unsaved changes to “{ $name }”
+# A question's window was opened without a question (it was answered elsewhere).
+dialog-question-gone = There is nothing to confirm any more.
+# The settings save bar's status for screen readers, once the bar went.
+dialog-settings-saved = Changes saved.
+dialog-settings-discarded = Changes discarded.

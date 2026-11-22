@@ -2,7 +2,7 @@
  * Opening an attachment the core flagged as risky (ADR 0211; the flags are
  * `MessageWarning` `dangerous-attachment`, ADR 0032): the card does not open
  * it at once but asks in the modal confirmation {@link MAIL_OPEN_ATTACHMENT_DIALOG}
- * ("Open anyway" / "Cancel", Cancel focused), as a flagged link does
+ * (a `ConfirmDialog`: "Open anyway" in red, Cancel focused), as a flagged link does
  * (`ReaderLinks.tsx`, ADR 0206). Only "Open anyway" runs the card's open.
  */
 import { useState } from "react";
@@ -11,7 +11,7 @@ import { useT } from "../i18n/I18nProvider";
 import type { DialogProps } from "../layout/dialogRegistry";
 import { useComposeContext } from "../state/hooks";
 import type { UiStore } from "../state/uiStore";
-import { MailConfirm, pendingSlot } from "./MailConfirm";
+import { ConfirmDialog, pendingSlot } from "./dialog";
 
 /** The confirmation's window kind (dialog name). */
 export const MAIL_OPEN_ATTACHMENT_DIALOG = "mail-open-attachment";
@@ -49,21 +49,26 @@ export function OpenAttachmentDialog({ close }: DialogProps) {
     close();
   };
   return (
-    <MailConfirm
+    <ConfirmDialog
       kind="open-attachment"
+      risk="destructive"
       question={t("mail-open-attachment-question")}
+      {...(what === null
+        ? {}
+        : {
+            detail: (
+              <p data-part="mail-confirm.warning">
+                {t(`security-risk-${what.risk}`, { name: what.name })}
+              </p>
+            ),
+          })}
+      action={t("mail-open-link-open")}
       canConfirm={what !== null}
       onConfirm={() => {
         done();
         what?.run();
       }}
-      onCancel={done}
-    >
-      {what !== null && (
-        <p data-part="mail-confirm.warning">
-          {t(`security-risk-${what.risk}`, { name: what.name })}
-        </p>
-      )}
-    </MailConfirm>
+      cancel={{ onClick: done }}
+    />
   );
 }

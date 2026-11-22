@@ -31,6 +31,8 @@ export const REMOVE_CALENDAR_DIALOG = "pim-remove-calendar";
 export const DELETE_EVENT_DIALOG = "pim-delete-event";
 /** "Delete the task …?" */
 export const DELETE_TASK_DIALOG = "pim-delete-task";
+/** "Delete the contact …?" / "Delete N contacts?" (card, list, editor). */
+export const DELETE_CONTACTS_DIALOG = "pim-delete-contacts";
 /** "Delete the group …?" (Contact groups). */
 export const DELETE_GROUP_DIALOG = "pim-delete-group";
 /** "Remove the source …?" (Calendars and address books). */
@@ -51,6 +53,7 @@ export const DIALOGS = [
   REMOVE_CALENDAR_DIALOG,
   DELETE_EVENT_DIALOG,
   DELETE_TASK_DIALOG,
+  DELETE_CONTACTS_DIALOG,
   DELETE_GROUP_DIALOG,
   REMOVE_SOURCE_DIALOG,
 ] as const;

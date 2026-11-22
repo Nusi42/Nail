@@ -436,6 +436,18 @@ export interface FooterExpectation {
 }
 
 /**
+ * A destructive confirmation (R6, ADR 0239 rule 5): the verb and Cancel in
+ * `os`'s order, the verb red, the focus on Cancel.
+ */
+export async function expectDestructiveConfirm(question: Locator, os: ViewerOs): Promise<void> {
+  await expectDialogFooter(question, { os, roles: ["primary", "cancel"], focused: "cancel" });
+  await expect(question.locator('button[data-role="primary"]')).toHaveAttribute(
+    "data-variant",
+    "danger",
+  );
+}
+
+/**
  * Checks the shared footer of `dialog` (its last `dialog.footer`): the
  * system it follows, its end group's buttons in that system's order by
  * role, the start button and the focused button.
@@ -501,13 +513,26 @@ export async function expectDialogPattern(
     window.locator('button[data-variant="danger"]:focus'),
     `${name}: a destructive button has the focus`,
   ).toHaveCount(0);
+  // Every confirmation is the shared one (no hand-written question body).
+  await expect(
+    window.locator('[data-confirm]:not([data-part="dialog.confirm"])'),
+    `${name}: a confirmation outside the shared ConfirmDialog`,
+  ).toHaveCount(0);
   const known = TOUR_FOOTERS[name];
   if (known !== undefined) {
     await expectDialogFooter(window, { os, ...known });
     return;
   }
   const footers = window.locator('[data-part="dialog.footer"]');
-  if ((await footers.count()) === 0) return;
+  if ((await footers.count()) === 0) {
+    // A modal confirmation always ends with the shared footer.
+    const modal = await window.evaluate((el) => el.hasAttribute("data-modal"));
+    const buttons = await window
+      .locator('[data-part="window.body"] button[data-part="form.button"]')
+      .count();
+    expect(modal && buttons > 0, `${name}: a modal window without the shared footer`).toBe(false);
+    return;
+  }
   const footer = footers.last();
   if (!(await footer.isVisible())) return;
   await expect(footer, `${name}: footer system`).toHaveAttribute("data-os", os);

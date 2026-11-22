@@ -49,6 +49,7 @@ import { useThemeName } from "./ThemeEditor";
 import { previewColors } from "./themes";
 import { pickerColor, pixels } from "./tokens";
 import { useSettingsDraft } from "../../widgets/dialog";
+import { sameJson } from "../../text/json";
 
 function Swatch({ geom, color }: { geom: string; color: string }) {
   useGeometry(geom, { "background-color": color });
@@ -388,7 +389,7 @@ function useAppearanceDraft(saved: Appearance | undefined) {
     );
   const changedOverrides =
     draft.overrides !== undefined &&
-    JSON.stringify(overridesOf(draft.overrides)) !== JSON.stringify(overridesOf(savedOverrides));
+    !sameJson(overridesOf(draft.overrides), overridesOf(savedOverrides));
   const changedTheme =
     saved !== undefined && draft.theme !== undefined && draft.theme !== saved.settings.theme;
   const dirty = changedTheme || changedPrefs || changedOverrides;

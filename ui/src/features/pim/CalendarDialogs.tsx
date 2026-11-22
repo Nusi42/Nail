@@ -17,13 +17,20 @@ import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { isTaskList, removalOf } from "./calendarGroups";
 import { CALENDAR_COLORS, isCssColor, paletteColorOf } from "./colors";
-import { Problem, Swatch, geomId, problemOf, useChangeContext, SubmitActions } from "./common";
+import {
+  Problem,
+  Swatch,
+  geomId,
+  problemOf,
+  useChangeContext,
+  useEditorSave,
+  SubmitActions,
+} from "./common";
 import { pimWrite, useCalendars, usePimSources } from "./queries";
 import { usePim } from "./store";
 import { sourceName } from "./Sources";
 import { TextField } from "../../widgets/forms";
 import { ConfirmDialog, DialogFooter } from "../../widgets/dialog";
-import { useBusyAction } from "../../state/busyAction";
 
 /** Problems of a calendar's name and colour before asking the core. */
 export function calendarFormIssues(name: string, color: string): LocalizedMessage | null {
@@ -119,6 +126,33 @@ function useCalendarForm(
   return { name, setName, color, setColor, reminders, setReminders };
 }
 
+/**
+ * A calendar dialog's form and its saving (R6, ADR 0239): the shared editor
+ * save (`useEditorSave`), so ×, Esc and Cancel ask with the shared prompt
+ * while the name, colour or reminders changed; `write` stores the values.
+ */
+function useCalendarEditor(
+  initial: () => { name: string; color: string; reminders: boolean },
+  write: (form: CalendarForm) => Promise<void>,
+  close: () => void,
+) {
+  const form = useCalendarForm(initial);
+  const save = useEditorSave({
+    // An empty name: the prompt says "Untitled".
+    name: form.name.trim(),
+    state: { name: form.name, color: form.color, reminders: form.reminders },
+    readOnly: false,
+    check: () => calendarFormIssues(form.name, form.color),
+    write: () => write(form),
+    close,
+  });
+  const onSubmit = (event: SubmitEvent) => {
+    event.preventDefault();
+    void save.submit();
+  };
+  return { form, busy: save.busy, problem: save.problem, onSubmit };
+}
+
 function CalendarFields({ name, setName, color, setColor, reminders, setReminders }: CalendarForm) {
   const t = useT();
   const ids = { reminders: useId() };
@@ -164,40 +198,34 @@ export function CalendarSettingsDialog({ close }: DialogProps) {
 function CalendarSettingsForm({ calendar, close }: { calendar: Calendar; close: () => void }) {
   const t = useT();
   const ctx = useChangeContext();
-  const form = useCalendarForm(() => ({
-    name: calendar.settings.name,
-    color: calendar.settings.color ?? "",
-    reminders: calendar.settings.reminders,
-  }));
-  const { busy, problem, setProblem, run } = useBusyAction();
-
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const issue = calendarFormIssues(form.name, form.color);
-    setProblem(issue);
-    if (issue) return;
-    const settings: CalendarSettings = {
-      ...calendar.settings,
-      name: form.name.trim(),
-      color: form.color.trim() || null,
-      reminders: form.reminders,
-    };
-    await run(async () => {
+  const { form, busy, problem, onSubmit } = useCalendarEditor(
+    () => ({
+      name: calendar.settings.name,
+      color: calendar.settings.color ?? "",
+      reminders: calendar.settings.reminders,
+    }),
+    async (values) => {
+      const settings: CalendarSettings = {
+        ...calendar.settings,
+        name: values.name.trim(),
+        color: values.color.trim() || null,
+        reminders: values.reminders,
+      };
       await pimWrite(
         ctx,
         { type: "UpdateCalendar", calendar_id: calendar.id, settings },
         "CalendarSaved",
       );
-      close();
-    });
-  };
+    },
+    close,
+  );
 
   return (
     <form
       data-part="pim.calendar-dialog"
       aria-label={t("pim-calendar-settings-of", { name: calendar.settings.name })}
       aria-busy={busy}
-      onSubmit={(e) => void submit(e)}
+      onSubmit={onSubmit}
     >
       {calendar.read_only && <p data-part="pim.editor.hint">{t("pim-calendar-read-only-hint")}</p>}
       <CalendarFields {...form} />
@@ -249,35 +277,20 @@ function NewCalendarForm({
   const t = useT();
   const ctx = useChangeContext();
   const sources = usePimSources();
-  const form = useCalendarForm(() => ({
-    name: "",
-    color: unusedColor(calendars),
-    reminders: true,
-  }));
-  const { busy, problem, setProblem, run } = useBusyAction();
-  const where = sourceName(
-    t,
-    sources.data?.find((s) => s.id === sourceId),
-    sourceId,
-  );
-
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const issue = calendarFormIssues(form.name, form.color);
-    setProblem(issue);
-    if (issue) return;
-    await run(async () => {
+  const { form, busy, problem, onSubmit } = useCalendarEditor(
+    () => ({ name: "", color: unusedColor(calendars), reminders: true }),
+    async (values) => {
       await pimWrite(
         ctx,
         {
           type: "CreateCalendar",
           source_id: sourceId,
           settings: {
-            name: form.name.trim(),
+            name: values.name.trim(),
             description: null,
-            color: form.color.trim() || null,
+            color: values.color.trim() || null,
             visible: true,
-            reminders: form.reminders,
+            reminders: values.reminders,
             default_alarms: [],
             order: calendars.length,
           },
@@ -285,9 +298,14 @@ function NewCalendarForm({
         },
         "CalendarSaved",
       );
-      close();
-    });
-  };
+    },
+    close,
+  );
+  const where = sourceName(
+    t,
+    sources.data?.find((s) => s.id === sourceId),
+    sourceId,
+  );
 
   const heading =
     component === "task"
@@ -299,7 +317,7 @@ function NewCalendarForm({
       data-component={component}
       aria-label={heading}
       aria-busy={busy}
-      onSubmit={(e) => void submit(e)}
+      onSubmit={onSubmit}
     >
       <p data-part="pim.editor.hint">{heading}</p>
       <CalendarFields {...form} />

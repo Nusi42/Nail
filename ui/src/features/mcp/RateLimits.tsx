@@ -13,6 +13,7 @@ import { useClient } from "../../state/queries";
 import { CheckField, NumberField } from "../../widgets/forms";
 import { useSettingsForm } from "../settings/draft";
 import { DEFAULT_RATE_LIMITS, MAX_RATE_LIMIT, mcpKeys, rateLimitIssues } from "./queries";
+import { sameJson } from "../../text/json";
 
 /** The limits in display order. */
 export const RATE_LIMIT_KEYS = [
@@ -133,7 +134,7 @@ export function RateLimitsEditor({ client }: { client: McpClient }) {
           type="button"
           data-part="form.button"
           data-action="reset-rate-limits"
-          disabled={disabled || JSON.stringify(limits) === JSON.stringify(DEFAULT_RATE_LIMITS)}
+          disabled={disabled || sameJson(limits, DEFAULT_RATE_LIMITS)}
           onClick={() => {
             form.set({ ...DEFAULT_RATE_LIMITS });
             setNotice(null);

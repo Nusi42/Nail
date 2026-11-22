@@ -28,7 +28,7 @@ const openWorkInbox = (page: Page, count: number) => mail.openWorkInbox(page, se
 
 const summary = (page: Page) => page.locator('[data-part="message-list.selection-summary"]');
 const bulkQuestion = (page: Page) =>
-  page.locator('[data-part="mail-confirm"][data-confirm="bulk"]');
+  page.locator('[data-part="dialog.confirm"][data-confirm="bulk"]');
 const selectedRows = (page: Page) => messageRows(page).and(page.locator('[aria-selected="true"]'));
 
 /** The number "All N selected" shows. */
@@ -165,11 +165,12 @@ test("Esc clears select all; Cancel acts on nothing", async ({ page }) => {
   await selectAll(page, messageRow(page, subjectOf(COUNT)));
   expect(await selectedCount(page)).toBeGreaterThan(COUNT);
 
-  // Archive (e), then Cancel: nothing moves, the selection stays.
+  // Archive (e), then Cancel: nothing moves, the selection stays. Archiving
+  // is a normal confirmation (R6): its verb has the focus.
   await messageList(page).focus();
   await page.keyboard.press("e");
   const question = bulkQuestion(page);
-  await expect(question.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await expect(question.getByRole("button", { name: "Archive all" })).toBeFocused();
   await question.getByRole("button", { name: "Cancel" }).click();
   await expect(question).toBeHidden();
   expect(await onServer("INBOX")).toBe(COUNT);

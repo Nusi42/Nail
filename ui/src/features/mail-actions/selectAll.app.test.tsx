@@ -96,7 +96,7 @@ async function readMarkSettled(env: Env): Promise<void> {
 /** The open question before an action on the whole list. */
 const bulkQuestion = () =>
   settleUntil(
-    () => document.querySelector<HTMLElement>('[data-part="mail-confirm"][data-confirm="bulk"]'),
+    () => document.querySelector<HTMLElement>('[data-part="dialog.confirm"][data-confirm="bulk"]'),
     "the question",
   );
 

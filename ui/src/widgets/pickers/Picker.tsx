@@ -67,6 +67,7 @@ import {
   type TreeMove,
 } from "./tree";
 import type { PickerKind, PickerOption, PickerProps } from "./types";
+import { sameJson } from "../../text/json";
 
 /** Every part a picker renders (the theme styles these). */
 export const PICKER_PARTS = [
@@ -350,7 +351,7 @@ export function Picker({
         { width: popup.getBoundingClientRect().width, room: popupRoom(popup) },
         { width: window.innerWidth, height: window.innerHeight },
       );
-      setPlace((p) => (JSON.stringify(p) === JSON.stringify(next) ? p : next));
+      setPlace((p) => (sameJson(p, next) ? p : next));
     };
     measure();
     window.addEventListener("scroll", measure, true);

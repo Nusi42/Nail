@@ -21,6 +21,7 @@ import { useDateFormat, type DateFormatter } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { initialsOf } from "./ContactList";
+import { askDeleteContacts } from "./contactDelete";
 import { formatDay, formatPimTime } from "./fmt";
 import { CONTACT_DIALOG } from "./names";
 import {
@@ -237,14 +238,16 @@ function ContactDetails({ contact }: { contact: Contact }) {
               data-variant="danger"
               data-action="delete"
               onClick={() => {
-                void run({ type: "DeleteContacts", contact_ids: [contact.id] }, "PimDeleted").then(
-                  () => {
+                askDeleteContacts(ctx, t, {
+                  ids: [contact.id],
+                  name,
+                  onDeleted: () => {
                     ctx.pim.getState().showContact(null);
                   },
-                );
+                });
               }}
             >
-              {t("pim-delete")}
+              {t("pim-delete-ask")}
             </button>
           )}
         </div>

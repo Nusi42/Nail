@@ -28,6 +28,7 @@ import { useLeaveDrafts, useSettingsForm } from "../settings/draft";
 import { PickerField } from "../../widgets/pickers";
 import { BODY_MODES, TRI_CHOICES, type Tri } from "./model";
 import { useSync } from "./store";
+import { sameJson } from "../../text/json";
 
 export const syncKeys = {
   policy: (folderId: FolderId | null) => ["sync", "policy", folderId] as const,
@@ -251,7 +252,7 @@ function DialogPolicyForm({ policy, close }: { policy: FolderSyncPolicy; close: 
   const [failure, setFailure] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const issues = policyDraftIssues(draft);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const dirty = !sameJson(draft, initial);
   const save = async (): Promise<boolean> => {
     if (issues.length > 0) return false;
     setBusy(true);

@@ -140,7 +140,7 @@ export function SourcesPanel() {
                       }),
                       detail: t("pim-remove-source-note"),
                       action: t("pim-remove-source"),
-                      go: async () => {
+                      run: async () => {
                         await pimWrite(
                           ctx,
                           { type: "RemovePimSource", source_id: source.id },

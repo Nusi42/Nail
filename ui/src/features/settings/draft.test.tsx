@@ -204,7 +204,7 @@ describe("settings questions", () => {
     expect(run).toHaveBeenCalledOnce();
   });
 
-  it("offer only Cancel when nothing was asked", async () => {
+  it("say so and offer only Done when nothing was asked", async () => {
     const env = createEnv();
     const user = userEvent.setup();
     renderSettings(env, <Nothing />);
@@ -212,7 +212,13 @@ describe("settings questions", () => {
       env.store.getState().openWindow(ACCOUNT_REMOVE_DIALOG);
     });
     const question = await settingsQuestion();
-    expect(within(question).getByRole("button", { name: "Remove account" })).toBeDisabled();
+    expect(question).toHaveTextContent("There is nothing to confirm any more.");
+    expect(
+      within(question)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(expect.arrayContaining(["Done"]));
+    expect(within(question).queryByRole("button", { name: "Remove account" })).toBeNull();
     // Esc means Cancel.
     await user.keyboard("{Escape}");
     await waitFor(() => {

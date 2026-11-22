@@ -474,7 +474,7 @@ export function SettingsPage({ node }: WidgetProps) {
         <div data-part="settings-page.body" ref={body}>
           {section && <SectionCards key={section.id} section={section} />}
         </div>
-        <SettingsSaveBar name={sectionName} />
+        <SettingsSaveBar name={sectionName} focusAfter={title} />
       </div>
     </div>
   );

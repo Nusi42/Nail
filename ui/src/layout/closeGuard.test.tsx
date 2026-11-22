@@ -20,6 +20,7 @@ import {
   askToLeave,
   closeGuardOf,
   closeWindowNow,
+  confirmLeave,
   guardedWindowOf,
   promptWindowFor,
   useCloseGuard,
@@ -266,6 +267,54 @@ describe("the close guard (R6)", () => {
       true,
     );
     await settleQueries(env);
+  });
+});
+
+describe("the prompt's answers (R6 review)", () => {
+  it("Cancel while Save runs keeps the window, also once the save ends", async () => {
+    const user = userEvent.setup();
+    const env = setup();
+    await user.type(within(editor()).getByRole("textbox", { name: "Rule name" }), "Releases");
+    let finish: (ok: boolean) => void = () => undefined;
+    saveResult = () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      });
+    await user.keyboard("{Escape}");
+    await user.click(within(prompt()).getByRole("button", { name: "Save" }));
+    await user.click(within(prompt()).getByRole("button", { name: "Cancel" }));
+    await act(async () => {
+      finish(true);
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([EDITOR]);
+    });
+  });
+
+  it("confirmLeave resolves at once without changes, else with the prompt's answer", async () => {
+    const user = userEvent.setup();
+    const env = setup();
+    await expect(confirmLeave(env.store, EDITOR)).resolves.toBe(true);
+    await user.type(within(editor()).getByRole("textbox", { name: "Rule name" }), "Releases");
+    const answers: boolean[] = [];
+    const ask = async () => {
+      await act(async () => {
+        void confirmLeave(env.store, EDITOR).then((ok) => answers.push(ok));
+        await Promise.resolve();
+      });
+      return screen.findByRole("dialog", { name: "Unsaved changes" });
+    };
+    await user.click(within(await ask()).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(answers).toEqual([false]);
+    });
+    await user.click(within(await ask()).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(answers).toEqual([false, true]);
+    });
+    // Moving out was the caller's business: the window is still open.
+    expect(env.store.getState().windows).toEqual([EDITOR]);
   });
 });
 

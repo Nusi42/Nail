@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Appearance, ThemePreferences } from "../../api/generated";
 import { queryKeys, useClient } from "../../state/queries";
+import { sameJson } from "../../text/json";
 
 /** Query keys of this feature. */
 export const appearanceKeys = {
@@ -26,7 +27,7 @@ export function applyAppearance(queryClient: QueryClient, appearance: Appearance
   const switched =
     before?.active !== appearance.active ||
     before.settings.density !== appearance.settings.density ||
-    JSON.stringify(before.settings.overrides) !== JSON.stringify(appearance.settings.overrides);
+    !sameJson(before.settings.overrides, appearance.settings.overrides);
   if (switched) void queryClient.invalidateQueries({ queryKey: queryKeys.config });
 }
 

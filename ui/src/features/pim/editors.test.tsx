@@ -27,6 +27,7 @@ import { handlePimEvent } from ".";
 import { fireReminder } from "./mock";
 import {
   CONTACT_DIALOG,
+  DELETE_CONTACTS_DIALOG,
   DELETE_EVENT_DIALOG,
   DELETE_GROUP_DIALOG,
   DELETE_TASK_DIALOG,
@@ -46,6 +47,7 @@ import { localZone, makePimTime, todayIn } from "./time";
 import { stringMatching } from "../../test/matchers";
 import { inTimeZone, clickAndClose } from "../../test/env";
 import { must } from "../../test/must";
+import { saveThroughGuard } from "../../test/closeGuard";
 import { BERLIN } from "../../test/mockIds";
 
 const START_LABEL = "Start";
@@ -320,6 +322,15 @@ describe("event editor", () => {
   });
 });
 
+/** Contact groups with "Family" chosen. */
+async function openFamilyGroup() {
+  const user = userEvent.setup({ delay: null });
+  const env = createEnv();
+  renderWithProviders(<GroupsDialog />, env);
+  await user.click(await screen.findByRole("button", { name: "Family (2 members)" }));
+  return { user, env };
+}
+
 describe("contacts", () => {
   it("lists, searches, selects and shows contacts with linked ones", async () => {
     const user = userEvent.setup({ delay: null });
@@ -486,10 +497,7 @@ describe("contacts", () => {
   });
 
   it("asks before it deletes a group", async () => {
-    const user = userEvent.setup({ delay: null });
-    const env = createEnv();
-    renderWithProviders(<GroupsDialog />, env);
-    await user.click(await screen.findByRole("button", { name: "Family (2 members)" }));
+    const { user, env } = await openFamilyGroup();
     await user.click(screen.getByRole("button", { name: "Delete group…" }));
     // Nothing deleted before the answer.
     expect(pimOf(env).groups.some((g) => g.id === "grp-family")).toBe(true);
@@ -808,12 +816,98 @@ describe("R6: the editors' footer, questions and close guard", () => {
     // Cancel goes the way of × and Esc (the window's close, which the guard watches).
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(close).toHaveBeenCalledTimes(1);
-    let saved: boolean | undefined;
-    await act(async () => {
-      saved = await guard().save?.();
-    });
-    expect(saved).toBe(true);
-    expect(guard().isDirty()).toBe(false);
+    await saveThroughGuard(guard);
     expect(pimOf(env).events.find((e) => e.id === "ev-lunch")?.fields.title).toMatch(/with Ada$/);
+  });
+});
+
+describe("R6 review: deleting contacts asks, group edits are guarded", () => {
+  const renderContacts = (env: Env) =>
+    renderWithProviders(
+      <>
+        <NodeView node={widget("contact-list")} path="t/0" />
+        <NodeView node={widget("contact-card")} path="t/1" />
+      </>,
+      env,
+    );
+
+  it("asks before the card's Delete deletes one contact", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    renderContacts(env);
+    const list = await screen.findByRole("listbox", { name: "Contacts" });
+    await user.click(within(list).getByRole("option", { name: /Ada Lovelace/ }));
+    const card = (await screen.findByRole("heading", { name: "Ada Lovelace" })).closest("section");
+    await user.click(within(must(card)).getByRole("button", { name: "Delete…" }));
+    // Nothing deleted before the answer.
+    expect(pimOf(env).contacts.some((c) => c.id === "ct-ada")).toBe(true);
+    expect(pimQuestion(env.store, DELETE_CONTACTS_DIALOG)?.question).toBe(
+      "Delete the contact “Ada Lovelace”?",
+    );
+    await confirmPim(env, user, DELETE_CONTACTS_DIALOG, "Delete contact");
+    await waitFor(() => {
+      expect(pimOf(env).contacts.some((c) => c.id === "ct-ada")).toBe(false);
+    });
+  });
+
+  it("asks before the Delete key deletes the selected contacts", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    renderContacts(env);
+    const list = await screen.findByRole("listbox", { name: "Contacts" });
+    const [first, second] = within(list).getAllByRole("option");
+    await user.click(must(first));
+    await user.keyboard("{Shift>}");
+    await user.click(must(second));
+    await user.keyboard("{/Shift}");
+    const before = pimOf(env).contacts.length;
+    await user.keyboard("{Delete}");
+    expect(pimOf(env).contacts).toHaveLength(before);
+    expect(pimQuestion(env.store, DELETE_CONTACTS_DIALOG)?.question).toBe("Delete 2 contacts?");
+    await confirmPim(env, user, DELETE_CONTACTS_DIALOG, "Delete 2 contacts");
+    await waitFor(() => {
+      expect(pimOf(env).contacts).toHaveLength(before - 2);
+    });
+    expect(pimStoreFor(env.store).getState().selectedContacts).toEqual([]);
+  });
+
+  it("offers Delete… in the contact editor, which asks and closes the editor", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    pimStoreFor(env.store).getState().editContact({ mode: "edit", contactId: "ct-linus" });
+    const close = vi.fn();
+    renderWithProviders(<ContactEditorDialog name={CONTACT_DIALOG} close={close} />, env);
+    const remove = await screen.findByRole("button", { name: "Delete…" });
+    expect(remove).toHaveAttribute("data-role", "start");
+    await user.click(remove);
+    expect(close).not.toHaveBeenCalled();
+    await confirmPim(env, user, DELETE_CONTACTS_DIALOG, "Delete contact");
+    await waitFor(() => {
+      expect(close).toHaveBeenCalled();
+    });
+    expect(pimOf(env).contacts.some((c) => c.id === "ct-linus")).toBe(false);
+  });
+
+  it("guards a group's unsaved edits and asks before another group shows", async () => {
+    const { user, env } = await openFamilyGroup();
+    const guard = () => closeGuardOf(env.store, MAIN_GUARD);
+    expect(must(guard()).isDirty()).toBe(false);
+    await user.click(await screen.findByRole("checkbox", { name: "Ada Lovelace" }));
+    expect(must(guard()).isDirty()).toBe(true);
+    expect(must(guard()).name()).toBe("Family");
+    // Another group: the shared prompt asks, the edits stay meanwhile.
+    const other = screen
+      .getAllByRole("button")
+      .find(
+        (b) =>
+          b.getAttribute("data-part") === "pim.groups.choose" &&
+          b.getAttribute("aria-pressed") === "false",
+      );
+    await user.click(must(other));
+    expect(env.store.getState().windows.some((w) => w.startsWith("unsaved-changes"))).toBe(true);
+    expect(screen.getByRole("checkbox", { name: "Ada Lovelace" })).toBeChecked();
+    // Its Save writes the group.
+    await saveThroughGuard(() => must(guard()));
+    expect(pimOf(env).groups.find((g) => g.id === "grp-family")?.member_ids).toContain("ct-ada");
   });
 });

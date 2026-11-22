@@ -58,8 +58,9 @@ are ordinary shortcuts of the action `menu.context`, so you can change them.
 
 ## Changing shortcuts, toolbars and list columns
 
-Settings → Layout & toolbars has three editors. Each writes your change into
-`layout.kdl`, keeping the rest of the file as it is (see
+Settings → Layout & toolbars has three editors. Each writes your changes into
+`layout.kdl` when you click **Save** in the section's bar, keeping the rest
+of the file as it is (see
 [Customizing](customization.md#editing-toolbars-shortcuts-and-columns)):
 
 - **Toolbars**: reorder, add and remove buttons. Each entry has Up, Down and
@@ -75,7 +76,9 @@ Every pane, list, button and field has a name. The message list is a list
 box whose selected message is announced; toolbars, tabs, menus and dialogs
 use the standard roles, so screen readers describe them as such. Status
 messages ("Saved.", "Saving 2 changes…") are announced without moving the
-focus; errors are announced at once.
+focus; errors are announced at once. In Settings, screen readers hear when a
+section gets unsaved changes and when they were saved or discarded; after
+**Save** or **Discard** in the bar the focus moves to the section's title.
 
 ## High contrast
 

@@ -12,7 +12,7 @@
  */
 import type { MailAction, MailTargetResolution } from "../../api/generated";
 import type { UiStore } from "../../state/uiStore";
-import { pendingSlot } from "../../widgets/MailConfirm";
+import { pendingSlot } from "../../widgets/dialog";
 
 /** The confirmation's window kind (dialog name). */
 export const BULK_CONFIRM_DIALOG = "mail-bulk-confirm";

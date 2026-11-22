@@ -15,6 +15,7 @@ window-exchange-category-delete = Delete category
 window-exchange-automatic-replies = Automatic replies
 window-exchange-classify = { exchange-focused-label }
 window-exchange-apply-categories = Apply categories
+window-exchange-server-rule-delete = Delete inbox rule
 
 ## Actions (layout labels @exchange.action.*)
 
@@ -168,6 +169,8 @@ exchange-rules-from-server = created in Outlook or on the web
 exchange-rules-unsupported = Nail cannot show all of this rule; you can only switch it on or off or delete it.
 exchange-rules-in-error = The server reports this rule as broken.
 exchange-rules-delete-named = Delete inbox rule { $name }
+# The question's verb (the rule's Delete… is pim-delete-ask's text).
+exchange-rules-delete-rule = { rules-delete-confirm }
 exchange-rules-delete-question = Delete the inbox rule “{ $name }” from the server?
 exchange-rules-delete-placed-question = Delete “{ $name }” from the server? Nail places it again on the next sync unless you change the Nail rule.
 

@@ -32,6 +32,7 @@ import {
   POP_OUT_ISSUE_MESSAGE_IDS,
   WINDOW_STATE_ISSUE_MESSAGE_IDS,
 } from "./generated";
+import { sameJson } from "../text/json";
 
 /** The requests answered here. */
 export const WINDOW_STATE_REQUESTS = [
@@ -106,7 +107,7 @@ function setState(core: MockCore, kind: string, state: WindowState | null): void
   const windows = windowsOf(core);
   const before = Object.hasOwn(windows.states, kind) ? windows.states[kind] : null;
   const after = state !== null && !isEmptyWindowState(state) ? state : null;
-  if (JSON.stringify(before ?? null) === JSON.stringify(after)) return;
+  if (sameJson(before ?? null, after)) return;
   const rest = Object.entries(windows.states).filter(([k]) => k !== kind);
   windows.states = Object.fromEntries(
     after === null ? rest : [...rest, [kind, structuredClone(after)]],

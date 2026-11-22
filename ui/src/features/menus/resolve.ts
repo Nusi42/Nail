@@ -21,6 +21,7 @@ import {
   type ResolvedMenu,
   type ResolvedMenuEntry,
 } from "../../api/generated";
+import { sameJson } from "../../text/json";
 export { CONTEXT_MENU_PARTS, CONTEXT_MENU_PREFIX } from "../../api/generated";
 
 /** `context:<part>`. */
@@ -35,10 +36,6 @@ export function keyContextOf(part: string): string {
   return KEY_CONTEXT_OF_PART[part] ?? "global";
 }
 
-function sameArgs(a: readonly JsonValue[], b: readonly JsonValue[]): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 /** The key bound to `action` + `args` in `keyContext`, else in `global`. */
 export function shortcut(
   layout: ResolvedLayout,
@@ -49,7 +46,7 @@ export function shortcut(
   const find = (context: string) =>
     [...layout.keys]
       .reverse()
-      .find((k) => k.context === context && k.action === action && sameArgs(k.args, args))?.key ??
+      .find((k) => k.context === context && k.action === action && sameJson(k.args, args))?.key ??
     null;
   return find(keyContext) ?? find("global");
 }

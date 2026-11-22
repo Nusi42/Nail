@@ -95,9 +95,9 @@ same careful way and can undo every step; see
 ## Editing toolbars, shortcuts and columns
 
 Settings → Layout & toolbars has three editors under the error list. The
-toolbar and column editors write nothing until you click **Save** in the
-bar **Unsaved changes** at the bottom of the section; **Discard** forgets
-what you did since. Choosing another toolbar or list, or leaving the
+toolbar, shortcut and column editors write nothing until you click **Save**
+in the bar **Unsaved changes** at the bottom of the section; **Discard**
+forgets what you did since. Choosing another toolbar or list, or leaving the
 section, with unsaved changes asks first.
 
 **Toolbars.** Choose a toolbar (`main`, `reader`, `customize`, or one of
@@ -114,7 +114,11 @@ press the keys: a chord such as `Ctrl+Shift+M`, or several keys in a row
 for a sequence such as `G` then `R`. Backspace removes the last key. When
 the keys already do something there, the editor says what they replace.
 **Remove** deletes a shortcut (a default one gets `unbind`); **Default**
-brings back the default layout's binding for those keys.
+brings back the default layout's binding for those keys. Added, removed and
+reset shortcuts wait for **Save** in the section's bar: the table marks a
+new one *New, not saved* and a reset one *Default on save*. Keys you
+recorded but did not add yet count as a change too — **Save** adds them,
+**Discard** forgets them.
 
 **Columns.** A message list normally shows rows made from templates. Choose
 columns — From, Subject, Date, Preview, Tags, Account — and their order to

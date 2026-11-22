@@ -27,8 +27,22 @@ import {
   SOURCES_DIALOG,
 } from "./names";
 import { pimStoreFor } from "./store";
+import { closeGuardOf, MAIN_GUARD } from "../../layout/closeGuard";
+import { must } from "../../test/must";
+import { saveThroughGuard } from "../../test/closeGuard";
 
 const pimOf = (env: Env) => env.transport.data.features.pim;
+
+/** The settings dialog of the calendar "Work" (its form, and the window's close). */
+async function workSettings(env: Env) {
+  const close = vi.fn();
+  renderWithProviders(
+    <CalendarSettingsDialog name={CALENDAR_SETTINGS_DIALOG} close={close} />,
+    env,
+  );
+  const form = await screen.findByRole("form", { name: "Settings of Work" });
+  return { close, form };
+}
 const windows = (env: Env) => env.store.getState().windows;
 
 async function settle(env: Env): Promise<void> {
@@ -288,12 +302,7 @@ describe("calendar list widget", () => {
     await user.click(await screen.findByRole("button", { name: "Actions for Work" }));
     await user.click(screen.getByRole("menuitem", { name: "Settings…" }));
     expect(windows(env)).toContain(CALENDAR_SETTINGS_DIALOG);
-    const close = vi.fn();
-    renderWithProviders(
-      <CalendarSettingsDialog name={CALENDAR_SETTINGS_DIALOG} close={close} />,
-      env,
-    );
-    const form = await screen.findByRole("form", { name: "Settings of Work" });
+    const { close, form } = await workSettings(env);
     const name = within(form).getByLabelText("Name");
     expect(name).toHaveValue("Work");
     // #ef4444 is not in the palette: it shows as the other colour.
@@ -397,5 +406,40 @@ describe("calendar & contacts settings section", () => {
     expect(screen.getByRole("button", { name: "Settings of Personal" })).toBeInTheDocument();
     await userEvent.setup({ delay: null }).click(screen.getByRole("button", { name: "Import…" }));
     expect(windows(env)).toContain(IMPORT_DIALOG);
+  });
+});
+
+describe("calendar dialogs with unsaved changes (R6 review)", () => {
+  it("register the changed name, colour or reminders with the close guard and save through it", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    pimStoreFor(env.store).getState().editCalendar("cal-work");
+    const { form } = await workSettings(env);
+    const guard = () => must(closeGuardOf(env.store, MAIN_GUARD));
+    expect(guard().isDirty()).toBe(false);
+    await user.click(within(form).getByRole("checkbox", { name: "Show reminders" }));
+    expect(guard().isDirty()).toBe(true);
+    expect(guard().name()).toBe("Work");
+    // An invalid name cannot be saved: the prompt offers Discard changes only.
+    await user.clear(within(form).getByLabelText("Name"));
+    expect(guard().canSave?.()).toBe(false);
+    await user.type(within(form).getByLabelText("Name"), "Office");
+    await saveThroughGuard(guard);
+    expect(pimOf(env).calendars.find((c) => c.id === "cal-work")?.settings).toMatchObject({
+      name: "Office",
+      reminders: false,
+    });
+  });
+
+  it("guard a typed name in New calendar", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    renderWithProviders(<NewCalendarDialog name={NEW_CALENDAR_DIALOG} close={vi.fn()} />, env);
+    const guard = () => must(closeGuardOf(env.store, MAIN_GUARD));
+    const name = await screen.findByLabelText("Name");
+    expect(guard().isDirty()).toBe(false);
+    await user.type(name, "Holidays");
+    expect(guard().isDirty()).toBe(true);
+    expect(guard().name()).toBe("Holidays");
   });
 });

@@ -40,7 +40,7 @@ import {
 } from "../../state/windows";
 import { Icon } from "../../widgets/Icon";
 import { PopOutTitleContext } from "./hooks";
-import { errorMessageId, preparerOf, returnPopOut, windowTitleId } from "./model";
+import { errorMessageId, mayMoveWindow, preparerOf, returnPopOut, windowTitleId } from "./model";
 
 export function PopOutHost({ layout, window }: { layout: ResolvedLayout; window: string }) {
   const t = useT();
@@ -132,11 +132,15 @@ export function PopOutHost({ layout, window }: { layout: ResolvedLayout; window:
               title={t("popout-return-hint")}
               onClick={() => {
                 setError(null);
-                // What only this page holds is saved first (the composer's
-                // draft), like before popping out.
+                // Unsaved changes ask first (R6); what only this page holds is
+                // saved first (the composer's draft), like before popping out.
                 const prepare = preparerOf(window);
-                Promise.resolve(prepare?.(window, { client, store, queryClient }))
-                  .then(() => returnPopOut({ client, queryClient }, window))
+                void mayMoveWindow(store, window)
+                  .then(async (go) => {
+                    if (!go) return;
+                    await prepare?.(window, { client, store, queryClient });
+                    await returnPopOut({ client, queryClient }, window);
+                  })
                   .catch((e: unknown) => {
                     setError(errorMessageId(e));
                   });

@@ -8,6 +8,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { NailError, type NailClient } from "../../api/client";
 import type { JsonValue, PopOut, PopOutChange, Response, WindowSpec } from "../../api/generated";
+import { closeWindowNow, confirmLeave } from "../../layout/closeGuard";
 import type { UiStore } from "../../state/uiStore";
 import { applyPopOuts } from "../../state/windowState";
 import { parsePopOutRoute, windowKind } from "../../state/windows";
@@ -84,11 +85,19 @@ export interface PopOutPreparerOptions {
    * the front.
    */
   refresh?: boolean;
+  /**
+   * The preparer hands the window's unsaved changes over (the composer saves
+   * its draft and the pop-out loads it). Without it, a window with unsaved
+   * changes asks with the shared prompt before it pops out or returns (R6,
+   * ADR 0239): Save or Don't save, then it moves; Cancel keeps it.
+   */
+  handsOverChanges?: boolean;
 }
 
 interface Registered {
   preparer: PopOutPreparer;
   refresh: boolean;
+  handsOverChanges: boolean;
 }
 
 const preparers = new Map<string, Registered>();
@@ -102,7 +111,11 @@ export function registerPopOutPreparer(
   preparer: PopOutPreparer,
   options: PopOutPreparerOptions = {},
 ): () => void {
-  preparers.set(kind, { preparer, refresh: options.refresh === true });
+  preparers.set(kind, {
+    preparer,
+    refresh: options.refresh === true,
+    handsOverChanges: options.handsOverChanges === true,
+  });
   return () => {
     if (preparers.get(kind)?.preparer === preparer) preparers.delete(kind);
   };
@@ -111,6 +124,17 @@ export function registerPopOutPreparer(
 /** The preparer of a window (by id or kind). */
 export function preparerOf(window: string): PopOutPreparer | undefined {
   return preparers.get(windowKind(window))?.preparer;
+}
+
+/**
+ * Before `window` moves out of this page (popped out, or back to the main
+ * window): `true` when it may go — nothing unsaved, its preparer hands the
+ * changes over, or the shared prompt's Save / Don't save answered; `false`
+ * when the user kept editing.
+ */
+export function mayMoveWindow(store: UiStore, window: string): Promise<boolean> {
+  if (preparers.get(windowKind(window))?.handsOverChanges === true) return Promise.resolve(true);
+  return confirmLeave(store, window);
 }
 
 /** Whether opening `window` again hands its popped-out window a new context. */
@@ -128,17 +152,19 @@ function popOutsOf(response: Response): readonly PopOut[] {
 }
 
 /**
- * Pops `window` out (main page): runs the kind's preparer, asks the core
- * (`PopOutWindow` with the window's title, the context and the spec's
- * first and smallest size) and takes the window off the page. The window
- * stays in the page when anything fails.
+ * Pops `window` out (main page): asks first while it has unsaved changes
+ * (`mayMoveWindow`; `null` when the user kept editing), runs the kind's
+ * preparer, asks the core (`PopOutWindow` with the window's title, the
+ * context and the spec's first and smallest size) and takes the window off
+ * the page. The window stays in the page when anything fails.
  */
 export async function popOutWindow(
   ctx: PopOutPrepareContext,
   window: string,
   title: string,
   spec?: Pick<WindowSpec, "size" | "min_size">,
-): Promise<readonly PopOut[]> {
+): Promise<readonly PopOut[] | null> {
+  if (!(await mayMoveWindow(ctx.store, window))) return null;
   const prepare = preparerOf(window);
   const context = prepare ? await prepare(window, ctx) : undefined;
   const popOuts = popOutsOf(
@@ -151,7 +177,8 @@ export async function popOutWindow(
     }),
   );
   applyPopOuts(ctx.queryClient, popOuts);
-  ctx.store.getState().closeWindow(window);
+  // Its changes were saved, dropped or handed over: it goes without asking.
+  closeWindowNow(ctx.store, window);
   return popOuts;
 }
 

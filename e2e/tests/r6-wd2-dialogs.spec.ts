@@ -3,7 +3,12 @@ import { saveSettings } from "../support/settings";
 import { openCalendar } from "../support/calendar";
 import { nailPerTest } from "../support/nail";
 import { openSettings, showView, viewRegion, windowById } from "../support/views";
-import { expectDialogFooter, unsavedPrompt, openMailAs } from "../support/windowTour";
+import {
+  expectDestructiveConfirm,
+  expectDialogFooter,
+  unsavedPrompt,
+  openMailAs,
+} from "../support/windowTour";
 
 /**
  * R6 (ADR 0239) for calendars, tasks, appearance and customization against
@@ -64,11 +69,7 @@ for (const os of ["windows", "macos"] as const) {
     await editor.getByRole("button", { name: "Delete…" }).click();
     const question = windowById(page, "pim-delete-task");
     await expect(question).toContainText("Delete the task “Water the plants”?");
-    await expectDialogFooter(question, { os, roles: ["primary", "cancel"], focused: "cancel" });
-    await expect(question.locator('button[data-role="primary"]')).toHaveAttribute(
-      "data-variant",
-      "danger",
-    );
+    await expectDestructiveConfirm(question, os);
     // Enter on the focused Cancel deletes nothing.
     await page.keyboard.press("Enter");
     await expect(question).toBeHidden();

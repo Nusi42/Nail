@@ -119,13 +119,20 @@ describe("toolbar-editor", () => {
   });
 });
 
+/** The key-binding editor with its section and table. */
+async function keyEditor() {
+  const user = userEvent.setup({ delay: null });
+  const { env } = renderEditor("key-binding-editor");
+  const section = await screen.findByRole("region", { name: "Key binding editor" });
+  const table = within(section).getByRole("table", { name: "Shortcuts" });
+  return { user, env, section, table };
+}
+
 describe("key-binding-editor", () => {
-  it("records a shortcut, warns about conflicts, removes and resets", async () => {
-    const user = userEvent.setup({ delay: null });
-    const { env } = renderEditor("key-binding-editor");
-    const section = await screen.findByRole("region", { name: "Key binding editor" });
-    const table = within(section).getByRole("table", { name: "Shortcuts" });
+  it("records a shortcut, warns about conflicts, removes and resets, all saved with the bar", async () => {
+    const { user, env, section, table } = await keyEditor();
     expect(within(table).getAllByRole("row").length).toBeGreaterThan(5);
+    expect(bar()).toBeNull();
     await user.selectOptions(within(section).getByLabelText("Where"), "global");
     await user.selectOptions(within(section).getByLabelText("Action"), "mail.archive");
     const capture = within(section).getByLabelText("Keys");
@@ -136,31 +143,74 @@ describe("key-binding-editor", () => {
     fireEvent.keyDown(capture, { key: "Backspace" });
     fireEvent.keyDown(capture, { key: "k", ctrlKey: true, shiftKey: true });
     expect(capture).toHaveValue("Ctrl+Shift+K");
+    // A recorded shortcut is an unsaved change already (R6).
+    expect(bar()).not.toBeNull();
     await user.click(within(section).getByRole("button", { name: "Add shortcut" }));
-    expect(await within(section).findByText("Shortcut saved to layout.kdl.")).toBeVisible();
-    expect(requestsOf(env, "UpdateLayout")[0]?.patches).toEqual([
-      {
-        op: "add-key-binding",
-        context: "global",
-        key: "ctrl+shift+k",
-        action: "mail.archive",
-        args: [],
-      },
-    ]);
+    // Nothing is written before Save; the table shows it as new.
+    expect(requestsOf(env, "UpdateLayout")).toEqual([]);
     await user.selectOptions(within(section).getByLabelText("Show"), "global");
-    const row = await within(table).findByText("Ctrl+Shift+K");
-    const tr = row.closest("tr") as HTMLElement;
-    await user.click(within(tr).getByRole("button", { name: /Remove Ctrl\+Shift\+K/ }));
+    const added = must(within(table).getByText("Ctrl+Shift+K").closest("tr"));
+    expect(added).toHaveAttribute("data-state", "add");
+    expect(within(added).getByText("New, not saved")).toBeVisible();
+    await user.click(within(must(bar())).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(requestsOf(env, "UpdateLayout")[0]?.patches).toEqual([
+        {
+          op: "add-key-binding",
+          context: "global",
+          key: "ctrl+shift+k",
+          action: "mail.archive",
+          args: [],
+        },
+      ]);
+    });
+    await waitFor(() => {
+      expect(bar()).toBeNull();
+    });
+    expect(within(section).getByText("Saved to layout.kdl.")).toBeVisible();
+
+    // Remove and reset wait for Save too, and go in one write.
+    const row = must((await within(table).findByText("Ctrl+Shift+K")).closest("tr"));
+    await user.click(within(row).getByRole("button", { name: /Remove Ctrl\+Shift\+K/ }));
+    expect(within(table).queryByText("Ctrl+Shift+K")).toBeNull();
+    const reply = within(table).getByRole("button", { name: "Restore the default for R" });
+    await user.click(reply);
+    expect(reply).toBeDisabled();
+    expect(must(reply.closest("tr"))).toHaveAttribute("data-state", "reset");
+    expect(requestsOf(env, "UpdateLayout")).toHaveLength(1);
+    await user.click(within(must(bar())).getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(requestsOf(env, "UpdateLayout")[1]?.patches).toEqual([
         { op: "remove-key-binding", context: "global", key: "ctrl+shift+k" },
+        { op: "reset-key-binding", context: "global", key: "r" },
       ]);
     });
-    const reply = within(table).getByRole("button", { name: "Restore the default for R" });
-    await user.click(reply);
+  });
+
+  it("Save adds a recorded shortcut; Discard drops every change", async () => {
+    const { user, env, section, table } = await keyEditor();
+    await user.selectOptions(within(section).getByLabelText("Action"), "mail.archive");
+    const capture = within(section).getByLabelText("Keys");
+    capture.focus();
+    fireEvent.keyDown(capture, { key: "q", ctrlKey: true, altKey: true });
+    // Discard: the recorded keys and a staged removal go, nothing is written.
+    const first = must(within(table).getAllByRole("row")[1]);
+    await user.click(within(first).getByRole("button", { name: /^Remove / }));
+    await user.click(within(must(bar())).getByRole("button", { name: "Discard" }));
+    expect(bar()).toBeNull();
+    expect(capture).toHaveValue("");
+    expect(requestsOf(env, "UpdateLayout")).toEqual([]);
+    // Save with keys recorded but "Add shortcut" not pressed: they are added.
+    capture.focus();
+    fireEvent.keyDown(capture, { key: "q", ctrlKey: true, altKey: true });
+    await user.click(within(must(bar())).getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(requestsOf(env, "UpdateLayout")[2]?.patches).toEqual([
-        { op: "reset-key-binding", context: "global", key: "r" },
+      expect(requestsOf(env, "UpdateLayout")[0]?.patches).toEqual([
+        expect.objectContaining({
+          op: "add-key-binding",
+          key: "ctrl+alt+q",
+          action: "mail.archive",
+        }),
       ]);
     });
   });

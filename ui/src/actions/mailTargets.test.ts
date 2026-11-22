@@ -16,7 +16,6 @@ import {
   loadedRowTargets,
   mailListOf,
   rangeExcept,
-  sameList,
   toggleExcept,
   withAsOf,
   pickedOf,
@@ -27,6 +26,7 @@ import {
   type PickableRow,
   refetchedSince,
 } from "./mailTargets";
+import { sameJson } from "../text/json";
 
 const INBOX = "acc/Inbox";
 
@@ -274,7 +274,7 @@ describe("select all (R5, ADR 0235)", () => {
     selection.getState().selectAll();
     selection.getState().setPicked([]);
     expect(selection.getState().all).toBeNull();
-    expect(sameList(LIST, { ...LIST })).toBe(true);
+    expect(sameJson(LIST, { ...LIST })).toBe(true);
   });
 
   it("Ctrl / Shift + click leave rows out and take them back", () => {

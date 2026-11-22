@@ -16,7 +16,7 @@
  * on Cancel, Enter never deleting; ×, Esc and Cancel forget the question.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ActionTargets } from "../actions/mailTargets";
 import type { MailTargetResolution } from "../api/generated";
 import { errorMessageOf } from "../api/client";
@@ -27,7 +27,7 @@ import type { DialogProps } from "../layout/dialogRegistry";
 import type { WriteContext } from "../state/mailOps";
 import { useClient } from "../state/queries";
 import { useUiStoreApi, type UiStore } from "../state/uiStore";
-import { ConfirmDialog } from "./dialog";
+import { askInWindow, ConfirmDialog, pendingSlot, usePendingQuestion } from "./dialog";
 
 /** The confirmation's window kind (dialog name). */
 export const DELETE_PERMANENTLY_DIALOG = "mail-delete-permanently";
@@ -39,11 +39,11 @@ export interface PendingDelete {
   resolution: MailTargetResolution;
 }
 
-const pending = new WeakMap<UiStore, PendingDelete>();
+const pending = pendingSlot<PendingDelete>();
 
 /** What the open confirmation would delete (`null` = nothing). */
 export function pendingPermanentDelete(store: UiStore): PendingDelete | null {
-  return pending.get(store) ?? null;
+  return pending.get(store);
 }
 
 /**
@@ -65,20 +65,18 @@ export async function askDeletePermanently(
       "MailTargets",
     );
     if (resolution.messages === 0) return;
-    pending.set(ctx.store, { targets, resolution });
+    askInWindow(pending, ctx.store, DELETE_PERMANENTLY_DIALOG, { targets, resolution });
   } catch (error) {
     mailActionsStoreFor(ctx.store)
       .getState()
       .show({ kind: "error", message: errorMessageOf(error) });
-    return;
   }
-  ctx.store.getState().openWindow(DELETE_PERMANENTLY_DIALOG);
 }
 
 /** Deletes the pending targets permanently and closes the confirmation. */
 export async function confirmDeletePermanently(ctx: WriteContext): Promise<void> {
   const what = pendingPermanentDelete(ctx.store);
-  pending.delete(ctx.store);
+  pending.clear(ctx.store);
   ctx.store.getState().closeWindow(DELETE_PERMANENTLY_DIALOG);
   if (what === null) return;
   await runMailAction(
@@ -95,15 +93,9 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
   const store = useUiStoreApi();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [what] = useState(() => pendingPermanentDelete(store));
-  const [busy, setBusy] = useState(false);
   // However the question ends (Cancel, ×, Esc, the deletion), it is forgotten.
-  useEffect(
-    () => () => {
-      if (what !== null && pending.get(store) === what) pending.delete(store);
-    },
-    [store, what],
-  );
+  const what = usePendingQuestion(pending, store);
+  const [busy, setBusy] = useState(false);
   const messages = what?.resolution.messages ?? 0;
   const conversations = what?.resolution.conversations ?? 0;
   return (

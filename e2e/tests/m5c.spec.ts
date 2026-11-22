@@ -12,6 +12,7 @@ import {
   windowById,
 } from "../support/views";
 import { defined } from "../support/defined";
+import { lengthenAutosave } from "../support/compose";
 
 /**
  * Wave M5c (ADRs 0116–0121) against `nail serve --seed demo`: the window
@@ -34,16 +35,6 @@ async function openComposer(page: Page): Promise<{ id: string; own: Locator }> {
   return { id, own: win(page, id) };
 }
 const titleBar = (window: Locator) => window.locator('[data-part="window.header"]');
-
-/**
- * Lengthens the composer's autosave (`__nailAutosaveMs`, read by the UI):
- * scenarios that close a composer with unsaved changes must not race it.
- */
-async function lengthenAutosave(page: Page) {
-  await page.addInitScript(() => {
-    (globalThis as Record<string, unknown>).__nailAutosaveMs = 10 * 60 * 1000;
-  });
-}
 
 async function open(page: Page, seed: "demo" | "demo-multi" = "demo") {
   await server.start({ seed });

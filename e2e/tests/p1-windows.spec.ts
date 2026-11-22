@@ -4,6 +4,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { buildOutputDir, nailPerTest, type NailServer } from "../support/nail";
 import { createUser, rpcOk } from "../support/remote";
 import { addFromMenu } from "../support/rules";
+import { lengthenAutosave } from "../support/compose";
 import {
   STANDARD_SIZES,
   formatIssues,
@@ -662,6 +663,8 @@ test.describe("P1: every window and dialog is responsive", () => {
       test.setTimeout(600_000);
       const sweep = new Sweep(page, group);
       await page.setViewportSize(LARGE);
+      // The composer step closes it with unsaved changes: no autosave race.
+      await lengthenAutosave(page);
       await openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
       try {
         await run(sweep, server);

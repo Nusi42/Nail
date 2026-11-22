@@ -33,6 +33,8 @@ export const AUTOMATIC_REPLIES_DIALOG = "exchange-automatic-replies";
 export const CLASSIFY_DIALOG = "exchange-classify";
 /** The categories of the selected message (WP95). */
 export const APPLY_CATEGORIES_DIALOG = "exchange-apply-categories";
+/** Confirm deleting an inbox rule on the server (R6: the shared question window). */
+export const SERVER_RULE_DELETE_DIALOG = "exchange-server-rule-delete";
 
 export const DIALOGS = [
   MAILBOX_EDITOR_DIALOG,
@@ -42,6 +44,7 @@ export const DIALOGS = [
   AUTOMATIC_REPLIES_DIALOG,
   CLASSIFY_DIALOG,
   APPLY_CATEGORIES_DIALOG,
+  SERVER_RULE_DELETE_DIALOG,
 ] as const;
 
 /** Action ids (`exchange.*`). */

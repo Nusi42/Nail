@@ -80,7 +80,9 @@ in the bar is disabled and the question offers **Discard changes** or
 
 This holds for every setting, switches and choices included: turning
 notifications off, choosing a folder's download policy, granting an MCP
-client a scope or changing the tray behaviour all wait for **Save**. If
+client a scope, changing the tray behaviour, adding a shortcut, turning a
+plug-in off or changing its permissions or settings, and switching an
+Exchange inbox rule all wait for **Save**. If
 saving fails, the section keeps your changes and the bar, and shows why.
 
 Actions are not settings and happen when you choose them, after a

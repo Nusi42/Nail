@@ -47,10 +47,12 @@ import {
   MAILBOX_REMOVE_DIALOG,
   MAILBOXES_WIDGET,
   RULES_WIDGET,
+  SERVER_RULE_DELETE_DIALOG,
 } from "./names";
 import { exchangeKeys, isExchangeAccount, showFocus } from "./queries";
 import { ExchangeRulesWidget } from "./Rules";
 import { exchangeStoreFor } from "./store";
+import { QuestionWindow } from "../../widgets/dialog";
 
 export { exchangeKeys } from "./queries";
 export { EXCHANGE_BASE_CSS } from "./parts";
@@ -201,6 +203,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
   [AUTOMATIC_REPLIES_DIALOG]: AutomaticRepliesDialog,
   [CLASSIFY_DIALOG]: ClassifyDialog,
   [APPLY_CATEGORIES_DIALOG]: ApplyCategoriesDialog,
+  [SERVER_RULE_DELETE_DIALOG]: QuestionWindow,
 };
 
 /**
@@ -219,6 +222,7 @@ export const windows: NonNullable<Feature["windows"]> = {
     min_size: { width: 360, height: 300 },
   },
   [CATEGORY_DELETE_DIALOG]: { confirmation: true },
+  [SERVER_RULE_DELETE_DIALOG]: { confirmation: true },
   [AUTOMATIC_REPLIES_DIALOG]: {
     size: { width: 720, height: 640 },
     min_size: { width: 520, height: 480 },

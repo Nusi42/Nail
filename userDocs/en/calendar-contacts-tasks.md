@@ -173,11 +173,14 @@ upcoming meetings with that person.
   and a photo. Choose another address book to move the contact.
 - **Select several contacts** with **Ctrl**-click or **Shift**-click, or with
   **Shift + ↑ / ↓** in the list; **Space** adds or removes the contact you
-  are on. **Delete** deletes the selection, **Enter** edits.
+  are on. **Delete** deletes the selection after a question (**Delete 3
+  contacts?**; **Cancel** has the focus), **Enter** edits. The card's and
+  the editor's **Delete…** ask the same way.
 - **Groups…** manages contact groups: create, rename, delete, choose
   members (contacts of the same address book) and extra addresses. Each
   group saves on its own; **Delete group…** asks first (the contacts stay).
-  Close the window with × or `Esc`.
+  Close the window with × or `Esc`; with unsaved changes to a group, that
+  and choosing another group ask **Save changes to “…”?** first.
 - **Find duplicates…** merges contacts step by step: pick a group of
   duplicates, choose what the merged card keeps, then **Merge N contacts**;
   **Back** and **Cancel** are there on every step.
@@ -232,7 +235,9 @@ subscription is unsubscribed; Nail asks first). The **+** next to a group
 creates a **New calendar** or **New task list** there (on this computer and
 on CalDAV servers), or adds a **New subscription…**, and opens **Calendars
 and address books…** and **Import…**. The same is in **Settings → Calendar &
-contacts**.
+contacts**. Closing **Settings…**, **New calendar** or **New task list** with
+×, `Esc` or **Cancel** after changing something asks **Save changes to
+“…”?** first.
 
 **Calendars and address books…** shows every source with its state (up to
 date, syncing, offline, sign-in failed) and the last sync; **Sync now** and

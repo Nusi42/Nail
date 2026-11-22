@@ -1486,8 +1486,8 @@ left; the maintainer's human gate on the 0.8.10 installer, then release.
 customization, PIM and scheduling (ADR 0241), WD3 settings drafts, questions and the Add account wizard (ADR 0242),
 WD4 data, security, plug-in and system dialogs (ADR 0243). Integration: the theme parts no component emits any more
 removed (`wizard.buttons` with `WizardButtons`, the rules footer slots and inline question, `merge-dialog.actions`,
-`column-editor.actions`, `pim.scope.actions`, the scheduling rows; `DIALOG_BUTTON_ROWS` keeps `dialog.footer`,
-`mail-confirm.actions`, `confirmation.buttons`), `FooterButton` `ariaDisabled` / `describedBy` (Save rule and Run
+`column-editor.actions`, `pim.scope.actions`, the scheduling rows; `DIALOG_BUTTON_ROWS` keeps `dialog.footer` and
+`confirmation.buttons`), `FooterButton` `ariaDisabled` / `describedBy` (Save rule and Run
 focusable but marked), the agents feature's confirmation policy as a settings draft, `common-next` /
 `common-remove-question`, "Revoke code" in the pending codes, `SaveRow` removed, the plug-in dialog docs of
 `PluginDialogSpec` regenerated; the a11y window sweep checks every window's ×, Esc, footer order on Windows, Linux
@@ -1498,6 +1498,17 @@ buttons sit between the groups); e2e for Automatic replies, the mailbox editor, 
 category / mailbox deletes and the Outbox discard question (unit tests only); several unsaved composers open one
 prompt each when the view changes; Appearance has no live preview before Save; the maintainer's human gate on the
 0.8.10 installer.
+
+*Status (review fixes):* done (ADR 0244): deleting contacts asks (`pim-delete-contacts`, the contact editor's
+`Delete…`); `MailConfirm` removed (bulk, open link / attachment are `ConfirmDialog`s; the sweep fails on a
+confirmation outside `ConfirmDialog` or a modal window without the footer); the key-binding editor, the plug-in
+manager (its window has the save bar) and the Exchange inbox-rule switches are settings drafts, the inbox-rule
+delete asks; the calendar dialogs and the contact group editor are guarded; the invitation answer and Propose /
+Forward use the shared footer; pop-out and return ask while a window has unsaved changes; one question window
+(`askQuestion`), one pending slot, one `sameJson`; the save bar announces its state and keeps the focus; Cancel
+during the prompt's Save keeps the window. Follow-ups: settings drafts are per UI store (the plug-in manager window
+and Settings share them); no navigation marker for a section with unsaved changes; the "New group" name is not
+guarded. E2e `r6-review-dialogs.spec.ts`.
 
 *Status (WD3):* done (ADR 0242): every settings section of the package saves with the bar
 (`useSettingsForm`), the sections' questions are `ConfirmDialog` windows (`askSettingsQuestion`), the Add account

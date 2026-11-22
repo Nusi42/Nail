@@ -48,6 +48,7 @@ import { exchangeStoreFor, useExchangeUi } from "./store";
 import { DialogFooter, DialogForm, useCloseGuard } from "../../widgets/dialog";
 import { EmptyDialog, useCloseNow } from "../../widgets/DialogStates";
 import { AccountChoiceField } from "../../widgets/pickers";
+import { sameJson } from "../../text/json";
 
 const STATUSES: readonly AutomaticRepliesStatus[] = AUTOMATIC_REPLIES_STATUS_VALUES;
 const AUDIENCES: readonly ExternalAudience[] = EXTERNAL_AUDIENCE_VALUES;
@@ -208,7 +209,7 @@ function RepliesForm({
       {dialog && (
         <RepliesGuard
           name={t("window-exchange-automatic-replies")}
-          isDirty={() => saved === null && JSON.stringify(draft) !== JSON.stringify(initial)}
+          isDirty={() => saved === null && !sameJson(draft, initial)}
           canSave={() => automaticRepliesIssues(settings).length === 0}
           save={save}
         />

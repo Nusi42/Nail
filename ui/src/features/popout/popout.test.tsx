@@ -6,7 +6,7 @@
  * page following `PopOutChanged`, the router sending windows to their OS
  * window, the actions, and axe on the pop-out page.
  */
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,6 +43,10 @@ import {
 } from "./model";
 import { PopOutRouter } from "./PopOutRouter";
 import { must } from "../../test/must";
+import { promptWindowFor, useCloseGuard } from "../../layout/closeGuard";
+import { WindowInstanceContext } from "../../state/windows";
+import { withCloseGuard } from "../../test/closeGuard";
+import { UnsavedPrompt } from "../../widgets/dialog/UnsavedPrompt";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -486,5 +490,119 @@ describe("the actions", () => {
     });
     expect(env.store.getState().windows).toEqual(["pim-event-editor"]);
     expect(await popOuts(env)).toEqual([]);
+  });
+});
+
+describe("windows with unsaved changes (R6 review)", () => {
+  /** What the dirty guard's Save did. */
+  const saved = vi.fn(() => true);
+
+  /** Registers a dirty close guard for the window it is rendered in. */
+  function Dirty() {
+    useCloseGuard({ name: () => "Mail", isDirty: () => true, save: saved, discard: vi.fn() });
+    return null;
+  }
+
+  /** A pop-out page's content with unsaved changes. */
+  function DirtyDialog() {
+    return <Dirty />;
+  }
+
+  /** The shared prompt the window's guard opened, answered with `button`. */
+  async function answerPrompt(env: Env, window: string, button: string) {
+    const prompt = promptWindowFor(window);
+    await waitFor(() => {
+      expect(env.store.getState().windows).toContain(prompt);
+    });
+    const { container, unmount } = renderWithProviders(
+      <UnsavedPrompt
+        name={prompt}
+        close={() => {
+          env.store.getState().closeWindow(prompt);
+        }}
+      />,
+      env,
+    );
+    await userEvent.click(await within(container).findByRole("button", { name: button }));
+    unmount();
+  }
+
+  it("asks before popping out; Cancel keeps the window, Save saves and then pops out", async () => {
+    saved.mockClear();
+    const env = desktopEnv();
+    withCloseGuard(env);
+    const sent = requests(env);
+    act(() => {
+      env.store.getState().openWindow("settings");
+    });
+    renderWithProviders(
+      <WindowInstanceContext.Provider value="settings">
+        <Dirty />
+        <PopOutButton window="settings" />
+      </WindowInstanceContext.Provider>,
+      env,
+    );
+    const button = await screen.findByRole("button", { name: "Open in new window" });
+    await userEvent.click(button);
+    await answerPrompt(env, "settings", "Cancel");
+    await waitFor(() => {
+      expect(button).toBeEnabled();
+    });
+    expect(sent.some((r) => r.type === "PopOutWindow")).toBe(false);
+    expect(env.store.getState().windows).toEqual(["settings"]);
+    expect(saved).not.toHaveBeenCalled();
+
+    await userEvent.click(button);
+    await answerPrompt(env, "settings", "Save");
+    await waitFor(() => {
+      expect(sent.some((r) => r.type === "PopOutWindow" && r.window === "settings")).toBe(true);
+    });
+    expect(saved).toHaveBeenCalledOnce();
+    // Gone from the page without a second question.
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+  });
+
+  it("asks before returning to the main window", async () => {
+    saved.mockClear();
+    const env = desktopEnv();
+    await env.client.call({ type: "PopOutWindow", window: "about-nail" });
+    const sent = requests(env);
+    renderPopOutPage(env, "about-nail", DirtyDialog);
+    const back = await screen.findByRole("button", { name: "Return to main window" });
+    await userEvent.click(back);
+    await answerPrompt(env, "about-nail", "Cancel");
+    await settleQueries(env);
+    expect(sent.some((r) => r.type === "ReturnPopOut")).toBe(false);
+    await userEvent.click(back);
+    await answerPrompt(env, "about-nail", "Don't save");
+    await waitFor(() => {
+      expect(sent).toContainEqual({ type: "ReturnPopOut", window: "about-nail" });
+    });
+    expect(saved).not.toHaveBeenCalled();
+  });
+
+  it("lets a kind whose preparer hands its changes over go without asking", async () => {
+    const env = desktopEnv();
+    const sent = requests(env);
+    act(() => {
+      env.store.getState().openWindow("composer:d7");
+    });
+    cleanups.push(
+      registerPopOutPreparer("composer", () => ({ draft: "d7" }), { handsOverChanges: true }),
+    );
+    renderWithProviders(
+      <WindowInstanceContext.Provider value="composer:d7">
+        <Dirty />
+        <PopOutButton window="composer:d7" />
+      </WindowInstanceContext.Provider>,
+      env,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Open in new window" }));
+    await waitFor(() => {
+      expect(sent.some((r) => r.type === "PopOutWindow")).toBe(true);
+    });
+    expect(env.store.getState().windows).toEqual([]);
   });
 });

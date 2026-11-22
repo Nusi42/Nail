@@ -1,13 +1,15 @@
 /**
  * A plug-in's settings page, generated from its manifest's settings schema
  * (`GetPluginSettings` / `UpdatePluginSettings`; the core checks values).
+ * Nothing is written before the settings page's Save (R6).
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useState, type ReactNode } from "react";
-import { errorMessageOf } from "../../api/client";
-import type { JsonValue, LocalizedMessage, PluginSettingDef } from "../../api/generated";
+import { useId, type ReactNode } from "react";
+import type { JsonValue, PluginSettingDef } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
+import { sameJson } from "../../text/json";
+import { useFormNotice, useSettingsForm } from "../settings/draft";
 import { pluginKeys, usePluginSettings } from "./queries";
 
 function SettingField({
@@ -116,79 +118,63 @@ function SettingField({
   );
 }
 
+/** No values yet (the settings are loading). */
+const NO_VALUES: Readonly<Record<string, JsonValue>> = {};
+
+/**
+ * The settings of plug-in `pluginId` (R6, ADR 0239): a settings draft,
+ * written with the section's Save (`UpdatePluginSettings`, only the changed
+ * keys); the core's refusal shows above the fields and the bar stays.
+ */
 export function Settings({ pluginId }: { pluginId: string }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const settings = usePluginSettings(pluginId);
-  const [changed, setChanged] = useState<Record<string, JsonValue>>({});
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
-  if (!settings.data) return null;
-  const { schema, values } = settings.data;
-  if (schema.length === 0) {
-    return <p data-part="plugin-settings.none">{t("plugin-settings-none")}</p>;
-  }
-  const save = async () => {
-    setBusy(true);
-    setProblem(null);
-    setSaved(false);
-    try {
+  const values = settings.data?.values ?? NO_VALUES;
+  const { notice, outcome, clear, problems } = useFormNotice();
+  const form = useSettingsForm<Record<string, JsonValue>>(values, {
+    save: async (edited) => {
+      const changed = Object.fromEntries(
+        Object.entries(edited).filter(([key, value]) => !sameJson(value, values[key])),
+      );
       const r = await client.request(
         { type: "UpdatePluginSettings", plugin_id: pluginId, values: changed },
         "PluginSettings",
       );
       queryClient.setQueryData(pluginKeys.settings(pluginId), r);
-      setChanged({});
-      setSaved(true);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+    ...outcome("common-settings-saved"),
+  });
+  if (!settings.data) return null;
+  const { schema } = settings.data;
+  if (schema.length === 0) {
+    return <p data-part="plugin-settings.none">{t("plugin-settings-none")}</p>;
+  }
+  const failure = problems([])[0];
   return (
-    <form
-      data-part="plugin-settings"
-      noValidate
-      aria-label={t("plugin-settings-label")}
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      {problem && (
+    <div data-part="plugin-settings" role="group" aria-label={t("plugin-settings-label")}>
+      {failure && (
         <p data-part="plugin-settings.error" role="alert">
-          {t(problem.id, problem.args)}
+          {t(failure.id, failure.args)}
         </p>
       )}
-      {saved && (
+      {notice !== null && !form.dirty && (
         <p data-part="plugin-settings.status" role="status">
-          {t("common-settings-saved")}
+          {t(notice)}
         </p>
       )}
       {schema.map((def) => (
         <SettingField
           key={def.key}
           def={def}
-          value={Object.hasOwn(changed, def.key) ? changed[def.key] : values[def.key]}
+          value={form.value[def.key]}
           onChange={(value) => {
-            setSaved(false);
-            setChanged((c) => ({ ...c, [def.key]: value }));
+            clear();
+            form.set((current) => ({ ...current, [def.key]: value }));
           }}
         />
       ))}
-      <div data-part="plugin-settings.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-action="save"
-          disabled={busy || Object.keys(changed).length === 0}
-        >
-          {t("plugin-settings-save")}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }

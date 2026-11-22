@@ -4,7 +4,7 @@
  * renders windows without the app installs it on its env for the test.
  */
 import { act } from "@testing-library/react";
-import { installCloseGuard } from "../layout/closeGuard";
+import { installCloseGuard, type CloseGuard } from "../layout/closeGuard";
 import type { Env } from "./harness";
 
 /** Installs the close guard on `env`'s UI store until the test finishes. */
@@ -14,4 +14,14 @@ export function withCloseGuard(env: Env): void {
     uninstall = installCloseGuard(env.store);
   });
   onTestFinished(() => uninstall?.());
+}
+
+/** Saves through `guard` (what the prompt's Save does) and expects it saved and clean. */
+export async function saveThroughGuard(guard: () => CloseGuard): Promise<void> {
+  let saved: boolean | undefined;
+  await act(async () => {
+    saved = await guard().save?.();
+  });
+  expect(saved).toBe(true);
+  expect(guard().isDirty()).toBe(false);
 }

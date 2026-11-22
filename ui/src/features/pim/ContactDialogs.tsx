@@ -17,7 +17,14 @@
  */
 import { useQueries } from "@tanstack/react-query";
 import { useId, useMemo, useState, type SubmitEvent } from "react";
-import { DialogFooter, DialogForm } from "../../widgets/dialog";
+import {
+  askToLeave,
+  DialogFooter,
+  DialogForm,
+  useCloseGuard,
+  useGuardKey,
+} from "../../widgets/dialog";
+import { sameJson } from "../../text/json";
 import { askPim } from "./Confirm";
 import { DELETE_GROUP_DIALOG } from "./names";
 import type {
@@ -83,9 +90,15 @@ export function GroupsDialog() {
   const [chosenBook, setNewBook] = useState<string>("");
   const newBook = nonEmpty(chosenBook) ?? writable[0]?.id ?? "";
   const group = groups.data?.find((g) => g.id === selected) ?? null;
+  const ui = ctx.store;
+  const guardKey = useGuardKey();
 
-  const create = async (event: SubmitEvent) => {
+  /** Creates the group and shows it (after the prompt when the shown one has unsaved edits). */
+  const create = (event: SubmitEvent) => {
     event.preventDefault();
+    askToLeave(ui, guardKey, () => void createNow());
+  };
+  const createNow = async () => {
     if (!newName.trim()) {
       setProblem({ id: "pim-issue-missing-name" });
       return;
@@ -133,7 +146,10 @@ export function GroupsDialog() {
                       aria-pressed={g.id === selected}
                       data-state={g.id === selected ? "selected" : undefined}
                       onClick={() => {
-                        setSelected(g.id);
+                        if (g.id === selected) return;
+                        askToLeave(ui, guardKey, () => {
+                          setSelected(g.id);
+                        });
                       }}
                     >
                       {t("pim-group-entry", {
@@ -160,7 +176,7 @@ export function GroupsDialog() {
           }}
         />
       )}
-      <form data-part="pim.groups.new" onSubmit={(e) => void create(e)}>
+      <form data-part="pim.groups.new" onSubmit={create}>
         <h3 data-part="form.section.title">{t("pim-group-new")}</h3>
         <div data-part="form.field" data-field="book">
           <label data-part="form.label" htmlFor={ids.book}>
@@ -203,6 +219,14 @@ export function GroupsDialog() {
   );
 }
 
+/** The member addresses typed into the editor, one per line (or separated by `,` / `;`). */
+function emailList(text: string): string[] {
+  return text
+    .split(/[\s,;]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
 function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () => void }) {
   const t = useT();
   const ctx = useChangeContext();
@@ -213,30 +237,43 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () 
   const [emails, setEmails] = useState(group.member_emails.join("\n"));
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [saved, setSaved] = useState(false);
+  const edited = { name: name.trim(), member_ids: memberIds, member_emails: emailList(emails) };
+  // What the editor last saved (or opened with): edits differ from it.
+  const [pristine, setPristine] = useState(() => ({
+    name: group.name.trim(),
+    member_ids: group.member_ids,
+    member_emails: group.member_emails,
+  }));
+  const dirty = !group.read_only && !sameJson(edited, pristine);
 
-  const save = async (event: SubmitEvent) => {
-    event.preventDefault();
+  /** Saves; `true` when saved (the tool window stays open). */
+  const persist = async (): Promise<boolean> => {
     setProblem(null);
     setSaved(false);
     try {
       await pimWrite(
         ctx,
-        {
-          type: "UpdateContactGroup",
-          group_id: group.id,
-          name: name.trim(),
-          member_ids: memberIds,
-          member_emails: emails
-            .split(/[\s,;]+/)
-            .map((e) => e.trim())
-            .filter(Boolean),
-        },
+        { type: "UpdateContactGroup", group_id: group.id, ...edited },
         "ContactGroupSaved",
       );
+      setPristine(edited);
       setSaved(true);
+      return true;
     } catch (error) {
       setProblem(problemOf(error));
+      return false;
     }
+  };
+  // R6 (ADR 0239): closing the window or picking another group asks while
+  // the group has unsaved edits.
+  useCloseGuard({
+    name: () => name,
+    isDirty: () => dirty,
+    save: persist,
+  });
+  const save = async (event: SubmitEvent) => {
+    event.preventDefault();
+    await persist();
   };
 
   /** Delete group…: asks first; the group's contacts stay. */
@@ -246,7 +283,7 @@ function GroupEditor({ group, onDeleted }: { group: ContactGroup; onDeleted: () 
       question: t("pim-delete-group-question", { name: group.name }),
       detail: t("pim-delete-group-note"),
       action: t("pim-group-delete"),
-      go: async () => {
+      run: async () => {
         await pimWrite(ctx, { type: "DeleteContactGroup", group_id: group.id }, "PimDeleted");
         onDeleted();
       },

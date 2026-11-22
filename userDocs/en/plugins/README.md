@@ -67,7 +67,10 @@ where it came from and its state: *Running*, *Off*, *Not running*,
 version of Nail*. For each plug-in:
 
 - the switch turns it on and off (turning it on again also restarts one
-  that stopped after a problem);
+  that stopped after a problem); like its permissions, confirmations and
+  settings, this waits for **Save** in the bar at the bottom (see
+  [Settings](../settings.md#saving-your-changes)); the plug-in manager
+  window asks before it closes with unsaved changes;
 - **Permissions** changes or revokes what it may do (from its next call
   on);
 - **Confirmations** chooses what it has to ask you about before it changes

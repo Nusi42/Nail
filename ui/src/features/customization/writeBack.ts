@@ -10,7 +10,6 @@
  */
 import type { NailClient } from "../../api/client";
 import type {
-  JsonValue,
   LayoutNode,
   LayoutNodeRef,
   LayoutPatch,
@@ -71,22 +70,6 @@ export async function updateLayout(client: NailClient, patches: LayoutPatch[]): 
 /** Writes a toolbar's items in a new order (or with new contents). */
 export function writeToolbar(client: NailClient, toolbar: string, items: ToolbarItem[]) {
   return updateLayout(client, [{ op: "toolbar-order", toolbar, items }]);
-}
-
-/** Binds a key (replacing the binding of that key in the context). */
-export function writeKeyBinding(
-  client: NailClient,
-  context: string,
-  key: string,
-  action: string,
-  args: JsonValue[] = [],
-) {
-  return updateLayout(client, [{ op: "add-key-binding", context, key, action, args }]);
-}
-
-/** Removes a key binding (the core writes `unbind` for default bindings). */
-export function removeKeyBinding(client: NailClient, context: string, key: string) {
-  return updateLayout(client, [{ op: "remove-key-binding", context, key }]);
 }
 
 /** Writes a list widget's column order. */
