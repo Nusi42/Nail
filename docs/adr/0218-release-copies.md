@@ -5,10 +5,8 @@ Status: accepted (2026-11-19)
 ## Context
 
 `release:prepare` builds into the lead work folder's `.nail-build/release/X.Y.Z/`,
-which `work-folders.mjs clean` and new builds remove. The maintainer kept the
-installers to try by copying them by hand to a folder outside the repository.
-That step was only written in the maintainer's notes, and the folder was hard
-to find again.
+which `work-folders.mjs clean` and new builds remove. Built releases were
+lost with the build output; a copy outside the work folder is needed.
 
 ## Decision
 

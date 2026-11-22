@@ -14,4 +14,4 @@ generated (ts-rs / `npm run gen:api`) or pinned by a test, never hand-mirrored. 
 mandatory rules; every review checks the wave's diff and reports violations as must-fix). The duplicate check
 (`npm run check:duplicates`, a blocking step of `npm run check`) stays at 0 findings, like [[zero-warnings-policy]].
 
-Related: [[zero-warnings-policy]], [[next-steps]]
+Related: [[zero-warnings-policy]]

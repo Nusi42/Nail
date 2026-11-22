@@ -260,6 +260,6 @@ header reading (`Message-ID`, recipients) is a small module of its own
   contact folders (only top-level folders are listed), contact photos are
   read on demand only (`contact_photo`), the appended-draft limitation,
   `MeetingSend::None` for new meetings, calendar changes outside the
-  window. Interop checks for the maintainer's tenant: `mailFolders/delta`
+  window. Interop checks against a real tenant: `mailFolders/delta`
   returns nested folders, `cancelledOccurrences` on v1.0, `If-Match` with
   the event change key.

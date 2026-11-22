@@ -5,12 +5,12 @@ after wave Q2 (ADRs 0171–0177)
 
 ## Context
 
-`work-6` (fixes from the maintainer's desktop test: IMAP first, windows follow the app, text selection, Check for new mail, Nail's own context
+`work-6` (fixes from a manual desktop test: IMAP first, windows follow the app, text selection, Check for new mail, Nail's own context
 menus) and `work-7` (connection log, error details, app log, resilient IMAP folder sync; crate `nail-connlog`,
 schema v19) branched from `ee62b66`, before Q2 moved shared code into `nail-net`, `nail-util`, generated
 constants and shared test helpers and made the duplicate check blocking. Two leftovers were open: the visual
 `calendar-year` screens drifted with the date (the demo-multi feeds and CalDAV events were dated from the real
-`Utc::now()`), and a desktop e2e run once collided with the maintainer's installed Nail (WebView2 `0x8007139F`, a
+`Utc::now()`), and a desktop e2e run once collided with an installed Nail on the same machine (WebView2 `0x8007139F`, a
 profile held by another process with other options).
 
 ## Decisions

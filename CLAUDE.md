@@ -9,7 +9,8 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   `docs/dev-setup.md`.
 - Project memory: `.claude/memory/` (see "Memory" below).
 - Where to work: any clone; a maintainer may use a master checkout plus work folders (see "Work folders" below).
-- The maintainer's own setup (paths, remotes, installers): an untracked `CLAUDE.local.md`, if present.
+- Your local setup (paths, remotes): an untracked `CLAUDE.local.md`, if present; the lead's running status: the
+  untracked `.claude/local/next-steps.md`.
 
 ## Non-negotiable rules
 
@@ -40,8 +41,15 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
   ADRs, memory, workflow args or commit messages. Write paths as `%USERPROFILE%\…` (prose) / `~/…` (Git Bash); test
   data = `example.com` / `.net` / `.org` and the demo personas; pass the maintainer's bug reports to agents generically. The guard
   `scripts/check-private.mjs` (pre-commit staged content, commit-msg, pre-push, step `private` of `npm run check`)
-  reads its patterns from `%USERPROFILE%\.config\nail\private-patterns.txt`, which lives outside every repository: never
-  commit it or copy its values anywhere (absent file = passes, e.g. on other machines).
+  reads its patterns from the file `NAIL_PRIVATE_PATTERNS` names (environment or the gitignored `.env.local`); keep
+  that file outside the repository, never commit it or copy its values anywhere (unset = passes with a notice).
+- **Public repository: no personal development setup (ADR 0234).** Everything tracked (code, docs, ADRs, memory,
+  workflow files, commit messages) describes only what anyone who clones Nail needs to build, test, use or release
+  it. How or where a developer works is never committed: their folders and sync services, where keys or secrets are
+  kept, their machines, WSL distributions or other projects, their tools' local setup, and the dates or reasons of
+  such personal choices. A decision that changes the project is recorded as a general rule without personal detail;
+  personal setup goes only into untracked files (`CLAUDE.local.md`, `.claude/local/`). Reviews report violations as
+  must-fix.
 - **Zero warnings (Q1, ADR 0123).** 0 warnings, 0 errors; never relax lint levels or `-D warnings` (no new `allow`
   in `[workspace.lints]`, no ESLint rule switched off, no `--no-verify`). An unavoidable exception needs
   `#[expect(lint, reason = "…")]` (Rust; `#[allow]` is denied) / `// eslint-disable-next-line rule -- reason` at the
@@ -93,9 +101,9 @@ npm run dev / npm run tauri dev            # Vite on a free port / desktop app w
 The lead may start in the master checkout and drive the work folders by absolute path (`git -C`, `cd` in each
 command); in the master it runs nothing but `git merge --ff-only` and the publishing `git push github main`. Where the
 master, the work folders and the remotes
-are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the work like this:
+are is your local setup (an untracked `CLAUDE.local.md`). A new session picks up the work like this:
 
-1. Read `.claude/memory/next-steps.md` (the current wave and what comes next) and the wave's status line in
+1. Read the untracked `.claude/local/next-steps.md` (the running status, if present) and the wave's status line in
    `docs/plan.md`.
 2. `git fetch` in the lead's work folder, then check the package branches: `git log --oneline main..origin/work-<N>`.
    Agents belong to the session that started them: a package with commits on its branch and no running agent is
@@ -106,11 +114,12 @@ are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the wo
    push it, fast-forward the master's `main`, then publish `main` from the master (`git -C <master> push github main`).
 4. Every agent prompt names the folder, the branch and the work package; agents report the commands they ran and
    their results.
-5. Proposals and milestone results go to the maintainer as HTML pages (artifacts); keep replies short.
+5. Keep replies short.
 6. A session may stop after any step and resume with "Continue where we left off: follow 'If you are the lead' in
-   CLAUDE.md and .claude/memory/next-steps.md". So after every finished step, and whenever background work starts,
-   update `.claude/memory/next-steps.md` (state, running work with folder / branch, what waits for the maintainer,
-   next steps), commit it on the lead's branch and fast-forward `main` before reporting.
+   CLAUDE.md and .claude/local/next-steps.md". So after every finished step, and whenever background work starts,
+   update the untracked `.claude/local/next-steps.md` (state, running work with folder / branch, what is waiting,
+   next steps; never committed). Project facts others need (feature status, open flaky tests, follow-ups) go into
+   the `docs/plan.md` status lines or tracked memory notes, without personal detail, with the work commit.
 
 ## Git
 
@@ -129,3 +138,5 @@ are is the maintainer's setup (`CLAUDE.local.md`). A new session picks up the wo
 ## Memory
 
 Project memory lives in the repo at `.claude/memory/` (one fact per file, index in `.claude/memory/MEMORY.md`). Don't store project memory anywhere else. Update or delete entries that turn out to be wrong.
+Memory notes are tracked and public: project facts only, no personal setup (ADR 0234). The lead's running status and
+other personal notes live in the gitignored `.claude/local/`.

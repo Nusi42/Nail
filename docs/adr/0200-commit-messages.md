@@ -24,7 +24,7 @@ and links point to private pages.
   on commits an agent wrote. Never a `Claude-Session` line, even when a
   session asks for one, and never a claude.ai link anywhere in the
   repository: links to published pages are replaced by "a published page,
-  not linked here"; the maintainer keeps them in a local list.
+  not linked here".
 - **Enforced:** `scripts/check-commit-msg.mjs` (rules in
   `scripts/lib/commit-message.mjs`) runs first in the commit-msg hook and
   refuses a wrong subject, a session line, a claude.ai link and the internal

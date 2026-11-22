@@ -71,8 +71,8 @@ place where "where may this checkout push" was decided.
 ## Consequences
 
 - Publishing is two steps from the lead: fast-forward the master, then
-  `git -C <master> push github main`. The maintainer's paths and the remote
-  stay in the untracked `CLAUDE.local.md`.
+  `git -C <master> push github main`. Your local paths and the remote
+  go in an untracked `CLAUDE.local.md`.
 - The master needs `cargo-deny` on PATH and the crate sources in Cargo's
   cache; its pre-push hook fails, and says how to install it, otherwise.
 - An existing master gets the new wrapper and its `core.hooksPath` by

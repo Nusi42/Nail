@@ -1,5 +1,5 @@
-// The private-data guard (ADR 0192). Synthetic patterns only: never put the
-// owner's real patterns (or anything derived from them) into a test.
+// The private-data guard (ADR 0192). Synthetic patterns only: never put
+// real patterns (or anything derived from them) into a test.
 // Run: node --test scripts/test/
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -123,9 +123,26 @@ test("output masks every match", () => {
   assert.doesNotMatch(line, /joanne/);
 });
 
-test("the patterns file: environment override, absent file = nothing to check", () => {
-  assert.equal(patternsPath({ [PATTERNS_ENV]: "x.txt" }), "x.txt");
-  assert.match(patternsPath({}), /\.config[\\/]nail[\\/]private-patterns\.txt$/);
+test("the patterns file: environment, .env.local, master; unset or absent = nothing to check", () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "nail-private-path-"));
+  try {
+    const work = path.join(base, "work");
+    const master = path.join(base, "master");
+    fs.mkdirSync(work);
+    fs.mkdirSync(master);
+    // Unset: nothing to check (there is no built-in location).
+    assert.equal(patternsPath({ root: work, master, env: {} }), undefined);
+    // The master's .env.local, relative to the master.
+    fs.writeFileSync(path.join(master, ".env.local"), `${PATTERNS_ENV}=p.txt\n`);
+    assert.equal(patternsPath({ root: work, master, env: {} }), path.join(master, "p.txt"));
+    // The checkout's own .env.local wins, the environment over both.
+    fs.writeFileSync(path.join(work, ".env.local"), `${PATTERNS_ENV}=own.txt\n`);
+    assert.equal(patternsPath({ root: work, master, env: {} }), path.join(work, "own.txt"));
+    const absolute = path.join(base, "elsewhere.txt");
+    assert.equal(patternsPath({ root: work, master, env: { [PATTERNS_ENV]: absolute } }), absolute);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
   assert.equal(loadMatchers(path.join(os.tmpdir(), "nail-no-such-patterns.txt")), undefined);
 });
 
@@ -178,13 +195,13 @@ const git = (dir, args) => execFileSync("git", args, { cwd: dir, encoding: "utf8
  * @param {string | undefined} patterns
  * @param {string} [input]
  */
-const run = (dir, args, patterns, input = "") =>
-  spawnSync(process.execPath, [SCRIPT, ...args], {
-    cwd: dir,
-    input,
-    encoding: "utf8",
-    env: { ...process.env, [PATTERNS_ENV]: patterns ?? path.join(dir, "absent.txt") },
-  });
+const run = (dir, args, patterns, input = "") => {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key !== PATTERNS_ENV),
+  );
+  if (patterns !== undefined) env[PATTERNS_ENV] = patterns;
+  return spawnSync(process.execPath, [SCRIPT, ...args], { cwd: dir, input, encoding: "utf8", env });
+};
 
 test("the command checks the tree, staged files, messages and pushes", () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "nail-private-"));
@@ -201,12 +218,20 @@ test("the command checks the tree, staged files, messages and pushes", () => {
     git(repo, ["add", "a.txt"]);
     git(repo, ["commit", "-q", "-m", "clean"]);
 
-    // No patterns file: passes and says so.
-    const absent = run(repo, [], undefined);
+    // Not configured: passes and says how to configure it.
+    const unset = run(repo, [], undefined);
+    assert.equal(unset.status, 0);
+    assert.match(unset.stdout, /no private patterns configured \(set NAIL_PRIVATE_PATTERNS/);
+    // Configured, but the file does not exist: passes and says so.
+    const absent = run(repo, [], path.join(base, "absent.txt"));
     assert.equal(absent.status, 0);
-    assert.match(absent.stdout, /no private patterns configured/);
+    assert.match(absent.stdout, /no private patterns configured \(the NAIL_PRIVATE_PATTERNS file/);
 
     assert.equal(run(repo, [], patterns).status, 0);
+    // The checkout's gitignored .env.local can name the file too.
+    fs.writeFileSync(path.join(repo, ".env.local"), `${PATTERNS_ENV}=${patterns}\n`);
+    assert.match(run(repo, [], undefined).stdout, /private: 1 tracked files clean/);
+    fs.rmSync(path.join(repo, ".env.local"));
 
     // Staged content (base64-encoded) and a staged file name.
     fs.writeFileSync(

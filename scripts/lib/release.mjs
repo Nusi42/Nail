@@ -14,11 +14,10 @@
  *   `<repository>/releases/latest/download/latest.json` (ADR 0210; no
  *   channels). A pre-release is never marked Latest, so it is never offered.
  */
-import path from "node:path";
 
 import { parseJson } from "./json.mjs";
 import { MANIFEST_FILE, parseVersion } from "./update-manifest.mjs";
-import { localSettings } from "./work-folder.mjs";
+import { pathSetting } from "./work-folder.mjs";
 
 /** The user-facing release notes. */
 export const RELEASE_NOTES = "userDocs/en/release-notes.md";
@@ -53,27 +52,15 @@ export const RECORD_FILE = "release.json";
 export const RELEASES_DIR_SETTING = "NAIL_RELEASES_DIR";
 
 /**
- * Where `release:prepare` copies a release, `undefined` for nowhere. The
- * setting comes from the environment, the checkout's `.env.local` or, in a
- * work folder, its master's `.env.local` (the first that has it); a
- * relative path is relative to the checkout whose file names it (the
- * current directory for the environment).
+ * Where `release:prepare` copies a release, `undefined` for nowhere: the
+ * {@link pathSetting} `NAIL_RELEASES_DIR` (environment, the checkout's
+ * `.env.local`, its master's `.env.local`).
  *
  * @param {{ root: string, master?: string, env?: NodeJS.ProcessEnv }} where
  * @returns {string | undefined}
  */
-export function releasesCopyDir({ root, master, env = process.env }) {
-  /** @type {[string, Record<string, string | undefined>][]} */
-  const sources = [
-    [process.cwd(), env],
-    [root, localSettings(root, {})],
-  ];
-  if (master !== undefined) sources.push([master, localSettings(master, {})]);
-  for (const [base, settings] of sources) {
-    const value = settings[RELEASES_DIR_SETTING]?.trim();
-    if (value) return path.resolve(base, value);
-  }
-  return undefined;
+export function releasesCopyDir(where) {
+  return pathSetting(RELEASES_DIR_SETTING, where);
 }
 
 /** @param {string} version */

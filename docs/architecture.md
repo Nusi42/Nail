@@ -1383,10 +1383,12 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - README and repository (ADRs 0197, 0198): `README.md` with the animated banner and GIFs from `docs/media/`
   (recorded by `e2e/readme/`); GitHub remote `github` in the master (ADR 0205); public commit identity checked by
   `scripts/check-private.mjs` (commit-msg and pre-push); license AGPL-3.0-or-later with a contributor license agreement (dual licensing), plug-in kit and examples MIT.
-- The maintainer's setup out of the repository (ADR 0199): the master is the checkout with `NAIL_CHECKOUT_ROLE=master`
+- Personal setup out of the repository (ADRs 0199, 0234): the master is the checkout with `NAIL_CHECKOUT_ROLE=master`
   (environment or gitignored `.env.local`, `scripts/lib/work-folder.mjs` `localSettings` / `isMaster`); work-folder
-  names from `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`; `nail-wave` takes its folders as args; personal
-  paths and remotes only in the untracked `CLAUDE.local.md`.
+  names from `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`; `nail-wave` takes its folders as args; your local
+  setup (paths, remotes) goes in an untracked `CLAUDE.local.md`, the lead's running status in the gitignored
+  `.claude/local/`; the private-data guard reads its patterns only from `NAIL_PRIVATE_PATTERNS`
+  (`scripts/lib/work-folder.mjs` `pathSetting`, shared with `NAIL_RELEASES_DIR`).
 - Commit messages (ADR 0200): Conventional Commits checked by the commit-msg hook (`scripts/check-commit-msg.mjs`, rules
   in `scripts/lib/commit-message.mjs`, also used by `check-private.mjs` for the message text); no session lines,
   claude.ai links or internal vocabulary.
@@ -1559,7 +1561,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   in `theme/compile.ts`), `strict` and `accounts`; converted fields: junk, server rules, vacation, Also my addresses,
   search index, MCP grants (accounts + hidden folders), export, import target, key lookup, Exchange automatic
   replies. Playwright helpers `e2e/support/pickers.ts`.
-- WR9: built-in theme Paper (`defaults/themes/paper.kdl`, mapped from the sister project's tokens in its header;
+- WR9: built-in theme Paper (`defaults/themes/paper.kdl`, Nail's existing tokens only;
   registered in `nail-config` `themes.rs` and `nail_api::appearance::BUILTIN_THEMES`); theme counts in tests derive
   from `BUILTIN_THEMES`. A user theme may not use a built-in id, so the config tests' user theme is `parchment`.
 

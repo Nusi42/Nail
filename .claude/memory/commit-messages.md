@@ -1,6 +1,6 @@
 ---
 name: commit-messages
-description: "Rule: Conventional Commits in plain English; never a Claude-Session line or claude.ai link; no internal jargon (WIN branches, waves, milestone codes, SSOT/DRY/ODR) in messages"
+description: "Rule: Conventional Commits in plain English; never a Claude-Session line or claude.ai link; no internal jargon (numbered work branches, waves, milestone codes, SSOT/DRY/ODR) in messages"
 metadata:
   type: feedback
 ---

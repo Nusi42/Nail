@@ -120,7 +120,7 @@ runtime (part of Windows 11). The zip is written with Windows' `tar.exe`
   `Cargo.lock`, licences, purls, dependency graph) and the UI's npm runtime
   packages (from `package-lock.json`, SHA-512 integrity). Not
   `cargo cyclonedx`, which writes its files next to every `Cargo.toml`
-  (into the OneDrive repository), and not `npm sbom`, which refuses this
+  (into the source tree), and not `npm sbom`, which refuses this
   workspace because the root package has no version.
 
 ### Build and CI

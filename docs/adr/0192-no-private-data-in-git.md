@@ -20,9 +20,10 @@ private. The git author address stays as it is.
    prose and `<work root>/nail-work-<N>` / `<master>` in commands (agents run Git Bash, which
    expands `~`).
 2. **Guard** `scripts/check-private.mjs` (logic in `scripts/lib/private-patterns.mjs`):
-   - The patterns live outside every repository in `%USERPROFILE%\.config\nail\private-patterns.txt` (one regular
-     expression per line, `#` comments, matched case-insensitively; `NAIL_PRIVATE_PATTERNS` points at another
-     file). Without the file the guard prints "no private patterns configured" and passes (CI, other machines).
+   - The patterns live in a file outside every repository, named by `NAIL_PRIVATE_PATTERNS` (the environment, the
+     checkout's gitignored `.env.local` or its master's; one regular expression per line, `#` comments, matched
+     case-insensitively). There is no built-in location (ADR 0234). Unset, or the file absent, the guard prints a
+     one-line "no private patterns configured" notice and passes (other machines).
      The file and its values are never copied into a repository, ADR, memory file or commit message.
    - For every pattern that is a plain literal (word boundaries and anchors aside), the guard also searches its
      base64 forms at the three byte alignments (the characters that depend only on the literal's bytes, standard
@@ -35,25 +36,16 @@ private. The git author address stays as it is.
      (pre-push hook: the messages, file names and added lines of the commits not yet on a remote; removed lines
      pass, so a commit that deletes private text can be pushed).
    - Tests use synthetic patterns only (`scripts/test/private-patterns.test.mjs`).
-3. **History rewrite** (one-time). The master and every work folder had the old history (branches
-   `main`, `work-1`–`work-7`). `git filter-repo --replace-text --replace-message` ran on a mirror clone outside
-   OneDrive with a replacement file kept outside every repository (next to the patterns): the maintainer's address →
-   `sam@example.net`, the domain → `example.net`, provider host names → `*.example.net`, the provider's name →
-   "the provider", the private folder name in the connection-log test files → `Receipts`, the user name in paths →
-   `<user>`, plus regex rules for their base64 forms. The rewritten branches were force-pushed to the master, its
-   stashes dropped, reflogs expired and objects pruned; every work folder was reset to its rewritten branch and
-   pruned likewise. Verified: no pattern (or base64 form) in `git log --all -p`, in any commit message or in any
-   working tree; author addresses unchanged; the new `main` tree equals the old `work-1` tree except for the intended
-   replacements.
+3. **History rewrite** (one-time). The history was rewritten once with `git filter-repo` (`--replace-text`,
+   `--replace-message`): private details became neutral example data (`example.net`, "the provider", `<user>`),
+   plus rules for their base64 forms. Verified clean: no pattern (or base64 form) in `git log --all -p`, in any
+   commit message or in any working tree; author addresses unchanged.
 
 ## Consequences
 
 - Old commit ids are gone; every clone of the old history must be discarded (there were no others).
-- **OneDrive's own version history** of the master's `.git` folder (and its recycle bin) may still hold the old
-  objects. The maintainer can purge them in OneDrive's web UI ("Version history" of the files, recycle bin); this ADR
-  does not attempt it.
 - Findings from the maintainer's real accounts are passed to agents generically ("a real IMAP account", "a folder")
   with "do not copy any of these details into the repo" (memory `no-private-data-in-git`). Reviews treat private
   data in a diff as blocking.
-- A new private detail is added by appending a pattern to the maintainer's pattern file (never to the repository); the next
+- A new private detail is added by appending a pattern to the configured patterns file (never to the repository); the next
   `npm run check` then scans the whole tree for it.

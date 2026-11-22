@@ -6,7 +6,7 @@ Status: accepted (2026-10-25); the pushes of `release:publish`: revised by ADR 0
 
 ADR 0089 built the pieces of a Windows release (installers, update
 signatures, per-channel update manifests, winget manifests) and ADR 0201
-moved every build to the maintainer's machine, but the release itself was a
+moved every build to a local machine, but the release itself was a
 list of hand steps in `docs/release.md`: the version typed into six files,
 release notes in three places (`CHANGELOG.md`, `userDocs/en/release-notes.md`
 and `packaging/release-notes/<version>.md`), the GitHub release created in
@@ -58,7 +58,7 @@ repository is public on GitHub.
   the installer build sees it, and only the bundler inside that
   (`docs/release.md` "Who sees the private key"). Its public half is
   committed as `packaging/updater/release.pub`; where the private half is
-  kept is the maintainer's business, not the repository's.
+  kept is up to whoever releases, not the repository's business.
 
 ## Consequences
 
@@ -67,6 +67,6 @@ repository is public on GitHub.
 - An installed copy updates from GitHub; anyone who can replace release
   assets still cannot ship an update without the update key.
 - The rolling `stable` and `beta` tags exist in the public repository
-  (until ADR 0210; the maintainer deletes them after 0.8.2).
+  (until ADR 0210; they are deleted after 0.8.2).
 - winget manifests are not part of the scripts yet (`winget-manifest.mjs`
   stays a separate step).

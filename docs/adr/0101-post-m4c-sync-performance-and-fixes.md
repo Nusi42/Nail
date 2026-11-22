@@ -101,10 +101,9 @@ planner on the `Message-ID` index, and a unit test pins the plan.
   synced before), the at-rest encryption and index policies (sealing,
   encrypted index, decrypted-index opt-in all go through the same calls).
 
-### Results (this machine: 32 threads, release builds, `run-perf.mjs --corpus standard`)
+### Results (32-thread Windows desktop, release builds, `run-perf.mjs --corpus standard`)
 
-Background: the user's Vite dev servers, a `tauri dev` session, OneDrive
-and a game client were running (idle); no builds in parallel. Before = the
+Other applications idle, no parallel builds. Before = the
 binaries of commit fc2695a, measured in the same session.
 
 | Metric | Before 1 | Before 2 | After 1 | After 2 | Budget |

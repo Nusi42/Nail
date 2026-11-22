@@ -729,7 +729,7 @@ Wire everything; **Playwright:** import an mbox and a Maildir with flags; import
 
 ## 10. Milestone M5 — UX overhaul (detailed)
 
-The owner approved the UX proposal, every decision included: a published page, not linked here (memory: `ux-overhaul-proposal`). M5 implements it in full. It also fixes the development-port conflicts with the owner's other Vite projects.
+The owner approved the UX proposal, every decision included: a published page, not linked here (memory: `ux-overhaul-proposal`). M5 implements it in full. It also fixes the development-port conflicts with other projects' dev servers on the same machine.
 
 **Automated gate:** all suites green, including the new Playwright scenarios per wave. Visual-regression baselines are regenerated and reviewed for all five themes (Frost, Sage, Graphite, Nocturne, High contrast) in both densities. axe is clean in every theme. No console warnings in tests, as the test setup enforces.
 **Human gate:** the owner looks at the real app (desktop and `nail serve`) and confirms the new look.
@@ -841,7 +841,7 @@ Requirement: linters and formatters for every kind of file, with 0 warnings and 
 
 ### Wave P1 (polish) — responsive layout, HTML mail, stability
 
-Review findings from the maintainer's first pass over the real app (M5's human gate): controls misalign and do not resize when the app window is resized; HTML mail did not render; mail threads are too cramped (a separate UX proposal, pending the maintainer's approval — **not** part of P1). P1 also takes the open points of `.claude/memory/next-steps.md`: the M5 cosmetic list and the tests that are flaky under machine load. One wave: contract (the HTML root cause, the responsive standard, the shared helper, slots), four parallel packages WP190–WP193, integration WP194, two reviews, fixes, verify. Arguments: `.claude/workflows/args/p1.json`; contract ADR 0139.
+Review findings from the maintainer's first pass over the real app (M5's human gate): controls misalign and do not resize when the app window is resized; HTML mail did not render; mail threads are too cramped (a separate UX proposal, pending the maintainer's approval — **not** part of P1). P1 also takes the open points of the lead's status notes: the M5 cosmetic list and the tests that are flaky under machine load. One wave: contract (the HTML root cause, the responsive standard, the shared helper, slots), four parallel packages WP190–WP193, integration WP194, two reviews, fixes, verify. Arguments: `.claude/workflows/args/p1.json`; contract ADR 0139.
 
 **Automated gate:** every suite green (`npm run check`, `cargo test --workspace`, `npm test`, `npm run e2e` incl. `p1-mail.spec.ts`, `p1-windows.spec.ts` and `p1-views.spec.ts`, `npm run visual` with baselines regenerated only for intended changes); every view, window and dialog passes the responsive standard below with `e2e/support/responsive.ts`; HTML mail renders faithfully (style sheets, inline images, remote images after allowing them) in `nail serve` (local and remote UI) and in the desktop app; the four previously flaky Vitest files and the two visual screens pass 5 runs in a row under parallel load.
 **Human gate:** the owner resizes the real app (desktop and `nail serve`) from wide to narrow and opens HTML mail.
@@ -894,7 +894,7 @@ WP190's Playwright scenarios assert the rendered result *inside the frame* (comp
 - **WP191 (parallel, windows and dialogs):** the window manager (`ui/src/layout/`, `features/windows`) and every window and dialog outside mail and PIM: composer, settings page and its cards, security, portability, system, agents, plugins, remote, palette, print, exchange, gmail, scheduling, mcp, rules, customization, sieve, triage, sync, popout. Shared form, button and card rules go into `ui/src/theme/skinResponsive.ts`, feature-specific ones into the feature's skin or parts file. `e2e/tests/p1-windows.spec.ts` sweeps every window with self-checked coverage (the list of the a11y window sweep). Report: window → findings → fixed.
 - **WP192 (parallel, views and editors):** the calendar, contacts and tasks views, the nav rail and view host, the layout editor, toolbar customizer, appearance page and theme editor (skins `features/{pim,shell,layout-editor,toolbar-editor,appearance}/skin.ts`; the Appearance rules in `theme/skin.ts` are overridden in `features/appearance/skin.ts`, not edited), with `e2e/tests/p1-views.spec.ts`. Also the M5 cosmetic list: a duplicated theme keeps the source's header comment (`crates/nail-config/src/theme_edit.rs`: rewrite it), the toolbar customizer clips the italic "Separator" label, the theme editor shows its title twice, and "This theme" tags wrap unevenly; plus a one-paragraph recommendation on the accent override in High contrast (left as is).
 - **WP193 (parallel, stability):** test files and the harness only: the Vitest files that hit 20 s timeouts under load (layout-editor, pim, rules, security m4c) and the visual screens High contrast · Comfortable `html` / `main-1024` (scroll position), made robust without raising timeouts. The contract's own suite runs on the loaded machine added more files that fail only under load: 20 s timeouts in `palette/palette.test.tsx`, `pim/calendarList.test.tsx`, `pim/a11y.test.tsx` (60 s), `plugins/extensionsA11y.test.tsx`, `security/KeyManager.test.tsx`; "not wrapped in act(...)" from `customization/editors.test.tsx` (MessageList), `palette/palette.test.tsx` (WindowLayer) and `rules/RuleManager.test.tsx`; and `ui/build/strictBuild.test.ts` "fails on Vite's chunk-size warning" (the build resolved: the native reporter's warning apparently reaches the logger after `closeBundle` when the machine is busy — find out and make the check reliable, in the test or in `strictBuild.ts`). Each passes alone. The contract fixed one deterministic case: `toolbar-editor/a11y.test.tsx` read the lazily loaded customizer before it rendered (now waits for it). Proof: 5 runs in a row under parallel load, with timings before and after.
-- **WP194 (integration):** merge, ADR numbering, the full suite incl. the three p1 specs and `npm run visual`, final screenshots at 1600×1000 and 1024×700 (mail with an HTML message, calendar, settings, composer, theme editor) in `<build dir>/screens/p1/final/`, memory `p1-status`, `next-steps`.
+- **WP194 (integration):** merge, ADR numbering, the full suite incl. the three p1 specs and `npm run visual`, final screenshots at 1600×1000 and 1024×700 (mail with an HTML message, calendar, settings, composer, theme editor) in `<build dir>/screens/p1/final/`, memory `p1-status`.
 
 *Status:* contract done (ADR 0139). The root cause of the HTML rendering is written down above: style sheets, classes and body attributes removed by the sanitizer; `cid:` images never resolved and blocked by the inherited CSP; the reader's reading width and `smart` dark mode. The responsive standard is defined, with `e2e/support/responsive.ts` and its self-test (11 cases), and the slot `ui/src/theme/skinResponsive.ts`. No new crates, feature folders or catalogs are needed: every package works in existing folders.
 
@@ -955,7 +955,7 @@ Owner decision: actions on a conversation row behave like Gmail — today they a
 - **WP-perf (parallel):** schema v18 keeps `thread_activity` current (triggers recommended, property test against the backfill), `ListThreads` on the table, nail-bench, `thread-page-p95-ms` ≤ 10.
 - **WP-actions-ui (parallel):** conversation targets from the toolbar, row, menus and keys; card actions on their message; the undo toast and `mail.undo`; the Delete permanently confirmation with the count; `e2e/tests/p3-actions.spec.ts`; user docs.
 - **WP-card-height (parallel):** measured local frames, the sandbox route's hashed height script with the `parent` check, no 40vh / 50vh minimums, `e2e/tests/p3-card-height.spec.ts` (local, remote UI, desktop).
-- **Integration:** merge, renumber ADRs / migrations, the full suite incl. the p3 specs and `npm run visual` (baselines only for intended changes), review screenshots mixing Frost (light) with Graphite / Nocturne (dark), memory `p3-status`, `next-steps`.
+- **Integration:** merge, renumber ADRs / migrations, the full suite incl. the p3 specs and `npm run visual` (baselines only for intended changes), review screenshots mixing Frost (light) with Graphite / Nocturne (dark), memory `p3-status`.
 
 Gates as in P2: every suite green, the responsive standard on changed screens, the perf budget met on the standard corpus, the owner's human gate on the real app (conversation actions with undo in the unified inbox, long HTML mail in the card feed).
 
@@ -985,7 +985,7 @@ Owner rule, mandatory for existing and new code and for every source review: sin
 - **WP-rust-engines (parallel):** nail-proto-*, nail-exchange, nail-dav, nail-ical, nail-itip, nail-auth, nail-discovery, nail-pgp, nail-smime, nail-pkcs11, nail-mapi, nail-testkit, nail-testkit-net, nail-net, app/src-tauri, and the clones shared by core and engine crates: 404 findings.
 - **WP-ui (parallel):** `ui/` (not generated code), `defaults/`, the UI's Fluent catalogs (with `common.ftl`): 783 findings (444 of them Fluent texts).
 - **WP-mirrors-tooling (parallel):** every Rust ↔ TypeScript mirror (its TypeScript side, the generator / ts-rs export / shared JSON in nail-api), `packages/`, `examples/`, `e2e/`, `scripts/`, root configs, the flaky desktop `beforeAll` timeout of `p3-card-height.spec.ts`: 305 findings.
-- **Integration:** merge, renumber ADRs, `--strict` at 0, delete the baselines, the full suite, memory `q2-status`, `next-steps`.
+- **Integration:** merge, renumber ADRs, `--strict` at 0, delete the baselines, the full suite, memory `q2-status`.
 
 A package's work list: `node scripts/check-duplicates.mjs --owner WP-… --list`; its gate: `--strict --owner WP-…` at 0.
 
@@ -1015,7 +1015,7 @@ Maintainer feedback of 2026-11-20: rules can only be run by hand on their defaul
 - **Contract (done):** ADR 0219, `RunRules` / `RulesRan` (core: `run_rules_now`, `RunRule` through it; remote grant checks; remote-auth scope), MCP `run_rules` (`RunRulesArgs`, `MAX_RUN_RULES`, `rule_action_kind`, `run_rules_kind`, `confirmation-summary-run-rules`), TS regenerated, mock core `RunRules`, `features/rules/api.ts` `runRules` / `runRule` with `RuleRunTarget`, `LIVE_SEARCH_PAUSE_MS` + `useDebouncedAction`, the `search` slot, user docs of the MCP tool.
 - **WR1 — rules on demand (parallel):** `ui/src/features/rules/` (the run-target control and running the selected rules in `RuleEditor` / `RuleManager`; the Editor / Text switch bug: reproduce in a test first, then fix), the "Run rule" submenu in `context:message-list.row` and `context:folder-tree.folder` (`defaults/layout.kdl` menus plus the rules feature's actions; a submenu that lists the rules may need a dynamic menu source in `features/menus/` — keep it inside the rules slot where possible), `locales/en/rules.ftl`, `userDocs/en/rules.md`, `e2e/tests/r1-rules-on-demand.spec.ts`.
 - **WR2 — live search (parallel):** `ui/src/widgets/SearchBar.tsx` and its skin, the search parts of `ui/src/state/uiStore.ts` / `queries.ts`, `ui/src/features/search/`, `locales/en/search.ftl` (moving the field's texts there is allowed), `userDocs/en/search.md`, `e2e/tests/r1-live-search.spec.ts` (typing searches after the pause, Enter at once, an invalid query keeps the list and shows the indicator without moving it).
-- **Integration:** rebase, renumber ADRs, the full suite incl. the r1 specs and `npm run visual` (baselines only for intended changes), memory `next-steps`.
+- **Integration:** rebase, renumber ADRs, the full suite incl. the r1 specs and `npm run visual` (baselines only for intended changes).
 
 Gates as in P3: every suite green, the responsive standard on changed screens, the maintainer's human gate on the real app (a fresh rule applied to a selection from the rules window and from the list menu, live search while typing, an invalid query).
 
@@ -1083,7 +1083,7 @@ leftovers. Contract ADR 0222.
   folder-change re-run (`widgets/SearchBar.tsx`, `features/search/`, the search state), `RunRules` in
   `features/rules/mock.ts`.
 - **Integration:** rebase, renumber ADRs, regenerate the layout / theme snapshots once, the full suite incl. the r2
-  specs and `npm run visual` (baselines only for intended changes), memory `next-steps`.
+  specs and `npm run visual` (baselines only for intended changes).
 
 Gates as in R1: every suite green, the responsive standard on the rules window (1024×700 and 1600×1000, stacked
 below about 760 px), the maintainer's human gate on the real app (a new rule from a mail with values from it, the
@@ -1128,7 +1128,7 @@ Maintainer decisions of 2026-11-21 after trying the 0.8.7 build fully (including
 one combined Exchange badge per rule row; the "Values from this mail" button right after the condition's text
 field; multi-select in the rule list with Run running the selected rules; every remaining plain folder / account /
 address field switched to the shared picker; the address picker lists the most-used addresses while empty; a new
-built-in theme "Paper" ported from the sister project's `paper` theme. 0.8.7 is not published: the next release,
+built-in light theme, Paper. 0.8.7 is not published: the next release,
 0.8.8, contains R1–R3. Contract ADR 0227.
 
 #### Scope decisions for R3
@@ -1147,8 +1147,8 @@ built-in theme "Paper" ported from the sister project's `paper` theme. 0.8.7 is 
 - **Most-used addresses (core, contract):** `SuggestAddresses` with an empty prefix answers the most-used
   correspondents (`Store::most_used_recipients`: collected addresses by use and recency, the user's own addresses
   left out, contact names for contacts); the mock does the same. The address picker asks on open.
-- **Paper theme:** `defaults/themes/paper.kdl` (light), registered in `nail-config` `themes.rs`; the sister
-  project's tokens mapped onto Nail's names (no new tokens for one theme); contrast tests and visual baselines.
+- **Paper theme:** `defaults/themes/paper.kdl` (light), registered in `nail-config` `themes.rs`; Nail's
+  existing token names only (no new tokens for one theme); contrast tests and visual baselines.
 - **Release:** the release notes' 0.8.7 section is now "Nail 0.8.8"; `CHANGELOG.md` keeps the entries under
   `[Unreleased]`; the integrator adds the R3 items to both.
 - No new crates and no new slots: each package works in folders it already owns.
@@ -1170,7 +1170,7 @@ built-in theme "Paper" ported from the sister project's `paper` theme. 0.8.7 is 
   built-in theme tests), contrast and visual tests and baselines, `userDocs/en/theme-reference.md`,
   `userDocs/en/themes.md` / `appearance.md`.
 - **Integration:** rebase, renumber ADRs, regenerate the layout / theme snapshots once, the R3 items in the release
-  notes (0.8.8) and `CHANGELOG.md` (`[Unreleased]`), the full suite incl. `npm run visual`, memory `next-steps`.
+  notes (0.8.8) and `CHANGELOG.md` (`[Unreleased]`), the full suite incl. `npm run visual`.
 
 Gates: every suite green; the rule list's keyboard model and `aria-multiselectable` in the accessibility scenario;
 Paper passes the built-in themes' contrast tests; the maintainer's human gate on the real app (multi-select and
@@ -1188,8 +1188,8 @@ reasons, each account's line on hover / focus and as the row's description); "Va
 the value. Row controls are pointer-only (an option may hold no focusable control): Alt+Up / Down reorders, the
 editor's On switch switches. WR8: the shared picker's multi-value mode (chips), `strict` and `accounts`; junk,
 server rules, vacation, Also my addresses, search index, MCP grants, export / import target, key lookup and
-automatic replies use it; an empty address picker lists the most-used addresses. WR9: built-in light theme Paper
-from the sister project. Deferred: plug-in folder-picker nodes, Gmail's parent label, the Exchange shared-mailbox
+automatic replies use it; an empty address picker lists the most-used addresses. WR9: a new built-in light theme,
+Paper. Deferred: plug-in folder-picker nodes, Gmail's parent label, the Exchange shared-mailbox
 address and room lists, the composer's From and the scheduling attendee field stay as they are; a hidden folder of
 an MCP account that is no longer granted shows its id as the chip; the README media still show five themes and
 the old rule list (`npm run readme:media` with review). Next: the maintainer's human gate on the 0.8.8 installer,
@@ -1265,7 +1265,7 @@ Contract ADR 0230.
   highlighted row or an exact match, arrow keys move the highlight, a confirmation before Drafts / Trash / Junk;
   `isDraftMessage` by the `\Draft` flag only (non-drafts in Drafts open in the reader).
 - **Integration:** rebase, renumber ADRs, shared ftl files, the R4 items in the 0.8.9 release notes and
-  `CHANGELOG.md`, the full suite incl. `npm run visual`, memory `next-steps` and `r4-status`.
+  `CHANGELOG.md`, the full suite incl. `npm run visual`, memory `r4-status`.
 
 Gates: every suite green; a bulk action of 500 messages on the IMAP mock ends with an empty status bar and no
 stale rows (core test and e2e); a forced lag (`Resync`) refetches the open list and prunes the selection (Vitest);

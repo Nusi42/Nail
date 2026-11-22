@@ -1,18 +1,17 @@
-# ADR 0132: Master repository in OneDrive, work folders outside it
+# ADR 0132: Master checkout and work folders
 
-Status: accepted · 2026-10-04 · maintainer requirement (between the M5d contract and its packages) · publishing revised by ADR 0205
+Status: accepted · 2026-10-04 · optional since ADR 0199 · publishing revised by ADR 0205
 
 ## Context
 
-The repository lives in OneDrive. Until now a local `.cargo/config.toml`
-moved Cargo's `target/` to `%LOCALAPPDATA%\nail-build\target`, and test
-output went to `%LOCALAPPDATA%\nail-build`. `node_modules` and `ui/dist`
-still sat in OneDrive. That caused the reparse-point workarounds for Vite
+A checkout may live in a cloud-synced folder (e.g. OneDrive). Until now a
+local `.cargo/config.toml` moved Cargo's `target/` to
+`%LOCALAPPDATA%\nail-build\target`, and test output went to
+`%LOCALAPPDATA%\nail-build`. `node_modules` and `ui/dist` still sat in the
+synced folder. That caused the reparse-point workarounds for Vite
 (ADR 0129), and all parallel agents shared one checkout and one npm tree.
-The maintainer keeps their projects as a master repository in OneDrive with
-clones in `<work root>\<project>.winN`, each on its own
-branch `work-<N>`, and required the same here: the master folder is the
-master and is never used for development.
+A synced checkout should hold only sources and Git objects, so it becomes a
+master that is never used for development, with work folders elsewhere.
 
 ## Decisions
 
@@ -20,7 +19,7 @@ master and is never used for development.
   shared history. It only receives pushes and fast-forward merges. Nothing
   is built, tested, run, installed or committed there, releases included
   (release builds run in a work folder on a `main` commit, later in CI).
-- **Work folders** (outside OneDrive) are clones of the master, with
+- **Work folders** (outside the synced folder) are clones of the master, with
   `origin` pointing to it:
   - `<work root>\nail-work-1`, branch `work-1`: the lead.
     Contracts, integration, reviews, fixes and verification run here.
@@ -37,10 +36,10 @@ master and is never used for development.
   file and hands findings back to the agent (exit code 2, at most 20
   lines). Waves run with Nail's wave workflow.
 - **The post-edit hook decides by the edited file.** The lead session
-  runs in the master, so the session folder always lies in OneDrive. The
+  may run in the master, so the session folder may be the master. The
   hook therefore finds the checkout from the *edited file* (the nearest
   folder with `.git` and `scripts/lib/run-checks.mjs`), runs that work
-  folder's own checks, and skips only files inside OneDrive. The Git hooks
+  folder's own checks, and skips only files of the master. The Git hooks
   (`.githooks/`, set by `npm ci`) are active in every work folder.
 - **Build output stays in each work folder:** Cargo's default `target/`,
   and the default build base is the checkout's gitignored `.nail-build/`
@@ -52,8 +51,8 @@ master and is never used for development.
   overrides), so a `git clean` of a work folder
   cannot delete it.
 - **Guards:**
-  - `scripts/lib/work-folder.mjs` `assertWorkFolder` refuses inside any
-    OneDrive folder. It is called by `npm run dev`, `check`, `test`,
+  - `scripts/lib/work-folder.mjs` `assertWorkFolder` refuses in the
+    master (detected by its role since ADR 0199). It is called by `npm run dev`, `check`, `test`,
     `visual`, `tauri` and `build:desktop`, by `npm ci` / `npm install`
     (`prepare`) and by the Git hooks (pre-commit: per-file checks;
     pre-push: `npm run check`), so nobody commits in the master.
@@ -75,7 +74,7 @@ master and is never used for development.
 
 ## Consequences
 
-- OneDrive syncs only sources and Git objects. The master's old
+- A synced master holds only sources and Git objects. The master's old
   `node_modules`, `ui/dist` and `.codegraph` are removed;
   `%LOCALAPPDATA%\nail-build` is no longer used (except `keys/`).
 - Each work folder needs its own `npm ci` and Cargo build (several GB each).
@@ -87,6 +86,6 @@ master and is never used for development.
 ## Alternatives considered
 
 - **Keep one checkout and move only build output:** that was the previous
-  state; `node_modules` stayed in OneDrive and agents shared one tree.
-- **Git worktrees of the master:** Git state would live in OneDrive and be
+  state; `node_modules` stayed in the synced folder and agents shared one tree.
+- **Git worktrees of the master:** Git state would live in the synced folder and be
   written by every agent at once. Clones keep each folder independent.

@@ -7,10 +7,10 @@ Status: accepted · 2026-10-08 · amends ADR 0089 (installers) for machines with
 `scripts/installer-smoke.ps1` installs the per-user NSIS setup silently into a temporary directory, starts it,
 updates and uninstalls it. A per-user installation owns fixed HKCU keys (`Uninstall\Nail`,
 `Software\Nail\Install`, `RegisteredApplications`, the ProgIDs, the PATH entry, the Run key), so the script
-refuses to run where Nail is already installed — the maintainer's development machine, where every wave's installer
-is built. Running the setup there would update, re-register or (on cleanup) uninstall the maintainer's installation.
+refuses to run where Nail is already installed — such as a development machine with Nail installed, where
+installers are built. Running the setup there would update, re-register or (on cleanup) uninstall that installation.
 Building a second product identity for smoke tests would still share most of those keys (the NSIS hooks name
-`Nail` literally) and would test a different build from the one the maintainer gets.
+`Nail` literally) and would test a different build from the one users get.
 
 ## Decision
 
@@ -39,7 +39,7 @@ or processes. `installer-smoke.ps1` stays the full test for clean machines and C
 ## Consequences
 
 - Not verified beside an installation: what only running the setup shows — the NSIS script's registry writes,
-  shortcuts, PATH entry, file associations, the uninstaller and update in place. The maintainer's own install / upgrade
-  of each wave's setup covers them; CI runs the full `installer-smoke.ps1` on a clean runner.
+  shortcuts, PATH entry, file associations, the uninstaller and update in place. A manual install / upgrade test
+  of the setup covers them; CI runs the full `installer-smoke.ps1` on a clean runner.
 - The payload check depends on the build's `installer.nsi`: run it on the build directory that produced the setup,
   before the UI is rebuilt (hashed asset names would be missing).

@@ -40,5 +40,5 @@ the pre-commit hook checks staged files, the pre-push hook runs
 - The interop tests need Docker locally (`NAIL_INTEROP=1`); without it they
   return at once.
 - Item 5 of the release checklist becomes the full local verification run.
-- The release update key never leaves the maintainer's machines; nothing
+- The release update key stays on the release machine; nothing
   has to be stored as a repository secret.

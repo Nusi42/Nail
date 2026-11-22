@@ -1,38 +1,30 @@
 ---
 name: work-folders
-description: "The owner keeps a master checkout (git only, NAIL_CHECKOUT_ROLE=master) and develops in work folders nail-work-<N> on work-<N> (owner rule, ADRs 0132, 0199); concrete paths only in CLAUDE.local.md"
+description: "Optional: one master checkout (git only, NAIL_CHECKOUT_ROLE=master) and work folders nail-work-<N> on work-<N> (ADRs 0132, 0199); concrete paths only in an untracked CLAUDE.local.md"
 metadata:
   type: feedback
 ---
 
-Rule: the master checkout `<master>` is the master directory; work folders live in `<work root>`.
-The master must not be used for debugging or development, at most for release builds. We chose not at
-all: releases are also built in a work folder on a `main` commit. Since ADR 0199 the master is marked by
-`NAIL_CHECKOUT_ROLE=master` in its gitignored `.env.local`, not detected by its path, and the concrete paths, the
-public remote and the releases folder live only in the untracked `CLAUDE.local.md` (requirement: everyone who clones the
-repository must be able to set it up on their own).
+Rule: a plain clone is a work folder. Optionally one checkout is marked as the master (`NAIL_CHECKOUT_ROLE=master`
+in its gitignored `.env.local`, ADR 0199). Nothing is built, tested, run or committed in the master; it only receives
+pushes and fast-forward merges and alone publishes `main`. Work happens in work folders (`nail-work-<N>` on
+`work-<N>` by default; `NAIL_WORK_FOLDER_PREFIX` / `NAIL_WORK_BRANCH_PREFIX`).
 
-**Why:** a synced master should hold only sources and Git objects, not `node_modules`, `target/` or test output.
-Parallel agents should not share one tree. Personal paths do not belong in a public repository.
+**Why:** a master in a cloud-synced folder should hold only sources and Git objects, not `node_modules`, `target/`
+or test output, and parallel agents should not share one tree.
 
 **How to apply:**
 
-- The maintainer's session runs in the master folder (requirement: sessions start there, never in a
-  different folder). It is only the launch point: drive `nail-work-1` (branch `work-1`, the lead) and the others by absolute path.
-  Parallel packages use `nail-work-2` and up (`work-<N>`, reset to `origin/main`, commit, push). Integrate by merging into
-  `work-1`.
-- `main` moves only by `git -C <master> merge --ff-only work-1` after each green lead stage, and only the master
-  publishes it: `git -C <master> push github main` (ADR 0205; the remote `github` exists only in the master). These
-  are the only git commands in the master.
+- The lead works in work folder 1; parallel packages use folders 2 and up (reset to `origin/main`, commit, push the
+  branch). Branches are combined by rebasing ([[rebase-not-merge]]).
+- `main` moves only by `git -C <master> merge --ff-only <lead branch>` after each green lead stage, and only the
+  master publishes it (ADR 0205). These are the only git commands in the master.
 - Hooks: pre-commit (per-file checks), pre-push (`scripts/lib/push-plan.mjs`: work folder → master runs
   `npm run check`; master → public remote runs the private-data guard and `cargo deny check licenses`; a work folder's
-  push to a network remote is refused), Claude Code post-edit (`.claude/settings.json`, small: finds the checkout from
-  the edited file and runs its `scripts/lib/after-edit.mjs`; skips files of the master).
+  push to a network remote is refused), Claude Code post-edit (`.claude/settings.json`; skips files of the master).
 - New folder: `node scripts/work-folders.mjs create <n>`, run from a work folder; `guard-master` marks the master.
-- Guards refuse development in the master: npm entry points, `prepare`, the pre-commit hook, and the master's rustc
-  wrapper. Never work around them.
-- Build output goes to each folder's `target/` and `.nail-build/`. The dev update key stays in
-  `%LOCALAPPDATA%\nail-dev\keys`.
-- The wave workflow `.claude/workflows/nail-wave.js` takes the folders as arguments (from `CLAUDE.local.md`).
+  Guards refuse development in the master; never work around them.
+- The concrete paths and remotes of a local setup live only in an untracked `CLAUDE.local.md` (ADR 0234); the wave
+  workflow `.claude/workflows/nail-wave.js` takes the folders as arguments. Details: `docs/dev-setup.md` "Work folders".
 
-Related: [[next-steps]], [[zero-warnings-policy]], [[no-private-data-in-git]]
+Related: [[zero-warnings-policy]], [[no-private-data-in-git]]

@@ -30,7 +30,7 @@
      UI (remote debugging on a free loopback port) and the app must stay
      up; then this process tree (and only it) is stopped.
 
-  Not verified here (the owner's own install / upgrade does it): the NSIS
+  Not verified here (a manual install / upgrade test does it): the NSIS
   script's registry writes, shortcuts, PATH entry, file associations,
   uninstaller and update-in-place.
 

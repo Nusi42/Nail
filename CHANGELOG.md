@@ -111,8 +111,7 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ### Added — Paper theme
 
-- New built-in light theme Paper: warm paper neutrals with a blue accent
-  (from the sister project Bugaboo).
+- New built-in light theme Paper: warm paper neutrals with a blue accent.
 
 ## [0.8.6] — 2026-11-19
 

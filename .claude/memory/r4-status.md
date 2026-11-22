@@ -18,7 +18,7 @@ metadata:
 - `EditDraftMessage` on a message without `\Draft` copies it into a new draft without a server copy: the original
   is never replaced or deleted (`draft_edit.rs`, test `m1b::a_non_draft_in_drafts_is_copied_and_never_replaced`).
   Review (ADR 0233): a draft's server copy is removed only if it is Nail's own or flagged `\Draft`
-  (`draft_copy_removal_in`); schema v23 unlinks 0.8.8 links to received mail (maintainer lost drafts that way);
+  (`draft_copy_removal_in`); schema v23 unlinks 0.8.8 links to received mail (0.8.8 could lose drafts that way);
   `m1b::an_old_link_to_a_received_message_never_deletes_it`.
 - UI: `ui/src/state/opsSummary.ts` tracks the summary (start, reconnect, `OpsChanged`, `Resync`) and re-asks after
   `OPS_RECHECK_MS` (2.5 s) while changes wait; `pendingOps` only holds ids queued since the last summary. `Resync`
@@ -42,4 +42,4 @@ metadata:
 Retry / Dismiss; coalesce the per-operation WARN of a mass permanent failure; a separate text for Retry / Dismiss
 errors.
 
-Related: [[r3-status]], [[next-steps]]
+Related: [[r3-status]]

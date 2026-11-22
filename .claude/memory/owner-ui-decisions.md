@@ -14,4 +14,4 @@ metadata:
 **Why:** decisions on the P1 / P2 human-gate questions.
 **How to apply:** treat both as settled; changes need the maintainer's approval.
 
-Related: [[next-steps]]
+Related: [[r4-status]]

@@ -30,7 +30,7 @@ const NOTE =
   `  ${SESSION_KEY}: 0000-1111\n  ${String(NODE_TYPE)}: memory\n---\n\nBody\n`;
 
 test("notes are the Markdown files of .claude/memory", () => {
-  assert.ok(NOTES.test(".claude/memory/next-steps.md"));
+  assert.ok(NOTES.test(".claude/memory/r4-status.md"));
   assert.ok(!NOTES.test("docs/plan.md"));
   assert.ok(!NOTES.test(".claude/memory/sub/x.md"));
 });

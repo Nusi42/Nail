@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// The private-data guard (ADR 0192): fails when a pattern of
-// %USERPROFILE%\.config\nail\private-patterns.txt (or $NAIL_PRIVATE_PATTERNS)
-// matches, case-insensitively, or the base64 form of a literal pattern
-// matches. Without the file it passes ("no private patterns configured"), so
-// CI and other machines work. Findings name file and line; the matched text
-// is masked.
+// The private-data guard (ADR 0192): fails when a pattern of the file named
+// by NAIL_PRIVATE_PATTERNS matches, case-insensitively, or the base64 form
+// of a literal pattern matches. Unconfigured (or the file absent) it passes
+// with a one-line notice, so other machines work. Findings name file and
+// line; the matched text is masked.
 //
 //   node scripts/check-private.mjs              every tracked file (content + name), `npm run check`
 //   node scripts/check-private.mjs --staged     staged content + names (pre-commit hook)
@@ -27,7 +26,7 @@ import {
   scanText,
 } from "./lib/private-patterns.mjs";
 import { messageText } from "./lib/commit-message.mjs";
-import { hasCommit, parsePushLines, pushedRange } from "./lib/push-plan.mjs";
+import { hasCommit, masterOf, parsePushLines, pushedRange } from "./lib/push-plan.mjs";
 import { STAGED_FILES_ARGS, parseStaged } from "./lib/staged.mjs";
 
 // The repository the hook or check runs in (its working directory).
@@ -37,10 +36,14 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "
 const git = (args, input = "") =>
   execFileSync("git", args, { cwd: root, input, maxBuffer: 1 << 30 });
 
-const file = patternsPath();
-const matchers = loadMatchers(file);
+const file = patternsPath({ root, master: masterOf(root) });
+const matchers = file === undefined ? undefined : loadMatchers(file);
 if (matchers === undefined) {
-  console.log("private: no private patterns configured");
+  console.log(
+    file === undefined
+      ? "private: no private patterns configured (set NAIL_PRIVATE_PATTERNS to a file outside the repository)"
+      : "private: no private patterns configured (the NAIL_PRIVATE_PATTERNS file does not exist)",
+  );
   process.exit(0);
 }
 

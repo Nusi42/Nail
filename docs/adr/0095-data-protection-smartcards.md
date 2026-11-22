@@ -27,7 +27,7 @@ for every migration, PINs never stored.
 | --- | --- |
 | `libsqlite3-sys` `bundled-sqlcipher(-vendored-openssl)` | needs OpenSSL (banned) |
 | A crate wrapping sqlite3mc for `rusqlite` | none on crates.io usable with `rusqlite` 0.40 (`walletkit-sqlite` is an app-specific wrapper, not a `libsqlite3-sys`) |
-| Vendoring the amalgamation into the repo | 13 MB of C in OneDrive; downloading it from GitHub is outside the allowed network |
+| Vendoring the amalgamation into the repo | 13 MB of vendored C in the repository; downloading it from GitHub is outside the allowed network |
 | **`sqlite3mc-src` 205.1.0 (crates.io) + a local `libsqlite3-sys` 0.38.2 stand-in** | builds on Windows MSVC in about 80 s (debug), all store / vault / core tests pass |
 
 `sqlite3mc-src` ships the untouched SQLite3 Multiple Ciphers 2.5.1

@@ -100,7 +100,7 @@ you type, several rules run at once, and there is a new theme, Paper.
   addresses you use most, before you type anything. The vacation reply's
   "Reply from" and "Also my addresses" offer only your own addresses.
 - **New theme: Paper** — a warm light theme with paper tones and a blue
-  accent, from Nail's sister project Bugaboo.
+  accent.
 
 ## Nail 0.8.6 (`0.8.6`)
 

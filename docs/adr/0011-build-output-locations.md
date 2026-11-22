@@ -4,9 +4,9 @@ Status: accepted · 2026-09-29 · M0 review fixes
 
 ## Context
 
-The repository lives in a OneDrive folder. The ground rule is that build
-output never goes into the repository, because OneDrive would sync it on
-every build. Three tools write output:
+A checkout may live in a cloud-synced folder (e.g. OneDrive). The ground
+rule is that build output never goes into the repository, because the sync
+would upload it on every build. Three tools write output:
 
 - cargo (`target/`, several GB),
 - Playwright (`test-results/` with traces and screenshots, the HTML report),
@@ -32,6 +32,6 @@ embeds it.
 
 ## Consequences
 
-- OneDrive syncs about 1 MB after each UI build. That is accepted.
+- A synced checkout uploads about 1 MB after each UI build. That is accepted.
 - If the bundle grows or sync becomes a problem, move it with a generated
   Tauri config (`tauri build --config`) and `NAIL_UI_DIR` for `nail serve`.

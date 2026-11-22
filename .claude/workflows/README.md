@@ -24,11 +24,17 @@ and then cleans the package folders (`node scripts/work-folders.mjs clean <n>`).
    shape) and set `since` to the commit the wave starts from.
 4. Ask Claude to run the `nail-wave` workflow with those arguments
    (`Workflow({ scriptPath: "<master>/.claude/workflows/nail-wave.js", args: … })`).
-   The folders and the commit trailer are the maintainer's setup, not part
+   The folders and the commit trailer are your local setup, not part
    of the repository: pass them as the arguments `master` / `masterSh`,
    `workRoot` / `workRootSh` (prose and Git Bash forms; write the home
    folder as `%USERPROFILE%` / `~`, never a user name, ADR 0192) and
-   `trailer` (`CLAUDE.local.md` keeps them).
+   `trailer`; keep them in an untracked `CLAUDE.local.md`.
+
+Every agent prompt starts with a shared preamble (`COMMON` in
+`nail-wave.js`): the project's mandatory rules, among them the public
+repository rule (ADR 0234: nothing of a developer's personal setup in
+tracked files or commit messages). Reviewers report violations of it, like
+SSOT / ODR / DRY violations, as must-fix.
 
 ## Arguments
 

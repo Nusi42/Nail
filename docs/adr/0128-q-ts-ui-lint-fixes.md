@@ -13,10 +13,10 @@ was switched off.
 
 ## Decisions
 
-### Vite on a OneDrive checkout
+### Vite on a checkout in a cloud-synced folder
 
 Vite's native resolver canonicalizes the real path of every package it
-resolves. Inside a OneDrive folder `node_modules` is a cloud-file reparse
+resolves. In a checkout inside a cloud-synced folder (e.g. OneDrive) `node_modules` is a cloud-file reparse
 point (tag `0x9000e01a`), the canonicalization fails and no bare import
 resolves ("Failed to resolve import"). `ui/vite.config.ts` sets
 `resolve.preserveSymlinks: true`; the renderer imports no symlinked

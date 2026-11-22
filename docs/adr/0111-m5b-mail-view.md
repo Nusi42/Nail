@@ -127,8 +127,8 @@ is a request to WP165.
 
 Widgets format dates only through `i18n/format.ts` with `useLocale()`; a new
 test renders list rows (relative and short dates) and the reader's date with
-a German browser and an English UI and expects English. The maintainer's setup —
-Windows / browser German, no language chosen — still shows German dates
+a German browser and an English UI and expects English. A setup with
+Windows / browser in German and no language chosen still shows German dates
 with English texts: `createLocalizer` negotiates the browser languages
 against every catalog directory, and `locales/de/` exists (empty), so the
 locale is `de` while every text falls back to English. The fix belongs in

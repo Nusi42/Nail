@@ -19,9 +19,7 @@ steps on 2026-11-21:
    settings, search index, Sieve, the vacation account, MCP grants, import /
    export folders, "Also my addresses" (several addresses).
 5. The address picker lists the most-used addresses while its field is empty.
-6. A new built-in theme "Paper", ported from the sister project's `paper`
-   theme (same maintainer, same AGPL licence; its token names differ from
-   Nail's).
+6. A new built-in light theme, Paper.
 
 0.8.7 was prepared but not published (no tag); the next release is 0.8.8 and
 contains R1, R2 and R3.
@@ -87,9 +85,8 @@ contains R1, R2 and R3.
 ### Paper theme (WR9 builds it)
 
 - `defaults/themes/paper.kdl`, registered in `nail-config` `themes.rs`
-  (`BUILTIN_THEMES`, then `npm run gen:api`), a light theme. The sister
-  project's tokens are mapped onto Nail's token names; a value without a
-  counterpart is left out, never added as a new token just for this theme.
+  (`BUILTIN_THEMES`, then `npm run gen:api`), a light theme. It uses Nail's
+  existing token names only; no new token is added just for this theme.
   It passes the same contrast tests as the other built-in themes and gets
   visual baselines.
 

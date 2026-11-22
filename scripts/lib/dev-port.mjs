@@ -1,8 +1,8 @@
 /**
  * Development ports without collisions (plan section 10, "Development
  * ports"): the Vite dev server for `npm run dev` / `npm run tauri dev`
- * takes a free port instead of a fixed one, so Nail runs next to the
- * owner's other Vite / Tauri projects.
+ * takes a free port instead of a fixed one, so Nail runs next to other
+ * projects' dev servers on the same machine.
  *
  * - `NAIL_DEV_PORT` names the port exactly; a taken one is an error.
  * - Otherwise the preferred port ({@link PREFERRED_DEV_PORT}, deliberately

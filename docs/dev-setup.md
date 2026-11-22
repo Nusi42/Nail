@@ -67,8 +67,9 @@ URL (a path is local, anything else a network remote):
 | plain clone (no master) → any remote | the guard on the pushed commits, then `npm run check` |
 | work folder → network remote, master → local path, master → other refs | refused, with the command to use |
 
-The maintainer's paths and remotes are kept in an untracked
-`CLAUDE.local.md` that Claude Code loads. Commits use the public identity in each checkout's local config
+Your local setup (paths, remotes) goes in an untracked
+`CLAUDE.local.md` that Claude Code loads; the lead's running status and other personal notes go in the
+gitignored `.claude/local/` (ADR 0234: nothing of a developer's personal setup in tracked files). Commits use the public identity in each checkout's local config
 (`user.name` / `user.email`, e.g. a GitHub noreply address; ADR 0198),
 never a real name or private address; `work-folders.mjs create` copies it
 from the master. Hooks in every checkout (`.githooks/`; they run the
@@ -369,18 +370,20 @@ accepted the agreement first.
 
 ### No private data in git
 
-None of the owner's private information may reach git (ADR 0192): addresses,
+None of the maintainer's private information may reach git (ADR 0192): addresses,
 domains, providers and server names of real accounts, folder names, mailbox
 contents, the Windows user name (write `%USERPROFILE%\…` in prose,
 `~/…` in Git Bash commands). Test data uses `example.com` / `example.net` /
 `example.org` and the demo personas.
 
-`scripts/check-private.mjs` enforces it with patterns kept **outside every
-repository** in `%USERPROFILE%\.config\nail\private-patterns.txt` (one regular
-expression per line, `#` comments, case-insensitive; `NAIL_PRIVATE_PATTERNS`
-names another file). Never commit that file or copy its values anywhere in a
-repository, a commit message, an ADR or memory. Without the file the guard
-prints "no private patterns configured" and passes (other machines). For
+`scripts/check-private.mjs` enforces it with patterns from the file that
+`NAIL_PRIVATE_PATTERNS` names (one regular expression per line, `#` comments,
+case-insensitive). Set it to a file **outside the repository**, in the
+environment or in the checkout's gitignored `.env.local` (a work folder also
+reads its master's); there is no default location. Never commit that file or
+copy its values anywhere in a repository, a commit message, an ADR or memory.
+Unset (or the file absent), the guard prints a one-line "no private patterns
+configured" notice and passes (other machines). For
 each literal pattern it also searches the base64 forms (three alignments).
 Findings name file and line with the match masked.
 
@@ -952,7 +955,7 @@ On Windows, check the non-Windows code in a WSL2 distribution (Ubuntu 24.04):
 
 ```sh
 # PowerShell, once: a distribution of its own, outside cloud-synced folders
-wsl --install Ubuntu-24.04 --name nail-ubuntu --location "$env:USERPROFILE\WSL\nail-ubuntu" --no-launch
+wsl --install Ubuntu-24.04 --name nail-linux --location "<a folder for the distribution>" --no-launch
 # inside it (root): the Tauri / WebKitGTK build dependencies and the keyring
 apt-get install -y build-essential curl file git pkg-config libssl-dev libwebkit2gtk-4.1-dev \
   libxdo-dev libayatana-appindicator3-dev librsvg2-dev libsecret-1-dev libdbus-1-dev xvfb

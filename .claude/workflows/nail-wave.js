@@ -19,7 +19,7 @@ const A = args
 // fast-forwarded to the lead's branch (FF below), so main is always green.
 // Parallel package i resets work folder <lead+1+i> (or b.folder) to main,
 // works on its branch and pushes it.
-// Where they are is the maintainer's setup, never in the repository: the
+// Where they are is your local setup, never in the repository: the
 // args name it (the Workflow runtime has no Node APIs to read .env.local).
 //   master / masterSh: the master in prose (Windows) and Git Bash form
 //   workRoot / workRootSh: the folder that holds the work folders
@@ -54,7 +54,8 @@ Mandatory rules:
 - React components never use inline styles or literal classNames; data-part attributes only; styling only from the compiled theme; structure only from layout.kdl.
 - The core owns data; UI talks only through NailClient; every write goes through the operation queue.
 - Licences: Nail is AGPL-3.0-or-later and dual-licensed (ADR 0198) — do not add GPL/LGPL/AGPL dependencies (MPL-2.0, MIT, Apache-2.0, BSD, ISC, Zlib, Unicode are fine). Check licences before adding a crate/package. Avoid an OpenSSL build dependency unless an ADR justifies it.
-- The machine is shared with other development work (other Vite / tauri dev projects may be running and holding ports and memory): run cargo with -j 4 (os error 1455 = out of page file -> rerun with -j 2), never bind fixed development ports (take free ports), and never kill processes you did not start.
+- Public repository (ADR 0234, CLAUDE.md): everything you commit (code, docs, ADRs, memory notes, workflow files, commit messages) describes only what anyone who clones Nail needs to build, test, use or release it. Never commit how or where a developer works: their folders or sync services (or paths into them), where keys or secrets are kept, their machines, WSL distributions or other projects, their tools' local setup, or the dates or reasons of such personal choices. Record a decision that changes the project as a general rule without personal detail; personal setup belongs only in untracked files (CLAUDE.local.md, .claude/local/).
+- Other development work may run on the same machine (other projects' dev servers may hold ports and memory): run cargo with -j 4 (os error 1455 = out of page file -> rerun with -j 2), never bind fixed development ports (take free ports), and never kill processes you did not start.
 - No network except localhost mocks and package registries. A Vite dev server / 'tauri dev' may be running from the user's session: never kill it; if npm ci hits a locked file use npm install and say so.
 - Prefer well-maintained crates/packages; verify real APIs in ~/.cargo/registry or node_modules rather than guessing.
 - SSOT / ODR / DRY (mandatory, CLAUDE.md): every fact (type, constant, id, limit, size, string, rule, mapping, schema) has exactly one source of truth and one definition; other places derive it (generated code, imports, shared tokens, shared helpers) instead of mirroring or copying it by hand. No copy-pasted logic: extract a shared function / component / test helper when the second copy appears. Rust <-> TS facts are generated (ts-rs / gen:api) or checked by a test, never hand-mirrored. The duplicate check in npm run check must stay at 0 findings.`
@@ -151,7 +152,8 @@ const reviews = await parallel(A.reviews.map(r => () =>
 YOUR TASK: review ${A.wave} in ${REPO} (read-only: do not modify tracked files, do not commit). Lens: ${r.lens}
 Integration report: ${integ ? integ.summary + '\nTests: ' + integ.testReport : 'integration agent failed'}
 Use CARGO_TARGET_DIR=${REPO_SH}/.nail-build/target-review-${r.key}. Report only real, verified problems with concrete evidence; no nits. Rank by severity.
-Always also check the wave's changes (git diff ${A.since}..HEAD) for SSOT / ODR / DRY violations: a fact defined or hand-mirrored in more than one place, copy-pasted logic, a second definition of an existing type / constant / helper. Report each as severity "medium" or higher (must-fix), naming both places and the single source it should come from.`, { ...OPTS, label: `review:${r.key}`, phase: 'Review', schema: FINDINGS })
+Always also check the wave's changes (git diff ${A.since}..HEAD) for SSOT / ODR / DRY violations: a fact defined or hand-mirrored in more than one place, copy-pasted logic, a second definition of an existing type / constant / helper. Report each as severity "medium" or higher (must-fix), naming both places and the single source it should come from.
+Also check the same changes (files and commit messages) for personal development setup (the "Public repository" rule above: a developer's folders, sync services, key locations, machines, WSL distributions, other projects, local tool setup, dates or reasons of personal choices). Report each as severity "medium" or higher (must-fix).`, { ...OPTS, label: `review:${r.key}`, phase: 'Review', schema: FINDINGS })
 ))
 const all = reviews.filter(Boolean).flatMap(r => r.findings)
 const must = all.filter(f => f.severity !== 'low')

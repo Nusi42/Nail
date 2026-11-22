@@ -1,16 +1,16 @@
-// The private-data guard (ADR 0192): the owner's private details (addresses,
-// domains, providers, the Windows user name, ...) must never reach git. The
-// patterns live OUTSIDE every repository, in
-// %USERPROFILE%\.config\nail\private-patterns.txt (one regular expression per line,
-// `#` starts a comment, matched case-insensitively). Never copy that file or
-// any of its values into the repository; tests use synthetic patterns only.
-// scripts/check-private.mjs runs the checks; scripts/test/private-patterns.test.mjs
-// tests this module.
+// The private-data guard (ADR 0192): private details (addresses, domains,
+// providers, user names, ...) must never reach git. The configured patterns
+// live in a file OUTSIDE every repository, named by NAIL_PRIVATE_PATTERNS
+// (the environment, the checkout's gitignored `.env.local` or its master's;
+// one regular expression per line, `#` starts a comment, matched
+// case-insensitively). Never copy that file or any of its values into the
+// repository; tests use synthetic patterns only. scripts/check-private.mjs
+// runs the checks; scripts/test/private-patterns.test.mjs tests this module.
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 
-/** Environment variable that points the guard at another patterns file (tests, other machines). */
+import { pathSetting } from "./work-folder.mjs";
+
+/** The setting that names the patterns file. */
 export const PATTERNS_ENV = "NAIL_PRIVATE_PATTERNS";
 
 /** Encoded forms shorter than this are not searched (they match random base64 / hex too often). */
@@ -32,19 +32,19 @@ export const MIN_ENCODED_LENGTH = 5;
  */
 
 /**
- * Where the patterns file is: $NAIL_PRIVATE_PATTERNS, else
- * %USERPROFILE%\.config\nail\private-patterns.txt.
+ * Where the patterns file is: the {@link pathSetting} NAIL_PRIVATE_PATTERNS,
+ * `undefined` when it is not configured (nothing to check).
  *
- * @param {NodeJS.ProcessEnv} [env]
- * @returns {string}
+ * @param {{ root: string, master?: string, env?: NodeJS.ProcessEnv }} where
+ * @returns {string | undefined}
  */
-export function patternsPath(env = process.env) {
-  return env[PATTERNS_ENV] ?? path.join(os.homedir(), ".config", "nail", "private-patterns.txt");
+export function patternsPath(where) {
+  return pathSetting(PATTERNS_ENV, where);
 }
 
 /**
- * Reads the patterns file; `undefined` when it does not exist (CI, other
- * machines: nothing to check).
+ * Reads the patterns file; `undefined` when it does not exist (nothing to
+ * check).
  *
  * @param {string} file
  * @returns {Matcher[] | undefined}

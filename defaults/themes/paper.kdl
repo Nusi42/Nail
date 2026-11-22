@@ -1,24 +1,17 @@
 // Nail built-in theme: Paper (light).
 //
-// Warm paper neutrals with a confident blue accent. Ported from Paper in
-// Bugaboo, the sister project by the same author; its token names are
-// mapped onto Nail's and no new tokens are added (ADR 0227).
+// Warm paper neutrals with a confident blue accent. It sets Nail's
+// existing tokens only; no new tokens are added (ADR 0227).
 // Colours only: spacing, type, corners, elevation and density come from
 // the base theme (defaults/theme.kdl). Pick it in Settings → Appearance.
 // See userDocs/en/theme-reference.md for every token.
 //
-// Mapping (Bugaboo → Nail): bg-canvas → bg, bg-surface → bg-subtle,
-// bg-sunken → bg-raised (Nail's raised surfaces are the darker toolbars
-// and headers), bg-hover → canvas, border-subtle → rail, border → border,
-// border-control → border-strong; fg, fg-muted, fg-subtle, accent,
-// danger, warning and success keep their names and values. Nail's
-// `accent-fg` is the text on the accent (white), not Bugaboo's
-// accent-coloured text. The soft accent and the selection derive from the
-// accent as in Frost, mixed close to Bugaboo's accent-soft and
-// bg-selected. Nail has no `more=` (more contrast): Paper's normal values
-// already pass WCAG AA (4.5:1) for every text on every surface, the
-// selection included (the closest, success on the selection, is 4.69:1),
-// so none of Bugaboo's `more=` values is needed. The contrast test
+// `bg-raised` is the darker surface of toolbars and headers; `accent-fg`
+// is the text on the accent (white). The soft accent and the selection
+// derive from the accent as in Frost. Paper sets no `more=` (more
+// contrast): its normal values already pass WCAG AA (4.5:1) for every
+// text on every surface, the selection included (the closest, success on
+// the selection, is 4.69:1). The contrast test
 // (crates/nail-config/tests/integration/theme_contrast.rs) checks each
 // pair. `print=` is the print view (white paper, black text).
 

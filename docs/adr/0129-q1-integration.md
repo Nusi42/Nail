@@ -64,8 +64,8 @@ as a whole and resolved what the packages asked for.
   so the first commit through the hook found its import order and two long
   `compile_error!` lines. Formatting only; no code changed.
 - **`create-nail-plugin` tests under Node 26:** the workspace symlink
-  `node_modules/@nail/plugin-api` could not be canonicalized on the OneDrive
-  checkout, so Vite treated the package as external and Node loaded its
+  `node_modules/@nail/plugin-api` could not be canonicalized in a checkout inside a
+  cloud-synced folder (e.g. OneDrive), so Vite treated the package as external and Node loaded its
   TypeScript sources natively (failing on extensionless imports).
   `resolve.preserveSymlinks: true` in its `vitest.config.ts` (as in
   `ui/vite.config.ts`) fixes it; all 56 tests run again and the root

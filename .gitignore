@@ -27,5 +27,7 @@ Thumbs.db
 /.nail-build/
 # Copies of built releases (`NAIL_RELEASES_DIR=releases`, ADR 0218)
 /releases/
-# The maintainer's own setup for Claude Code (paths, remotes; ADR 0199), never committed
+# Your local setup for Claude Code (paths, remotes; ADRs 0199, 0234), never committed
 /CLAUDE.local.md
+# Personal notes for Claude Code, e.g. the lead's running status (.claude/local/next-steps.md); never committed
+/.claude/local/

@@ -47,6 +47,31 @@ export function localSettings(root, env = process.env) {
 }
 
 /**
+ * A path setting from the first source that has it: the environment, the
+ * checkout's `.env.local`, then (in a work folder) its master's
+ * `.env.local`. A relative path is relative to the checkout whose file names
+ * it (the current directory for the environment); a blank value counts as
+ * unset. `undefined` when no source sets it.
+ *
+ * @param {string} name e.g. `NAIL_RELEASES_DIR`
+ * @param {{ root: string, master?: string, env?: NodeJS.ProcessEnv }} where
+ * @returns {string | undefined}
+ */
+export function pathSetting(name, { root, master, env = process.env }) {
+  /** @type {[string, Record<string, string | undefined>][]} */
+  const sources = [
+    [process.cwd(), env],
+    [root, localSettings(root, {})],
+  ];
+  if (master !== undefined) sources.push([master, localSettings(master, {})]);
+  for (const [base, settings] of sources) {
+    const value = settings[name]?.trim();
+    if (value) return path.resolve(base, value);
+  }
+  return undefined;
+}
+
+/**
  * Whether the checkout at `root` is the master.
  *
  * @param {string} root
