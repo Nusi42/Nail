@@ -36,6 +36,14 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   Drafts folder open in the reader, with the new action Move out of
   Drafts. `EditDraftMessage` on a message without `\Draft` makes a new
   draft that never replaces or deletes it.
+- A draft's server copy is deleted only when it is Nail's own copy or
+  flagged `\Draft`; schema v23 unlinks drafts that 0.8.8 linked to a
+  received message, which their next autosave, send or discard deleted
+  (ADR 0233). Move out of Drafts moves only the selected message.
+- A server message held back while a move of its Message-ID out of the
+  folder waits or failed is listed (schema v23, `sync_refetch`) and fetched
+  once nothing holds it back; dismissing a failed move or delete puts the
+  message back where the server still has it (ADR 0233).
 
 ## [0.8.8] — 2026-11-21
 

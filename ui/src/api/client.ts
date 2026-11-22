@@ -59,8 +59,19 @@ export function errorMessageIdOf(error: unknown): string {
  * when it sent one, else the text of the error code (ADR 0043).
  */
 export function errorMessageOf(error: unknown): LocalizedMessage {
-  if (error instanceof NailError && error.localized) return error.localized;
-  return { id: errorMessageIdOf(error) };
+  return error instanceof NailError ? errorReason(error) : { id: errorMessageIdOf(error) };
+}
+
+/**
+ * The user-facing text of a reported error (a failed request, a sync
+ * error, a failed queued write, a connection-log report): the core's
+ * `localized` text when it sent one, else the text of its class (ADR 0043).
+ */
+export function errorReason(error: {
+  code: ErrorCode;
+  localized?: LocalizedMessage | null;
+}): LocalizedMessage {
+  return error.localized ?? { id: errorMessageId(error.code) };
 }
 
 type ResponseOf<T extends Response["type"]> = Extract<Response, { type: T }>;

@@ -140,6 +140,21 @@ pub struct OpsAccountSummary {
     pub failed: u32,
 }
 
+impl OpsAccountSummary {
+    /// Writes of this account not yet on the server (`pending` +
+    /// `in_flight`); [`OpsSummary::waiting`] is their sum.
+    pub fn waiting(&self) -> u32 {
+        waiting(self.pending, self.in_flight)
+    }
+}
+
+/// The "waiting" rule (pending + in flight) of [`OpsAccountSummary::waiting`]
+/// and [`OpsSummary::waiting`]; the UI's `opsWaiting` is pinned to it by the
+/// `ops` ts-vectors.
+const fn waiting(pending: u32, in_flight: u32) -> u32 {
+    pending.saturating_add(in_flight)
+}
+
 /// The newest write the core gave up on, for the status bar's text and its
 /// Retry (ADR 0230).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -202,7 +217,7 @@ impl OpsSummary {
     /// Writes not yet on the server (`pending` + `in_flight`): the number
     /// the status bar shows as "Saving N changes".
     pub fn waiting(&self) -> u32 {
-        self.pending + self.in_flight
+        waiting(self.pending, self.in_flight)
     }
 
     /// The same summary restricted to the accounts `keep` allows (the
@@ -289,6 +304,16 @@ mod tests {
             (3, 1, 2)
         );
         assert_eq!(summary.waiting(), 4);
+        assert_eq!(
+            summary.accounts[0].waiting(),
+            4,
+            "one account: the same rule"
+        );
+        assert_eq!(
+            summary.accounts[1].waiting(),
+            0,
+            "failed writes do not wait"
+        );
         assert_eq!(summary.accounts.len(), 2, "empty rows are dropped");
         let narrowed = summary.clone().retain_accounts(|a| a.as_str() == "a");
         assert_eq!(narrowed.failed, 0);

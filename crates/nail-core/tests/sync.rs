@@ -700,6 +700,73 @@ async fn the_connection_log_is_kept_on_disk_only_when_asked() {
     assert!(!folder.exists(), "turning it off deletes the files");
 }
 
+/// Review of ADR 0230: a second copy with the same Message-ID that arrives
+/// while a move of the first out of the folder waits is left out by that
+/// sync and fetched by the next one, once the move is replayed.
+#[tokio::test]
+async fn a_copy_held_back_by_a_waiting_move_is_fetched_later() {
+    let f = setup("secret").await;
+    let raw = |body: &str| {
+        format!(
+            "From: Grace <grace@example.net>\r\nSubject: Copied twice\r\nMessage-ID: <copied-1@example.org>\r\n\r\n{body}\r\n"
+        )
+    };
+    f.server
+        .store()
+        .append("INBOX", raw("first").as_bytes(), &["\\Seen"])
+        .unwrap();
+    f.service.sync_account(&f.account).await.unwrap();
+    let store = f.service.store();
+    let archive = archive_of(&f);
+    let copied = |role| {
+        local_messages(&f, role)
+            .into_iter()
+            .filter(|m| m.subject == "Copied twice")
+            .count()
+    };
+    let first = local_messages(&f, FolderRole::Inbox)
+        .into_iter()
+        .find(|m| m.subject == "Copied twice")
+        .unwrap();
+    store
+        .enqueue(&nail_store::Operation::MoveMessage {
+            message_id: first.id,
+            target_folder_id: archive,
+            source: None,
+        })
+        .unwrap();
+    // A list copy of the same message arrives before the move is replayed.
+    f.server
+        .store()
+        .append("INBOX", raw("second").as_bytes(), &["\\Seen"])
+        .unwrap();
+    f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(
+        copied(FolderRole::Inbox),
+        0,
+        "held back while the move waits"
+    );
+    assert_eq!(f.service.ops_summary().await.unwrap().waiting(), 0);
+    assert_eq!(server_count(&f, "INBOX", "Copied twice"), 1);
+
+    f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(
+        copied(FolderRole::Inbox),
+        1,
+        "fetched once the move is done"
+    );
+    assert_eq!(copied(FolderRole::Archive), 1);
+}
+
+/// The local Archive folder of the fixture's account.
+fn archive_of(f: &Fixture) -> nail_api::FolderId {
+    f.service
+        .store()
+        .folder_with_role(&f.account, FolderRole::Archive)
+        .unwrap()
+        .unwrap()
+}
+
 /// The messages of the folder with `role` (store order).
 fn local_messages(f: &Fixture, role: FolderRole) -> Vec<nail_api::MessageSummary> {
     let store = f.service.store();
@@ -819,10 +886,7 @@ async fn a_uidvalidity_reset_with_pending_moves_shows_no_duplicates() {
     let f = setup("secret").await;
     f.service.sync_account(&f.account).await.unwrap();
     let store = f.service.store();
-    let archive = store
-        .folder_with_role(&f.account, FolderRole::Archive)
-        .unwrap()
-        .unwrap();
+    let archive = archive_of(&f);
     let before = local_messages(&f, FolderRole::Inbox);
     let archived = local_messages(&f, FolderRole::Archive).len();
     let moved = &before[..2];

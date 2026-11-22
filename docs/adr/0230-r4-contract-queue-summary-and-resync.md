@@ -58,8 +58,9 @@ What the code does (verified for this ADR):
   the remote UI narrows it to granted accounts).
 - `Request::RetryFailedOps { account_id? }` → `Queued` (every failed write of
   the account, or of all accounts) and `Request::DismissFailedOps
-  { account_id? }` → `Done` (deletes the failed rows; their local change was
-  already given up and the next sync shows the server's state). Organize
+  { account_id? }` → `Done` (deletes the failed rows; ADR 0233: a dismissed
+  move or delete is undone locally, so the message shows where the server
+  still has it). Organize
   scope; without `account_id` a remote session needs every account.
   `RetryOp` stays for one operation.
 - Store: `Store::write_queue_counts` (contract name `op_queue_counts`,

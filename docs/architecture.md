@@ -252,6 +252,9 @@ crates/nail-store      SQLite metadata (v19), blob store, per-account operation 
                        mail_batch_ops (mail actions with inverses for undo; mail_batches.rs)
                        v19 (ADRs 0190 / 0191): sync_errors.rs (sync_errors: last error per account / folder,
                        sync_skipped: messages a folder sync skipped, with attempts and ErrorDetails)
+                       v23 (ADR 0233): sync_refetch (server UIDs to fetch again: held back by a waiting or
+                       failed move-out, or given back by a dismissed write); drafts linked to a received message
+                       unlinked (compose.rs unlink_received_server_copies)
                        v18 (P3 WP-perf, ADR 0166): five triggers keep thread_activity equal to the backfill
                        (activity.rs MAINTENANCE_SQL; a later migration that rebuilds messages / folders must recreate
                        them); ListThreads pages are index ranges on the table, one batched read per page
@@ -1577,8 +1580,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   restart. `Store::write_queue_counts` also counts pending `folder_ops`, `gmail_label_ops` and `exchange_ops`
   (failures only of `op_queue`, which Retry / Dismiss act on). A deferred pass logs one INFO line ("writes
   deferred; retrying later"; the text at DEBUG). `ingest::resolve_id` skips a server message while a move or delete
-  of the same Message-ID out of that folder waits (`Store::has_waiting_move_out`): no duplicate rows after a
-  UIDVALIDITY reset. Test helpers `nail_core::testing::store_op_id` / `wire_op_id`. The lag tests: `app/src-tauri`
+  of the same Message-ID out of that folder waits or failed (`Store::held_move_outs`, read once per batch) and lists
+  its UID in `sync_refetch` (`Store::record_refetch`; `sync.rs` `retry_skipped` fetches `refetch_uids` once no write
+  holds them back, ADR 0233): no duplicate rows after a UIDVALIDITY reset, and no copy lost. Test helpers `nail_core::testing::store_op_id` / `wire_op_id`. The lag tests: `app/src-tauri`
   `a_lagging_forwarder_resyncs_the_webview`, `nail-server` `a_lagging_client_is_resynced`.
 - WS2 (ADR 0232): `ui/src/state/opsSummary.ts` tracks the summary (`opsWaiting` pinned by the `ops` ts-vectors);
   `uiStore` `opsSummary` / `setOpsSummary` / `resyncAt` / `resynced` (no `failedOp` / `opFinished`; `pendingOps` =
@@ -1592,3 +1596,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   and action `mail.move-out-of-drafts` (`{role: "inbox"}`, in `layout.kdl`'s reader toolbar and menus). Core
   `draft_edit.rs`: `EditDraftMessage` on a non-`\Draft` message makes a draft without a server copy (the mock
   `mockDrafts.ts` likewise). E2e `r4-move-picker.spec.ts`.
+- Review fixes (ADR 0233): a draft's server copy is removed only when it is Nail's own copy or flagged `\Draft`
+  (`composer.rs` `draft_copy_removal_in`); `DismissFailedOps` puts dismissed moves / deletes back
+  (`queue.rs` `revert_move_out`, `DismissedOps`). Shared UI pieces: `MailConfirm` (every mail confirmation, focus
+  back to Cancel after a failure), `FolderRowLabel`, `listOptionId` (`rovingFocus.ts`), `errorReason`
+  (`api/client.ts`), `messageTarget` / `runOptionsOf`. E2e `r4-status-failures.spec.ts` (Retry and Dismiss with the
+  mock's `imap-deny`).

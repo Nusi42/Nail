@@ -23,6 +23,10 @@ export const messageRows = (scope: Page | Locator) =>
 export const messageRow = (scope: Page | Locator, subject: string) =>
   messageRows(scope).filter({ hasText: subject });
 
+/** The status bar's item for queued writes ("Saving N changes", failed writes). */
+export const opsItem = (page: Page) =>
+  page.locator('[data-part="status-bar.item"][data-item="ops"]');
+
 /** The message list (focus it for the list's keys). */
 export const messageList = (page: Page) => page.locator('[data-part="message-list"]');
 

@@ -1,5 +1,12 @@
 import defaultLayoutJson from "../../../crates/nail-api/fixtures/default-layout.json";
-import { NailError, TransportClient, errorMessageId, errorMessageIdOf } from "./client";
+import {
+  NailError,
+  TransportClient,
+  errorMessageId,
+  errorMessageIdOf,
+  errorMessageOf,
+  errorReason,
+} from "./client";
 import type { Event as NailEvent } from "./generated";
 import { MockTransport } from "./mock";
 import { createMockData } from "./mockData";
@@ -161,6 +168,16 @@ describe("errors", () => {
     expect(errorMessageId("invalid_request")).toBe("error-invalid-request");
     expect(errorMessageIdOf(new NailError("auth_failed", ""))).toBe("error-auth-failed");
     expect(errorMessageIdOf(new Error("x"))).toBe("error-internal");
+  });
+
+  it("names the core's text, else the class's (ADR 0043)", () => {
+    const localized = { id: "error-folder-gone", args: { name: "Bills" } };
+    expect(errorReason({ code: "not_found", localized })).toBe(localized);
+    expect(errorReason({ code: "not_found", localized: null })).toEqual({ id: "error-not-found" });
+    expect(errorReason({ code: "network" })).toEqual({ id: "error-network" });
+    expect(errorMessageOf(new NailError("conflict", "", localized))).toBe(localized);
+    expect(errorMessageOf(new NailError("conflict", ""))).toEqual({ id: "error-conflict" });
+    expect(errorMessageOf(new Error("x"))).toEqual({ id: "error-internal" });
   });
 });
 

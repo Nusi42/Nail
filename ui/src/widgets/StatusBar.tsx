@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from "react";
-import { errorMessageId, errorMessageIdOf } from "../api/client";
+import { errorMessageId, errorMessageIdOf, errorReason } from "../api/client";
 import { useLocale, useT } from "../i18n/I18nProvider";
 import { optionList, type WidgetProps } from "../layout/widgetRegistry";
 import { cancelRichSend } from "../features/composer/flows";
@@ -8,7 +8,6 @@ import { useComposeContext } from "../state/hooks";
 import { useAccounts, useAccountStatuses, useClient, useFolders } from "../state/queries";
 import { sendPercent, useUi } from "../state/uiStore";
 import { waitingCount } from "../state/opsSummary";
-import type { OpFailure } from "../api/generated";
 import { DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** How long "Message sent" stays in the status bar. */
@@ -36,9 +35,8 @@ function SyncItem() {
     });
     state = "error";
   } else if (syncError) {
-    const reason = syncError.localized
-      ? t(syncError.localized.id, syncError.localized.args)
-      : t(errorMessageId(syncError.code));
+    const why = errorReason(syncError);
+    const reason = t(why.id, why.args);
     text = t("status-sync-failed", { reason });
     state = "error";
     if (syncError.details) {
@@ -123,13 +121,6 @@ function AccountStatusItem() {
   );
 }
 
-/** The reason of a failed queued write, as the core reported it. */
-function failureReason(t: ReturnType<typeof useT>, failure: OpFailure): string {
-  return failure.localized
-    ? t(failure.localized.id, failure.localized.args)
-    : t(errorMessageId(failure.code));
-}
-
 /**
  * Queued writes the core has not saved yet, or the ones it gave up on: the
  * core's queue summary (ADR 0230), never a list the UI keeps.
@@ -151,7 +142,8 @@ function OpsItem() {
   };
   const failure = summary !== null && summary.failed > 0 ? summary.newest_failure : null;
   if (failure) {
-    const reason = actionError ? t(actionError) : failureReason(t, failure);
+    const why = errorReason(failure);
+    const reason = actionError ? t(actionError) : t(why.id, why.args);
     return (
       <span data-part="status-bar.item" data-item="ops" data-state="error">
         <span data-part="status-bar.text">

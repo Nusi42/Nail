@@ -454,7 +454,7 @@ async fn queue_counts_retry_and_dismiss_failed_ops() {
         .replay_pending(&replayer, ReplayPolicy::default())
         .await
         .unwrap();
-    assert_eq!(store.dismiss_failed_ops(None).unwrap(), 1);
+    assert_eq!(store.dismiss_failed_ops(None).unwrap().count, 1);
     assert_eq!(store.write_queue_counts().unwrap(), []);
     assert_eq!(store.newest_failed_op().unwrap(), None);
 }
@@ -530,64 +530,129 @@ fn write_queue_counts_include_folder_changes() {
     );
 }
 
-/// ADR 0230: a move out of a folder that waits for replay is found by the
-/// message's Message-ID (angle brackets optional), until it is replayed.
-#[tokio::test]
-async fn a_waiting_move_out_is_found_by_message_id() {
-    let store = seeded_store();
+/// Stores message `id` in the inbox with UID 7 and Message-ID
+/// `<id@example.org>`.
+fn synced_in_inbox(store: &Store, id: &str) {
     let mut row = nail_store::SyncedMessage {
-        message: message("m1", "a1", "inbox", "2026-01-01T00:00:00Z"),
+        message: message(id, "a1", "inbox", "2026-01-01T00:00:00Z"),
         meta: Some(nail_store::MessageMeta {
-            message_id: Some("<m1@example.org>".into()),
+            message_id: Some(format!("<{id}@example.org>")),
             ..nail_store::MessageMeta::default()
         }),
     };
     row.message.uid = Some(7);
     store.merge_messages(&[row]).unwrap();
+}
+
+fn move_to_archive(id: &str) -> Operation {
+    Operation::MoveMessage {
+        message_id: id.into(),
+        target_folder_id: "archive".into(),
+        source: None,
+    }
+}
+
+/// ADR 0230: a move out of a folder that waits for replay or failed holds
+/// the message's Message-ID back, until it is replayed or dismissed.
+#[tokio::test]
+async fn a_waiting_or_failed_move_out_holds_the_message_id() {
+    let store = seeded_store();
+    synced_in_inbox(&store, "m1");
     let inbox = FolderId::from("inbox");
     let archive = FolderId::from("archive");
-    assert!(
-        !store
-            .has_waiting_move_out(&inbox, "m1@example.org")
-            .unwrap()
-    );
+    assert!(store.held_move_outs(&inbox).unwrap().is_empty());
+    store.enqueue(&move_to_archive("m1")).unwrap();
+    let held = store.held_move_outs(&inbox).unwrap();
+    assert_eq!(held.into_iter().collect::<Vec<_>>(), ["m1@example.org"]);
+    assert!(store.held_move_outs(&archive).unwrap().is_empty());
     store
-        .enqueue(&Operation::MoveMessage {
-            message_id: "m1".into(),
-            target_folder_id: archive.clone(),
-            source: None,
-        })
+        .replay_pending(&AllFail, ReplayPolicy::default())
+        .await
         .unwrap();
-    assert!(
-        store
-            .has_waiting_move_out(&inbox, "m1@example.org")
-            .unwrap()
-    );
-    assert!(
-        store
-            .has_waiting_move_out(&inbox, "<m1@example.org>")
-            .unwrap()
-    );
-    assert!(
-        !store
-            .has_waiting_move_out(&archive, "m1@example.org")
-            .unwrap()
-    );
-    assert!(
-        !store
-            .has_waiting_move_out(&inbox, "other@example.org")
-            .unwrap()
-    );
-    assert!(!store.has_waiting_move_out(&inbox, "<>").unwrap());
+    assert_eq!(store.held_move_outs(&inbox).unwrap().len(), 1, "failed");
+    store.retry_failed_ops(None).unwrap();
     store
         .replay_pending(&AllDone, ReplayPolicy::default())
         .await
         .unwrap();
-    assert!(
-        !store
-            .has_waiting_move_out(&inbox, "m1@example.org")
-            .unwrap()
+    assert!(store.held_move_outs(&inbox).unwrap().is_empty(), "replayed");
+}
+
+/// Review of ADR 0230: dismissing a failed move puts the row back where
+/// the server still has it (source folder, UID); the folders are reported.
+#[tokio::test]
+async fn dismissing_a_failed_move_puts_the_row_back() {
+    let store = seeded_store();
+    synced_in_inbox(&store, "m1");
+    store.enqueue(&move_to_archive("m1")).unwrap();
+    let moved = store.get_message(&"m1".into()).unwrap();
+    assert_eq!(
+        (moved.summary.folder_id.as_str(), moved.uid),
+        ("archive", None)
     );
+    store
+        .replay_pending(&AllFail, ReplayPolicy::default())
+        .await
+        .unwrap();
+    let dismissed = store.dismiss_failed_ops(None).unwrap();
+    assert_eq!(dismissed.count, 1);
+    assert_eq!(
+        dismissed.folders,
+        [FolderId::from("archive"), FolderId::from("inbox")]
+    );
+    assert_eq!(dismissed.accounts, ["a1".into()]);
+    let back = store.get_message(&"m1".into()).unwrap();
+    assert_eq!(
+        (back.summary.folder_id.as_str(), back.uid),
+        ("inbox", Some(7))
+    );
+    assert_eq!(store.list_ops(None).unwrap().len(), 0);
+}
+
+/// Review of ADR 0230: dismissing a failed permanent delete (the row is
+/// gone) lists the source UID to fetch again; a held-back UID waits.
+#[tokio::test]
+async fn dismissing_a_failed_delete_lists_the_message_to_fetch_again() {
+    let store = seeded_store();
+    let inbox = FolderId::from("inbox");
+    synced_in_inbox(&store, "m1");
+    store
+        .enqueue(&Operation::DeleteMessage {
+            message_id: "m1".into(),
+            permanent: true,
+            source: None,
+            trash_folder_id: None,
+        })
+        .unwrap();
+    assert!(store.get_message(&"m1".into()).is_err());
+    // A sync left another copy out while the delete is held.
+    store
+        .record_refetch(&inbox, 9, Some("<m1@example.org>"))
+        .unwrap();
+    assert_eq!(store.refetch_uids(&inbox, 10).unwrap(), Vec::<u32>::new());
+    store
+        .replay_pending(&AllFail, ReplayPolicy::default())
+        .await
+        .unwrap();
+    assert_eq!(store.refetch_uids(&inbox, 10).unwrap(), Vec::<u32>::new());
+    let dismissed = store.dismiss_failed_ops(Some(&"a1".into())).unwrap();
+    assert_eq!(dismissed.count, 1);
+    assert_eq!(dismissed.folders, Vec::<FolderId>::new());
+    assert_eq!(store.refetch_uids(&inbox, 10).unwrap(), [7, 9]);
+    assert_eq!(store.refetch_uids(&inbox, 1).unwrap(), [7]);
+    assert_eq!(store.remove_refetch(&inbox, &[7]).unwrap(), 1);
+    // A UIDVALIDITY reset forgets them.
+    store.clear_skipped(&inbox).unwrap();
+    assert_eq!(store.refetch_uids(&inbox, 10).unwrap(), Vec::<u32>::new());
+}
+
+/// Fails every operation permanently.
+struct AllFail;
+
+impl Replayer for AllFail {
+    fn replay(&self, _op: &QueuedOp) -> impl Future<Output = ReplayOutcome> + Send {
+        std::future::ready(ReplayOutcome::Fail("refused".into()))
+    }
 }
 
 /// Replays every operation successfully.

@@ -112,15 +112,26 @@ impl Service {
     }
 
     /// `DismissFailedOps`: forgets the failed writes of `account` (or of
-    /// all accounts).
+    /// all accounts). Dismissed moves and deletes are undone locally
+    /// ([`nail_store::Store::dismiss_failed_ops`]); a sync of their accounts
+    /// fetches what the server still holds.
     pub(crate) async fn dismiss_failed_ops(&self, account: Option<AccountId>) -> Result<()> {
-        let removed = self
+        let dismissed = self
             .inner
             .store
             .call(move |s| s.dismiss_failed_ops(account.as_ref()))
             .await?;
-        if removed > 0 {
-            self.broadcast_ops_changed().await;
+        if dismissed.count == 0 {
+            return Ok(());
+        }
+        if !dismissed.folders.is_empty() {
+            self.broadcast(Event::MailChanged {
+                folder_ids: dismissed.folders,
+            });
+        }
+        self.broadcast_ops_changed().await;
+        for account in &dismissed.accounts {
+            self.inner.engines.request_sync(account);
         }
         Ok(())
     }

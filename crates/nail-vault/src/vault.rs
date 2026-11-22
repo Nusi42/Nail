@@ -91,10 +91,7 @@ fn encode_error(err: &VaultError) -> String {
 
 fn decode_error(text: &str) -> (Option<ErrorCode>, String) {
     match text.split_once('|') {
-        Some((code, message)) => (
-            ErrorCode::ALL.into_iter().find(|c| c.as_str() == code),
-            message.to_owned(),
-        ),
+        Some((code, message)) => (ErrorCode::parse(code), message.to_owned()),
         None => (Some(ErrorCode::Internal), text.to_owned()),
     }
 }

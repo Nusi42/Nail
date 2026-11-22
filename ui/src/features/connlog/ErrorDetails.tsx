@@ -7,7 +7,7 @@
  * shown.
  */
 import { useState } from "react";
-import { errorMessageId, errorMessageIdOf } from "../../api/client";
+import { errorMessageIdOf, errorReason } from "../../api/client";
 import type { ErrorDetails } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
@@ -69,9 +69,8 @@ function useFields(details: ErrorDetails): Field[] {
 /** The wrapper text of a report: the core's localized text, else its class's. */
 function useSummary(report: ErrorReport): string {
   const t = useT();
-  return report.localized
-    ? t(report.localized.id, report.localized.args)
-    : t(errorMessageId(report.code));
+  const why = errorReason(report);
+  return t(why.id, why.args);
 }
 
 /** The details of one report. */

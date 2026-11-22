@@ -146,7 +146,7 @@ pub use folder_ops::{FolderOp, FolderOpOutcome, QueuedFolderOp, folder_op_id};
 pub use lock::{DataDirLock, LOCK_FILE, LockError, LockHolder};
 pub use mail::{
     FolderCounts, FolderSyncState, MergeReport, MessageMeta, MessagePage, StoredMessage,
-    SyncedMessage, UidFlags,
+    SyncedMessage, UidFlags, normalize_msgid,
 };
 pub use mail_batches::{
     MailBatchApplied, MailBatchPlan, MailBatchRecord, MailBatchUndo, mail_batch_id,
@@ -159,7 +159,7 @@ pub use plugins::{
 };
 pub use pop3::{Pop3State, Pop3Uid};
 pub use queue::{
-    Enqueued, FlagChange, MessageSource, OpError, OpId, OpState, Operation, QueuedOp,
+    DismissedOps, Enqueued, FlagChange, MessageSource, OpError, OpId, OpState, Operation, QueuedOp,
     ReplayOutcome, ReplayPolicy, ReplayReport, Replayer,
 };
 pub use remote::{

@@ -224,7 +224,7 @@ pub(crate) fn log_deferred_pass(
 ) {
     let waiting = summary
         .and_then(|s| s.accounts.iter().find(|a| &a.account_id == account))
-        .map_or(0, |a| a.pending + a.in_flight);
+        .map_or(0, nail_api::OpsAccountSummary::waiting);
     tracing::info!(%account, waiting, error = %code, "writes deferred; retrying later");
 }
 

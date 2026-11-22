@@ -970,10 +970,12 @@ async fn store_batches(
     result.map(|()| sink.out)
 }
 
-/// Fetches messages earlier passes skipped (ADR 0191), least tried first:
-/// the ones that come now are stored and forgotten as skipped, the ones that
-/// still fail count another attempt, the ones gone from the server are
-/// forgotten.
+/// Fetches messages earlier passes skipped (ADR 0191), least tried first,
+/// and the ones listed to fetch again that no write holds back any more
+/// ([`nail_store::Store::refetch_uids`]): the ones that come now are stored
+/// and forgotten as skipped, the ones that still fail count another attempt
+/// (as skipped), the ones gone from the server are forgotten. A message a
+/// write still holds back is listed again by the ingest.
 async fn retry_skipped(
     ctx: &SyncCtx,
     client: &mut ImapClient,
@@ -984,7 +986,13 @@ async fn retry_skipped(
     let uids = {
         let id = folder.id.clone();
         ctx.store
-            .call(move |s| s.skipped_uids(&id, SKIPPED_RETRIES))
+            .call(move |s| {
+                let mut uids = s.skipped_uids(&id, SKIPPED_RETRIES)?;
+                uids.extend(s.refetch_uids(&id, SKIPPED_RETRIES)?);
+                uids.sort_unstable();
+                uids.dedup();
+                Ok(uids)
+            })
             .await?
     };
     if uids.is_empty() {
@@ -1012,12 +1020,15 @@ async fn retry_skipped(
         .filter(|m| !m.deleted)
         .map(incoming)
         .collect();
+    let retried = uids.len();
     let target = folder.clone();
     let blobs = ctx.blobs.clone();
     let search = ctx.index.get();
     let report = ctx
         .store
         .call(move |s| {
+            // Forgotten first: the ingest lists a message still held back again.
+            s.remove_refetch(&target.id, &uids)?;
             let report =
                 crate::ingest::ingest(s, &blobs, Some(&search), &target, uid_validity, &messages)?;
             s.remove_skipped(&target.id, &done)?;
@@ -1027,7 +1038,7 @@ async fn retry_skipped(
             Ok(report)
         })
         .await?;
-    tracing::info!(folder = %folder.path, retried = uids.len(), stored = report.stored.len(), "skipped messages retried");
+    tracing::info!(folder = %folder.path, retried, stored = report.stored.len(), "skipped messages retried");
     ctx.emit(Event::SyncErrorsChanged {
         account_id: folder.account_id.clone(),
     });
@@ -1111,7 +1122,8 @@ async fn reset_folder(ctx: &SyncCtx, folder: &Folder, uid_validity: u32) -> Resu
                 .map(|(_, id)| id)
                 .collect();
             let dropped = s.clear_folder(&target.id)?;
-            // Skipped UIDs of the old UIDVALIDITY name nothing now.
+            // Skipped UIDs and UIDs to fetch again of the old UIDVALIDITY
+            // name nothing now.
             s.clear_skipped(&target.id)?;
             // Messages with waiting operations stay (without their UID).
             let gone: Vec<_> = gone

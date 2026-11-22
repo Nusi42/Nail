@@ -56,7 +56,11 @@ impl Service {
                 .await?
         };
         // Nail's own copy of a saved draft (or a message imported before).
-        if let Some(header_id) = located.header_id.clone() {
+        // Only for a real draft: a received message that an older build
+        // linked as a draft's server copy gets a new draft of its own.
+        if located.is_draft
+            && let Some(header_id) = located.header_id.clone()
+        {
             let folder = located.folder_id.clone();
             let own = self
                 .inner

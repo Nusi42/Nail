@@ -12,9 +12,14 @@ metadata:
   names the real reason after a restart. `Store::write_queue_counts` (was `op_queue_counts`) also counts pending
   folder, Gmail label and Exchange writes; their failures are not in `failed` (bulk Retry / Dismiss act on message
   writes only). One INFO line per deferred replay pass. `ingest::resolve_id` skips a server message while a move-out
-  of the same Message-ID waits (`has_waiting_move_out`): no duplicates after a UIDVALIDITY reset.
+  of the same Message-ID waits or failed (`held_move_outs`, once per batch) and lists its UID in `sync_refetch`
+  (schema v23; fetched by `retry_skipped` once nothing holds it back): no duplicates after a UIDVALIDITY reset, no
+  lost copy. Dismiss puts failed moves / deletes back (`revert_move_out`, ADR 0233).
 - `EditDraftMessage` on a message without `\Draft` copies it into a new draft without a server copy: the original
   is never replaced or deleted (`draft_edit.rs`, test `m1b::a_non_draft_in_drafts_is_copied_and_never_replaced`).
+  Review (ADR 0233): a draft's server copy is removed only if it is Nail's own or flagged `\Draft`
+  (`draft_copy_removal_in`); schema v23 unlinks 0.8.8 links to received mail (maintainer lost drafts that way);
+  `m1b::an_old_link_to_a_received_message_never_deletes_it`.
 - UI: `ui/src/state/opsSummary.ts` tracks the summary (start, reconnect, `OpsChanged`, `Resync`) and re-asks after
   `OPS_RECHECK_MS` (2.5 s) while changes wait; `pendingOps` only holds ids queued since the last summary. `Resync`
   refetches lists, conversations, searches and the open message and prunes a stale selection. Move window =
@@ -34,7 +39,7 @@ metadata:
 - e2e `m5d` "customize layout … Undo and Redo" failed twice under load in WS2's runs (passes alone): watch it.
 
 **Follow-ups (plan status line):** failures of folder / Gmail label / Exchange writes in the summary with bulk
-Retry / Dismiss; coalesce the per-operation WARN of a mass permanent failure; a second same-Message-ID copy in a
-folder with a waiting move-out is fetched only on the next full fetch; a separate text for Retry / Dismiss errors.
+Retry / Dismiss; coalesce the per-operation WARN of a mass permanent failure; a separate text for Retry / Dismiss
+errors.
 
 Related: [[r3-status]], [[next-steps]]

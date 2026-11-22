@@ -1285,9 +1285,15 @@ webkit p3-card-height timeout under load, passed alone), the desktop specs, `npm
 Move window and the toolbar customizer). Next: review, then the maintainer's human gate on the 0.8.9 installer.
 Follow-ups:
 failures of folder / Gmail label / Exchange writes are not in `OpsSummary.failed` (bulk Retry / Dismiss act on
-message writes only); a mass permanent failure still logs one WARN per operation; a second copy with the same
-Message-ID in a folder with a waiting move-out is fetched only on the next full fetch; Retry / Dismiss errors show
+message writes only); a mass permanent failure still logs one WARN per operation; Retry / Dismiss errors show
 in place of the failure reason.
+
+*Status (review fixes):* done (ADR 0233). Drafts linked by 0.8.8 to received mail are unlinked (schema v23) and a
+draft's server copy is removed only when it is Nail's own or flagged `\Draft`; server copies held back by a waiting
+or failed move-out are listed (`sync_refetch`) and fetched later; Dismiss puts failed moves / deletes back; Move out
+of Drafts moves only the selected message; one confirmation body (`MailConfirm`, focus back to Cancel after a
+failure) and the other single definitions the reviews asked for; e2e `r4-status-failures.spec.ts` (Retry, Dismiss).
+Next: the maintainer's human gate on the 0.8.9 installer.
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

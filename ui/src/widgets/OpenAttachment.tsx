@@ -52,8 +52,8 @@ export function OpenAttachmentDialog({ close }: DialogProps) {
     <MailConfirm
       kind="open-attachment"
       question={t("mail-open-attachment-question")}
-      canOpen={what !== null}
-      onOpen={() => {
+      canConfirm={what !== null}
+      onConfirm={() => {
         done();
         what?.run();
       }}

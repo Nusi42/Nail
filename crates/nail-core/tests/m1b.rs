@@ -792,6 +792,74 @@ async fn a_non_draft_in_drafts_is_copied_and_never_replaced() {
     f.service.shutdown().await;
 }
 
+/// Waits until the work account has no message write left to replay.
+async fn queue_drained(f: &Fixture) {
+    eventually("every write replayed", || async {
+        f.service
+            .store()
+            .write_queue_counts()
+            .unwrap()
+            .iter()
+            .all(|a| a.waiting() == 0 && a.failed == 0)
+    })
+    .await;
+}
+
+/// Drafts safety (review of ADR 0232): a draft that an older build linked
+/// to a received message in Drafts (no `\Draft`) as its server copy never
+/// deletes that message, on autosave or discard, and opening the message
+/// starts a draft of its own instead of returning the linked one.
+#[tokio::test]
+async fn an_old_link_to_a_received_message_never_deletes_it() {
+    let f = setup().await;
+    synced(&f).await;
+    let raw = format!(
+        "From: Grace <grace@example.net>\r\nTo: {MULTI_WORK_EMAIL}\r\nSubject: Linked mail\r\nMessage-ID: <received-2@example.net>\r\n\r\nNot a draft either\r\n"
+    );
+    let (message, uid) = in_drafts(&f, "Linked mail", raw, &[]).await;
+    let drafts = folder(&f.service, MULTI_WORK_ID, FolderRole::Drafts)
+        .await
+        .unwrap();
+    let mut draft = blank_draft("Mine v1");
+    let id = save(&f.service, draft.clone()).await;
+    queue_drained(&f).await;
+    // What 0.8.8 wrote when the received message was continued.
+    f.service
+        .store()
+        .set_draft_server_copy(
+            &id,
+            Some(&nail_store::DraftServerCopy {
+                folder_id: drafts.id.clone(),
+                uid: None,
+                message_id: "received-2@example.net".into(),
+            }),
+        )
+        .unwrap();
+    let own = edit_draft_message(&f.service, &message).await;
+    assert_ne!(own, id, "the received message starts a draft of its own");
+
+    // Autosave: the old link names no copy to delete.
+    draft.id = Some(id.clone());
+    draft.subject = "Mine v2".into();
+    save(&f.service, draft).await;
+    eventually("the new copy on the server", || async {
+        f.server_subjects(MULTI_WORK_ID, "Drafts")
+            .contains(&"Mine v2".to_owned())
+    })
+    .await;
+    queue_drained(&f).await;
+    assert!(server_draft_uids(&f).contains(&uid), "kept after autosave");
+
+    // Discarding the draft that the received message started keeps it too.
+    assert!(matches!(
+        request(&f.service, Request::DeleteDraft { draft_id: own }).await,
+        Response::Done
+    ));
+    queue_drained(&f).await;
+    assert!(server_draft_uids(&f).contains(&uid), "kept after discard");
+    f.service.shutdown().await;
+}
+
 fn invoice_rule() -> Rule {
     common::subject_rule(
         "Invoices to Archive",

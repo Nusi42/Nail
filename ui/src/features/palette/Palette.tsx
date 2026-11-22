@@ -27,6 +27,7 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import { useLayoutConfig } from "../../layout/LayoutContext";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
+import { listOptionId } from "../../widgets/rovingFocus";
 import { ariaShortcut, keyLabel } from "../menus/keyLabels";
 import { appRegistry } from "../registry";
 import { useInstallation } from "../system/queries";
@@ -54,11 +55,6 @@ export function useRecentActions() {
 }
 
 /** The title with the matched parts marked. */
-/** The element id of result row `index` in the palette with id `base`. */
-function optionId(base: string, index: number): string {
-  return `${base}-option-${String(index)}`;
-}
-
 function Highlighted({ text, ranges }: { text: string; ranges: readonly Range[] }) {
   if (ranges.length === 0) return <>{text}</>;
   const pieces: { text: string; match: boolean }[] = [];
@@ -218,7 +214,7 @@ export function CommandPalette({ close }: { close: () => void }) {
   // Keep the active row in view.
   useEffect(() => {
     const row = listRef.current?.querySelector<HTMLElement>(
-      `#${CSS.escape(optionId(base, current))}`,
+      `#${CSS.escape(listOptionId(base, current))}`,
     );
     row?.scrollIntoView({ block: "nearest" });
     // `results`: a new result list moves the rows under the active index.
@@ -306,7 +302,7 @@ export function CommandPalette({ close }: { close: () => void }) {
           aria-expanded="true"
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={results.length > 0 ? optionId(base, current) : undefined}
+          aria-activedescendant={results.length > 0 ? listOptionId(base, current) : undefined}
           aria-label={t("palette-search-label")}
           placeholder={t("palette-search-placeholder")}
           autoComplete="off"
@@ -336,7 +332,7 @@ export function CommandPalette({ close }: { close: () => void }) {
           {results.map((scored, index) => (
             <Row
               key={scored.entry.id}
-              id={optionId(base, index)}
+              id={listOptionId(base, index)}
               scored={scored}
               active={index === current}
               firstOther={index === firstUnavailable && index > 0}

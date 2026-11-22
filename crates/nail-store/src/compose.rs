@@ -289,6 +289,30 @@ pub struct DraftServerCopy {
     pub message_id: String,
 }
 
+/// Schema v23 step: unlinks every draft whose server copy names messages
+/// in its Drafts folder none of which is flagged `\Draft`. Nail 0.8.8 linked
+/// a received message continued in Drafts as the draft's server copy, and
+/// the next autosave, send or discard deleted it for good. A copy that is
+/// not stored locally (nothing to compare) keeps its link.
+pub(crate) fn unlink_received_server_copies(tx: &Transaction<'_>) -> Result<()> {
+    let unlinked = tx.execute(
+        "UPDATE drafts SET server_folder_id = NULL, server_uid = NULL, server_message_id = NULL
+         WHERE server_message_id IS NOT NULL
+           AND EXISTS (SELECT 1 FROM messages m
+                       WHERE m.folder_id = drafts.server_folder_id
+                         AND m.message_id = trim(trim(trim(drafts.server_message_id), '<>')))
+           AND NOT EXISTS (SELECT 1 FROM messages m
+                           WHERE m.folder_id = drafts.server_folder_id
+                             AND m.message_id = trim(trim(trim(drafts.server_message_id), '<>'))
+                             AND m.draft = 1)",
+        [],
+    )?;
+    if unlinked > 0 {
+        tracing::info!(unlinked, "drafts unlinked from received messages");
+    }
+    Ok(())
+}
+
 fn draft_in_tx(tx: &Transaction<'_>, n: i64) -> Result<Draft> {
     let payload: String = tx
         .query_row(

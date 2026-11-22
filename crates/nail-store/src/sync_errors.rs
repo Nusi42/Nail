@@ -5,6 +5,9 @@
 //! details" survives a restart. `sync_skipped` lists the messages a folder
 //! sync could not download (refused, withheld, unreadable, too large): the
 //! folder's checkpoint moves past them and later syncs retry them.
+//! `sync_refetch` (schema v23) lists server messages a sync left out on
+//! purpose or a dismissed write gave back: they are fetched again once
+//! nothing holds them back.
 
 use nail_api::connlog::{ErrorDetails, SkippedMessage, SyncErrorRecord};
 use nail_api::{AccountId, FolderId};
@@ -38,6 +41,56 @@ CREATE TABLE sync_skipped (
     PRIMARY KEY (folder_id, uid)
 );
 ";
+
+/// Schema v23: server messages to fetch again. A sync leaves a message out
+/// while a move or delete of its `Message-ID` out of the folder waits or
+/// failed (the write takes it away; stored, it would show twice); a
+/// dismissed failed write whose local row is gone lists the message's
+/// source UID. `message_id` (normalized, may be NULL) names the write that
+/// holds the message back.
+pub(crate) const V23: &str = r"
+CREATE TABLE sync_refetch (
+    folder_id  TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+    uid        INTEGER NOT NULL,
+    message_id TEXT,
+    PRIMARY KEY (folder_id, uid)
+);
+";
+
+/// Lists message `uid` of `folder` to fetch again (see [`V23`]), inside a
+/// transaction or on the store's connection.
+pub(crate) fn record_refetch_in(
+    conn: &rusqlite::Connection,
+    folder: &FolderId,
+    uid: u32,
+    message_id: Option<&str>,
+) -> Result<()> {
+    let mid = message_id.and_then(crate::mail::normalize_msgid);
+    conn.prepare_cached(
+        "INSERT INTO sync_refetch (folder_id, uid, message_id) VALUES (?1, ?2, ?3)
+         ON CONFLICT (folder_id, uid) DO UPDATE SET message_id = excluded.message_id",
+    )?
+    .execute(params![folder.as_str(), uid, mid])?;
+    Ok(())
+}
+
+/// Deletes the rows of `uids` in `folder` from a `(folder_id, uid)` table;
+/// returns how many there were.
+fn delete_uids(
+    tx: &rusqlite::Transaction<'_>,
+    table: &str,
+    folder: &FolderId,
+    uids: &[u32],
+) -> Result<usize> {
+    let mut stmt = tx.prepare_cached(&format!(
+        "DELETE FROM {table} WHERE folder_id = ?1 AND uid = ?2"
+    ))?;
+    let mut removed = 0;
+    for uid in uids {
+        removed += stmt.execute(params![folder.as_str(), uid])?;
+    }
+    Ok(removed)
+}
 
 fn folder_key(folder: Option<&FolderId>) -> &str {
     folder.map_or("", FolderId::as_str)
@@ -118,26 +171,57 @@ impl Store {
     /// Forgets skipped messages (fetched after all, or gone); returns how
     /// many were listed.
     pub fn remove_skipped(&self, folder: &FolderId, uids: &[u32]) -> Result<usize> {
+        self.with_tx(|tx| delete_uids(tx, "sync_skipped", folder, uids))
+    }
+
+    /// Forgets every skipped message and every message to fetch again of a
+    /// folder (its UIDs became invalid).
+    pub fn clear_skipped(&self, folder: &FolderId) -> Result<()> {
         self.with_tx(|tx| {
-            let mut stmt =
-                tx.prepare_cached("DELETE FROM sync_skipped WHERE folder_id = ?1 AND uid = ?2")?;
-            let mut removed = 0;
-            for uid in uids {
-                removed += stmt.execute(params![folder.as_str(), uid])?;
+            for table in ["sync_skipped", "sync_refetch"] {
+                tx.execute(
+                    &format!("DELETE FROM {table} WHERE folder_id = ?1"),
+                    [folder.as_str()],
+                )?;
             }
-            Ok(removed)
+            Ok(())
         })
     }
 
-    /// Forgets every skipped message of a folder (its UIDs became invalid).
-    pub fn clear_skipped(&self, folder: &FolderId) -> Result<()> {
-        self.with_conn(|conn| {
-            conn.execute(
-                "DELETE FROM sync_skipped WHERE folder_id = ?1",
-                [folder.as_str()],
+    /// Lists message `uid` of `folder` to fetch again once no move or
+    /// delete of `message_id` out of `folder` holds it back (schema v23).
+    pub fn record_refetch(
+        &self,
+        folder: &FolderId,
+        uid: u32,
+        message_id: Option<&str>,
+    ) -> Result<()> {
+        self.with_conn(|conn| record_refetch_in(conn, folder, uid, message_id))
+    }
+
+    /// Up to `limit` UIDs of `folder` to fetch again now: listed by
+    /// [`Store::record_refetch`] and no longer held back by a write
+    /// ([`Store::held_move_outs`]), lowest first.
+    pub fn refetch_uids(&self, folder: &FolderId, limit: usize) -> Result<Vec<u32>> {
+        let held = self.held_move_outs(folder)?;
+        let rows: Vec<(u32, Option<String>)> = self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT uid, message_id FROM sync_refetch WHERE folder_id = ?1 ORDER BY uid",
             )?;
-            Ok(())
-        })
+            collect_rows(&mut stmt, [folder.as_str()])
+        })?;
+        Ok(rows
+            .into_iter()
+            .filter(|(_, mid)| mid.as_ref().is_none_or(|m| !held.contains(m)))
+            .map(|(uid, _)| uid)
+            .take(limit)
+            .collect())
+    }
+
+    /// Forgets messages to fetch again (fetched, or gone); returns how many
+    /// were listed.
+    pub fn remove_refetch(&self, folder: &FolderId, uids: &[u32]) -> Result<usize> {
+        self.with_tx(|tx| delete_uids(tx, "sync_refetch", folder, uids))
     }
 
     /// Up to `limit` skipped UIDs of a folder to retry, least tried first.

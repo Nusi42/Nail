@@ -87,6 +87,12 @@ impl ErrorCode {
         }
     }
 
+    /// The code with wire name `name` (the reverse of [`Self::as_str`]);
+    /// `None` for an unknown name (e.g. a newer build's).
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.as_str() == name)
+    }
+
     /// The Fluent message id the UI shows for this code, e.g. `"error-not-found"`.
     pub fn message_id(self) -> String {
         format!("error-{}", self.as_str().replace('_', "-"))
@@ -198,6 +204,15 @@ mod tests {
         assert_eq!(ErrorCode::TooLarge.message_id(), "error-too-large");
         let unique: std::collections::HashSet<_> = ErrorCode::ALL.iter().collect();
         assert_eq!(unique.len(), ErrorCode::ALL.len());
+    }
+
+    #[test]
+    fn parse_is_the_reverse_of_as_str() {
+        for code in ErrorCode::ALL {
+            assert_eq!(ErrorCode::parse(code.as_str()), Some(code));
+        }
+        assert_eq!(ErrorCode::parse("no_such_class"), None);
+        assert_eq!(ErrorCode::parse(""), None);
     }
 
     #[test]

@@ -410,4 +410,5 @@ changes, Gmail labels and Exchange changes included. When you are offline,
 changes wait and are sent when the connection is back. If changes cannot be
 saved, the status bar names the reason (also after a restart) and, when
 several failed, how many; **Retry** sends all of them again and **Dismiss**
-gives them up, and Nail shows the server's state again.
+gives them up: a message you moved or deleted shows again where the server
+still has it.

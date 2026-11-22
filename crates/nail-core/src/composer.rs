@@ -853,19 +853,21 @@ impl Service {
 }
 
 /// The operation that deletes a draft's server copy, if it still exists
-/// locally.
+/// locally. Only Nail's own copy or a message flagged `\Draft` is ever
+/// deleted: an older build could link a received message in the Drafts
+/// folder as a draft's server copy, and that message must survive.
 fn draft_copy_removal_in(store: &nail_store::Store, copy: &DraftServerCopy) -> Option<Operation> {
     let own = Service::draft_copy_id(&copy.folder_id, &copy.message_id);
     let old = if store.get_message(&own).is_ok() {
         own
     } else {
-        // A draft continued from another client's message
-        // (`EditDraftMessage`): that message, found by its Message-ID.
+        // A draft continued from another client's draft
+        // (`EditDraftMessage`): that draft, found by its Message-ID.
         store
             .find_messages_by_message_id(&copy.message_id)
             .ok()?
             .into_iter()
-            .find(|m| m.folder_id == copy.folder_id)?
+            .find(|m| m.folder_id == copy.folder_id && m.flags.draft)?
             .id
     };
     Some(Operation::DeleteMessage {

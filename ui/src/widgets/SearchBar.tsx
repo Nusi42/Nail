@@ -15,6 +15,7 @@ import { useUi } from "../state/uiStore";
 import { Icon } from "./Icon";
 import { SearchValues, searchTextWith, useSearchValues } from "./pickers";
 import { ProblemIndicator } from "./ProblemIndicator";
+import { listOptionId } from "./rovingFocus";
 import { useDebounced } from "../state/debounce";
 import { useLiveSearch } from "../features/search/liveSearch";
 
@@ -344,7 +345,7 @@ export function SearchForm({
 
   const errorId = `${ids}-error`;
   const hintsId = `${ids}-hints`;
-  const optionId = (index: number) => `${ids}-option-${String(index)}`;
+  const optionId = (index: number) => listOptionId(ids, index);
   return (
     <form
       ref={formRef}

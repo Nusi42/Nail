@@ -6,6 +6,7 @@ import {
   messageRow,
   messageRows,
   moveSelectionTo,
+  opsItem,
   sectionInbox,
 } from "../support/views";
 
@@ -36,7 +37,6 @@ async function deliverBulk(target: NailServer): Promise<void> {
   }
 }
 
-const opsItem = (page: Page) => page.locator('[data-part="status-bar.item"][data-item="ops"]');
 const folderCounts = (page: Page) =>
   page.locator('[data-part="status-bar.item"][data-item="folder-counts"]');
 

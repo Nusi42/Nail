@@ -12,7 +12,7 @@
 //!
 //! [`ingest`] does both for callers with a single message or batch.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroUsize;
 
 use nail_api::{Address, Flags, Folder, FolderRole, MessageId};
@@ -175,16 +175,21 @@ pub(crate) fn meta_of(parsed: &ParsedMessage, size: usize) -> MessageMeta {
 /// every message).
 ///
 /// `None` = not stored: the user moved or deleted this message (same
-/// Message-ID) out of `folder` and the write still waits for replay. The
-/// server's copy is the one the write will take away; stored as a new row
-/// it would show the message twice, e.g. when a UIDVALIDITY reset makes
-/// the sync fetch the folder again with new UIDs (ADR 0230).
+/// Message-ID) out of `folder` and the write waits for replay or failed
+/// (`held`, [`Store::held_move_outs`]). The server's copy is the one the
+/// write will take away; stored as a new row it would show the message
+/// twice, e.g. when a UIDVALIDITY reset makes the sync fetch the folder
+/// again with new UIDs (ADR 0230). Its UID is listed to fetch again
+/// ([`Store::record_refetch`]) once nothing holds it back: a second copy
+/// with the same Message-ID, or one a failed and dismissed write leaves on
+/// the server, still shows up.
 fn resolve_id(
     store: &Store,
     folder: &Folder,
     uid_validity: u32,
     message: &IncomingMessage,
     parsed: &ParsedMessage,
+    held: &HashSet<String>,
 ) -> nail_store::Result<Option<MessageId>> {
     if let Some(id) = &message.id {
         return Ok(Some(id.clone()));
@@ -198,8 +203,11 @@ fn resolve_id(
             store.set_message_uid(&moved, Some(uid))?;
             return Ok(Some(moved));
         }
-        if store.has_waiting_move_out(&folder.id, mid)? {
-            tracing::debug!(folder = %folder.id, uid, "skipped: a move out of the folder is pending");
+        if nail_store::normalize_msgid(mid).is_some_and(|m| held.contains(&m)) {
+            tracing::debug!(folder = %folder.id, uid, "deferred: a move out of the folder is pending");
+            if let Some(uid) = message.uid {
+                store.record_refetch(&folder.id, uid, Some(mid))?;
+            }
             return Ok(None);
         }
     }
@@ -297,11 +305,12 @@ fn merge_prepared(
     let mut keeps_body: Vec<MessageId> = Vec::new();
     // The messages behind `rows`, in the same order (some are skipped).
     let mut kept: Vec<&PreparedMessage> = Vec::with_capacity(batch.messages.len());
+    let held = store.held_move_outs(&folder.id)?;
     for prepared in &batch.messages {
         let message = &prepared.message;
         let parsed = &prepared.parsed;
         let blob_hash = prepared.blob_hash.clone();
-        let Some(id) = resolve_id(store, folder, uid_validity, message, parsed)? else {
+        let Some(id) = resolve_id(store, folder, uid_validity, message, parsed, &held)? else {
             continue;
         };
         kept.push(prepared);
@@ -398,14 +407,14 @@ fn merge_prepared(
         }
     }
     // WP123: sets, not `Vec::contains` in loops (large batches).
-    let skipped: std::collections::HashSet<&MessageId> = merged.skipped.iter().collect();
+    let skipped: HashSet<&MessageId> = merged.skipped.iter().collect();
     report.new.retain(|id| !skipped.contains(id));
     for row in &rows {
         if !skipped.contains(&row.message.summary.id) {
             report.stored.push(row.message.summary.id.clone());
         }
     }
-    let new: std::collections::HashSet<&MessageId> = report.new.iter().collect();
+    let new: HashSet<&MessageId> = report.new.iter().collect();
     let learned: Vec<Address> = addresses
         .into_iter()
         .filter(|(id, _)| new.contains(id))
@@ -417,8 +426,8 @@ fn merge_prepared(
         tracing::debug!(%err, "cannot record addresses");
     }
     if let Some(index) = index {
-        let stored: std::collections::HashSet<&MessageId> = report.stored.iter().collect();
-        let keeps_body: std::collections::HashSet<&MessageId> = keeps_body.iter().collect();
+        let stored: HashSet<&MessageId> = report.stored.iter().collect();
+        let keeps_body: HashSet<&MessageId> = keeps_body.iter().collect();
         docs.retain(|d| stored.contains(&d.message_id) && !keeps_body.contains(&d.message_id));
         if let Err(err) = index.add(&docs) {
             tracing::warn!(%err, "cannot index new messages");

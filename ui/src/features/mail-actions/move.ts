@@ -19,7 +19,7 @@ import type {
 } from "../../api/generated";
 import { findSummary, type WriteContext } from "../../state/mailOps";
 import type { UiStore } from "../../state/uiStore";
-import { runMailAction, type RunOptions } from "./run";
+import { runMailAction, runOptionsOf, type RunOptions } from "./run";
 
 const pending = new WeakMap<UiStore, ActionTargets>();
 
@@ -113,12 +113,7 @@ export async function moveToFolder(
   const targets = pendingMove(ctx.store);
   pending.delete(ctx.store);
   const options: RunOptions =
-    resolution === undefined || resolution.message_ids.length === 0
-      ? {}
-      : {
-          apply: resolution.message_ids.map((id) => ({ kind: "message", message_id: id })),
-          conversations: resolution.conversations,
-        };
+    resolution === undefined || resolution.message_ids.length === 0 ? {} : runOptionsOf(resolution);
   const result = await runMailAction(ctx, targets, moveAction(folderId), options);
   return result !== null;
 }

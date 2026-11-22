@@ -174,8 +174,8 @@ export function OpenLinkDialog({ close }: DialogProps) {
     <MailConfirm
       kind="open-link"
       question={t("mail-open-link-question")}
-      canOpen={what !== null}
-      onOpen={() => {
+      canConfirm={what !== null}
+      onConfirm={() => {
         done();
         if (what !== null) void openMailLink(ctx, what.link.href);
       }}

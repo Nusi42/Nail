@@ -12,7 +12,7 @@
  * merges these exports into the app; see `../README.md`.
  */
 import type { JsonValue, MessageBody } from "../../api/generated";
-import { currentTargets, type ActionTargets } from "../../actions/mailTargets";
+import { currentTargets, messageTarget, type ActionTargets } from "../../actions/mailTargets";
 import type { ActionContext } from "../../actions/registry";
 import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
@@ -40,7 +40,7 @@ function targets(ctx: ActionContext, args: readonly JsonValue[] = []): ActionTar
   // A message's own widget (the reader's junk verdict) names its message.
   const id = args[0];
   if (typeof id === "string" && id !== "") {
-    return { targets: [{ kind: "message", message_id: id }], source: "card" };
+    return { targets: [messageTarget(id)], source: "card" };
   }
   return currentTargets(ctx.store);
 }

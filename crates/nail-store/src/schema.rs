@@ -390,6 +390,13 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(crate::rules::V21),
     // Schema v22 (ADR 0230): the error class of a failed write.
     Migration::sql(crate::queue::V22),
+    // Schema v23: server messages to fetch again; drafts that an older
+    // build linked to a received message as their server copy are unlinked.
+    Migration {
+        sql: crate::sync_errors::V23,
+        backfill: Some(crate::compose::unlink_received_server_copies),
+        foreign_keys_off: false,
+    },
 ];
 
 /// The schema version this build creates and understands.
@@ -615,6 +622,7 @@ mod tests {
                 "sieve_state",
                 "snoozed_messages",
                 "sync_errors",
+                "sync_refetch",
                 "sync_skipped",
                 "thread_activity",
                 "thread_refs",
@@ -783,6 +791,58 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// Drafts safety: a draft that 0.8.8 linked to a received message (no
+    /// `\Draft`) loses the link; Nail's own copy, a copy not stored locally
+    /// and a folder with a `\Draft` copy too keep theirs.
+    #[test]
+    fn v23_unlinks_drafts_from_received_messages() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate_to_version(&mut conn, 22).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (id, name, email, kind) VALUES ('a', 'A', 'a@x', 'imap');
+             INSERT INTO folders (id, account_id, name, path) VALUES ('d', 'a', 'Drafts', 'Drafts');
+             INSERT INTO messages (id, account_id, folder_id, date, draft, message_id)
+                 VALUES ('received', 'a', 'd', 'x', 0, 'r@example.net'),
+                        ('own', 'a', 'd', 'x', 1, 'own@example.net'),
+                        ('both-1', 'a', 'd', 'x', 0, 'b@example.net'),
+                        ('both-2', 'a', 'd', 'x', 1, 'b@example.net');",
+        )
+        .unwrap();
+        for (n, mid) in [
+            (1, "<r@example.net>"),
+            (2, "own@example.net"),
+            (3, "not-stored@example.net"),
+            (4, "b@example.net"),
+        ] {
+            conn.execute(
+                "INSERT INTO drafts (id, identity_id, payload, server_folder_id, server_message_id)
+                 VALUES (?1, 'a@x', '{}', 'd', ?2)",
+                rusqlite::params![n, mid],
+            )
+            .unwrap();
+        }
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        let linked: Vec<(i64, Option<String>)> = {
+            let mut stmt = conn
+                .prepare("SELECT id, server_message_id FROM drafts ORDER BY id")
+                .unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap()
+        };
+        assert_eq!(
+            linked,
+            [
+                (1, None),
+                (2, Some("own@example.net".into())),
+                (3, Some("not-stored@example.net".into())),
+                (4, Some("b@example.net".into())),
+            ]
+        );
+        assert!(tables(&conn).contains(&"sync_refetch".to_owned()));
     }
 
     #[test]

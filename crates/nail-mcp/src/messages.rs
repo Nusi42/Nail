@@ -84,10 +84,7 @@ pub fn audit_detail(detail: &str) -> Option<LocalizedMessage> {
     }
     // `ApiError`'s display form: `<code>: <message>`.
     let (code, _) = detail.split_once(": ")?;
-    ErrorCode::ALL
-        .iter()
-        .find(|c| c.as_str() == code)
-        .map(|c| LocalizedMessage::for_code(*c))
+    ErrorCode::parse(code).map(LocalizedMessage::for_code)
 }
 
 /// The text of a write's audit detail: what happened, to how many items,

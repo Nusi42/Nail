@@ -36,7 +36,7 @@
 //!   its flag changes on top of the server's state, and does not touch a
 //!   message with a pending move or delete at all.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::{Arc, PoisonError};
 
@@ -336,6 +336,96 @@ impl Operation {
                 Ok((summary.account_id, vec![summary.folder_id], self.clone()))
             }
         }
+    }
+}
+
+/// What [`Store::dismiss_failed_ops`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DismissedOps {
+    /// Failed operations deleted.
+    pub count: usize,
+    /// Folders whose contents changed (rows put back).
+    pub folders: Vec<FolderId>,
+    /// The accounts of the deleted operations (their next sync fetches
+    /// what was listed to fetch again).
+    pub accounts: Vec<AccountId>,
+}
+
+/// Undoes the local side of a dismissed move or delete (see
+/// [`Store::dismiss_failed_ops`]); returns the folders that changed. A row
+/// that has moved on (another write waits for it, or it has a UID again)
+/// is left alone; so is one whose source UID is unknown or no longer valid.
+fn revert_move_out(tx: &Transaction<'_>, operation: &Operation) -> Result<Vec<FolderId>> {
+    let Some(source) = operation.source() else {
+        return Ok(Vec::new());
+    };
+    let id = operation.message_id();
+    let current_validity: Option<u32> = tx
+        .query_row(
+            "SELECT uidvalidity FROM folders WHERE id = ?1",
+            [source.folder_id.as_str()],
+            |r| r.get(0),
+        )
+        .optional()?
+        .flatten();
+    let Some(uid) = source
+        .uid
+        .filter(|_| source.uid_validity.is_none() || source.uid_validity == current_validity)
+    else {
+        return Ok(Vec::new());
+    };
+    let taken = tx
+        .query_row(
+            "SELECT 1 FROM messages WHERE folder_id = ?1 AND uid = ?2",
+            params![source.folder_id.as_str(), uid],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    if taken {
+        return Ok(Vec::new());
+    }
+    let row: Option<(String, Option<u32>)> = tx
+        .query_row(
+            "SELECT folder_id, uid FROM messages WHERE id = ?1",
+            [id.as_str()],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    match row {
+        None => {
+            crate::sync_errors::record_refetch_in(
+                tx,
+                &source.folder_id,
+                uid,
+                source.header_message_id.as_deref(),
+            )?;
+            Ok(Vec::new())
+        }
+        Some((folder, None)) if folder != source.folder_id.as_str() => {
+            let waiting: bool = tx.query_row(
+                &format!(
+                    "SELECT EXISTS (SELECT 1 FROM op_queue
+                     WHERE message_id = ?1 AND state IN {WAITING_STATES})"
+                ),
+                [id.as_str()],
+                |r| r.get(0),
+            )?;
+            if waiting {
+                return Ok(Vec::new());
+            }
+            tx.execute(
+                "UPDATE messages SET account_id = ?2, folder_id = ?3, uid = ?4 WHERE id = ?1",
+                params![
+                    id.as_str(),
+                    source.account_id.as_str(),
+                    source.folder_id.as_str(),
+                    uid
+                ],
+            )?;
+            Ok(vec![FolderId(folder), source.folder_id.clone()])
+        }
+        Some(_) => Ok(Vec::new()),
     }
 }
 
@@ -676,6 +766,10 @@ fn op_payloads(
 /// SQL: the states of an operation still waiting for replay.
 pub(crate) const WAITING_STATES: &str = "('pending', 'in_flight')";
 
+/// SQL: the states of an operation whose local change still stands: waiting
+/// for replay, or failed and not yet retried or dismissed.
+const HELD_STATES: &str = "('pending', 'in_flight', 'failed')";
+
 /// SQL condition: the message `message` (a column, e.g. `m.id`) has an
 /// operation waiting for replay. Sync never deletes such a message: it is
 /// where the user put it, and the server learns it on replay.
@@ -719,7 +813,7 @@ fn op_from_row(row: &Row<'_>) -> rusqlite::Result<QueuedOp> {
         // An unknown class (a newer build's) or text reads as none.
         error_code: row
             .get::<_, Option<String>>(8)?
-            .and_then(|c| ErrorCode::ALL.into_iter().find(|k| k.as_str() == c)),
+            .and_then(|c| ErrorCode::parse(&c)),
         error_localized: row
             .get::<_, Option<String>>(9)?
             .and_then(|json| serde_json::from_str(&json).ok()),
@@ -1007,27 +1101,24 @@ impl Store {
         })
     }
 
-    /// Whether a move or delete of a message with this `Message-ID` (angle
-    /// brackets optional) out of `folder` is still waiting for replay.
-    /// The sync then must not store the server's copy in `folder` as a new
-    /// row: after a UIDVALIDITY reset the folder is fetched again with new
-    /// UIDs, and the message the user moved away would show twice (in its
-    /// new folder and back in the old one) until the move reaches the
-    /// server (ADR 0230).
-    pub fn has_waiting_move_out(&self, folder: &FolderId, message_id: &str) -> Result<bool> {
-        let Some(mid) = crate::mail::normalize_msgid(message_id) else {
-            return Ok(false);
-        };
+    /// The `Message-ID`s (normalized) of the messages whose move or delete
+    /// out of `folder` waits for replay or failed (kept until retried or
+    /// dismissed). The sync must not store the server's copy of such a
+    /// message in `folder` as a new row: the write takes it away, and after
+    /// a UIDVALIDITY reset the message would show twice (in its new folder
+    /// and back in the old one). It lists the copy to fetch again instead
+    /// ([`Store::record_refetch`], ADR 0230). One query per sync batch.
+    pub fn held_move_outs(&self, folder: &FolderId) -> Result<HashSet<String>> {
         self.with_conn(|conn| {
-            Ok(conn
-                .prepare_cached(&format!(
-                    "SELECT EXISTS (SELECT 1 FROM op_queue
-                     WHERE state IN {WAITING_STATES}
-                       -- Only moves and deletes record a source.
-                       AND json_extract(payload, '$.source.folder_id') = ?1
-                       AND json_extract(payload, '$.source.header_message_id') = ?2)"
-                ))?
-                .query_row(params![folder.as_str(), mid], |r| r.get(0))?)
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT json_extract(payload, '$.source.header_message_id') FROM op_queue
+                 WHERE state IN {HELD_STATES}
+                   -- Only moves and deletes record a source.
+                   AND json_extract(payload, '$.source.folder_id') = ?1
+                   AND json_extract(payload, '$.source.header_message_id') IS NOT NULL"
+            ))?;
+            let rows = stmt.query_map([folder.as_str()], |r| r.get::<_, String>(0))?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
         })
     }
 
@@ -1074,16 +1165,43 @@ impl Store {
     }
 
     /// Deletes the `failed` operations of `account` (of all accounts when
-    /// `None`): the user dismissed them; their local change was already
-    /// given up (the next sync shows the server's state). Returns how many
-    /// were deleted.
-    pub fn dismiss_failed_ops(&self, account: Option<&AccountId>) -> Result<usize> {
+    /// `None`): the user dismissed them. A dismissed move or delete is
+    /// undone locally, since the server never saw it: the row goes back to
+    /// its source folder with its UID, or, when the row is gone (a
+    /// permanent delete), the source UID is listed to fetch again
+    /// ([`Store::record_refetch`]). Returns how many were deleted and the
+    /// folders whose contents changed.
+    pub fn dismiss_failed_ops(&self, account: Option<&AccountId>) -> Result<DismissedOps> {
         let account = account.map(AccountId::as_str);
-        self.with_conn(|conn| {
-            Ok(conn.execute(
+        self.with_tx(|tx| {
+            let failed: Vec<QueuedOp> = {
+                let mut stmt = tx.prepare_cached(&format!(
+                    "SELECT {OP_COLS} FROM op_queue
+                     WHERE state = 'failed' AND (?1 IS NULL OR account_id = ?1) ORDER BY id DESC"
+                ))?;
+                let rows = stmt.query_map([account], op_from_row)?;
+                rows.collect::<rusqlite::Result<_>>()?
+            };
+            let count = tx.execute(
                 "DELETE FROM op_queue WHERE state = 'failed' AND (?1 IS NULL OR account_id = ?1)",
                 [account],
-            )?)
+            )?;
+            let mut dismissed = DismissedOps {
+                count,
+                ..DismissedOps::default()
+            };
+            // Newest first: a chain of failed moves ends where it began.
+            for op in &failed {
+                if !dismissed.accounts.contains(&op.account_id) {
+                    dismissed.accounts.push(op.account_id.clone());
+                }
+                for folder in revert_move_out(tx, &op.operation)? {
+                    if !dismissed.folders.contains(&folder) {
+                        dismissed.folders.push(folder);
+                    }
+                }
+            }
+            Ok(dismissed)
         })
     }
 

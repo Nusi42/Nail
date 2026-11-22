@@ -461,7 +461,7 @@ pub(crate) fn folder_account_in_tx(tx: &Transaction<'_>, folder: &FolderId) -> R
 
 /// Normalizes a Message-ID: trims whitespace and angle brackets; `None`
 /// when nothing is left.
-pub(crate) fn normalize_msgid(id: &str) -> Option<String> {
+pub fn normalize_msgid(id: &str) -> Option<String> {
     let id = id
         .trim()
         .trim_start_matches('<')

@@ -69,7 +69,9 @@ from showing twice after a UIDVALIDITY reset.
 - `ingest::resolve_id` no longer stores a server message as a new row when
   a move or delete of a message with the same `Message-ID` out of that
   folder is still waiting for replay (`Store::has_waiting_move_out`, which
-  reads the operation's recorded source). After a UIDVALIDITY reset the sync
+  reads the operation's recorded source; ADR 0233 replaced it with
+  `Store::held_move_outs`, which also holds failed writes, and lists the
+  skipped UID to fetch again). After a UIDVALIDITY reset the sync
   fetches the folder again with new UIDs; without the check the moved
   message showed in its new folder and, as a new row, in the old one until
   the next sync after the replay.

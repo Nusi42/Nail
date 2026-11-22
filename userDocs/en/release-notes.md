@@ -22,7 +22,9 @@ mean.
 - **Failed changes say why** — when changes could not be saved, the status
   bar names the real reason (for example no connection, or the server
   refused), also after a restart, and with several failures how many there
-  are. **Retry** and **Dismiss** act on all of them at once.
+  are. **Retry** and **Dismiss** act on all of them at once; after
+  **Dismiss**, a message you moved or deleted shows again where the server
+  still has it.
 - **Lists stay right after large moves** — messages you moved could still
   show in their old folder, or in another folder, until a restart. Nail now
   refreshes the open lists and the selection when it notices it fell
@@ -41,8 +43,17 @@ mean.
   folder used to open in the composer as a draft. Now only real drafts do;
   other messages there open in the reader, and **Move out of Drafts** (in
   the reader's toolbar, the message menu and the command palette) takes
-  them back to the Inbox. Continuing such a message from another client or an agent now
-  makes a new draft and never replaces or deletes the original.
+  the selected message back to the Inbox (real drafts stay). Continuing such
+  a message from another client or an agent now makes a new draft and never
+  replaces or deletes the original.
+- **Received mail in Drafts is no longer deleted** — in 0.8.8, continuing a
+  received message that sat in a Drafts folder could delete that message
+  for good when the draft was saved, sent or discarded. Nail now never
+  deletes a message that is not a draft this way, and drafts linked like
+  that in 0.8.8 are unlinked when you update.
+- **No message hidden after a waiting move** — a second copy of a message
+  (for example from a mailing list) that arrived while moving the first
+  copy was still being saved now shows up once the move is done.
 
 ## Nail 0.8.8 (`0.8.8`)
 

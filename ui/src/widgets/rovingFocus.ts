@@ -34,3 +34,12 @@ export function moveRovingFocus(
   event.preventDefault();
   buttons[next]?.focus();
 }
+
+/**
+ * The element id of option `index` of a combobox's listbox whose ids start
+ * with `base` (the command palette, the search hints, the move window): the
+ * input names the highlighted option with `aria-activedescendant`.
+ */
+export function listOptionId(base: string, index: number): string {
+  return `${base}-option-${String(index)}`;
+}

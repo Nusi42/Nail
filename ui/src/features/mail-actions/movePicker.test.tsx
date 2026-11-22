@@ -12,6 +12,7 @@ import userEvent from "@testing-library/user-event";
 import type { Folder, FolderRole, MessageSummary } from "../../api/generated";
 import { listFolders } from "../../api/mockMail";
 import { mockFolderId } from "../../api/mockData";
+import { listSelectionFor } from "../../actions/mailTargets";
 import { builtinActions, createDispatcher } from "../../actions/registry";
 import { confirmedMoveRole, setPendingMove, sourceFolderOf } from "./move";
 import { isDraftMessage, isMisplacedInDrafts } from "./run";
@@ -55,6 +56,14 @@ const option = (name: string) => screen.getByRole("option", { name });
 /** The question before a move into Drafts, Trash or Junk (named by its text). */
 const findQuestion = () => screen.findByRole("group", { name: /^Move \d+ messages? to / });
 const moves = (env: Env) => requestsOf(env, "ApplyMailAction");
+
+/** The move window's question after picking Trash. */
+async function askTrash() {
+  const user = userEvent.setup();
+  const { env } = openPicker();
+  await user.click(await screen.findByRole("option", { name: "Trash" }));
+  return { user, env, question: await findQuestion() };
+}
 
 /** The window closed after moving the selected message (`#2` of the Inbox) to `folderId`. */
 async function expectMoved(env: Env, folderId: string) {
@@ -147,10 +156,7 @@ describe("the move window", () => {
   });
 
   it("asks before moving into Trash, with the count; Cancel moves nothing", async () => {
-    const user = userEvent.setup();
-    const { env } = openPicker();
-    await user.click(await screen.findByRole("option", { name: "Trash" }));
-    const question = await findQuestion();
+    const { user, env, question } = await askTrash();
     expect(question).toHaveAttribute("data-role", "trash");
     expect(question).toHaveTextContent("Move 1 message to Trash?");
     expect(question).toHaveTextContent("Messages in Trash may be deleted for good later.");
@@ -167,6 +173,18 @@ describe("the move window", () => {
     await waitFor(() => {
       expect(filterField()).toHaveFocus();
     });
+    expect(env.store.getState().windows).toEqual(["move"]);
+  });
+
+  it("gives the focus back to Cancel when the core refuses the move", async () => {
+    const { user, env, question } = await askTrash();
+    // Gone meanwhile (another window): the core refuses the move.
+    env.transport.data.messages = env.transport.data.messages.filter((m) => m.id !== `${INBOX}#2`);
+    await user.click(within(question).getByRole("button", { name: "Move" }));
+    await waitFor(() => {
+      expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    expect(question).toHaveAttribute("aria-busy", "false");
     expect(env.store.getState().windows).toEqual(["move"]);
   });
 
@@ -302,6 +320,22 @@ describe("move window ranking", () => {
   });
 });
 
+/** Runs Move out of Drafts: exactly message `id` moves to the Inbox. */
+async function expectMovedOutOfDrafts(
+  env: Env,
+  dispatcher: ReturnType<typeof createDispatcher>,
+  id: string,
+) {
+  await dispatcher.dispatch(MOVE_OUT_OF_DRAFTS_ACTION);
+  expect(moves(env)).toEqual([
+    {
+      type: "ApplyMailAction",
+      targets: [{ kind: "message", message_id: id }],
+      action: { type: "move", target: { role: "inbox" } },
+    },
+  ]);
+}
+
 describe("drafts safety", () => {
   /** A received message (no `\Draft` flag) moved into the personal Drafts folder, listed there. */
   function receivedInDrafts(): { env: Env; message: MessageSummary } {
@@ -337,15 +371,33 @@ describe("drafts safety", () => {
     expect(actionInfo[MOVE_OUT_OF_DRAFTS_ACTION]?.title).toBe(
       "mail-actions-action-move-out-of-drafts",
     );
-    await dispatcher.dispatch(MOVE_OUT_OF_DRAFTS_ACTION);
-    expect(moves(env)).toEqual([
-      {
-        type: "ApplyMailAction",
-        targets: [{ kind: "message", message_id: message.id }],
-        action: { type: "move", target: { role: "inbox" } },
-      },
-    ]);
+    await expectMovedOutOfDrafts(env, dispatcher, message.id);
     expect(env.transport.data.messages.find((m) => m.id === message.id)?.folder_id).toBe(INBOX);
+  });
+
+  it("moves only the selected message, never picked rows or its conversation's drafts", async () => {
+    const { env, message } = receivedInDrafts();
+    const draft = must(env.transport.data.messages.find((m) => m.id === `${INBOX}#3`));
+    draft.folder_id = DRAFTS;
+    draft.flags = { ...draft.flags, draft: true };
+    draft.thread_id = message.thread_id;
+    cacheList(env, [message, draft]);
+    // Both rows picked, in a list of conversations: `currentTargets` would
+    // name the real draft too.
+    listSelectionFor(env.store).setState({
+      scope: { conversations: true, folderId: DRAFTS },
+      picked: [message, draft].map((m) => ({
+        key: m.id,
+        messageId: m.id,
+        threadId: m.thread_id,
+        child: false,
+      })),
+    });
+    const ctx = actionContext(env);
+    const dispatcher = createDispatcher(ctx, { ...builtinActions, ...actions });
+    expect(dispatcher.isEnabled(MOVE_OUT_OF_DRAFTS_ACTION)).toBe(true);
+    await expectMovedOutOfDrafts(env, dispatcher, message.id);
+    expect(env.transport.data.messages.find((m) => m.id === draft.id)?.folder_id).toBe(DRAFTS);
   });
 
   it("does not offer it for real drafts or mail outside Drafts", () => {

@@ -12,8 +12,9 @@
  * `mail.toggle-flag`, `mail.move(-to)` and `mail.undo` are built-ins
  * (`../../actions/registry.ts`) running `./run.ts`; this slot registers the
  * toast and the palette descriptions of the new actions.
- * R4 (ADR 0230): `mail.move-out-of-drafts` moves a message that sits in a
- * Drafts folder without being a draft (no `\Draft` flag) to the Inbox; the
+ * R4 (ADR 0230): `mail.move-out-of-drafts` moves the selected message that
+ * sits in a Drafts folder without being a draft (no `\Draft` flag) to the
+ * Inbox, never the picked rows or its conversation (real drafts stay); the
  * reader offers it for such messages, which open in the reader rather than
  * the composer. The move window asks before Drafts, Trash and Junk
  * (`./move.ts`, `../../widgets/FolderPicker.tsx`).
@@ -21,7 +22,7 @@
  * `mail-action-kind-*` in `core-mail-actions.ftl`). The mock core answers
  * the requests (`../../api/mockMailActions.ts`).
  */
-import { currentTargets } from "../../actions/mailTargets";
+import { messageTarget } from "../../actions/mailTargets";
 import { MAIL_AVAILABILITY as MAIL, type ActionInfo } from "../../actions/palette";
 import type { Feature } from "../types";
 import { isMisplacedInDrafts, runMailAction } from "./run";
@@ -33,12 +34,16 @@ export const MOVE_OUT_OF_DRAFTS_ACTION = "mail.move-out-of-drafts";
 export const widgets: Feature["widgets"] = {};
 export const actions: Feature["actions"] = {
   [MOVE_OUT_OF_DRAFTS_ACTION]: {
+    // Only the selected message: the open menu's row, the picked rows or
+    // its conversation may hold real drafts, which stay where they are.
     run: async (ctx) => {
-      if (!isMisplacedInDrafts(ctx, ctx.store.getState().selectedMessageId)) return;
-      await runMailAction(ctx, currentTargets(ctx.store), {
-        type: "move",
-        target: { role: "inbox" },
-      });
+      const selected = ctx.store.getState().selectedMessageId;
+      if (selected === null || !isMisplacedInDrafts(ctx, selected)) return;
+      await runMailAction(
+        ctx,
+        { targets: [messageTarget(selected)], source: "list" },
+        { type: "move", target: { role: "inbox" } },
+      );
     },
     enabled: (ctx) => isMisplacedInDrafts(ctx, ctx.store.getState().selectedMessageId),
   },

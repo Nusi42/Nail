@@ -85,6 +85,12 @@ export function useListSelection<T>(selector: (state: ListSelectionState) => T):
   return useStore(listSelectionFor(useUiStoreApi()), selector);
 }
 
+/** The target that names one message. */
+export const messageTarget = (id: MessageId): MessageTarget => ({
+  kind: "message",
+  message_id: id,
+});
+
 /** The target a row stands for. */
 export function rowTarget(
   row: { messageId: MessageId; threadId: ThreadId | null; child: boolean },
@@ -93,7 +99,7 @@ export function rowTarget(
   if (!row.child && row.threadId !== null && scope.conversations) {
     return { kind: "conversation", thread_id: row.threadId, folder_id: scope.folderId };
   }
-  return { kind: "message", message_id: row.messageId };
+  return messageTarget(row.messageId);
 }
 
 /** Where the targets of an action come from. */
@@ -105,12 +111,10 @@ export interface ActionTargets {
   source: TargetSource;
 }
 
-const message = (id: MessageId): MessageTarget => ({ kind: "message", message_id: id });
-
 /** Targets of a context menu's target, or `null` to use the selection. */
 function menuTargets(target: ContextTarget, state: ListSelectionState): ActionTargets | null {
   if (target.card && target.messageId !== null) {
-    return { targets: [message(target.messageId)], source: "card" };
+    return { targets: [messageTarget(target.messageId)], source: "card" };
   }
   if (target.part !== "message-list.row" || target.messageId === null) return null;
   const { picked, scope } = state;

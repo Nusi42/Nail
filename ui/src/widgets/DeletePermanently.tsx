@@ -12,17 +12,18 @@
  * stays.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { ActionTargets } from "../actions/mailTargets";
-import type { MessageId } from "../api/generated";
+import type { MailTargetResolution } from "../api/generated";
 import { errorMessageOf } from "../api/client";
 import { mailActionsStoreFor } from "../features/mail-actions/store";
-import { runMailAction } from "../features/mail-actions/run";
+import { runMailAction, runOptionsOf } from "../features/mail-actions/run";
 import { useT } from "../i18n/I18nProvider";
 import type { DialogProps } from "../layout/dialogRegistry";
 import type { WriteContext } from "../state/mailOps";
 import { useClient } from "../state/queries";
 import { useUiStoreApi, type UiStore } from "../state/uiStore";
+import { MailConfirm } from "./MailConfirm";
 
 /** The confirmation's window kind (dialog name). */
 export const DELETE_PERMANENTLY_DIALOG = "mail-delete-permanently";
@@ -30,12 +31,8 @@ export const DELETE_PERMANENTLY_DIALOG = "mail-delete-permanently";
 /** What the open confirmation would delete. */
 export interface PendingDelete {
   targets: ActionTargets;
-  /** Messages the targets resolve to. */
-  messages: number;
-  /** Those messages: what Delete permanently acts on. */
-  messageIds: readonly MessageId[];
-  /** Conversations among the targets that resolve to a message. */
-  conversations: number;
+  /** The messages the targets resolve to (what Delete permanently acts on). */
+  resolution: MailTargetResolution;
 }
 
 const pending = new WeakMap<UiStore, PendingDelete>();
@@ -64,12 +61,7 @@ export async function askDeletePermanently(
       "MailTargets",
     );
     if (resolution.message_ids.length === 0) return;
-    pending.set(ctx.store, {
-      targets,
-      messages: resolution.message_ids.length,
-      messageIds: resolution.message_ids,
-      conversations: resolution.conversations,
-    });
+    pending.set(ctx.store, { targets, resolution });
   } catch (error) {
     mailActionsStoreFor(ctx.store)
       .getState()
@@ -89,10 +81,7 @@ export async function confirmDeletePermanently(ctx: WriteContext): Promise<void>
     ctx,
     what.targets,
     { type: "delete-permanently" },
-    {
-      apply: what.messageIds.map((id) => ({ kind: "message", message_id: id })),
-      conversations: what.conversations,
-    },
+    runOptionsOf(what.resolution),
   );
 }
 
@@ -104,49 +93,31 @@ export function DeletePermanentlyDialog({ close }: DialogProps) {
   const queryClient = useQueryClient();
   const [what] = useState(() => pendingPermanentDelete(store));
   const [busy, setBusy] = useState(false);
-  const cancel = useRef<HTMLButtonElement>(null);
-  const messages = what?.messages ?? 0;
-  const conversations = what?.conversations ?? 0;
-  // The safe choice has the focus (after the frame focused its first button).
-  useEffect(() => {
-    queueMicrotask(() => cancel.current?.focus());
-  }, []);
+  const messages = what?.resolution.message_ids.length ?? 0;
+  const conversations = what?.resolution.conversations ?? 0;
   return (
-    <div data-part="mail-confirm" data-confirm="delete-permanently" aria-busy={busy}>
-      <p data-part="mail-confirm.question">
-        {conversations > 0 && messages > 1
+    <MailConfirm
+      kind="delete-permanently"
+      question={
+        conversations > 0 && messages > 1
           ? t("mail-actions-delete-permanently-conversations", { messages, conversations })
-          : t("mail-delete-permanently-question", { count: messages })}
-      </p>
+          : t("mail-delete-permanently-question", { count: messages })
+      }
+      confirmLabel={t("mail-action-delete-permanently")}
+      canConfirm={messages > 0}
+      busy={busy}
+      onConfirm={() => {
+        setBusy(true);
+        void confirmDeletePermanently({ client, store, queryClient }).finally(() => {
+          setBusy(false);
+        });
+      }}
+      onCancel={() => {
+        pending.delete(store);
+        close();
+      }}
+    >
       <p data-part="mail-confirm.note">{t("mail-delete-permanently-note")}</p>
-      <div data-part="mail-confirm.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="danger"
-          disabled={busy || messages === 0}
-          onClick={() => {
-            setBusy(true);
-            void confirmDeletePermanently({ client, store, queryClient }).finally(() => {
-              setBusy(false);
-            });
-          }}
-        >
-          {t("mail-action-delete-permanently")}
-        </button>
-        <button
-          ref={cancel}
-          type="button"
-          data-part="form.button"
-          disabled={busy}
-          onClick={() => {
-            pending.delete(store);
-            close();
-          }}
-        >
-          {t("common-cancel")}
-        </button>
-      </div>
-    </div>
+    </MailConfirm>
   );
 }

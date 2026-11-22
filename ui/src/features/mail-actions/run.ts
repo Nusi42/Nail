@@ -11,6 +11,7 @@ import type {
   MailAction,
   MailActionResult,
   MailBatchId,
+  MailTargetResolution,
   MessageId,
   MessageTarget,
   Response,
@@ -20,6 +21,7 @@ import { MAX_MAIL_ACTION_TARGETS } from "../../api/generated/constants";
 import {
   listSelectionFor,
   messageIdsOf,
+  messageTarget,
   threadIdsOf,
   type ActionTargets,
 } from "../../actions/mailTargets";
@@ -272,6 +274,18 @@ export interface RunOptions {
   conversations?: number;
   /** What a tag change calls its tags in the toast (Gmail labels, Exchange categories). */
   tagNoun?: TagNoun;
+}
+
+/**
+ * The options that act on exactly the messages a confirmation counted
+ * (`ResolveMailTargets`: Delete permanently, a move into Drafts, Trash or
+ * Junk).
+ */
+export function runOptionsOf(resolution: MailTargetResolution): RunOptions {
+  return {
+    apply: resolution.message_ids.map(messageTarget),
+    conversations: resolution.conversations,
+  };
 }
 
 /** What the toast calls the tags of a `tags` action. */

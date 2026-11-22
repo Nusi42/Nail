@@ -8,7 +8,8 @@
  * that start with the text come before names that contain it and paths
  * that contain it. The folder the mail is already in is left out. Moving
  * into Drafts, Trash or Junk asks first in the window, with the number of
- * messages (`../features/mail-actions/move.ts`).
+ * messages (`../features/mail-actions/move.ts`); after a failed move the
+ * focus returns to Cancel (`./MailConfirm.tsx`).
  */
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../api/client";
@@ -26,8 +27,11 @@ import {
 } from "../features/mail-actions/move";
 import { useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
+import { FolderRowLabel } from "./FolderList";
 import { flattenFolders } from "./FolderTree";
-import { folderIcon, Icon } from "./Icon";
+import { MailConfirm } from "./MailConfirm";
+import { stepIndex } from "./messageListModel";
+import { listOptionId } from "./rovingFocus";
 
 /** Name of the layout window that holds the move picker. */
 export const MOVE_WINDOW = "move";
@@ -86,14 +90,11 @@ export function initialOption(rows: readonly { folder: Folder }[], filter: strin
   return exact.length === 1 ? 0 : null;
 }
 
-/** The highlighted option after an arrow key (`null` = none yet). */
+/** The highlighted option after an arrow key (`null` = none), as j / k step through the list. */
 export function stepOption(active: number | null, count: number, delta: 1 | -1): number | null {
-  if (count === 0) return null;
-  if (active === null) return delta > 0 ? 0 : count - 1;
-  return Math.min(count - 1, Math.max(0, active + delta));
+  const next = stepIndex(count, active ?? -1, delta);
+  return next < 0 ? null : next;
 }
-
-const optionIdOf = (base: string, index: number) => `${base}-option-${String(index)}`;
 
 /** The open question before a move into Drafts, Trash or Junk. */
 interface MoveQuestion {
@@ -132,7 +133,7 @@ export function FolderPicker({ node }: WidgetProps) {
 
   useEffect(() => {
     if (active === null) return;
-    document.getElementById(optionIdOf(base, active))?.scrollIntoView({ block: "nearest" });
+    document.getElementById(listOptionId(base, active))?.scrollIntoView({ block: "nearest" });
   }, [active, base]);
 
   const finish = async (folder: Folder, resolution?: MailTargetResolution) => {
@@ -177,10 +178,17 @@ export function FolderPicker({ node }: WidgetProps) {
 
   if (question !== null) {
     return (
-      <MoveConfirm
-        question={question}
+      <MailConfirm
+        kind="move"
+        dataRole={question.role}
+        question={t("mail-actions-move-confirm", {
+          count: question.resolution.message_ids.length,
+          folder: question.folder.name,
+        })}
+        confirmLabel={t("mail-actions-move-confirm-yes")}
+        variant="primary"
         busy={busy}
-        onMove={() => {
+        onConfirm={() => {
           setBusy(true);
           void finish(question.folder, question.resolution).finally(() => {
             setBusy(false);
@@ -190,7 +198,9 @@ export function FolderPicker({ node }: WidgetProps) {
           setQuestion(null);
           queueMicrotask(() => input.current?.focus());
         }}
-      />
+      >
+        <p data-part="mail-confirm.note">{t(`mail-actions-move-note-${question.role}`)}</p>
+      </MailConfirm>
     );
   }
 
@@ -212,7 +222,9 @@ export function FolderPicker({ node }: WidgetProps) {
           aria-expanded="true"
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={current && active !== null ? optionIdOf(base, active) : undefined}
+          aria-activedescendant={
+            current && active !== null ? listOptionId(base, active) : undefined
+          }
           value={filter}
           autoComplete="off"
           spellCheck={false}
@@ -251,7 +263,7 @@ export function FolderPicker({ node }: WidgetProps) {
           // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the combobox input handles the keyboard for its options (aria-activedescendant).
           <li
             key={folder.id}
-            id={optionIdOf(base, index)}
+            id={listOptionId(base, index)}
             role="option"
             data-part="folder-picker.item"
             data-depth={depth}
@@ -267,10 +279,7 @@ export function FolderPicker({ node }: WidgetProps) {
             }}
             onClick={() => void pick(folder)}
           >
-            <span data-part="folder-picker.button" data-role={folder.role} data-folder={folder.id}>
-              <Icon name={folderIcon(folder.role)} part="folder-picker.button.icon" />
-              <span data-part="folder-picker.button.name">{folder.name}</span>
-            </span>
+            <FolderRowLabel folder={folder} />
           </li>
         ))}
       </ul>
@@ -278,64 +287,5 @@ export function FolderPicker({ node }: WidgetProps) {
         <div data-part="folder-picker.empty">{t("folder-picker-no-match")}</div>
       )}
     </form>
-  );
-}
-
-/** "Move 3 messages to Trash?" inside the move window. */
-function MoveConfirm({
-  question,
-  busy,
-  onMove,
-  onCancel,
-}: {
-  question: MoveQuestion;
-  busy: boolean;
-  onMove: () => void;
-  onCancel: () => void;
-}) {
-  const t = useT();
-  const cancel = useRef<HTMLButtonElement>(null);
-  const questionId = useId();
-  // The safe choice has the focus.
-  useEffect(() => {
-    cancel.current?.focus();
-  }, []);
-  return (
-    <div
-      data-part="mail-confirm"
-      data-confirm="move"
-      data-role={question.role}
-      aria-busy={busy}
-      role="group"
-      aria-labelledby={questionId}
-    >
-      <p data-part="mail-confirm.question" id={questionId}>
-        {t("mail-actions-move-confirm", {
-          count: question.resolution.message_ids.length,
-          folder: question.folder.name,
-        })}
-      </p>
-      <p data-part="mail-confirm.note">{t(`mail-actions-move-note-${question.role}`)}</p>
-      <div data-part="mail-confirm.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          disabled={busy}
-          onClick={onMove}
-        >
-          {t("mail-actions-move-confirm-yes")}
-        </button>
-        <button
-          ref={cancel}
-          type="button"
-          data-part="form.button"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          {t("common-cancel")}
-        </button>
-      </div>
-    </div>
   );
 }
