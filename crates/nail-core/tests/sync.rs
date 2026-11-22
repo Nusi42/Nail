@@ -811,20 +811,32 @@ fn append_bulk(f: &Fixture, n: usize) {
     }
 }
 
-/// Waits (up to `limit`) until no write waits any more, then returns the
-/// events sent meanwhile; fails when the channel overflowed.
+/// Waits until no write waits any more, then returns the events sent
+/// meanwhile; fails when the channel overflowed, or when the queue did not
+/// shrink for `stall`: a large queue on a loaded machine may take long, but
+/// it has to keep moving.
 async fn drain_queue(
     f: &Fixture,
     events: &mut broadcast::Receiver<Event>,
-    limit: std::time::Duration,
+    stall: std::time::Duration,
 ) -> Vec<Event> {
-    tokio::time::timeout(limit, async {
-        while f.service.ops_summary().await.unwrap().waiting() > 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let mut least = u32::MAX;
+    let mut moved_at = std::time::Instant::now();
+    loop {
+        let waiting = f.service.ops_summary().await.unwrap().waiting();
+        if waiting == 0 {
+            break;
         }
-    })
-    .await
-    .expect("the queue drains");
+        if waiting < least {
+            least = waiting;
+            moved_at = std::time::Instant::now();
+        }
+        assert!(
+            moved_at.elapsed() < stall,
+            "the queue stopped draining: {waiting} writes waiting for {stall:?}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
     let mut sent = Vec::new();
     loop {
         match tokio::time::timeout(std::time::Duration::from_millis(500), events.recv()).await {
@@ -910,7 +922,9 @@ async fn a_bulk_move_and_delete_sends_a_few_events() {
 #[tokio::test]
 async fn a_list_of_25000_messages_is_archived_and_deleted_with_one_undo_each() {
     const BULK: usize = common::BULK_ACTION_MESSAGES;
-    const DRAIN: std::time::Duration = std::time::Duration::from_secs(600);
+    // The longest the queue may stand still while it replays (it drains
+    // in groups of a few hundred writes, each within seconds).
+    const STALL: std::time::Duration = std::time::Duration::from_secs(120);
     let f = bulk_fixture(BULK).await;
     let inbox = f
         .service
@@ -968,7 +982,7 @@ async fn a_list_of_25000_messages_is_archived_and_deleted_with_one_undo_each() {
         };
         let applied_in = started.elapsed();
         assert_eq!(result.message_ids.len(), in_inbox);
-        let sent = drain_queue(&f, &mut events, DRAIN).await;
+        let sent = drain_queue(&f, &mut events, STALL).await;
         let replayed_in = started.elapsed();
         assert_few_events(&sent, max_events);
         assert_eq!(start("INBOX"), 0);
@@ -986,7 +1000,7 @@ async fn a_list_of_25000_messages_is_archived_and_deleted_with_one_undo_each() {
             other => panic!("unexpected {other:?}"),
         }
         let undone_in = started.elapsed();
-        let sent = drain_queue(&f, &mut events, DRAIN).await;
+        let sent = drain_queue(&f, &mut events, STALL).await;
         assert_few_events(&sent, max_events);
         assert_eq!(start("INBOX"), BULK, "one undo brings every message back");
         assert_eq!(start(to), 0);

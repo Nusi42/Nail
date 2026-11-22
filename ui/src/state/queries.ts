@@ -58,7 +58,8 @@ export const queryKeys = {
     ["threads", folderId, pageSize] as const,
   allThreads: ["threads"] as const,
   /** The true count of a selected whole list (`ResolveMailTargets`, ADR 0235). */
-  listCount: (target: string, total: number | null) => ["list-count", target, total] as const,
+  listCount: (list: string, target: string, total: number | null) =>
+    ["list-count", list, target, total] as const,
   allListCounts: ["list-count"] as const,
   thread: (id: ThreadId | null) => ["thread", id] as const,
   /** P2: under the thread's key, so invalidating the thread refetches it. */
@@ -349,13 +350,16 @@ export function searchQueryOf(
  * `ResolveMailTargets` of its list target with an action that reaches
  * every message of a row (marking read changes nothing here). `total` is
  * the list's own row count, so the count follows new and removed rows.
- * `null` target = no list selected.
+ * `null` target = no list selected. While a new count loads, the previous
+ * one stands in only for the same list (rows left out, rows added): the
+ * count of another list (a search before it was narrowed) never shows.
  */
 export function useListCount(target: MessageTarget | null, total: number | null) {
   const client = useClient();
   const key = target === null ? "" : JSON.stringify(target);
+  const list = target?.kind === "list" ? JSON.stringify(target.list) : "";
   return useQuery({
-    queryKey: queryKeys.listCount(key, total),
+    queryKey: queryKeys.listCount(list, key, total),
     queryFn: async () =>
       (
         await client.request(
@@ -368,7 +372,8 @@ export function useListCount(target: MessageTarget | null, total: number | null)
         )
       ).resolution,
     enabled: target !== null,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === list ? previous : undefined,
   });
 }
 

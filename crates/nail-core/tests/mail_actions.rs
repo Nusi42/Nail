@@ -7,6 +7,8 @@
 
 #![cfg(test)]
 
+use std::collections::HashSet;
+
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
 use common::{
@@ -990,6 +992,61 @@ async fn a_search_list_is_every_local_hit() {
     let as_conversations = resolve(&f, list(true), read).await;
     assert_eq!(as_conversations.messages, one_by_one.messages);
     assert_eq!(as_conversations.conversations, one_by_one.conversations);
+}
+
+#[tokio::test]
+async fn a_search_list_counts_each_conversation_once() {
+    let f = setup();
+    f.service.rebuild_search_index().unwrap();
+    // Everywhere: the conversation's messages in Inbox and Sent are hits.
+    let query = SearchQuery::new("Nightingale", 1000);
+    let hits = hits_of(&f, &query).await;
+    let threads: HashSet<_> = hits
+        .iter()
+        .map(|h| h.message.thread_id.clone().unwrap())
+        .collect();
+    assert!(
+        threads.len() < hits.len(),
+        "hits share a conversation: {hits:?}"
+    );
+    let list = MessageTarget::list(
+        MailList::Search {
+            query,
+            conversations: true,
+            listed_folder_id: None,
+        },
+        vec![],
+    );
+    for action in [
+        MailAction::MarkRead { read: true },
+        MailAction::Archive,
+        MailAction::Trash,
+    ] {
+        let resolved = resolve(&f, vec![list.clone()], action.clone()).await;
+        assert!(
+            resolved.conversations <= resolved.messages,
+            "{action:?}: {resolved:?}"
+        );
+        assert!(
+            usize::try_from(resolved.conversations).unwrap() <= threads.len(),
+            "{action:?}: {resolved:?}"
+        );
+    }
+    // Reading reaches every hit's conversation: each counts once.
+    let read = resolve(&f, vec![list], MailAction::MarkRead { read: true }).await;
+    assert_eq!(usize::try_from(read.conversations).unwrap(), threads.len());
+    // Two rows of one conversation, named one by one, count once too.
+    let thread = hits[0].message.thread_id.clone().unwrap();
+    let twice = resolve(
+        &f,
+        vec![
+            MessageTarget::conversation(thread.clone(), None),
+            MessageTarget::conversation(thread, None),
+        ],
+        MailAction::MarkRead { read: true },
+    )
+    .await;
+    assert_eq!(twice.conversations, 1);
 }
 
 #[tokio::test]

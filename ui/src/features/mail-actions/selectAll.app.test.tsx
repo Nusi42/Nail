@@ -12,7 +12,7 @@ import { violations } from "../../test/axe";
 import { appWindowEachTest, eventually, renderApp, settleUntil } from "../../test/app";
 import { createEnv, type Env } from "../../test/harness";
 import { must } from "../../test/must";
-import { INBOX } from "../../test/mockIds";
+import { INBOX, SENT } from "../../test/mockIds";
 import { listSelectionFor } from "../../actions/mailTargets";
 import { BULK_CONFIRM_DIALOG } from "./bulk";
 import { CLEAR_SELECTION_ACTION, SELECT_ALL_ACTION, TOGGLE_ROW_ACTION } from "./index";
@@ -77,6 +77,19 @@ async function pressSelectAll(listBox: HTMLElement): Promise<void> {
   fireEvent.keyDown(listBox, { key: "a", ctrlKey: true });
   await eventually(() => {
     expect(summary()).not.toBeNull();
+  });
+}
+
+/**
+ * Until the opened row's read mark (a queued write) has replayed and the
+ * status bar has its summary: a test that ends earlier gets that update
+ * after its end, outside `act`.
+ */
+async function readMarkSettled(env: Env): Promise<void> {
+  await eventually(() => {
+    expect(env.transport.requests.some((r) => r.type === "UpdateFlags")).toBe(true);
+    expect(env.transport.data.opQueue.size).toBe(0);
+    expect(env.store.getState().opsSummary).toMatchObject({ pending: 0, in_flight: 0 });
   });
 }
 
@@ -230,6 +243,53 @@ describe("select all in the message list (R5)", () => {
       expect(summary()).toHaveTextContent(`All ${String(total)} selected`);
     });
     expect(selectedCount()).toBe(rows().length);
+    await readMarkSettled(env);
+  });
+
+  it("another list never shows the previous list's count while its own loads", async () => {
+    const env = renderInbox();
+    const listBox = await focusedList(env);
+    const inboxTotal = conversationCount(env);
+    await pressSelectAll(listBox);
+    await eventually(() => {
+      expect(summary()).toHaveTextContent(`All ${String(inboxTotal)} selected`);
+    });
+    fireEvent.keyDown(listBox, { key: "Escape" });
+    await eventually(() => {
+      expect(summary()).toBeNull();
+    });
+
+    // Another list (the Sent folder); its count waits for the test.
+    const sentTotal = new Set(
+      env.transport.data.messages.filter((m) => m.folder_id === SENT).map((m) => m.thread_id),
+    ).size;
+    expect(sentTotal).toBeGreaterThan(0);
+    expect(sentTotal).not.toBe(inboxTotal);
+    act(() => {
+      env.store.getState().selectFolder(SENT);
+    });
+    await settleUntil(
+      () => rows().find((r) => r.getAttribute("aria-selected") !== "true") ?? null,
+      "the Sent folder's rows",
+    );
+    const gate: { release?: () => void } = {};
+    const held = new Promise<void>((resolve) => {
+      gate.release = resolve;
+    });
+    const send = env.transport.send.bind(env.transport);
+    env.transport.send = async (request) => {
+      if (request.type === "ResolveMailTargets") await held;
+      return send(request);
+    };
+    fireEvent.keyDown(list(), { key: "a", ctrlKey: true });
+    await eventually(() => {
+      expect(summary()).toHaveTextContent(/^All selected$/);
+    });
+    expect(announcer()).toHaveTextContent(/^All selected$/);
+    must(gate.release)();
+    await eventually(() => {
+      expect(summary()).toHaveTextContent(`All ${String(sentTotal)} selected`);
+    });
   });
 
   it("one row left of a list says how many are selected, not that the list has one row", async () => {

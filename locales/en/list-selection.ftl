@@ -11,6 +11,9 @@ message-list-all-selected =
         [one] 1 selected
        *[other] All { $count } selected
     }
+# The whole list is selected and the core is still counting its rows
+# (shown instead of a count that might belong to another list).
+message-list-all-selected-counting = All selected
 # Announced to screen readers when "select all" ends (Esc, another list).
 message-list-selection-cleared = Selection cleared
 

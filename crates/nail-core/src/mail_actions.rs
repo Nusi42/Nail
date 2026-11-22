@@ -39,7 +39,7 @@ use nail_api::mail_actions::{
 };
 use nail_api::{
     AccountId, ApiError, ErrorCode, Event, FolderId, FolderRole, LocalizedMessage, MailAction,
-    MailBatchId, MessageId, MessageTarget, MoveTarget, OpId,
+    MailBatchId, MessageId, MessageTarget, MoveTarget, OpId, ThreadId,
 };
 use nail_store::{
     ConversationFolders, MailBatchApplied, MailBatchPlan, MailBatchUndo, Operation, OwnAddresses,
@@ -105,12 +105,23 @@ enum Gone {
 /// The messages a set of targets resolves to.
 struct Resolved {
     messages: Vec<TargetMessage>,
+    /// The distinct conversations the rows reached: two rows of one
+    /// conversation (two search hits in it) count once, so there are
+    /// never more conversations than messages.
     conversations: u32,
 }
 
 impl Resolved {
     fn ids(&self) -> Vec<MessageId> {
         self.messages.iter().map(|m| m.id.clone()).collect()
+    }
+}
+
+/// The conversation a row stands for (`None` for a message row).
+fn conversation_of(row: &MessageTarget) -> Option<&ThreadId> {
+    match row {
+        MessageTarget::Conversation(c) => Some(&c.thread_id),
+        MessageTarget::Message { .. } | MessageTarget::List(_) => None,
     }
 }
 
@@ -159,7 +170,14 @@ impl Service {
             conversations: 0,
         };
         let mut seen = HashSet::new();
-        let mut push = |out: &mut Resolved, picked: Vec<TargetMessage>| {
+        let mut threads: HashSet<ThreadId> = HashSet::new();
+        let mut push = |out: &mut Resolved, picked: Vec<TargetMessage>, row: Option<&ThreadId>| {
+            if let Some(thread) = row
+                && !picked.is_empty()
+                && threads.insert(thread.clone())
+            {
+                out.conversations += 1;
+            }
             for message in picked {
                 if seen.insert(message.id.clone()) {
                     out.messages.push(message);
@@ -171,14 +189,11 @@ impl Service {
             .filter(|t| !matches!(t, MessageTarget::List(_)))
             .cloned()
             .collect();
-        for (picked, reached) in self
-            .resolve_rows(&rows, action, filter, &own, Gone::Fail)
-            .await?
-        {
-            if reached {
-                out.conversations += 1;
-            }
-            push(&mut out, picked);
+        for (row, picked) in rows.iter().zip(
+            self.resolve_rows(&rows, action, filter, &own, Gone::Fail)
+                .await?,
+        ) {
+            push(&mut out, picked, conversation_of(row));
         }
         for target in targets {
             let MessageTarget::List(list) = target else {
@@ -192,22 +207,19 @@ impl Service {
                 .resolve_rows(&list.except, action, filter, &own, Gone::Skip)
                 .await?
                 .into_iter()
-                .flat_map(|(picked, _)| picked.into_iter().map(|m| m.id))
+                .flat_map(|picked| picked.into_iter().map(|m| m.id))
                 .collect();
             let rows = self.mail_list_rows(&list.list, filter).await?;
             let resolved = self
                 .resolve_rows(&rows, action, filter, &own, Gone::Skip)
                 .await?;
-            for (row, (mut picked, _)) in rows.iter().zip(resolved) {
+            for (row, mut picked) in rows.iter().zip(resolved) {
                 picked.retain(|m| {
                     !except.contains(&m.id)
                         && mark.is_none_or(|mark| m.listed_seq <= mark)
                         && within(filter, &m.folder_id, &m.account_id)
                 });
-                if matches!(row, MessageTarget::Conversation(_)) && !picked.is_empty() {
-                    out.conversations += 1;
-                }
-                push(&mut out, picked);
+                push(&mut out, picked, conversation_of(row));
             }
         }
         // Grouped by account and folder (stable), so the queue hands each
@@ -232,7 +244,7 @@ impl Service {
     }
 
     /// The messages each row target (a message or a conversation) reaches,
-    /// in order, and whether it is a conversation that reached one. A
+    /// in order. A
     /// message row no longer stored fails with `not_found`, or reaches
     /// nothing with [`Gone::Skip`] (a whole list's rows and exceptions: a
     /// message removed meanwhile is simply gone). Trash
@@ -248,7 +260,7 @@ impl Service {
         filter: Option<&FolderFilter>,
         own: &OwnAddresses,
         gone: Gone,
-    ) -> Result<Vec<(Vec<TargetMessage>, bool)>> {
+    ) -> Result<Vec<Vec<TargetMessage>>> {
         let mut scopes: HashMap<FolderId, ConversationFolders> = HashMap::new();
         for row in rows {
             match row {
@@ -279,33 +291,30 @@ impl Service {
                 .call(move |s| {
                     let mut out = Vec::with_capacity(chunk.len());
                     for row in &chunk {
-                        let (mut picked, conversation) = match row {
+                        let mut picked = match row {
                             MessageTarget::Conversation(c) => {
                                 let scope = c.folder_id.as_ref().and_then(|f| scopes.get(f));
-                                let picked = s.conversation_targets(
+                                s.conversation_targets(
                                     &c.thread_id,
                                     scope,
                                     &own,
                                     as_keep(keep.as_ref()),
                                     reach,
-                                )?;
-                                (picked, true)
+                                )?
                             }
                             MessageTarget::Message { message_id } => {
                                 let id = std::slice::from_ref(message_id);
-                                let picked = match gone {
+                                match gone {
                                     Gone::Fail => s.target_messages(id)?,
                                     Gone::Skip => s.stored_target_messages(id)?,
-                                };
-                                (picked, false)
+                                }
                             }
-                            MessageTarget::List(_) => (Vec::new(), false),
+                            MessageTarget::List(_) => Vec::new(),
                         };
                         if trash {
                             picked.retain(|m| m.role != "trash");
                         }
-                        let reached = conversation && !picked.is_empty();
-                        out.push((picked, reached));
+                        out.push(picked);
                     }
                     Ok(out)
                 })

@@ -5,7 +5,11 @@
  */
 import { TransportClient } from "./client";
 import { MockTransport } from "./mock";
-import { addMockConversation, MOCK_CONVERSATION_ID } from "./mockConversations";
+import {
+  addMockConversation,
+  MOCK_CONVERSATION_ID,
+  MOCK_CONVERSATION_SUBJECT,
+} from "./mockConversations";
 import { createMockData } from "./mockData";
 import { explicitTargetCount, kindOf, reachOf } from "./mockMailActions";
 import { listFolderOf } from "../actions/mailTargets";
@@ -209,6 +213,31 @@ describe("whole lists in the mock core (R5, ADR 0235)", () => {
     expect(result.message_ids.length).toBeLessThanOrEqual(messages);
     expect(must(transport.data.messages.find((m) => m.id === newcomer.id)).folder_id).toBe(INBOX);
     expect(result.batch_id).not.toBeNull();
+  });
+
+  it("counts each conversation of a search list once, like the core", async () => {
+    const { client, added } = setup();
+    // Everywhere: the conversation's Inbox and Sent messages are hits of
+    // one conversation.
+    expect(new Set(added.map((m) => m.folder_id)).size).toBeGreaterThan(1);
+    const text = `subject:"${MOCK_CONVERSATION_SUBJECT}"`;
+    const counted = await resolution(client, [
+      {
+        kind: "list",
+        list: {
+          source: "search",
+          query: { text, account_id: null, folder_id: null, offset: 0, limit: 1, sort: "date" },
+          conversations: true,
+          listed_folder_id: null,
+        },
+        except: [],
+        as_of: null,
+      },
+    ]);
+    expect(counted.conversations).toBe(1);
+    expect(counted.messages).toBeGreaterThan(1);
+    // Two rows of one conversation named one by one count once too.
+    expect((await resolution(client, [row, row])).conversations).toBe(1);
   });
 
   it("lists a search's hits and refuses nested lists and too many rows", async () => {

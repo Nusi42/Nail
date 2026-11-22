@@ -10,10 +10,11 @@ metadata:
 - Contract: `MessageTarget::List` (`ListTarget { list: MailList, except, as_of }`), `MAX_MAIL_ACTION_TARGETS` =
   4 096 rows named one by one, `MAIL_ACTION_PART_MESSAGES` = 10 000, `MailTargetResolution::{messages, as_of}`.
 - Core: list rows resolve in bulk (`ROWS_PER_STORE_CALL` = 500, `Store::target_messages`); the `as_of` mark is
-  `mark-<n>` (`Store::message_mark`, the highest message rowid; any other format = invalid request); actions above
-  10 000 messages run in parts (`apply_mail_batch_part`, one batch, one undo; undo also in parts); one `MailChanged`
-  and one `OpsChanged` per part; `STATEMENT_CACHE` = 64. MCP takes no list targets (every MCP write is confirmed
-  per message).
+  `mark-<n>` (`Store::message_mark`, the `message_listed_seq` counter = the latest `messages.listed_seq`; any other
+  format = invalid request); actions above 10 000 messages run in parts (`apply_mail_batch_part`, one batch, one
+  undo; undo also in parts); one `MailChanged` and one `OpsChanged` per part; `STATEMENT_CACHE` = 64. MCP takes no
+  list targets (every MCP write is confirmed per message). A resolution counts distinct conversations (two search
+  hits of one conversation count once), so never more conversations than messages.
 - UI: `list.select-all` (`ctrl+a` / `meta+a` in the list, palette, row menu), `list.clear-selection` (`escape`);
   selection `all: { list, except }`; "All N selected" (`message-list.selection-summary`, sticky); every whole-list
   action asks once (`mail-bulk-confirm`) unless the Move window's Drafts / Trash / Junk question or "Delete
@@ -39,6 +40,9 @@ server has every move after about 31 s; Delete 7.3 s / about 29 s; each undo que
   failed later part; the select-all live region is `message-list.announcer` beside the list box (a live region
   inside `role=listbox` is an axe violation); `ctrl+space` = `list.toggle-row`.
 - A new table needs its name in `schema::tests::migrates_empty_database_to_latest`.
+- "All N selected" shows the core's count of the current list only (`useListCount` keeps a previous count only
+  for the same list); "All selected" while it loads. `sync.rs` `drain_queue` fails only when the queue stops
+  shrinking (no wall-clock limit for the 25 000-message test).
 
 **Follow-ups (plan status line):** tag states for a whole list; rules "run on selected" with a list target; smaller
 store transactions inside a part; profile the replay of 25 000 IMAP moves; a 1 200-row e2e gate variant; the

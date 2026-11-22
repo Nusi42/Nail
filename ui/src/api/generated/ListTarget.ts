@@ -7,7 +7,8 @@ import type { MessageTarget } from "./MessageTarget";
  *
  * The core lists the rows exactly as the message list pages them and
  * treats each row as the target it stands for in the list
- * ([`MailList::row_target`], the same rule as the UI's `rowTarget`): a
+ * ([`MailList::row_target`], pinned against the UI's `rowTarget` by the
+ * `mail-actions` ts-vectors in `crates/nail-api/tests/integration/ts_vectors.rs`): a
  * conversation row as [`MessageTarget::Conversation`] with
  * [`MailList::row_folder_id`], a message row as [`MessageTarget::Message`]. The
  * action reaches the rows' messages minus the messages the `except`

@@ -45,6 +45,40 @@ async function selectAll(page: Page, row: Locator): Promise<void> {
   await expect(summary(page)).toHaveText(/^All \d+ selected$/);
 }
 
+/**
+ * Records every text "All N selected" shows from now on (the line and the
+ * live region); the returned function reads them.
+ */
+async function recordSummaries(page: Page): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    Object.assign(window, { __nailSummaries: seen });
+    const note = () => {
+      for (const el of document.querySelectorAll(
+        '[data-part="message-list.selection-summary"], [data-part="message-list.announcer"]',
+      )) {
+        const text = el.textContent;
+        if (text !== "" && seen.at(-1) !== text) seen.push(text);
+      }
+    };
+    new MutationObserver(note).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+  return () =>
+    page.evaluate(() => (window as unknown as { __nailSummaries: string[] }).__nailSummaries);
+}
+
+/** Runs a search from the search bar; the list shows its hits. */
+async function searchFor(page: Page, text: string): Promise<void> {
+  const search = page.getByRole("combobox", { name: "Search mail" });
+  await search.fill(text);
+  await search.press("Enter");
+  await expect(messageList(page)).toHaveAttribute("data-state", "search");
+}
+
 /** The delivered messages in a server mailbox. */
 const onServer = (mailbox: string) => mail.onServer(server, mailbox);
 
@@ -98,10 +132,7 @@ test("Ctrl+A selects a list larger than one page; deselect one, move the rest", 
 test("Ctrl+A in a search selects every hit", async ({ page }) => {
   const HITS = 12;
   await openWorkInbox(page, HITS);
-  const search = page.getByRole("combobox", { name: "Search mail" });
-  await search.fill(`"${PREFIX}"`);
-  await search.press("Enter");
-  await expect(messageList(page)).toHaveAttribute("data-state", "search");
+  await searchFor(page, `"${PREFIX}"`);
   await expect(messageRows(page)).toHaveCount(HITS);
 
   await selectAll(page, messageRow(page, subjectOf(HITS)));
@@ -171,4 +202,35 @@ test("the row's menu selects all; Ctrl+Space leaves the selected row out", async
   await page.keyboard.press("Control+Space");
   await expect(row).toHaveAttribute("aria-selected", "false");
   await expect(summary(page)).toHaveText(`All ${String(all - 1)} selected`);
+});
+
+test("a narrowed search counts its own hits, never the wider search's", async ({ page }) => {
+  const WIDE = 50;
+  await openWorkInbox(page, WIDE);
+  await searchFor(page, `"${PREFIX}"`);
+  // Select all in the wide search first, so a count of it is at hand.
+  await selectAll(page, messageRow(page, subjectOf(WIDE)));
+  await expect(summary(page)).toHaveText(`All ${String(WIDE)} selected`);
+
+  // Narrow it to one hit: Ctrl+A says "1 selected", never the wide count.
+  const one = subjectOf(12);
+  await searchFor(page, `"${one}"`);
+  await expect(messageRows(page)).toHaveCount(1);
+  await expect(summary(page)).toHaveCount(0);
+  await messageRow(page, one).click();
+  await messageList(page).focus();
+  const shown = await recordSummaries(page);
+  await page.keyboard.press("ControlOrMeta+a");
+  await expect(summary(page)).toHaveText("1 selected");
+  await expect(page.locator('[data-part="message-list.announcer"]')).toHaveText("1 selected");
+  // Not even for a moment while the count loads.
+  expect(await shown()).not.toContain(`All ${String(WIDE)} selected`);
+
+  // The question names the same count.
+  await page.keyboard.press("e");
+  const question = bulkQuestion(page);
+  await expect(question).toContainText("This affects 1 conversation");
+  await question.getByRole("button", { name: "Cancel" }).click();
+  await expect(question).toBeHidden();
+  await expect(summary(page)).toHaveText("1 selected");
 });

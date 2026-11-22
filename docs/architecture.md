@@ -1629,8 +1629,8 @@ The contract, integration and review notes of each wave, in short; the ADRs name
 - WT1 (ADR 0236): list targets resolve in bulk (`ROWS_PER_STORE_CALL` = 500 rows per store call in
   `mail_actions.rs`; message rows through `Store::target_messages`, `TargetMessage::row` = the rowid); `plan_moves`
   looks up the target folder once per account. The `as_of` mark is `mark-<n>` from `Store::message_mark` (the
-  highest message rowid); `ApplyMailAction` leaves out a list's messages above it, any other mark format is an
-  invalid request. Actions above `MAIL_ACTION_PART_MESSAGES` run in parts, each its own store transaction
+  `message_listed_seq` counter, the latest `messages.listed_seq`, ADR 0238); `ApplyMailAction` leaves out a list's
+  messages above it, any other mark format is an invalid request. Actions above `MAIL_ACTION_PART_MESSAGES` run in parts, each its own store transaction
   (`Store::apply_mail_batch_part`; a later part joins the first part's batch through `into`) with one
   `MailChanged` and one `OpsChanged`; undo in parts (`undo_mail_batch_part` / `undo_mail_batch_rest`). The store
   keeps 64 prepared statements per connection (`STATEMENT_CACHE` in `store.rs`). MCP takes no list targets.
@@ -1641,6 +1641,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   part and report `MailActionResult::left_out`; the mark is `listed_seq` (schema v24). UI: live region
   `message-list.announcer` beside the list box (visually hidden in `theme/skin.ts`), `list.toggle-row`
   (`ctrl+space`, through `widgets/messageListControl.ts`), Shift + arrows under select all.
+- Verification fixes: `resolve_targets` counts distinct conversations (`conversation_of`; two search hits of one
+  conversation count once, as in `mockMailActions.ts`); `useListCount` (`state/queries.ts`) keeps a previous count
+  only for the same list, and "All selected" (`message-list-all-selected-counting`) stands in while the current
+  list is counted.
 - WT2 (ADR 0237): `list.select-all` (default `ctrl+a` / `meta+a` in the list, the palette, the row menu) and
   `list.clear-selection` (`escape`) in `features/mail-actions/index.ts`; the list selection's `all: { list, except }`
   and `mailListOf` / `withAsOf` / `inAll` / `toggleExcept` in `actions/mailTargets.ts` (`currentTargets` returns

@@ -191,8 +191,6 @@ function listRows(d: MockData, list: MailList): RowTarget[] | Response {
 
 interface Row {
   messages: MessageSummary[];
-  /** A conversation that reached at least one message. */
-  reached: boolean;
 }
 
 /**
@@ -208,10 +206,10 @@ function resolveRow(
 ): Row | Response {
   if (target.kind === "message") {
     const m = d.messages.find((x) => x.id === target.message_id);
-    if (!m && gone === "skip") return { messages: [], reached: false };
+    if (!m && gone === "skip") return { messages: [] };
     if (!m) return errorResponse("not_found", `message ${target.message_id} not found`);
     const keep = action.type !== "trash" || roleOf(d, m.folder_id) !== "trash";
-    return { messages: keep ? [m] : [], reached: false };
+    return { messages: keep ? [m] : [] };
   }
   const answer = getConversation(d, target.thread_id, target.folder_id);
   if (answer.type !== "Conversation") return answer;
@@ -239,7 +237,7 @@ function resolveRow(
   const messages = picked
     .filter((m) => action.type !== "trash" || roleOf(d, m.folder_id) !== "trash")
     .flatMap((p) => d.messages.filter((x) => x.id === p.id));
-  return { messages, reached: messages.length > 0 };
+  return { messages };
 }
 
 /**
@@ -264,8 +262,10 @@ function resolve(
   }
   const out: MessageSummary[] = [];
   const seen = new Set<MessageId>();
-  let conversations = 0;
-  const add = (messages: readonly MessageSummary[]) => {
+  // Distinct conversations: two rows of one (two search hits) count once.
+  const threads = new Set<string>();
+  const add = (messages: readonly MessageSummary[], row: RowTarget) => {
+    if (row.kind === "conversation" && messages.length > 0) threads.add(row.thread_id);
     for (const m of messages) {
       if (!seen.has(m.id)) {
         seen.add(m.id);
@@ -277,8 +277,7 @@ function resolve(
     if (target.kind !== "list") {
       const row = resolveRow(d, target, action);
       if ("type" in row) return row;
-      if (row.reached) conversations += 1;
-      add(row.messages);
+      add(row.messages, target);
       continue;
     }
     const except = new Set<MessageId>();
@@ -295,8 +294,7 @@ function resolve(
       const row = resolveRow(d, r, action, "skip");
       if ("type" in row) return row;
       const left = row.messages.filter((m) => !except.has(m.id) && (known?.has(m.id) ?? true));
-      if (r.kind === "conversation" && left.length > 0) conversations += 1;
-      add(left);
+      add(left, r);
     }
   }
   if (action.type === "delete-permanently") {
@@ -309,7 +307,7 @@ function resolve(
       );
     }
   }
-  return { messages: out, conversations };
+  return { messages: out, conversations: threads.size };
 }
 
 function apply(core: MockCore, ids: MessageId[], action: MailAction): Response {

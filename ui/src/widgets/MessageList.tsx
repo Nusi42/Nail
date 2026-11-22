@@ -579,8 +579,8 @@ function useRows(node: WidgetNode, pageSize: number) {
 
 /**
  * "All N selected" (R5, ADR 0235): the true count of a selected whole list
- * from the core (`ResolveMailTargets`), the rows of the list minus the ones
- * left out until it answers; `null` without "select all".
+ * from the core (`ResolveMailTargets`), a plain "All selected" until the
+ * core counted this list; `null` without "select all".
  */
 function useAllSelectedText(total: number | null): string | null {
   const t = useT();
@@ -593,8 +593,9 @@ function useAllSelectedText(total: number | null): string | null {
     all.list.source === "messages" || (all.list.source === "search" && !all.list.conversations)
       ? counted?.messages
       : counted?.conversations;
-  const count = rows ?? Math.max(0, (total ?? 0) - all.except.length);
-  return t("message-list-all-selected", { count });
+  return rows === undefined
+    ? t("message-list-all-selected-counting")
+    : t("message-list-all-selected", { count: rows });
 }
 
 /** The visible "All N selected" line at the top of the list. */
