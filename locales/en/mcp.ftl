@@ -22,7 +22,10 @@ mcp-client-state-revoked = { common-revoked }
 mcp-client-token-hint = Token …{ $hint }
 mcp-client-last-used = Last used { $time }
 mcp-client-never-used = Never used
-mcp-client-revoke-confirm = Revoke “{ $name }”? Its token stops working at once; its log entries stay.
+mcp-client-revoke = Revoke…
+mcp-client-revoke-question = Revoke “{ $name }”?
+mcp-client-revoke-detail = Its token stops working at once; its log entries stay.
+window-revoke-mcp-client = { mcp-client-revoke-yes }
 mcp-client-revoke-yes = Revoke client
 
 ## The token, shown once
@@ -124,7 +127,7 @@ mcp-rate-writes-unlimited = No limit for changes
 mcp-rate-sends = Messages sent per hour
 mcp-rate-sends-hint = Sent mail, invitations and answers to invitations.
 mcp-rate-sends-unlimited = No limit for sending
-mcp-rate-save = Save limits
+
 mcp-rate-saved = Limits saved.
 mcp-rate-defaults = Use the default limits
 mcp-client-pending =

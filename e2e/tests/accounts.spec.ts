@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { nailPerTest, control } from "../support/nail";
+import { saveSettings } from "../support/settings";
 import {
   accountSectionNamed,
   accountSections,
@@ -93,7 +94,7 @@ test("an account is added through discovery against the mock servers", async ({ 
   await expect(dialog.locator('[data-part="account-setup.result"]')).toHaveCount(2);
   await dialog.getByRole("button", { name: "Add account" }).click();
   await expect(dialog.getByText(/“Bob” was added/)).toBeVisible();
-  await dialog.getByRole("button", { name: "Go to the inbox" }).click();
+  await dialog.getByRole("button", { name: "Done" }).click();
   await expect(dialog).toBeHidden();
 
   const bob = accountSectionNamed(page, "Bob");
@@ -145,7 +146,7 @@ test("a virtual account merges folders and dedupes a mailing-list message", asyn
   await expect(editor.getByRole("checkbox", { name: "Work" })).toBeChecked();
   await expect(editor.getByRole("checkbox", { name: "Home" })).toBeChecked();
   await expect(editor.getByRole("checkbox", { name: /Merge Inbox, Sent/ })).toBeChecked();
-  await editor.getByRole("button", { name: "Create" }).click();
+  await saveSettings(page);
   await expect(editor.getByText("Virtual account saved.")).toBeVisible();
   await showView(page, "Mail");
 

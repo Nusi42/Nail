@@ -1,10 +1,12 @@
 /**
  * Small controls of the remote feature beyond `widgets/forms.tsx`: a text
  * input with autofocus / autocomplete / input mode (login forms), a
- * checkbox that can be disabled with a reason, and a two-step confirm
- * button. Labels are Fluent ids; styling is the theme's (`form.*` parts).
+ * checkbox that can be disabled with a reason, and a button that asks
+ * first. Labels are Fluent ids; styling is the theme's (`form.*` parts).
  */
-import { useId, useState, type ComponentProps, type ReactNode } from "react";
+import { useId, type ComponentProps, type ReactNode } from "react";
+import { useUiStoreApi } from "../../state/uiStore";
+import { askSettingsQuestion } from "../settings/confirm";
 import type { RemoteAccessPreset } from "../../api/generated";
 import { SelectField, TextField } from "../../widgets/forms";
 import { PRESETS } from "./model";
@@ -60,9 +62,15 @@ export function Toggle({
   );
 }
 
+/** The confirmation window of the remote settings' questions (`ConfirmButton`). */
+export const REMOTE_CONFIRM_DIALOG = "remote-confirm";
+
 /**
- * A button that asks before doing something irreversible: the first press
- * shows the question with "yes" and "cancel"; Escape cancels.
+ * A button that asks before doing something irreversible (R6, ADR 0239):
+ * the press opens the shared confirmation (`REMOTE_CONFIRM_DIALOG`) with
+ * the question and the verb `yesId`; a `danger` verb is destructive (the
+ * focus on Cancel, Enter never runs it). The window closes when
+ * `onConfirm` resolves.
  */
 export function ConfirmButton({
   labelId,
@@ -86,62 +94,25 @@ export function ConfirmButton({
   disabled?: boolean;
 }): ReactNode {
   const t = useT();
-  const [asking, setAsking] = useState(false);
-  if (!asking) {
-    return (
-      <button
-        type="button"
-        data-part="form.button"
-        data-action={action}
-        data-variant={variant}
-        disabled={disabled}
-        onClick={() => {
-          setAsking(true);
-        }}
-      >
-        {t(labelId, labelArgs)}
-      </button>
-    );
-  }
+  const ui = useUiStoreApi();
   return (
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Escape from the question's buttons takes the question back.
-    <span
-      data-part="remote-confirm"
-      role="group"
-      aria-label={t(questionId, questionArgs)}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          setAsking(false);
-        }
+    <button
+      type="button"
+      data-part="form.button"
+      data-action={action}
+      data-variant={variant}
+      disabled={disabled}
+      onClick={() => {
+        askSettingsQuestion(ui, REMOTE_CONFIRM_DIALOG, {
+          question: t(questionId, questionArgs),
+          action: t(yesId),
+          risk: variant === "danger" ? "destructive" : "normal",
+          run: onConfirm,
+        });
       }}
     >
-      <span data-part="remote-confirm.text">{t(questionId, questionArgs)}</span>
-      <button
-        type="button"
-        data-part="form.button"
-        data-action={action}
-        data-variant={variant}
-        // eslint-disable-next-line jsx-a11y/no-autofocus -- the question replaced the button: keep the keyboard focus here.
-        autoFocus
-        onClick={() => {
-          setAsking(false);
-          void onConfirm();
-        }}
-      >
-        {t(yesId)}
-      </button>
-      <button
-        type="button"
-        data-part="form.button"
-        data-action="cancel"
-        onClick={() => {
-          setAsking(false);
-        }}
-      >
-        {t("common-cancel")}
-      </button>
-    </span>
+      {t(labelId, labelArgs)}
+    </button>
   );
 }
 

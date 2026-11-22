@@ -17,10 +17,15 @@ import { useActions } from "../../actions/ActionsProvider";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccountsConfig, useClient, useMessage } from "../../state/queries";
-import { useUi } from "../../state/uiStore";
+import { useUi, useUiStoreApi } from "../../state/uiStore";
+import { askSettingsQuestion } from "../settings/confirm";
+import { useFormNotice, useLeaveDrafts, useSettingsForm } from "../settings/draft";
 import { CheckField, NumberField } from "../../widgets/forms";
 import { AccountChoiceField } from "../../widgets/pickers";
 import { junkIssues, MAX_MIN_TRAINING } from "./model";
+
+/** The confirmation window of "Reset the filter…". */
+export const JUNK_RESET_DIALOG = "reset-junk-filter";
 import { triageKeys, useJunkStatus } from "./queries";
 import { DATE_TIME, formatDateTime } from "../../i18n/format";
 
@@ -77,7 +82,6 @@ function Issues({ issues }: { issues: readonly LocalizedMessage[] }) {
 function SettingsForm({ accountId }: { accountId: string }) {
   const t = useT();
   const status = useJunkStatus(accountId);
-  const [notice, setNotice] = useState<string | null>(null);
   if (status.isError) {
     const message = errorMessageOf(status.error);
     return (
@@ -89,70 +93,56 @@ function SettingsForm({ accountId }: { accountId: string }) {
   if (!status.data) {
     return <p data-part="junk-settings.loading">{t("junk-settings-loading")}</p>;
   }
-  return (
-    <SettingsEditor
-      key={JSON.stringify(status.data.settings)}
-      status={status.data}
-      notice={notice}
-      onNotice={setNotice}
-    />
-  );
+  return <SettingsEditor status={status.data} />;
 }
 
-function SettingsEditor({
-  status: s,
-  notice,
-  onNotice,
-}: {
-  status: JunkStatus;
-  notice: string | null;
-  onNotice: (id: string | null) => void;
-}) {
+/** The problems of junk settings, as messages. */
+function issuesOf(settings: Settings): LocalizedMessage[] {
+  return junkIssues(settings).map((i) => ({ id: JUNK_ISSUE_MESSAGE_IDS[i] }));
+}
+
+function SettingsEditor({ status: s }: { status: JunkStatus }) {
   const t = useT();
   const locale = useLocale();
   const client = useClient();
+  const ui = useUiStoreApi();
   const queryClient = useQueryClient();
   const accountId = s.account_id;
-  const [draft, setDraft] = useState<Settings>(s.settings);
-  const [problems, setProblems] = useState<LocalizedMessage[]>([]);
-  const [confirmReset, setConfirmReset] = useState(false);
+  const { notice, setNotice, outcome, clear, problems: withFailure } = useFormNotice();
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm(s.settings, {
+    ...outcome("junk-settings-saved"),
+    canSave: (settings) => junkIssues(settings).length === 0,
+    save: async (settings) => {
+      const answer = await client.request(
+        { type: "UpdateJunkSettings", account_id: accountId, settings },
+        "JunkStatus",
+      );
+      queryClient.setQueryData(triageKeys.junk(accountId), answer.status);
+    },
+  });
+  const draft = form.value;
+  const problems = withFailure(issuesOf(draft));
 
   const update = (patch: Partial<Settings>) => {
-    setDraft({ ...draft, ...patch });
-    onNotice(null);
+    form.set((current) => ({ ...current, ...patch }));
+    clear();
   };
 
-  const save = async () => {
-    const issues = junkIssues(draft);
-    if (issues.length > 0) {
-      setProblems(issues.map((i) => ({ id: JUNK_ISSUE_MESSAGE_IDS[i] })));
-      return;
-    }
-    setProblems([]);
-    try {
-      const answer = await client.request(
-        { type: "UpdateJunkSettings", account_id: accountId, settings: draft },
-        "JunkStatus",
-      );
-      onNotice("junk-settings-saved");
-      queryClient.setQueryData(triageKeys.junk(accountId), answer.status);
-    } catch (error) {
-      setProblems([errorMessageOf(error)]);
-    }
-  };
-
-  const reset = async () => {
-    setConfirmReset(false);
-    try {
-      const answer = await client.request(
-        { type: "ResetJunkClassifier", account_id: accountId },
-        "JunkStatus",
-      );
-      onNotice("junk-settings-reset-done");
-      queryClient.setQueryData(triageKeys.junk(accountId), answer.status);
-    } catch (error) {
-      setProblems([errorMessageOf(error)]);
-    }
+  const reset = () => {
+    askSettingsQuestion(ui, JUNK_RESET_DIALOG, {
+      question: t("junk-reset-question"),
+      detail: t("junk-reset-detail"),
+      action: t("junk-reset-action"),
+      run: async () => {
+        const answer = await client.request(
+          { type: "ResetJunkClassifier", account_id: accountId },
+          "JunkStatus",
+        );
+        queryClient.setQueryData(triageKeys.junk(accountId), answer.status);
+        setNotice("junk-settings-reset-done");
+      },
+    });
   };
 
   const last = s.last_trained_at === null ? null : new Date(s.last_trained_at);
@@ -237,46 +227,9 @@ function SettingsEditor({
         </p>
       )}
       <div data-part="junk-settings.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          data-variant="primary"
-          onClick={() => void save()}
-        >
-          {t("common-save")}
+        <button type="button" data-part="form.button" data-action="junk-reset" onClick={reset}>
+          {t("junk-reset")}
         </button>
-        {confirmReset ? (
-          <div data-part="junk-settings.confirm" role="group" aria-label={t("junk-reset-confirm")}>
-            <span data-part="junk-settings.confirm.text">{t("junk-reset-confirm")}</span>
-            <button
-              type="button"
-              data-part="form.button"
-              data-variant="danger"
-              onClick={() => void reset()}
-            >
-              {t("junk-reset-yes")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              onClick={() => {
-                setConfirmReset(false);
-              }}
-            >
-              {t("common-cancel")}
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            data-part="form.button"
-            onClick={() => {
-              setConfirmReset(true);
-            }}
-          >
-            {t("junk-reset")}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -289,6 +242,7 @@ export function JunkSettingsWidget({ node }: WidgetProps) {
   const config = useAccountsConfig();
   const accounts = config.data?.accounts ?? [];
   const [chosen, setChosen] = useState<string | null>(null);
+  const leave = useLeaveDrafts();
   const accountId = chosen ?? accounts[0]?.id ?? null;
   return (
     <section
@@ -306,7 +260,12 @@ export function JunkSettingsWidget({ node }: WidgetProps) {
             name="account"
             accounts={accounts}
             value={accountId}
-            onChange={setChosen}
+            onChange={(id) => {
+              // R6: another account asks first when this one has unsaved changes.
+              leave(() => {
+                setChosen(id);
+              });
+            }}
           />
           {accountId !== null && <SettingsForm key={accountId} accountId={accountId} />}
         </>

@@ -22,6 +22,14 @@ import { WebNotifications, notificationTexts } from "./Notifications";
 import { triageStoreFor } from "./store";
 import { snoozeForADay, requestsOf, actionContext } from "../../test/env";
 import { INBOX } from "../../test/mockIds";
+import {
+  confirmSettingsQuestion,
+  discardSettings,
+  renderSettings,
+  saveBar,
+  saveSettingsDone,
+  settingsQuestion,
+} from "../settings/testing";
 
 function dispatcher(env: Env) {
   return createDispatcher(actionContext(env), appRegistry.actions);
@@ -227,33 +235,51 @@ describe("triage widgets", () => {
   it("edits the junk filter with validation", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderWithProviders(<NodeView node={widget("junk-settings")} path="t" />, env);
+    renderSettings(env, "junk-settings");
     await screen.findByText(/Learning/);
-    await user.click(screen.getByLabelText(/Classify arriving mail/));
+    // R6: a change waits for the bar's Save; Discard takes it back.
+    const enabled = screen.getByLabelText(/Classify arriving mail/);
+    await user.click(enabled);
+    expect(enabled).toBeChecked();
+    await discardSettings(user);
+    expect(enabled).not.toBeChecked();
+    expect(saveBar()).toBeNull();
+    await user.click(enabled);
     const threshold = screen.getByLabelText("Junk threshold (percent)");
     await user.clear(threshold);
     await user.type(threshold, "20");
-    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("between 50 and 99");
+    const bar = saveBar();
+    expect(bar && within(bar).getByRole("button", { name: "Save" })).toBeDisabled();
     expect(requestsOf(env, "UpdateJunkSettings")).toEqual([]);
     await user.clear(threshold);
     await user.type(threshold, "80");
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Saved.");
+    await saveSettingsDone(user);
+    expect(await screen.findByText("Saved.")).toBeVisible();
+    expect(requestsOf(env, "UpdateJunkSettings")).toHaveLength(1);
     expect(requestsOf(env, "UpdateJunkSettings")[0]?.settings).toMatchObject({
       enabled: true,
       threshold: 80,
     });
+    // Resetting asks first: a destructive question, Cancel focused.
     await user.click(screen.getByRole("button", { name: "Reset the filter…" }));
-    await user.click(screen.getByRole("button", { name: "Reset" }));
+    const question = await settingsQuestion();
+    expect(question).toHaveAccessibleName("Reset the junk filter");
+    await waitFor(() => {
+      expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await confirmSettingsQuestion(user, "Reset filter");
     expect(await screen.findByText("The filter forgot everything it learned.")).toBeVisible();
     expect(requestsOf(env, "ResetJunkClassifier")).toHaveLength(1);
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
   });
 
   it("edits notification settings: quiet hours, overrides, test", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderWithProviders(<NodeView node={widget("notification-settings")} path="t" />, env);
+    renderSettings(env, "notification-settings");
     await user.click(await screen.findByLabelText("No notifications during quiet hours"));
     const from = screen.getByLabelText("From");
     expect(from).toHaveValue("22:00");
@@ -265,7 +291,8 @@ describe("triage widgets", () => {
     await screen.findByRole("treeitem", { name: /Receipts/ });
     await user.keyboard("{Enter}");
     expect(add).toHaveValue("");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(requestsOf(env, "UpdateNotificationSettings")).toEqual([]);
+    await saveSettingsDone(user);
     await screen.findByText("Saved.");
     const [update] = requestsOf(env, "UpdateNotificationSettings");
     expect(update?.settings.quiet_hours).toEqual({ start: "22:00", end: "07:00", days: ["sat"] });
@@ -283,8 +310,10 @@ describe("triage widgets", () => {
     // Invalid quiet hours are caught before sending.
     await user.clear(screen.getByLabelText("Until"));
     await user.type(screen.getByLabelText("Until"), "22:00");
-    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("must not start and end");
+    const bar = saveBar();
+    expect(bar && within(bar).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(requestsOf(env, "UpdateNotificationSettings")).toHaveLength(1);
   });
 });
 

@@ -484,7 +484,13 @@ const GROUPS: Record<string, Group> = {
         incoming.getByRole("textbox", { name: "Server" }),
         incoming.getByRole("textbox", { name: "User name" }),
       ]);
-      await sweep.close("account-setup");
+      // R6 (ADR 0239): the typed address asks before it is thrown away.
+      await setupWindow.locator('[data-part="window.close"]').click();
+      await page
+        .locator('[data-part="window"][data-window^="unsaved-changes:"]')
+        .getByRole("button", { name: "Discard changes" })
+        .click();
+      await expect(setupWindow).toBeHidden();
 
       await paletteWindowStep(sweep, "snoozed", "Snoozed messages", "snoozed");
       await messageDialogsStep(sweep, server);

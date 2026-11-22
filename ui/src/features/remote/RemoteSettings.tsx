@@ -9,7 +9,7 @@
  * problem before saving; the core's answer wins.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type SubmitEvent } from "react";
+import { useState } from "react";
 import { NailError, errorMessageId, errorMessageIdOf } from "../../api/client";
 import type {
   RemoteTlsMode,
@@ -21,6 +21,7 @@ import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { NumberField, SelectField, TextAreaField } from "../../widgets/forms";
+import { sameJson, useSettingsForm } from "../settings/draft";
 import { ConfirmButton, InputField, Toggle } from "./fields";
 import {
   ALL_INTERFACES,
@@ -167,43 +168,71 @@ function Internet({ status }: { status: RemoteUiStatus }) {
   );
 }
 
-function SettingsForm({
-  saved,
-  status,
-  justSaved,
-  onSaved,
-}: {
-  saved: RemoteUiSettings;
-  status: RemoteUiStatus;
-  /** These settings were just saved here (the form was remounted for them). */
-  justSaved: boolean;
-  onSaved: (settings: RemoteUiSettings) => void;
-}) {
+/**
+ * What the form edits: the settings, the network choice and the allowed
+ * networks as typed (one per line).
+ */
+interface RemoteDraft {
+  settings: RemoteUiSettings;
+  bind: BindChoice;
+  networks: string;
+}
+
+/** The settings a draft would save. */
+function settingsOf(draft: RemoteDraft): RemoteUiSettings {
+  return { ...draft.settings, allowed_networks: parseNetworks(draft.networks) };
+}
+
+/** The form's values for saved settings. */
+function draftOf(saved: RemoteUiSettings): RemoteDraft {
+  return {
+    settings: saved,
+    bind: bindChoiceOf(saved.bind_address),
+    networks: networksText(saved.allowed_networks),
+  };
+}
+
+function SettingsForm({ saved, status }: { saved: RemoteUiSettings; status: RemoteUiStatus }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState(saved);
-  const [bind, setBind] = useState<BindChoice>(bindChoiceOf(saved.bind_address));
-  const [networks, setNetworks] = useState(networksText(saved.allowed_networks));
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ id: string; error: boolean } | null>(
-    justSaved ? { id: "remote-settings-saved", error: false } : null,
-  );
+  const [notice, setNotice] = useState<{ id: string; error: boolean } | null>(null);
   const [serverIssue, setServerIssue] = useState<RemoteUiSettingsIssue | null>(null);
-
-  const next: RemoteUiSettings = { ...draft, allowed_networks: parseNetworks(networks) };
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm<RemoteDraft>(draftOf(saved), {
+    equal: (a, b) => sameJson(settingsOf(a), settingsOf(b)),
+    canSave: (value) => settingsIssues(settingsOf(value)).length === 0,
+    save: async (value) => {
+      const answer = await client.request(
+        { type: "UpdateRemoteUiSettings", settings: settingsOf(value) },
+        "RemoteUi",
+      );
+      queryClient.setQueryData<RemoteUi>(remoteKeys.ui, {
+        settings: answer.settings,
+        status: answer.status,
+      });
+    },
+    onSaved: () => {
+      setNotice({ id: "remote-settings-saved", error: false });
+    },
+    onError: (e) => {
+      setServerIssue(e instanceof NailError ? issueOfMessage(e.message) : null);
+      setNotice({ id: errorMessageIdOf(e), error: true });
+    },
+  });
+  const { settings: draft, bind, networks } = form.value;
+  const next = settingsOf(form.value);
   const issues = settingsIssues(next);
-  const dirty = JSON.stringify(next) !== JSON.stringify(saved);
   const loopback = isLoopbackAddress(next.bind_address);
 
   const change = (patch: Partial<RemoteUiSettings>) => {
-    setDraft((d) => ({ ...d, ...patch }));
+    form.set((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
     setNotice(null);
     setServerIssue(null);
   };
 
   const chooseBind = (choice: BindChoice) => {
-    setBind(choice);
+    form.set((d) => ({ ...d, bind: choice }));
     if (choice === "loopback") change({ bind_address: LOOPBACK_ADDRESS });
     else if (choice === "lan") {
       change({
@@ -214,30 +243,6 @@ function SettingsForm({
       change({ bind_address: draft.bind_address === ALL_INTERFACES ? "" : draft.bind_address });
   };
 
-  const save = async (event: SubmitEvent) => {
-    event.preventDefault();
-    if (busy || issues.length > 0) return;
-    setBusy(true);
-    setNotice(null);
-    try {
-      const answer = await client.request(
-        { type: "UpdateRemoteUiSettings", settings: next },
-        "RemoteUi",
-      );
-      onSaved(answer.settings);
-      setNotice({ id: "remote-settings-saved", error: false });
-      queryClient.setQueryData<RemoteUi>(remoteKeys.ui, {
-        settings: answer.settings,
-        status: answer.status,
-      });
-    } catch (e) {
-      setServerIssue(e instanceof NailError ? issueOfMessage(e.message) : null);
-      setNotice({ id: errorMessageIdOf(e), error: true });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const shown =
     serverIssue !== null && !issues.includes(serverIssue) ? [...issues, serverIssue] : issues;
 
@@ -246,7 +251,9 @@ function SettingsForm({
       data-part="remote-settings.form"
       aria-label={t("remote-settings-title")}
       noValidate
-      onSubmit={(e) => void save(e)}
+      onSubmit={(e) => {
+        e.preventDefault();
+      }}
     >
       <p data-part="remote-settings.intro">{t("remote-settings-intro")}</p>
       <Toggle
@@ -320,7 +327,7 @@ function SettingsForm({
           name="allowed-networks"
           value={networks}
           onChange={(v) => {
-            setNetworks(v);
+            form.set((d) => ({ ...d, networks: v }));
             setNotice(null);
           }}
         />
@@ -374,32 +381,6 @@ function SettingsForm({
           ))}
         </ul>
       )}
-      <div data-part="remote-settings.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-variant="primary"
-          data-action="save-remote-settings"
-          disabled={busy || !dirty || issues.length > 0}
-        >
-          {t("common-save")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="reset"
-          disabled={busy || !dirty}
-          onClick={() => {
-            setDraft(saved);
-            setBind(bindChoiceOf(saved.bind_address));
-            setNetworks(networksText(saved.allowed_networks));
-            setNotice(null);
-            setServerIssue(null);
-          }}
-        >
-          {t("common-undo-changes")}
-        </button>
-      </div>
       {notice && (
         <p
           data-part="remote-settings.notice"
@@ -419,8 +400,6 @@ export function RemoteSettingsWidget({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
   const ui = useRemoteUi();
-  const [savedKey, setSavedKey] = useState<string | null>(null);
-  const key = ui.data ? JSON.stringify(ui.data.settings) : "";
   return (
     <section
       data-part="remote-settings"
@@ -436,15 +415,7 @@ export function RemoteSettingsWidget({ node }: WidgetProps) {
       {ui.data && (
         <>
           <Status status={ui.data.status} />
-          <SettingsForm
-            key={key}
-            justSaved={savedKey === key}
-            onSaved={(settings) => {
-              setSavedKey(JSON.stringify(settings));
-            }}
-            saved={ui.data.settings}
-            status={ui.data.status}
-          />
+          <SettingsForm saved={ui.data.settings} status={ui.data.status} />
         </>
       )}
     </section>

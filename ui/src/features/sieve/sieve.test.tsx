@@ -1,10 +1,17 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { manageSieveIssues } from "./model";
 import { requestsOf } from "../../test/env";
 import { chipsOf, pickOption } from "../../widgets/pickers/testing";
+import { renderSettings, saveBar, saveSettingsDone } from "../settings/testing";
+
+/** The bar's Save button (R6: disabled while a draft is invalid). */
+function barSave(): HTMLElement | null {
+  const bar = saveBar();
+  return bar && within(bar).getByRole("button", { name: "Save" });
+}
 
 function withSieve(): Env {
   const env = createEnv();
@@ -54,18 +61,17 @@ describe("sieve-status", () => {
   it("turns ManageSieve on for an account and validates the settings", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderWithProviders(<NodeView node={widget("sieve-status")} path="t" />, env);
+    renderSettings(env, "sieve-status");
     const box = await screen.findByLabelText("Run rules on the server when possible");
     expect(box).not.toBeChecked();
     await user.click(box);
     await user.type(screen.getByLabelText("Server"), "sieve example");
-    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("without spaces");
+    expect(barSave()).toBeDisabled();
     await user.clear(screen.getByLabelText("Server"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => {
-      expect(requestsOf(env, "UpdateAccount")).toHaveLength(1);
-    });
+    expect(requestsOf(env, "UpdateAccount")).toEqual([]);
+    await saveSettingsDone(user);
+    expect(requestsOf(env, "UpdateAccount")).toHaveLength(1);
     expect(requestsOf(env, "UpdateAccount")[0]?.config.sieve).toEqual({
       enabled: true,
       host: null,
@@ -90,23 +96,25 @@ describe("vacation-editor", () => {
   it("validates, saves and reloads a vacation reply", async () => {
     const user = userEvent.setup();
     const env = withSieve();
-    renderWithProviders(<NodeView node={widget("vacation-editor")} path="t" />, env);
+    renderSettings(env, "vacation-editor");
     const section = await screen.findByRole("region", { name: "Vacation reply" });
     await pickOption(user, section, "Account", /^Work/);
     await user.click(await within(section).findByLabelText("Send a vacation reply"));
-    await user.click(within(section).getByRole("button", { name: "Save" }));
     expect(await within(section).findByRole("alert")).toHaveTextContent("Write the reply text.");
+    expect(barSave()).toBeDisabled();
     await user.type(within(section).getByLabelText("Message"), "Back on Monday.");
     // "Also my addresses": chips; a comma ends one, leaving the field ends the last.
     const addresses = within(section).getByRole("combobox", { name: "Also my addresses" });
     await user.type(addresses, "me@work.example, x");
     expect(chipsOf(section, "Also my addresses")).toEqual(["me@work.example"]);
-    await user.click(within(section).getByRole("button", { name: "Save" }));
+    await user.tab();
     expect(chipsOf(section, "Also my addresses")).toEqual(["me@work.example", "x"]);
     expect(await within(section).findByRole("alert")).toHaveTextContent("not an email address");
+    expect(barSave()).toBeDisabled();
     await user.click(within(section).getByRole("button", { name: "Remove x" }));
     expect(chipsOf(section, "Also my addresses")).toEqual(["me@work.example"]);
-    await user.click(within(section).getByRole("button", { name: "Save" }));
+    expect(requestsOf(env, "UpdateVacation")).toEqual([]);
+    await saveSettingsDone(user);
     expect(await within(section).findByRole("status")).toHaveTextContent("Saved.");
     expect(requestsOf(env, "UpdateVacation")[0]).toMatchObject({
       account_id: "acc-work",

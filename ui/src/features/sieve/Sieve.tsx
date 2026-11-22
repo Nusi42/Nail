@@ -23,8 +23,9 @@ import {
 } from "../../api/generated";
 import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
-import { useAccountsConfig, useClient } from "../../state/queries";
-import { CheckField, NumberField, TextAreaField, TextField, SaveRow } from "../../widgets/forms";
+import { queryKeys, useAccountsConfig, useClient } from "../../state/queries";
+import { CheckField, NumberField, TextAreaField, TextField } from "../../widgets/forms";
+import { useLeaveDrafts, useSettingsForm } from "../settings/draft";
 import {
   AccountChoiceField,
   NullablePickerField,
@@ -69,43 +70,61 @@ function formatTime(value: string | null, locale: string): string | null {
   return formatDateTime(value, locale, DATE_TIME);
 }
 
+/** What the ManageSieve form edits: on / off and the connection settings. */
+interface ConnectionDraft {
+  on: boolean;
+  config: ManageSieveConfig;
+}
+
 /** The ManageSieve switch and connection settings of one account. */
 function ConnectionEditor({ account }: { account: AccountConfig }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const sieve = account.sieve;
-  const [draft, setDraft] = useState<ManageSieveConfig>(
-    () => sieve ?? { enabled: true, host: null, port: null, tls: null, script_name: null },
-  );
-  const [on, setOn] = useState(sieve !== undefined && sieve.enabled !== false);
-  const [problems, setProblems] = useState<LocalizedMessage[]>([]);
+  const [failure, setFailure] = useState<LocalizedMessage | null>(null);
   const [saved, setSaved] = useState(false);
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm<ConnectionDraft>(
+    {
+      on: sieve !== undefined && sieve.enabled !== false,
+      config: sieve ?? { enabled: true, host: null, port: null, tls: null, script_name: null },
+    },
+    {
+      canSave: ({ on, config }) => !on || manageSieveIssues(config).length === 0,
+      save: async ({ on, config }) => {
+        const next: AccountConfig = on
+          ? { ...account, sieve: { ...config, enabled: true } }
+          : sieve === undefined
+            ? account
+            : { ...account, sieve: { ...config, enabled: false } };
+        await client.request({ type: "UpdateAccount", config: next, secrets: [] }, "AccountSaved");
+        await queryClient.invalidateQueries({ queryKey: queryKeys.accountsConfig });
+        void queryClient.invalidateQueries({ queryKey: sieveKeys.all });
+      },
+      onSaved: () => {
+        setSaved(true);
+      },
+      onError: (error) => {
+        setFailure(errorMessageOf(error));
+      },
+    },
+  );
+  const { on, config: draft } = form.value;
+  const issues: LocalizedMessage[] = on
+    ? manageSieveIssues(draft).map((i) => ({ id: `sieve-issue-${i}` }))
+    : [];
+  const problems = failure === null ? issues : [...issues, failure];
 
-  const save = async () => {
-    const issues = on ? manageSieveIssues(draft) : [];
-    if (issues.length > 0) {
-      setProblems(issues.map((i) => ({ id: `sieve-issue-${i}` })));
-      return;
-    }
-    setProblems([]);
-    const next: AccountConfig = on
-      ? { ...account, sieve: { ...draft, enabled: true } }
-      : sieve === undefined
-        ? account
-        : { ...account, sieve: { ...draft, enabled: false } };
-    try {
-      await client.request({ type: "UpdateAccount", config: next, secrets: [] }, "AccountSaved");
-      setSaved(true);
-      void queryClient.invalidateQueries({ queryKey: sieveKeys.all });
-    } catch (error) {
-      setProblems([errorMessageOf(error)]);
-    }
-  };
-
-  const change = (patch: Partial<ManageSieveConfig>) => {
-    setDraft({ ...draft, ...patch });
+  const change = (patch: Partial<ConnectionDraft>) => {
+    form.set((current) => ({ ...current, ...patch }));
     setSaved(false);
+    setFailure(null);
+  };
+  const changeConfig = (patch: Partial<ManageSieveConfig>) => {
+    form.set((current) => ({ ...current, config: { ...current.config, ...patch } }));
+    setSaved(false);
+    setFailure(null);
   };
 
   return (
@@ -116,8 +135,7 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
         name="sieve-enabled"
         checked={on}
         onChange={(value) => {
-          setOn(value);
-          setSaved(false);
+          change({ on: value });
         }}
       />
       {on && (
@@ -128,7 +146,7 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
             name="sieve-host"
             value={draft.host ?? ""}
             onChange={(host) => {
-              change({ host: host === "" ? null : host });
+              changeConfig({ host: host === "" ? null : host });
             }}
           />
           <NumberField
@@ -139,7 +157,7 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
             max={65535}
             value={draft.port}
             onChange={(port) => {
-              change({ port });
+              changeConfig({ port });
             }}
           />
           <TextField
@@ -148,22 +166,17 @@ function ConnectionEditor({ account }: { account: AccountConfig }) {
             name="sieve-script-name"
             value={draft.script_name ?? ""}
             onChange={(name) => {
-              change({ script_name: name === "" ? null : name });
+              changeConfig({ script_name: name === "" ? null : name });
             }}
           />
         </>
       )}
       <Messages items={problems} part="sieve-status.issues" />
-      {saved && (
+      {saved && !form.dirty && (
         <p data-part="sieve-status.notice" role="status">
           {t("common-saved-to-accounts")}
         </p>
       )}
-      <div data-part="sieve-status.actions">
-        <button type="button" data-part="form.button" onClick={() => void save()}>
-          {t("common-save")}
-        </button>
-      </div>
     </fieldset>
   );
 }
@@ -316,6 +329,7 @@ export function SieveStatusWidget({ node }: WidgetProps) {
   const statuses = useSieveStatus();
   const imap = (config.data?.accounts ?? []).filter((a) => a.incoming.protocol === "imap");
   const [chosen, setChosen] = useState<string | null>(null);
+  const leave = useLeaveDrafts();
   const account = imap.find((a) => a.id === chosen) ?? imap[0];
   const status = statuses.data?.find((s) => s.account_id === account?.id);
   return (
@@ -334,14 +348,14 @@ export function SieveStatusWidget({ node }: WidgetProps) {
             name="account"
             accounts={imap}
             value={account?.id ?? null}
-            onChange={setChosen}
+            onChange={(id) => {
+              // R6: another account asks first when this one has unsaved changes.
+              leave(() => {
+                setChosen(id);
+              });
+            }}
           />
-          {account && (
-            <ConnectionEditor
-              key={`${account.id}-${JSON.stringify(account.sieve)}`}
-              account={account}
-            />
-          )}
+          {account && <ConnectionEditor key={account.id} account={account} />}
           {statuses.isError && (
             <Messages items={[errorMessageOf(statuses.error)]} part="sieve-status.issues" />
           )}
@@ -366,35 +380,36 @@ function VacationForm({
   const client = useClient();
   const queryClient = useQueryClient();
   const ids = useId();
-  const [draft, setDraft] = useState(saved);
-  const [problems, setProblems] = useState<LocalizedMessage[]>([]);
+  const [failure, setFailure] = useState<LocalizedMessage | null>(null);
   const [notice, setNotice] = useState(false);
-
-  const change = (patch: Partial<VacationSettings>) => {
-    setDraft({ ...draft, ...patch });
-    setNotice(false);
-  };
-
-  const save = async () => {
-    const settings = draft;
-    const issues = vacationIssues(settings);
-    if (issues.length > 0) {
-      setProblems(issues.map((i) => ({ id: VACATION_ISSUE_MESSAGE_IDS[i] })));
-      return;
-    }
-    setProblems([]);
-    try {
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm(saved, {
+    canSave: (settings) => vacationIssues(settings).length === 0,
+    save: async (settings) => {
       const answer = await client.request(
         { type: "UpdateVacation", account_id: accountId, settings },
         "Vacation",
       );
-      setDraft(answer.settings);
-      setNotice(true);
       queryClient.setQueryData(sieveKeys.vacation(accountId), answer.settings);
       void queryClient.invalidateQueries({ queryKey: sieveKeys.status });
-    } catch (error) {
-      setProblems([errorMessageOf(error)]);
-    }
+    },
+    onSaved: () => {
+      setNotice(true);
+    },
+    onError: (error) => {
+      setFailure(errorMessageOf(error));
+    },
+  });
+  const draft = form.value;
+  const issues: LocalizedMessage[] = vacationIssues(draft).map((i) => ({
+    id: VACATION_ISSUE_MESSAGE_IDS[i],
+  }));
+  const problems = failure === null ? issues : [...issues, failure];
+
+  const change = (patch: Partial<VacationSettings>) => {
+    form.set((current) => ({ ...current, ...patch }));
+    setNotice(false);
+    setFailure(null);
   };
 
   const dateField = (key: "start_date" | "end_date", labelId: string) => (
@@ -492,7 +507,6 @@ function VacationForm({
           {t("vacation-saved")}
         </p>
       )}
-      <SaveRow part="vacation-editor.actions" onSave={() => void save()} />
     </div>
   );
 }
@@ -536,6 +550,7 @@ export function VacationEditorWidget({ node }: WidgetProps) {
     (a) => a.incoming.protocol === "imap" || a.incoming.protocol === "exchange",
   );
   const [chosen, setChosen] = useState<string | null>(null);
+  const leave = useLeaveDrafts();
   const account = imap.find((a) => a.id === chosen) ?? imap[0];
   return (
     <section
@@ -553,7 +568,12 @@ export function VacationEditorWidget({ node }: WidgetProps) {
             name="account"
             accounts={imap}
             value={account?.id ?? null}
-            onChange={setChosen}
+            onChange={(id) => {
+              // R6: another account asks first when this one has unsaved changes.
+              leave(() => {
+                setChosen(id);
+              });
+            }}
           />
           {account && <Vacation key={account.id} account={account} />}
         </>

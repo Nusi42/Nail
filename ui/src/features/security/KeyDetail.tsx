@@ -9,7 +9,7 @@ import { errorMessageIdOf } from "../../api/client";
 import type { CryptoKey, KeyEncoding, Response, TrustDecision } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
-import { CheckField, SelectField } from "../../widgets/forms";
+import { SelectField } from "../../widgets/forms";
 import { ChainView, UnlockForm } from "./MessageSecurity";
 import {
   TRUST_DECISIONS,
@@ -20,6 +20,12 @@ import {
   keyState,
 } from "./model";
 import { securityKeys } from "./queries";
+import { useUiStoreApi } from "../../state/uiStore";
+import { askSettingsQuestion } from "../settings/confirm";
+import { useSettingsForm } from "../settings/draft";
+
+/** The confirmation window of "Delete key…". */
+export const SECURITY_KEY_DELETE_DIALOG = "delete-key";
 
 type Exported = Extract<Response, { type: "KeyExported" }>;
 
@@ -37,21 +43,23 @@ function TrustEditor({ keyInfo }: { keyInfo: CryptoKey }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
-  const current = decisionOf(keyInfo.trust);
-  const [decision, setDecision] = useState<TrustDecision>(current);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const save = async () => {
-    setError(null);
-    setSaved(false);
-    try {
+  // R6 (ADR 0239): the decision waits for the settings page's Save.
+  const form = useSettingsForm<TrustDecision>(decisionOf(keyInfo.trust), {
+    save: async (decision) => {
+      setError(null);
       await client.request({ type: "SetKeyTrust", key_id: keyInfo.id, decision }, "KeySaved");
-      setSaved(true);
       await queryClient.invalidateQueries({ queryKey: securityKeys.all });
-    } catch (e) {
+    },
+    onSaved: () => {
+      setSaved(true);
+    },
+    onError: (e) => {
       setError(errorMessageIdOf(e));
-    }
-  };
+    },
+  });
+  const decision = form.value;
   if (keyInfo.has_secret) return null;
   return (
     <div data-part="security-key.trust-editor">
@@ -60,22 +68,13 @@ function TrustEditor({ keyInfo }: { keyInfo: CryptoKey }) {
         name="trust-decision"
         value={decision}
         onChange={(v) => {
-          setDecision(v as TrustDecision);
+          form.set(v as TrustDecision);
           setSaved(false);
         }}
         choices={TRUST_DECISIONS.map((d) => ({ value: d, label: `security-decision-${d}` }))}
       />
       <p data-part="form.hint">{t(`security-decision-${decision}-hint`)}</p>
-      <button
-        type="button"
-        data-part="form.button"
-        data-action="save-trust"
-        disabled={decision === current}
-        onClick={() => void save()}
-      >
-        {t("security-key-trust-save")}
-      </button>
-      {saved && (
+      {saved && !form.dirty && (
         <p data-part="security-key.saved" role="status">
           {t("security-key-trust-saved")}
         </p>
@@ -179,84 +178,37 @@ function ExportPanel({ keyInfo }: { keyInfo: CryptoKey }) {
   );
 }
 
+/** "Delete key…": asks in the shared confirmation (R6, ADR 0239); an own key needs the tick. */
 function DeletePanel({ keyInfo, onDeleted }: { keyInfo: CryptoKey; onDeleted: () => void }) {
   const t = useT();
   const client = useClient();
+  const ui = useUiStoreApi();
   const queryClient = useQueryClient();
-  const [confirm, setConfirm] = useState(false);
-  const [withSecret, setWithSecret] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const own = keyInfo.has_secret;
-  const remove = async () => {
-    setError(null);
-    try {
-      await client.request(
-        { type: "DeleteKey", key_id: keyInfo.id, delete_secret: own && withSecret },
-        "Done",
-      );
-      await queryClient.invalidateQueries({ queryKey: securityKeys.all });
-      onDeleted();
-    } catch (e) {
-      setError(errorMessageIdOf(e));
-    }
+  const name = keyInfo.user_ids[0] ?? keyInfo.fingerprint;
+  const ask = () => {
+    askSettingsQuestion(ui, SECURITY_KEY_DELETE_DIALOG, {
+      question: t("security-key-delete-question", { name }),
+      detail: t(own ? "security-key-delete-own-confirm" : "security-key-delete-confirm", { name }),
+      ...(own ? { confirmCheck: t("security-key-delete-secret") } : {}),
+      action: t("security-key-delete-yes"),
+      run: async () => {
+        await client.request({ type: "DeleteKey", key_id: keyInfo.id, delete_secret: own }, "Done");
+        await queryClient.invalidateQueries({ queryKey: securityKeys.all });
+        onDeleted();
+      },
+    });
   };
-  if (!confirm) {
-    return (
-      <button
-        type="button"
-        data-part="form.button"
-        data-variant="danger"
-        data-action="delete"
-        onClick={() => {
-          setConfirm(true);
-        }}
-      >
-        {t("common-delete")}
-      </button>
-    );
-  }
   return (
-    <div data-part="security-key.confirm" role="group" aria-label={t("common-delete")}>
-      <p data-part="security-key.confirm.text">
-        {t(own ? "security-key-delete-own-confirm" : "security-key-delete-confirm", {
-          name: keyInfo.user_ids[0] ?? keyInfo.fingerprint,
-        })}
-      </p>
-      {own && (
-        <CheckField
-          labelId="security-key-delete-secret"
-          name="delete-secret"
-          checked={withSecret}
-          onChange={setWithSecret}
-        />
-      )}
-      <button
-        type="button"
-        data-part="form.button"
-        data-variant="danger"
-        data-action="delete-confirm"
-        disabled={own && !withSecret}
-        onClick={() => void remove()}
-      >
-        {t("security-key-delete-yes")}
-      </button>
-      <button
-        type="button"
-        data-part="form.button"
-        data-action="cancel"
-        onClick={() => {
-          setConfirm(false);
-          setWithSecret(false);
-        }}
-      >
-        {t("security-cancel")}
-      </button>
-      {error && (
-        <p data-part="security-key.error" role="alert">
-          {t(error)}
-        </p>
-      )}
-    </div>
+    <button
+      type="button"
+      data-part="form.button"
+      data-variant="danger"
+      data-action="delete"
+      onClick={ask}
+    >
+      {t("security-key-delete")}
+    </button>
   );
 }
 

@@ -373,11 +373,6 @@ theme "default" mode="system" {
         border-left "4px solid $color.danger"
         color "$color.danger"
     }
-    part "account-setup.actions" {
-        display "flex"
-        justify-content "flex-end"
-        gap "$space.sm"
-    }
     part "account-setup.error" { color "$color.danger"; }
     part "account-setup.results" {
         display "flex"
@@ -1776,15 +1771,6 @@ theme "default" mode="system" {
         flex-direction "column"
         gap "$space.md"
     }
-    part "mcp-clients.confirm" {
-        display "flex"
-        flex-wrap "wrap"
-        align-items "center"
-        gap "$space.sm"
-        padding "$space.sm"
-        border-radius "$radius.sm"
-        background-color "$color.bg-raised"
-    }
     part "mcp-clients.error" { color "$color.danger"; }
     part "mcp-clients.empty" { color "$color.fg-muted"; }
     part "mcp-token" {
@@ -1838,10 +1824,6 @@ theme "default" mode="system" {
     part "mcp-grants.scope.hint" {
         font-size "$font-size.xs"
         color "$color.fg-muted"
-    }
-    part "mcp-grants.actions" {
-        display "flex"
-        gap "$space.sm"
     }
     part "mcp-grants.message" { font-size "$font-size.sm"; }
     part "mcp-grants.message:ok" { color "$color.success"; }
@@ -2517,13 +2499,6 @@ theme "default" mode="system" {
     part "remote-qr" { width 180; height 180; }
     part "remote-qr.background" { fill "#ffffff"; }
     part "remote-qr.modules" { fill "#000000"; }
-    part "remote-confirm" {
-        display "flex"
-        flex-wrap "wrap"
-        align-items "center"
-        gap "$space.sm"
-    }
-    part "remote-confirm.text" { color "$color.warning"; }
 
     part "remote-settings" {
         display "flex"
@@ -2567,7 +2542,6 @@ theme "default" mode="system" {
         padding "$space.md"
     }
     part "remote-settings.form" { display "flex"; flex-direction "column"; gap "$space.sm"; }
-    part "remote-settings.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "remote-settings.status" { display "flex"; flex-direction "column"; gap "$space.xs"; }
     part "remote-settings.state" { font-weight "$font-weight.medium"; }
     part "remote-settings.state:failed" { color "$color.danger"; }
@@ -2958,10 +2932,8 @@ theme "default" mode="system" {
     part "junk-settings.issues" { color "$color.danger"; }
     part "notification-settings.issues" { color "$color.danger"; }
     part "sync-policy.issues" { color "$color.danger"; }
-    part "vacation-editor.actions" { display "flex"; gap "$space.sm"; }
     part "junk-settings.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "notification-settings.actions" { display "flex"; gap "$space.sm"; }
-    part "sync-policy.actions" { display "flex"; gap "$space.sm"; }
 
     part "toolbar-editor" {
         display "flex"

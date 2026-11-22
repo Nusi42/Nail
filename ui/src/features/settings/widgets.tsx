@@ -38,14 +38,9 @@ import { usePlatform } from "../../state/platform";
 import { UI_STATE_SETTINGS_SECTION, useSetUiState, useUiStateValue } from "../../state/uiState";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
-import { askToLeave, useCloseGuard, useGuardKey } from "../../layout/closeGuard";
-import {
-  SettingsSaveBar,
-  discardSettingsDrafts,
-  saveSettingsDrafts,
-  settingsCanSave,
-  settingsDirty,
-} from "../../widgets/dialog";
+import { askToLeave, useGuardKey } from "../../layout/closeGuard";
+import { SettingsSaveBar } from "../../widgets/dialog";
+import { useSettingsGuard } from "./draft";
 import { appRegistry } from "../registry";
 import { currentSection, findSection, highlightText, rankSettingsHits } from "./model";
 import { settingsStoreFor, useSettingsState, type RevealRequest } from "./store";
@@ -289,15 +284,7 @@ export function SettingsPage({ node }: WidgetProps) {
     };
   }, [settingsStore, guardKey]);
   const sectionName = section ? label(sectionLabelOf(section)) : "";
-  useCloseGuard({
-    name: () => sectionName,
-    isDirty: () => settingsDirty(uiStore),
-    save: () => saveSettingsDrafts(uiStore),
-    canSave: () => settingsCanSave(uiStore),
-    discard: () => {
-      discardSettingsDrafts(uiStore);
-    },
-  });
+  useSettingsGuard(sectionName);
   const go = (id: string) => {
     if (id === sectionId) return;
     askToLeave(uiStore, guardKey, () => {

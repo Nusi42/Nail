@@ -18,9 +18,13 @@ import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { findSummary } from "../../state/mailOps";
 import { useAccountsConfig, useClient, useFolders, useMessage } from "../../state/queries";
-import { useUi } from "../../state/uiStore";
+import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { flattenFolders } from "../../widgets/FolderTree";
-import { NumberField, SelectField, SaveRow } from "../../widgets/forms";
+import { NumberField, SelectField } from "../../widgets/forms";
+import type { DialogProps } from "../../layout/dialogRegistry";
+import { closeWindowNow, useCloseGuard, useGuardKey } from "../../layout/closeGuard";
+import { DialogFooter, DialogForm } from "../../widgets/dialog";
+import { useLeaveDrafts, useSettingsForm } from "../settings/draft";
 import { PickerField } from "../../widgets/pickers";
 import { BODY_MODES, TRI_CHOICES, type Tri } from "./model";
 import { useSync } from "./store";
@@ -62,63 +66,72 @@ function usePolicy(folderId: FolderId | null) {
   });
 }
 
-function PolicyForm({
-  policy,
-  saved,
-  setSaved,
-}: {
-  policy: FolderSyncPolicy;
-  /** Kept by the editor: a save re-creates the form. */
-  saved: boolean;
-  setSaved: (saved: boolean) => void;
-}) {
-  const t = useT();
+/** What the policy form edits ("default": as the account). */
+export interface PolicyDraft {
+  mode: "default" | BodyPolicy["mode"];
+  /** The days of "recent" (kept while another mode is chosen). */
+  days: number | null;
+  enabled: Tri;
+  idle: Tri;
+}
+
+/** The form's values for the folder's own rule. */
+export function policyDraftOf(policy: FolderSyncPolicy): PolicyDraft {
+  const rule = policy.rule;
+  return {
+    mode: rule?.bodies?.mode ?? "default",
+    days: rule?.bodies?.mode === "recent" ? rule.bodies.days : 30,
+    enabled: tri(rule?.enabled ?? null),
+    idle: tri(rule?.idle ?? null),
+  };
+}
+
+/** Problems that keep the draft from being saved. */
+export function policyDraftIssues(draft: PolicyDraft): LocalizedMessage[] {
+  return draft.mode === "recent" && (draft.days === null || draft.days < 1)
+    ? [{ id: "sync-error-days" }]
+    : [];
+}
+
+/** Writes the folder's rule; the policy query shows it when this resolves. */
+function useWritePolicy(policy: FolderSyncPolicy) {
   const client = useClient();
   const queryClient = useQueryClient();
-  const rule = policy.rule;
-  const [mode, setMode] = useState<"default" | BodyPolicy["mode"]>(rule?.bodies?.mode ?? "default");
-  const [days, setDays] = useState<number | null>(
-    rule?.bodies?.mode === "recent" ? rule.bodies.days : 30,
-  );
-  const [enabled, setEnabled] = useState<Tri>(tri(rule?.enabled ?? null));
-  const [idle, setIdle] = useState<Tri>(tri(rule?.idle ?? null));
-  const [problems, setProblems] = useState<LocalizedMessage[]>([]);
+  return async (draft: PolicyDraft) => {
+    let bodies: BodyPolicy | null = null;
+    if (draft.mode === "recent") bodies = { mode: "recent", days: draft.days ?? 1 };
+    else if (draft.mode !== "default") bodies = { mode: draft.mode };
+    const answer = await client.request(
+      {
+        type: "SetFolderSyncPolicy",
+        folder_id: policy.folder_id,
+        bodies,
+        enabled: fromTri(draft.enabled),
+        idle: fromTri(draft.idle),
+      },
+      "FolderSyncPolicy",
+    );
+    queryClient.setQueryData(syncKeys.policy(policy.folder_id), answer.policy);
+  };
+}
+
+function PolicyFields({
+  policy,
+  draft,
+  onChange,
+  problems,
+  saved,
+}: {
+  policy: FolderSyncPolicy;
+  draft: PolicyDraft;
+  onChange: (draft: PolicyDraft) => void;
+  problems: readonly LocalizedMessage[];
+  /** Show that the rule was written. */
+  saved: boolean;
+}) {
+  const t = useT();
   const triChoices = (id: string) =>
     TRI_CHOICES.map((v) => ({ value: v, label: `sync-${id}-${v}` }));
-
-  const save = async () => {
-    let bodies: BodyPolicy | null = null;
-    if (mode === "recent") {
-      if (days === null || days < 1) {
-        setProblems([{ id: "sync-error-days" }]);
-        return;
-      }
-      bodies = { mode: "recent", days };
-    } else if (mode !== "default") {
-      bodies = { mode };
-    }
-    setProblems([]);
-    try {
-      const answer = await client.request(
-        {
-          type: "SetFolderSyncPolicy",
-          folder_id: policy.folder_id,
-          bodies,
-          enabled: fromTri(enabled),
-          idle: fromTri(idle),
-        },
-        "FolderSyncPolicy",
-      );
-      queryClient.setQueryData(syncKeys.policy(policy.folder_id), answer.policy);
-      setSaved(true);
-    } catch (error) {
-      setProblems([errorMessageOf(error)]);
-    }
-  };
-
-  const changed = () => {
-    setSaved(false);
-  };
   return (
     <div data-part="sync-policy.form">
       <p data-part="sync-policy.current" role="status">
@@ -133,25 +146,23 @@ function PolicyForm({
           <SelectField
             labelId="sync-bodies-label"
             name="bodies"
-            value={mode}
+            value={draft.mode}
             choices={[
               { value: "default", label: "sync-bodies-default" },
               ...BODY_MODES.map((m) => ({ value: m, label: `sync-choice-${m}` })),
             ]}
             onChange={(value) => {
-              setMode(value as typeof mode);
-              changed();
+              onChange({ ...draft, mode: value as PolicyDraft["mode"] });
             }}
           />
-          {mode === "recent" && (
+          {draft.mode === "recent" && (
             <NumberField
               labelId="sync-days"
               name="days"
               min={1}
-              value={days}
-              onChange={(value) => {
-                setDays(value);
-                changed();
+              value={draft.days}
+              onChange={(days) => {
+                onChange({ ...draft, days });
               }}
             />
           )}
@@ -163,22 +174,20 @@ function PolicyForm({
       <SelectField
         labelId="sync-enabled-label"
         name="enabled"
-        value={enabled}
+        value={draft.enabled}
         choices={triChoices("enabled")}
         onChange={(value) => {
-          setEnabled(value as Tri);
-          changed();
+          onChange({ ...draft, enabled: value as Tri });
         }}
       />
       {policy.on_demand && (
         <SelectField
           labelId="sync-idle-label"
           name="idle"
-          value={idle}
+          value={draft.idle}
           choices={triChoices("idle")}
           onChange={(value) => {
-            setIdle(value as Tri);
-            changed();
+            onChange({ ...draft, idle: value as Tri });
           }}
         />
       )}
@@ -196,16 +205,117 @@ function PolicyForm({
           {t("common-saved-to-accounts")}
         </p>
       )}
-      <SaveRow part="sync-policy.actions" onSave={() => void save()} />
     </div>
   );
 }
 
-/** The sync settings of one folder. */
-export function FolderPolicyEditor({ folderId }: { folderId: FolderId }) {
+/** In Settings (R6, ADR 0239): the edits wait for the page's Save. */
+function SettingsPolicyForm({ policy }: { policy: FolderSyncPolicy }) {
+  const write = useWritePolicy(policy);
+  const [failure, setFailure] = useState<LocalizedMessage | null>(null);
+  const [saved, setSaved] = useState(false);
+  const form = useSettingsForm(policyDraftOf(policy), {
+    canSave: (draft) => policyDraftIssues(draft).length === 0,
+    save: write,
+    onSaved: () => {
+      setSaved(true);
+    },
+    onError: (error) => {
+      setFailure(errorMessageOf(error));
+    },
+  });
+  const issues = policyDraftIssues(form.value);
+  return (
+    <PolicyFields
+      policy={policy}
+      draft={form.value}
+      onChange={(draft) => {
+        form.set(draft);
+        setSaved(false);
+        setFailure(null);
+      }}
+      problems={failure === null ? issues : [...issues, failure]}
+      saved={saved && !form.dirty}
+    />
+  );
+}
+
+/** The `sync-folder` dialog's form: Save writes and closes, Cancel asks when changed. */
+function DialogPolicyForm({ policy, close }: { policy: FolderSyncPolicy; close: () => void }) {
+  const t = useT();
+  const ui = useUiStoreApi();
+  const guard = useGuardKey();
+  const write = useWritePolicy(policy);
+  const [initial] = useState(() => policyDraftOf(policy));
+  const [draft, setDraft] = useState(initial);
+  const [failure, setFailure] = useState<LocalizedMessage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const issues = policyDraftIssues(draft);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const save = async (): Promise<boolean> => {
+    if (issues.length > 0) return false;
+    setBusy(true);
+    setFailure(null);
+    try {
+      await write(draft);
+      return true;
+    } catch (error) {
+      setFailure(errorMessageOf(error));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  useCloseGuard({
+    name: () => policy.path,
+    isDirty: () => dirty,
+    save,
+    canSave: () => issues.length === 0,
+  });
+  return (
+    <DialogForm
+      part="sync-policy.dialog"
+      busy={busy}
+      onSubmit={() => {
+        void save().then((saved) => {
+          if (saved) closeWindowNow(ui, guard);
+        });
+      }}
+    >
+      <PolicyFields
+        policy={policy}
+        draft={draft}
+        onChange={(next) => {
+          setDraft(next);
+          setFailure(null);
+        }}
+        problems={failure === null ? issues : [...issues, failure]}
+        saved={false}
+      />
+      <DialogFooter
+        primary={{
+          label: t("common-save"),
+          submit: true,
+          action: "save-sync-policy",
+          disabled: issues.length > 0,
+        }}
+        cancel={{ onClick: close }}
+        busy={busy}
+      />
+    </DialogForm>
+  );
+}
+
+/** The sync settings of one folder: in Settings, or in the `sync-folder` dialog (`close`). */
+export function FolderPolicyEditor({
+  folderId,
+  close,
+}: {
+  folderId: FolderId;
+  close?: () => void;
+}) {
   const t = useT();
   const policy = usePolicy(folderId);
-  const [saved, setSaved] = useState(false);
   if (policy.isError) {
     const message = errorMessageOf(policy.error);
     return (
@@ -220,12 +330,11 @@ export function FolderPolicyEditor({ folderId }: { folderId: FolderId }) {
       data-part="sync-policy"
       aria-label={t("sync-policy-label", { path: policy.data.path })}
     >
-      <PolicyForm
-        key={JSON.stringify(policy.data.rule)}
-        policy={policy.data}
-        saved={saved}
-        setSaved={setSaved}
-      />
+      {close === undefined ? (
+        <SettingsPolicyForm policy={policy.data} />
+      ) : (
+        <DialogPolicyForm policy={policy.data} close={close} />
+      )}
     </section>
   );
 }
@@ -237,6 +346,7 @@ export function SyncPoliciesWidget({ node }: WidgetProps) {
   const config = useAccountsConfig();
   const accounts = config.data?.accounts ?? [];
   const [chosenAccount, setAccount] = useState<string | null>(null);
+  const leave = useLeaveDrafts();
   const accountId = chosenAccount ?? accounts[0]?.id ?? null;
   const folders = useFolders(accountId);
   const rows = flattenFolders(folders.data ?? []);
@@ -262,7 +372,12 @@ export function SyncPoliciesWidget({ node }: WidgetProps) {
             name="account"
             value={accountId ?? ""}
             onChange={(id, option) => {
-              if (option) setAccount(id);
+              // R6: another account asks first when this folder has unsaved changes.
+              if (option) {
+                leave(() => {
+                  setAccount(id);
+                });
+              }
             }}
           />
           <PickerField
@@ -273,7 +388,11 @@ export function SyncPoliciesWidget({ node }: WidgetProps) {
             folderValue="id"
             value={folderId ?? ""}
             onChange={(id, option) => {
-              if (option) setFolder(id);
+              if (option) {
+                leave(() => {
+                  setFolder(id);
+                });
+              }
             }}
           />
           {folderId !== null && <FolderPolicyEditor key={folderId} folderId={folderId} />}
@@ -284,11 +403,11 @@ export function SyncPoliciesWidget({ node }: WidgetProps) {
 }
 
 /** The dialog `sync-folder`: the folder the menu was opened on. */
-export function SyncFolderDialog() {
+export function SyncFolderDialog({ close }: DialogProps) {
   const t = useT();
   const folderId = useSync((s) => s.folderId);
   if (folderId === null) return <p data-part="sync-policy.empty">{t("sync-no-folder")}</p>;
-  return <FolderPolicyEditor key={folderId} folderId={folderId} />;
+  return <FolderPolicyEditor key={folderId} folderId={folderId} close={close} />;
 }
 
 /**

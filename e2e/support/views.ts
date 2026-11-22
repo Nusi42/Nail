@@ -5,6 +5,7 @@
  */
 import { expect, type Locator, type Page } from "@playwright/test";
 import { pickOption } from "./pickers";
+import { saveSettings } from "./settings";
 
 export type ViewName = "Mail" | "Calendar" | "Contacts" | "Tasks" | "Settings";
 
@@ -58,7 +59,7 @@ export async function saveVacationReply(
   await pickOption(vacation, "Account", new RegExp(`^${account} `));
   await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
   await vacation.getByRole("textbox", { name: "Message" }).fill(message);
-  await vacation.getByRole("button", { name: "Save", exact: true }).click();
+  await saveSettings(page);
 }
 
 /** In the open "Apply labels" dialog: checks `label` and saves (R6: Save closes). */
@@ -389,7 +390,7 @@ export async function syncAccount(
   await settings.getByRole("button", { name: new RegExp(`^${name}`) }).click();
   if (check !== undefined) await check(settings);
   await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
-  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await saveSettings(page);
   await expect(settings.getByText("Settings saved.")).toBeVisible();
   await showView(page, "Mail");
   const account = accountSectionNamed(page, name);

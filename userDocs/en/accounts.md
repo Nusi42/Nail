@@ -41,8 +41,12 @@ Open **Settings → Accounts** and choose **Add account** (or run **Add account*
    password, server not reachable, secure connection failed). Go **Back**
    to fix the settings, or **Add anyway** if you know the server is only
    unavailable right now.
-5. **Done.** **Go to the inbox** opens the new account. Nail downloads your
-   mail in the background.
+5. **Done.** **Done** opens the new account. Nail downloads your mail in
+   the background.
+
+Every step has **Cancel** (as have × and Esc). Once you typed your name or
+address, Nail asks before it throws the half-finished account away:
+**Discard changes** or **Keep editing**.
 
 ### Signing in with Google or Microsoft
 
@@ -116,8 +120,12 @@ content or passwords.
 - the password (leave **New password** empty to keep the current one);
 - its **identities**.
 
-**Remove account** deletes the account and its local copy of the mail from
-Nail. Nothing changes on the server.
+Your changes apply when you press **Save** in the bar at the bottom of the
+section (see [Settings](settings.md#saving-your-changes)); **Discard**
+puts the saved values back.
+
+**Remove account…** asks first, then deletes the account and its local
+copy of the mail from Nail. Nothing changes on the server.
 
 ### Identities
 

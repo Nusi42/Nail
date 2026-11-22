@@ -682,7 +682,7 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        SHELL_SKIN_CSS (ADR 0110); widgets/ Toolbar.tsx + toolbarModel.ts (measured overflow into More,
                        rank=1 primary), FolderTree.tsx + folderPaneState.ts (grouped pane), ListHeader.tsx + listFilter.ts,
                        proposalToolbars.ts (ADR 0111); features/settings = page widgets, model.ts, store.ts, builtins.ts,
-                       formerTabs.json (ADR 0112); features/pim CalendarList.tsx / PimMenu.tsx / CalendarDialogs.tsx /
+                       formerTabs.json (ADR 0112), draft.ts + confirm.tsx (R6 WD3, ADR 0240); features/pim CalendarList.tsx / PimMenu.tsx / CalendarDialogs.tsx /
                        PimSettings.tsx / colors.ts, skin PIM_SKIN_CSS (ADR 0113); M5b integration (ADR 0114):
                        customization/LayoutMigration.tsx (offers the new default to a pre-rail layout once, UI-state key
                        `customize.layout-offer`, merge dialog prefilled with defaults/layout.kdl via ?raw);
@@ -1681,3 +1681,14 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   merge wizard uses `DialogFooter`. PIM: `features/pim/Confirm.tsx` (`askPim`, the modal `pim-delete-event` /
   `-task` / `-group`, `pim-remove-source`), `useEditorGuard` and `EditorLoadError` in `pim/common.tsx`; scheduling's
   Cancel meeting is a `ConfirmDialog`. E2e `r6-wd2-dialogs.spec.ts`; `e2e/support/appearance.ts`.
+- WD3 settings and accounts (ADR 0240): every settings widget keeps its edits in `useSettingsForm`
+  (`ui/src/features/settings/draft.ts`: value / set / dirty / discard / revision over the saved value, registered with
+  `useSettingsDraft`; `useLeaveDrafts` asks before another item inside a section; `useSettingsGuard` is the page's
+  close guard). Questions of the sections: `askSettingsQuestion` + `SettingsConfirmDialog`
+  (`features/settings/confirm.tsx`), one confirmation window kind per question (`remove-account`,
+  `delete-virtual-account`, `reset-junk-filter`, `revoke-mcp-client`, `switch-vault-encryption`, `delete-key`,
+  `remote-confirm` for `features/remote/fields.tsx` `ConfirmButton`). `widgets/AccountSetup.tsx`: `DialogFooter` on
+  every step, Done on the result, `useCloseGuard` once something was typed. `features/sync/Sync.tsx`: the settings
+  form is a draft, the `sync-folder` dialog a `DialogForm` with Save / Cancel and a guard. Vitest host
+  `features/settings/testing.tsx` (`renderSettings`, `saveSettings`, `confirmSettingsQuestion`); e2e
+  `e2e/support/settings.ts` (`saveSettings`, `answerQuestion`) and `r6-wd3-settings.spec.ts`.

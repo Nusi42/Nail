@@ -35,7 +35,9 @@ computers on the network cannot reach it.
 3. Nail shows the client's **token once**. Copy it now: Nail only keeps a
    fingerprint of the token and cannot show it again. If you lose it,
    revoke the client and create a new one.
-4. Choose what the client may read and change (see below) and **Save access**.
+4. Choose what the client may read and change (see below) and press
+   **Save** in the bar at the bottom of the section. Nothing is granted
+   before that. **Revoke…** asks before it stops the client's token.
 5. Configure the agent with the token (see "Configuring your agent").
 
 ## Permissions

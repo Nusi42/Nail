@@ -16,7 +16,8 @@ import { currentTargets, messageTarget, type ActionTargets } from "../../actions
 import type { ActionContext } from "../../actions/registry";
 import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
-import { JunkSettingsWidget, JunkVerdictBar } from "./Junk";
+import { JUNK_RESET_DIALOG, JunkSettingsWidget, JunkVerdictBar } from "./Junk";
+import { SettingsConfirmDialog } from "../settings/confirm";
 import { NotificationSettingsWidget, WebNotifications } from "./Notifications";
 import { invalidateJunk, markJunkTargets, triageKeys } from "./queries";
 import { SNOOZED_WINDOW, SNOOZE_DIALOG, SnoozeDialog, SnoozeList, SnoozedDialog } from "./Snooze";
@@ -99,6 +100,7 @@ export const actions: Feature["actions"] = {
 export const dialogs: NonNullable<Feature["dialogs"]> = {
   [SNOOZE_DIALOG]: SnoozeDialog,
   [SNOOZED_WINDOW]: SnoozedDialog,
+  [JUNK_RESET_DIALOG]: SettingsConfirmDialog,
 };
 
 /**
@@ -108,6 +110,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
  */
 export const windows: NonNullable<Feature["windows"]> = {
   [SNOOZE_DIALOG]: { size: { width: 440, height: 480 }, min_size: { width: 360, height: 380 } },
+  [JUNK_RESET_DIALOG]: { confirmation: true },
 };
 
 /** Keeps junk status, snoozed list and notification settings current. */

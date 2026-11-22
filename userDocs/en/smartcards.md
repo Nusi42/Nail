@@ -21,7 +21,7 @@ available in the browser when you use Nail remotely.
 
 ## Setting it up
 
-1. In **Settings → Keys & encryption**, add the PKCS#11 module with its full path (**Add module**; in the desktop app **Browse…** opens the file dialog) and **Save**.
+1. In **Settings → Keys & encryption**, add the PKCS#11 module with its full path (**Add module**; in the desktop app **Browse…** opens the file dialog) and press **Save** in the bar at the bottom of the section.
    Nail shows the modules it could not load and why.
 2. Insert the card. Nail lists the card with its keys and certificates:
    the algorithm, what each key may do (sign, decrypt) and, for

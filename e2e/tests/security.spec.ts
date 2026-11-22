@@ -17,6 +17,7 @@ import {
   messageRow,
 } from "../support/views";
 import { newMessage, sendMessage, smtpMessageMatching } from "../support/compose";
+import { answerQuestion, saveSettings } from "../support/settings";
 
 /**
  * End-to-end encryption and data protection (M2a, ADR 0034) against the
@@ -295,7 +296,7 @@ test("sender checks count only for a receiving server the user configured", asyn
   });
   await expect(servers).toHaveValue("mx.nail.example");
   await servers.fill("");
-  await settings.getByRole("button", { name: "Save" }).click();
+  await saveSettings(page);
   await expect(settings.getByText("Settings saved.")).toBeVisible();
   // One message is not enough to suggest a server.
   await settings.getByRole("button", { name: "Suggest from recent mail" }).click();
@@ -330,7 +331,7 @@ test("sender checks count only for a receiving server the user configured", asyn
   await settings
     .getByRole("textbox", { name: "Trusted receiving servers (authserv-id)" })
     .fill("mx.nail.example");
-  await settings.getByRole("button", { name: "Save" }).click();
+  await saveSettings(page);
   await expect(settings.getByText("Settings saved.")).toBeVisible();
   // Back to Mail first: the app reopens the last view after a reload.
   await showView(page, "Mail");
@@ -359,7 +360,7 @@ test("encryption at rest can be switched on and off with the data intact", async
   const state = settings.locator('[data-part="security-vault.state"]');
   await expect(state).toHaveAttribute("data-state", "plain");
   await settings.getByRole("button", { name: "Turn on encryption at rest" }).click();
-  await settings.getByRole("button", { name: "Encrypt now" }).click();
+  await answerQuestion(page, "Encrypt now");
   await expect(state).toHaveAttribute("data-state", "encrypted", { timeout: 30_000 });
   // Everything still reads and searches.
   await expectReleaseNotes(page);
@@ -374,7 +375,7 @@ test("encryption at rest can be switched on and off with the data intact", async
   await showView(page, "Settings");
   await openSettingsTab(page, "Data protection");
   await settings.getByRole("button", { name: "Turn off" }).click();
-  await settings.getByRole("button", { name: "Turn off and decrypt" }).click();
+  await answerQuestion(page, "Turn off and decrypt");
   await expect(state).toHaveAttribute("data-state", "plain", { timeout: 30_000 });
   await expectReleaseNotes(page);
 });

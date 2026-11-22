@@ -21,6 +21,7 @@ import { closePinPrompt, simulateLostVaultKey, simulatePinRequest } from "./vaul
 import { must } from "../../test/must";
 import { stubPrintEachTest } from "../../test/env";
 import { PKCS11_MODULE } from "../../test/mockIds";
+import { renderSettings } from "../settings/testing";
 
 function listen(env: Env): () => void {
   return env.client.subscribe((event) => {
@@ -249,7 +250,8 @@ describe("smartcards", () => {
     env.transport.data.features.portability.pickAnswers = [PKCS11_MODULE];
     const stop = listen(env);
     const user = userEvent.setup({ delay: null });
-    const { container } = render(env, <NodeView node={widget("security-smartcards")} path="t" />);
+    // R6: the settings page's bar saves (its Save is the only one).
+    const { container } = renderSettings(env, "security-smartcards");
     expect(await screen.findByText("No module yet.")).toBeVisible();
     await user.type(screen.getByLabelText("Module (DLL)"), "opensc.dll");
     await user.click(screen.getByRole("button", { name: "Add module" }));

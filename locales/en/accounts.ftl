@@ -71,7 +71,6 @@ setup-test-failed = Nail could not connect to every server. Go back to fix the s
 setup-save = { common-add-account }
 setup-save-anyway = Add anyway
 setup-done = “{ $name }” was added. Nail is now downloading your mail.
-setup-finish = Go to the inbox
 
 ## Account settings
 
@@ -103,7 +102,10 @@ settings-authserv-suggested = Nail filled in the server named in most of your re
 settings-authserv-none = Your recent mail names no receiving server Nail could suggest.
 settings-saved = { common-settings-saved }
 settings-remove = Remove account
-settings-remove-confirm = Remove “{ $name }”? Its local mail is deleted; nothing changes on the server.
+settings-remove-account = Remove account…
+settings-remove-question = Remove the account “{ $name }”?
+settings-remove-detail = Its local mail is deleted; nothing changes on the server.
+window-remove-account = { settings-remove }
 settings-removed = Account removed.
 settings-error-email = The account needs a valid email address.
 settings-error-host = Every server needs a host name.
@@ -142,10 +144,11 @@ virtual-rule-pattern-hint = For example *@client.com or *@*.client.com
 virtual-rule-identity = Send as
 virtual-add-rule = Add rule
 virtual-remove-rule = Remove rule
-virtual-create = { common-create }
-virtual-save = { common-save }
 virtual-saved = Virtual account saved.
 virtual-delete = Delete virtual account
+virtual-delete-account = Delete virtual account…
+virtual-delete-question = Delete the virtual account “{ $name }”?
+window-delete-virtual-account = { virtual-delete }
 virtual-removed = Virtual account deleted.
 virtual-error-name = Give the virtual account a name.
 virtual-error-members = { common-choose-account }

@@ -137,7 +137,7 @@ async function finishSetup(page: Page, dialog: Locator) {
   });
   await dialog.getByRole("button", { name: "Add account" }).click();
   await expect(dialog.getByText(/“Ada” was added/)).toBeVisible();
-  await dialog.getByRole("button", { name: "Go to the inbox" }).click();
+  await dialog.getByRole("button", { name: "Done" }).click();
   await expect(dialog).toBeHidden();
 }
 

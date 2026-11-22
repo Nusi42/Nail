@@ -11,6 +11,7 @@ import { ActionsProvider } from "../../actions/ActionsProvider";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { useComposeContext } from "../../state/hooks";
 import { createEnv, onPlatform, renderWithProviders, widget, type Env } from "../../test/harness";
+import { discardSettings, renderSettings, saveBar, saveSettingsDone } from "../settings/testing";
 import { richStoreFor } from "../composer/store";
 import { appRegistry } from "../registry";
 import { remoteStore } from "../remote";
@@ -143,19 +144,18 @@ describe("update-settings widget", () => {
     expect(container.querySelector("script")).toBeNull();
   });
 
-  it("saves the automatic options; there is no channel to choose", async () => {
+  it("saves the automatic options with the page's Save; there is no channel to choose", async () => {
     const env = createEnv();
     const user = userEvent.setup();
-    renderWithProviders(<NodeView node={widget("update-settings")} path="t/0" />, env);
+    renderSettings(env, "update-settings");
     await user.click(await screen.findByRole("checkbox", { name: /Check for updates/ }));
-    await waitFor(() => {
-      expect(env.transport.data.features.system.updateSettings.auto_check).toBe(false);
-    });
     await user.click(screen.getByRole("checkbox", { name: /Download updates/ }));
-    await waitFor(() => {
-      expect(env.transport.data.features.system.updateSettings.auto_download).toBe(false);
-    });
-    expect(sent(env, "SetUpdateSettings")).toHaveLength(2);
+    // R6: nothing is written before Save; one write for both.
+    expect(sent(env, "SetUpdateSettings")).toEqual([]);
+    await saveSettingsDone(user);
+    expect(env.transport.data.features.system.updateSettings.auto_check).toBe(false);
+    expect(env.transport.data.features.system.updateSettings.auto_download).toBe(false);
+    expect(sent(env, "SetUpdateSettings")).toHaveLength(1);
     expect(sent(env, "SetUpdateSettings").at(-1)).toEqual({
       type: "SetUpdateSettings",
       settings: { auto_check: false, auto_download: false },
@@ -274,23 +274,35 @@ describe("desktop-settings widget", () => {
   it("saves tray and startup settings and shows the dev endpoint", async () => {
     const env = createEnv();
     const user = userEvent.setup();
-    renderWithProviders(<NodeView node={widget("desktop-settings")} path="t/0" />, env);
+    renderSettings(env, "desktop-settings");
     const tray = await screen.findByRole("checkbox", { name: /notification area$/ });
     expect(tray).toBeChecked();
-    const hidden = screen.getByRole("checkbox", { name: /without a window/ });
+    const hidden = await screen.findByRole("checkbox", { name: /without a window/ });
     expect(hidden).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: "Start Nail with Windows" }));
-    await waitFor(() => {
-      expect(env.transport.data.features.system.desktopSettings.start_with_windows).toBe(true);
-    });
-    await waitFor(() => expect(hidden).toBeEnabled());
+    // The draft follows at once; the core only on Save.
+    expect(hidden).toBeEnabled();
     await user.click(tray);
-    await waitFor(() => {
-      expect(env.transport.data.features.system.desktopSettings.close_to_tray).toBe(false);
-    });
     await user.click(screen.getByRole("checkbox", { name: /nail plugin dev/ }));
+    expect(sent(env, "SetDesktopSettings")).toEqual([]);
+    await saveSettingsDone(user);
+    expect(env.transport.data.features.system.desktopSettings.start_with_windows).toBe(true);
+    expect(env.transport.data.features.system.desktopSettings.close_to_tray).toBe(false);
     expect(await screen.findByText("Listening on http://127.0.0.1:47811/")).toBeVisible();
-    expect(sent(env, "SetDesktopSettings")).toHaveLength(3);
+    expect(sent(env, "SetDesktopSettings")).toHaveLength(1);
+  });
+
+  it("discards unsaved desktop settings", async () => {
+    const env = createEnv();
+    const user = userEvent.setup();
+    renderSettings(env, "desktop-settings");
+    const tray = await screen.findByRole("checkbox", { name: /notification area$/ });
+    await user.click(tray);
+    expect(tray).not.toBeChecked();
+    await discardSettings(user);
+    expect(tray).toBeChecked();
+    expect(saveBar()).toBeNull();
+    expect(sent(env, "SetDesktopSettings")).toEqual([]);
   });
 
   it("hides the developer switch with show-dev-endpoint=#false", async () => {

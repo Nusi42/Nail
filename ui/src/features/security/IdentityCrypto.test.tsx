@@ -2,11 +2,12 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import type { Identity } from "../../api/generated";
-import { createEnv, renderNode, renderWithProviders, widget } from "../../test/harness";
+import { createEnv, renderWithProviders } from "../../test/harness";
 import { IdentityCryptoFields, identityText } from "./IdentityCrypto";
 import { makeKey } from "./mockSeed";
 import { must } from "../../test/must";
 import { requestsOf } from "../../test/env";
+import { renderSettings, saveBar, saveSettings, saveSettingsDone } from "../settings/testing";
 
 describe("identity crypto fields", () => {
   const identity: Identity = {
@@ -132,10 +133,9 @@ describe("security-identities widget", () => {
   it("saves one account's identities through UpdateAccount", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderNode(widget("security-identities"), env);
+    renderSettings(env, "security-identities");
     const work = await screen.findByRole("region", { name: "Work" });
-    const save = within(work).getByRole("button", { name: "Save Work" });
-    expect(save).toBeDisabled();
+    expect(saveBar()).toBeNull();
     const group = within(work).getByRole("group", { name: /ada@work.example/ });
     await user.click(within(group).getByRole("checkbox", { name: "Sign new messages" }));
     await waitFor(() => {
@@ -145,21 +145,14 @@ describe("security-identities widget", () => {
         ),
       ).toHaveLength(2);
     });
-    expect(save).toBeEnabled();
-    await user.click(save);
+    expect(requestsOf(env, "UpdateAccount")).toEqual([]);
+    await saveSettingsDone(user);
     expect(await within(work).findByRole("status")).toHaveTextContent("Saved.");
     const update = requestsOf(env, "UpdateAccount")[0];
     expect(update?.config.id).toBe("acc-work");
     expect(update?.secrets).toEqual([]);
     expect(update?.config.identities[0]?.crypto).toMatchObject({ sign: true, encrypt: false });
     expect(env.transport.data.accountsConfig.accounts[1]?.identities[0]?.crypto?.sign).toBe(true);
-    await waitFor(() =>
-      expect(
-        within(screen.getByRole("region", { name: "Work" })).getByRole("button", {
-          name: "Save Work",
-        }),
-      ).toBeDisabled(),
-    );
     // Other accounts are untouched.
     expect(requestsOf(env, "UpdateAccount")).toHaveLength(1);
   });
@@ -167,14 +160,15 @@ describe("security-identities widget", () => {
   it("shows save errors", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderNode(widget("security-identities"), env);
+    renderSettings(env, "security-identities");
     const personal = await screen.findByRole("region", { name: "Personal" });
     const group = must(within(personal).getAllByRole("group")[0]);
     await user.click(within(group).getByRole("checkbox", { name: "Sign new messages" }));
     env.transport.data.accountsConfig.accounts = env.transport.data.accountsConfig.accounts.filter(
       (a) => a.id !== "acc-personal",
     );
-    await user.click(within(personal).getByRole("button", { name: "Save Personal" }));
+    await saveSettings(user);
     expect(await within(personal).findByRole("alert")).toBeInTheDocument();
+    expect(saveBar()).not.toBeNull();
   });
 });

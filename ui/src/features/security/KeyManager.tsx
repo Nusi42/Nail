@@ -4,6 +4,7 @@
  * trust editing, import / export, generation, online lookup and the
  * Windows certificate store.
  */
+import { useLeaveDrafts } from "../settings/draft";
 import { useState } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { CryptoKey, CryptoTechnology, KeyId } from "../../api/generated";
@@ -77,6 +78,7 @@ export function KeyManager({ node }: WidgetProps) {
   const [ownOnly, setOwnOnly] = useState(false);
   const [tool, setTool] = useState<KeyTool | null>(null);
   const [selected, setSelected] = useState<KeyId | null>(null);
+  const leave = useLeaveDrafts();
   const keys = useKeys({
     technology: technology === "" ? null : technology,
     text: text.trim() === "" ? null : text.trim(),
@@ -167,7 +169,11 @@ export function KeyManager({ node }: WidgetProps) {
               keyInfo={k}
               active={k.id === current?.id}
               onSelect={() => {
-                setSelected(k.id);
+                if (k.id === current?.id) return;
+                // R6: another key asks first when this one's trust has unsaved changes.
+                leave(() => {
+                  setSelected(k.id);
+                });
               }}
             />
           ))}

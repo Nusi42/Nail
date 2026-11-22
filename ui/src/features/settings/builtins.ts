@@ -6,6 +6,11 @@
  */
 import type { SettingsWidgetInfo } from "../../layout/settingsIndex";
 
+/** The confirmation window of "Remove account…" (account settings). */
+export const ACCOUNT_REMOVE_DIALOG = "remove-account";
+/** The confirmation window of "Delete virtual account…" (virtual accounts). */
+export const VIRTUAL_ACCOUNT_DELETE_DIALOG = "delete-virtual-account";
+
 export const BUILTIN_SETTINGS: Readonly<Record<string, SettingsWidgetInfo>> = {
   "account-settings": {
     labels: [
@@ -41,7 +46,7 @@ export const BUILTIN_SETTINGS: Readonly<Record<string, SettingsWidgetInfo>> = {
       "identity-signature",
       "settings-sender-checks",
       "settings-authserv-ids",
-      "settings-remove",
+      "settings-remove-account",
     ],
     keywords: "settings-keywords-account-settings",
   },

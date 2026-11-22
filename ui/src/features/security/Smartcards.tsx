@@ -31,6 +31,7 @@ import { securityKeys } from "./queries";
 import { MAX_PIN_CACHE_MINUTES, smartcardSettingsIssue } from "./smartcardModel";
 import { hasText } from "../../text/empty";
 import { useBusyAction } from "../../state/busyAction";
+import { useSettingsForm } from "../settings/draft";
 
 export const SMARTCARDS_WIDGET = "security-smartcards";
 
@@ -101,24 +102,29 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
   const client = useClient();
   const queryClient = useQueryClient();
   const id = useId();
-  const [draft, setDraft] = useState(settings);
   const [newPath, setNewPath] = useState("");
-  const { busy, problem, run } = useBusyAction();
+  const { problem, run } = useBusyAction();
   const [saved, setSaved] = useState(false);
-  const issue = smartcardSettingsIssue(draft);
-  const changed = JSON.stringify(draft) !== JSON.stringify(settings);
-
-  const save = async () => {
-    await run(async () => {
-      const answer = await client.request(
-        { type: "SetSmartcardSettings", settings: draft },
-        "SmartcardSettings",
-      );
-      queryClient.setQueryData(smartcardKeys.settings, answer.settings);
-      void queryClient.invalidateQueries({ queryKey: smartcardKeys.tokens });
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm(settings, {
+    canSave: (value) => smartcardSettingsIssue(value) === null,
+    save: (value) =>
+      run(async () => {
+        const answer = await client.request(
+          { type: "SetSmartcardSettings", settings: value },
+          "SmartcardSettings",
+        );
+        queryClient.setQueryData(smartcardKeys.settings, answer.settings);
+        void queryClient.invalidateQueries({ queryKey: smartcardKeys.tokens });
+      }),
+    onSaved: () => {
       setSaved(true);
-    });
-  };
+    },
+  });
+  const draft = form.value;
+  const setDraft = form.set;
+  const issue = smartcardSettingsIssue(draft);
+  const changed = form.dirty;
 
   const add = () => {
     const path = newPath.trim();
@@ -212,16 +218,6 @@ function SettingsForm({ settings }: { settings: SmartcardSettings }) {
           {t("common-saved")}
         </p>
       )}
-      <button
-        type="button"
-        data-part="form.button"
-        data-variant="primary"
-        data-action="save-smartcards"
-        disabled={busy || !changed || issue !== null}
-        onClick={() => void save()}
-      >
-        {t("common-save")}
-      </button>
     </section>
   );
 }
@@ -368,7 +364,7 @@ export function SmartcardsWidget() {
       <h3 data-part="form.section.title">{t("security-smartcard-title")}</h3>
       <p data-part="form.hint">{t("security-smartcard-intro")}</p>
       {/* New settings from the core start a fresh form. */}
-      <SettingsForm key={JSON.stringify(settings.data)} settings={settings.data} />
+      <SettingsForm settings={settings.data} />
       <section data-part="form.section" aria-label={t("security-smartcard-cards")}>
         <h4 data-part="form.section.title">{t("security-smartcard-cards")}</h4>
         {!enabled ? (

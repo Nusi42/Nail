@@ -6,7 +6,7 @@
  */
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ActionContext } from "../../actions/registry";
+import { actionContext } from "../../test/env";
 import { promptWindowFor, MAIN_GUARD } from "../../layout/closeGuard";
 import { withCloseGuard } from "../../test/closeGuard";
 import { NodeView } from "../../layout/LayoutRenderer";
@@ -103,14 +103,7 @@ describe("settings save bar (R6)", () => {
   it("saves from the prompt, and a deep link asks too", async () => {
     const user = userEvent.setup();
     const env = await setup();
-    const ctx: ActionContext = {
-      client: env.client,
-      store: env.store,
-      queryClient: env.queryClient,
-      layout: env.transport.data.layout,
-      t: (id) => id,
-      locale: "en",
-    };
+    const ctx = actionContext(env);
     const target = env.transport.data.layout.settings.at(-1)?.sections.at(-1)?.id ?? "";
     await act(() => actions["settings.section"]?.run(ctx, [target]));
     const question = await screen.findByRole("dialog", { name: "Unsaved changes" });
@@ -121,6 +114,17 @@ describe("settings save bar (R6)", () => {
     expect(draft.save).toHaveBeenCalledOnce();
     const state = await env.client.call({ type: "GetUiState" });
     expect(state.type === "UiState" && state.state[UI_STATE_SETTINGS_SECTION]).toBe(target);
+  });
+
+  it("does not ask for a deep link into the section already shown", async () => {
+    const env = await setup();
+    const ctx = actionContext(env);
+    const shown = shownSection() ?? "";
+    await act(() => actions["settings.section"]?.run(ctx, [shown]));
+    expect(env.store.getState().windows).toEqual([]);
+    expect(shownSection()).toBe(shown);
+    expect(draft.discard).not.toHaveBeenCalled();
+    await settleQueries(env);
   });
 
   it("moves on at once without unsaved changes", async () => {

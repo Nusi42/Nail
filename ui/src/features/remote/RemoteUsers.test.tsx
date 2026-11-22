@@ -9,6 +9,7 @@ import { PAIR_DIALOG, PairDeviceDialog } from "./PairDevice";
 import { remoteStore } from "./state";
 import { createAda } from "./testUtil";
 import { requestsOf, wireEvents } from "../../test/env";
+import { confirmSettingsQuestion, renderSettings, saveSettingsDone } from "../settings/testing";
 
 afterEach(() => {
   // Unmount before resetting the feature's module-level stores.
@@ -65,7 +66,7 @@ describe("remote-users", () => {
       last_used_at: null,
       device_id: null,
     });
-    renderNode(widget("remote-users"), env);
+    renderSettings(env, "remote-users");
     const detail = await screen.findByRole("region", { name: "User ada" });
 
     // Password: too short, mismatch, then saved.
@@ -112,7 +113,7 @@ describe("remote-users", () => {
     await user.keyboard("Pixel{Enter}");
     expect(await within(keys).findByText("Pixel")).toBeInTheDocument();
     await user.click(within(keys).getByRole("button", { name: "Delete" }));
-    await user.click(within(keys).getByRole("button", { name: "Delete passkey" }));
+    await confirmSettingsQuestion(user, "Delete passkey");
     expect(await within(detail).findByText(/No passkeys/)).toBeInTheDocument();
   });
 
@@ -123,7 +124,7 @@ describe("remote-users", () => {
     await createAda(env.transport);
     const stored = env.transport.data.features.remote.users[0];
     if (stored) stored.locked_until = new Date(Date.now() + 600_000).toISOString();
-    renderNode(widget("remote-users"), env);
+    renderSettings(env, "remote-users");
     const detail = await screen.findByRole("region", { name: "User ada" });
     expect(within(detail).getByRole("alert")).toHaveTextContent(/locked until/);
     await user.click(within(detail).getByRole("button", { name: "Unlock now" }));
@@ -134,7 +135,7 @@ describe("remote-users", () => {
     expect(await within(detail).findByRole("button", { name: "Enable user" })).toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: "Pair a device" })).toBeDisabled();
     await user.click(within(detail).getByRole("button", { name: "Delete user" }));
-    await user.click(within(detail).getByRole("button", { name: "Delete user" }));
+    await confirmSettingsQuestion(user, "Delete user");
     expect(await screen.findByText("No remote users yet.")).toBeInTheDocument();
   });
 
@@ -143,13 +144,15 @@ describe("remote-users", () => {
     const env = createEnv();
     wireEvents(env, handleRemoteEvent);
     await createAda(env.transport);
-    renderNode(widget("remote-users"), env);
+    renderSettings(env, "remote-users");
     const detail = await screen.findByRole("region", { name: "User ada" });
     const access = within(detail).getByRole("combobox", { name: "Access" });
     expect(access).toHaveValue("full");
     await user.selectOptions(access, "no-send");
     await user.click(within(detail).getByRole("checkbox", { name: /Administration/ }));
-    await user.click(within(detail).getByRole("button", { name: "Save access" }));
+    // R6: written only by the page's Save.
+    expect(requestsOf(env, "UpdateRemoteUser")).toEqual([]);
+    await saveSettingsDone(user);
     await waitFor(() => {
       expect(env.transport.data.features.remote.users[0]?.grant).toEqual(presetGrant("no-send"));
     });

@@ -5,12 +5,13 @@
  * denied.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type SubmitEvent } from "react";
+import { useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import type { LocalizedMessage, McpClient, McpRateLimits } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useClient } from "../../state/queries";
 import { CheckField, NumberField } from "../../widgets/forms";
+import { useSettingsForm } from "../settings/draft";
 import { DEFAULT_RATE_LIMITS, MAX_RATE_LIMIT, mcpKeys, rateLimitIssues } from "./queries";
 
 /** The limits in display order. */
@@ -70,44 +71,41 @@ function LimitField({
   );
 }
 
-/** The rate limit editor of `client`. */
+/** The rate limit editor of `client`; R6 (ADR 0239): the edits wait for the settings page's Save. */
 export function RateLimitsEditor({ client }: { client: McpClient }) {
   const t = useT();
   const nail = useClient();
   const queryClient = useQueryClient();
-  const [limits, setLimits] = useState<McpRateLimits>(client.rate_limits);
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ message: LocalizedMessage; error: boolean } | null>(null);
-  const revoked = client.revoked_at !== null;
-  const disabled = revoked || busy;
-  const issues = rateLimitIssues(limits);
-  const dirty = JSON.stringify(limits) !== JSON.stringify(client.rate_limits);
-
-  const save = async (event: SubmitEvent) => {
-    event.preventDefault();
-    if (disabled || issues.length > 0) return;
-    setBusy(true);
-    setNotice(null);
-    try {
+  const form = useSettingsForm<McpRateLimits>(client.rate_limits, {
+    canSave: (limits) => rateLimitIssues(limits).length === 0,
+    save: async (limits) => {
       await nail.request(
         { type: "UpdateMcpRateLimits", client_id: client.id, limits },
         "McpClientSaved",
       );
       await queryClient.invalidateQueries({ queryKey: mcpKeys.clients });
+    },
+    onSaved: () => {
       setNotice({ message: { id: "mcp-rate-saved" }, error: false });
-    } catch (e) {
+    },
+    onError: (e) => {
       setNotice({ message: errorMessageOf(e), error: true });
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+  });
+  const limits = form.value;
+  const revoked = client.revoked_at !== null;
+  const disabled = revoked;
+  const issues = rateLimitIssues(limits);
 
   return (
     <form
       data-part="mcp-rate-limits"
       aria-label={t("mcp-rate-label", { name: client.name })}
       noValidate
-      onSubmit={(e) => void save(e)}
+      onSubmit={(e) => {
+        e.preventDefault();
+      }}
     >
       <fieldset data-part="mcp-rate-limits.fields" disabled={disabled}>
         <legend data-part="mcp-rate-limits.title">{t("mcp-rate-title")}</legend>
@@ -119,7 +117,7 @@ export function RateLimitsEditor({ client }: { client: McpClient }) {
             value={limits[key]}
             disabled={disabled}
             onChange={(value) => {
-              setLimits({ ...limits, [key]: value });
+              form.set((current) => ({ ...current, [key]: value }));
               setNotice(null);
             }}
           />
@@ -132,21 +130,13 @@ export function RateLimitsEditor({ client }: { client: McpClient }) {
       ))}
       <div data-part="mcp-rate-limits.actions">
         <button
-          type="submit"
-          data-part="form.button"
-          data-action="save-rate-limits"
-          data-variant="primary"
-          disabled={disabled || !dirty || issues.length > 0}
-        >
-          {t("mcp-rate-save")}
-        </button>
-        <button
           type="button"
           data-part="form.button"
           data-action="reset-rate-limits"
           disabled={disabled || JSON.stringify(limits) === JSON.stringify(DEFAULT_RATE_LIMITS)}
           onClick={() => {
-            setLimits({ ...DEFAULT_RATE_LIMITS });
+            form.set({ ...DEFAULT_RATE_LIMITS });
+            setNotice(null);
           }}
         >
           {t("mcp-rate-defaults")}

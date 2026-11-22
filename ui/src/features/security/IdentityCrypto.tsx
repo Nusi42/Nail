@@ -7,6 +7,7 @@
  * edits every identity of every account on its own.
  */
 import { useQueryClient } from "@tanstack/react-query";
+import { useSettingsForm } from "../settings/draft";
 import { useState } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type {
@@ -165,32 +166,34 @@ function AccountCrypto({ account, ownKeys }: { account: AccountConfig; ownKeys: 
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<AccountConfig>(account);
-  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ id: string; error: boolean } | null>(null);
-  const dirty = JSON.stringify(draft.identities) !== JSON.stringify(account.identities);
-
-  const save = async () => {
-    setBusy(true);
-    setMessage(null);
-    try {
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm<AccountConfig>(account, {
+    equal: (a, b) => JSON.stringify(a.identities) === JSON.stringify(b.identities),
+    save: async (draft) => {
+      setMessage(null);
       // Only the identities' crypto changes; everything else is sent as loaded.
-      const { config } = await client.request(
-        { type: "UpdateAccount", config: draft, secrets: [] },
+      await client.request(
+        {
+          type: "UpdateAccount",
+          config: { ...account, identities: draft.identities },
+          secrets: [],
+        },
         "AccountSaved",
       );
-      setDraft(config);
-      setMessage({ id: "security-identities-saved", error: false });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.accountsConfig }),
         queryClient.invalidateQueries({ queryKey: queryKeys.allIdentities }),
       ]);
-    } catch (e) {
+    },
+    onSaved: () => {
+      setMessage({ id: "security-identities-saved", error: false });
+    },
+    onError: (e) => {
       setMessage({ id: errorMessageIdOf(e), error: true });
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+  });
+  const draft = form.value;
 
   return (
     <section
@@ -205,25 +208,16 @@ function AccountCrypto({ account, ownKeys }: { account: AccountConfig; ownKeys: 
           identity={identity}
           ownKeys={ownKeys}
           onChange={(crypto) => {
-            setDraft({
-              ...draft,
-              identities: draft.identities.map((old, i) =>
+            form.set((current) => ({
+              ...current,
+              identities: current.identities.map((old, i) =>
                 i === index ? { ...old, crypto } : old,
               ),
-            });
+            }));
+            setMessage(null);
           }}
         />
       ))}
-      <button
-        type="button"
-        data-part="form.button"
-        data-variant="primary"
-        data-action="save-identities"
-        disabled={busy || !dirty}
-        onClick={() => void save()}
-      >
-        {t("security-identities-save", { account: account.name })}
-      </button>
       {message && (
         <p
           data-part="security-identities.message"
@@ -260,11 +254,7 @@ export function IdentityCryptoSettings({ node }: WidgetProps) {
         <p data-part="security-identities.empty">{t("security-identities-empty")}</p>
       )}
       {accounts.map((account) => (
-        <AccountCrypto
-          key={`${account.id}:${JSON.stringify(account.identities.map((i) => i.crypto ?? null))}`}
-          account={account}
-          ownKeys={keys.data ?? []}
-        />
+        <AccountCrypto key={account.id} account={account} ownKeys={keys.data ?? []} />
       ))}
     </section>
   );

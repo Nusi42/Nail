@@ -309,6 +309,15 @@ Where shared things live (Q2, ADRs 0172–0177):
   `TagDialogFooter`) are in `ui/src/widgets/DialogStates.tsx` (ADR 0240);
   demo-multi's work folders in e2e: `workFolderRow` / `folderMenuItem`
   (`e2e/support/views.ts`).
+- Settings widgets (ADR 0240) keep their edits in `useSettingsForm`
+  (`ui/src/features/settings/draft.ts`; `useLeaveDrafts` before another
+  item of a section) and ask with `askSettingsQuestion`
+  (`features/settings/confirm.tsx`). Vitest renders them with
+  `renderSettings` and presses the bar with `saveSettings` /
+  `saveSettingsDone` (`features/settings/testing.tsx`); e2e specs press it
+  with `saveSettings(page)` and answer a question with
+  `answerQuestion(page, verb)` (`e2e/support/settings.ts`); a theme is
+  picked and saved with `pickTheme` (`e2e/support/appearance.ts`).
 
 `npm run check` (`scripts/check.mjs`) runs all of them and prints a summary;
 `node scripts/check.mjs --list` shows the steps, `--only a,b` / `--skip a,b`

@@ -8,6 +8,7 @@
 ## Shared
 
 window-remote-pair = { remote-action-pair }
+window-remote-confirm = { settings-section-remote }
 remote-fingerprint-label = Certificate fingerprint (SHA-256)
 
 ## Login page (browser)

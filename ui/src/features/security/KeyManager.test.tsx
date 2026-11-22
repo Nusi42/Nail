@@ -1,13 +1,19 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createEnv, onPlatform, renderNode, widget } from "../../test/harness";
+import { createEnv, onPlatform } from "../../test/harness";
 import { armorKey } from "./mock";
 import { must } from "../../test/must";
 import { requestsOf } from "../../test/env";
+import {
+  confirmSettingsQuestion,
+  renderSettings,
+  saveSettingsDone,
+  settingsQuestion,
+} from "../settings/testing";
 
 async function open(env = createEnv()) {
   const user = userEvent.setup({ delay: null });
-  renderNode(widget("security-keys"), env);
+  renderSettings(env, "security-keys");
   const list = await screen.findByRole("list", { name: "Keys" });
   return { user, env, list };
 }
@@ -74,14 +80,14 @@ describe("security-keys", () => {
     await user.click(keyButton(list, /Alan Turing/));
     const detail = screen.getByRole("region", { name: /^Key Alan Turing/ });
     expect(within(detail).getAllByText(/Learned from the sender’s mail/).length).toBeGreaterThan(0);
-    const save = within(detail).getByRole("button", { name: "Save trust" });
-    expect(save).toBeDisabled();
+    expect(within(detail).queryByRole("button", { name: "Save trust" })).toBeNull();
     await user.selectOptions(
       within(detail).getByRole("combobox", { name: "Your decision" }),
       "Rejected",
     );
     expect(within(detail).getByText(/will neither encrypt to this key/)).toBeInTheDocument();
-    await user.click(save);
+    expect(requestsOf(env, "SetKeyTrust")).toEqual([]);
+    await saveSettingsDone(user);
     await waitFor(() =>
       expect(keyButton(list, /Alan Turing/)).toHaveAttribute("data-key-state", "rejected"),
     );
@@ -112,23 +118,26 @@ describe("security-keys", () => {
   it("deletes another person's key and needs a second confirmation for an own key", async () => {
     const { user, env, list } = await open();
     await user.click(keyButton(list, /Edsger Dijkstra/));
-    await user.click(screen.getByRole("button", { name: "Delete" }));
-    await user.click(screen.getByRole("button", { name: "Delete key" }));
+    await user.click(screen.getByRole("button", { name: "Delete key…" }));
+    await confirmSettingsQuestion(user, "Delete key");
     await waitFor(() => expect(within(list).queryByText(/Edsger/)).not.toBeInTheDocument());
     expect(requestsOf(env, "DeleteKey")).toEqual([
       { type: "DeleteKey", key_id: "key-6", delete_secret: false },
     ]);
 
     await user.click(keyButton(list, /Ada Lovelace <ada@example.org>/));
-    await user.click(screen.getByRole("button", { name: "Delete" }));
-    expect(screen.getByText(/is your own key/)).toBeInTheDocument();
-    const confirm = screen.getByRole("button", { name: "Delete key" });
-    expect(confirm).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("button", { name: "Delete key" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Delete" }));
-    await user.click(screen.getByRole("checkbox", { name: "Also delete my secret key" }));
-    await user.click(screen.getByRole("button", { name: "Delete key" }));
+    await user.click(screen.getByRole("button", { name: "Delete key…" }));
+    const ask = await settingsQuestion();
+    expect(within(ask).getByText(/is your own key/)).toBeInTheDocument();
+    expect(within(ask).getByRole("button", { name: "Delete key" })).toBeDisabled();
+    await user.click(within(ask).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+    await user.click(screen.getByRole("button", { name: "Delete key…" }));
+    const again = await settingsQuestion();
+    await user.click(within(again).getByRole("checkbox", { name: "Also delete my secret key" }));
+    await confirmSettingsQuestion(user, "Delete key");
     await waitFor(() =>
       expect(within(list).queryByText("Ada Lovelace <ada@example.org>")).not.toBeInTheDocument(),
     );

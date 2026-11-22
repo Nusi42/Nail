@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import type { DiscoveredAccount } from "../api/generated";
 import { securityDemoBySender } from "../features/security/mock";
@@ -15,6 +15,22 @@ import {
 import { defaultPort, protocolChoices, withProtocol, withTls } from "./forms";
 import { pruneToMembers, virtualProblems, newVirtualAccount } from "./VirtualAccountEditor";
 import { must } from "../test/must";
+import {
+  confirmSettingsQuestion,
+  renderSettings,
+  saveBar,
+  saveSettingsDone,
+  settingsQuestion,
+} from "../features/settings/testing";
+import { withCloseGuard } from "../test/closeGuard";
+import { WindowLayer } from "../layout/WindowLayer";
+import { renderWithProviders } from "../test/harness";
+
+/** The roles of a dialog footer's buttons, in any order (the order is the footer's own test). */
+function expectFooterRoles(footer: HTMLElement, roles: readonly string[]): void {
+  const shown = [...footer.querySelectorAll("button")].map((b) => b.getAttribute("data-role"));
+  expect(shown.sort()).toEqual([...roles].sort());
+}
 
 /** Forwards OAuth results to the UI state, as the app's event handler does. */
 function forwardOAuth(env: Env) {
@@ -29,7 +45,7 @@ function forwardOAuth(env: Env) {
 async function accountSettings() {
   const user = userEvent.setup();
   const env = createEnv();
-  renderNode(widget("account-settings"), env);
+  renderSettings(env, "account-settings");
   await screen.findByRole("textbox", { name: "Account name" });
   return { user, env };
 }
@@ -78,9 +94,60 @@ describe("account-setup", () => {
 
     await user.click(screen.getByRole("button", { name: "Add account" }));
     expect(await screen.findByText(/“Ada” was added/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Go to the inbox" }));
+    // R6: the result step shows only Done.
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Done" }));
     expect(env.store.getState().activeAccountId).toBe("example");
     expect(env.store.getState().windows).toEqual([]);
+  });
+
+  it("has Cancel on every step and asks once something was typed", async () => {
+    const user = userEvent.setup();
+    const env = createEnv({ state: { windows: ["account-setup"] } });
+    withCloseGuard(env);
+    renderWithProviders(<WindowLayer layout={env.transport.data.layout} />, env);
+    const dialog = await screen.findByRole("dialog", { name: "Add account" });
+    const footer = () => must(dialog.querySelector<HTMLElement>('[data-part="dialog.footer"]'));
+    expectFooterRoles(footer(), ["primary", "cancel"]);
+    // Nothing typed: Cancel closes at once.
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+    act(() => {
+      env.store.getState().openWindow("account-setup");
+    });
+    const again = await screen.findByRole("dialog", { name: "Add account" });
+    await user.type(
+      within(again).getByRole("textbox", { name: "Email address" }),
+      "ada@example.net",
+    );
+    await user.click(within(again).getByRole("button", { name: "Continue" }));
+    await waitFor(() => {
+      expect(again.querySelector('[data-part="account-setup"]')).toHaveAttribute(
+        "data-step",
+        "servers",
+      );
+    });
+    expectFooterRoles(must(again.querySelector<HTMLElement>('[data-part="dialog.footer"]')), [
+      "primary",
+      "secondary",
+      "cancel",
+    ]);
+    await user.click(within(again).getByRole("button", { name: "Cancel" }));
+    // Half an account cannot be saved: the prompt offers to discard it.
+    const prompt = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    await user.click(within(prompt).getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual(["account-setup"]);
+    });
+    await user.click(within(again).getByRole("button", { name: "Cancel" }));
+    const second = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    await user.click(within(second).getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+    expect(env.transport.requests.some((r) => r.type === "AddAccount")).toBe(false);
   });
 
   it("signs in with OAuth when the provider needs it", async () => {
@@ -283,7 +350,7 @@ describe("account-settings", () => {
   it("edits an account and its identities", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderNode(widget("account-settings"), env);
+    renderSettings(env, "account-settings");
     const list = await screen.findByRole("list", { name: "Accounts" });
     await user.click(await within(list).findByRole("button", { name: /Work/ }));
     const name = screen.getByRole("textbox", { name: "Account name" });
@@ -300,7 +367,8 @@ describe("account-settings", () => {
     await user.type(must(addresses[1]), "sales@work.example");
     await user.type(must(screen.getAllByRole("textbox", { name: "Signature" })[1]), "Sales");
     await user.type(screen.getByLabelText("New password"), "new-secret");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(env.transport.requests.some((r) => r.type === "UpdateAccount")).toBe(false);
+    await saveSettingsDone(user);
     expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
     const update = env.transport.requests.find((r) => r.type === "UpdateAccount");
     expect(update).toMatchObject({
@@ -323,11 +391,21 @@ describe("account-settings", () => {
 
   it("removes an account after confirmation and opens setup for new ones", async () => {
     const { user, env } = await accountSettings();
-    await user.click(screen.getByRole("button", { name: "Remove account" }));
-    expect(screen.getByText(/Remove “Personal”\?/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await user.click(screen.getByRole("button", { name: "Remove account" }));
-    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(screen.getByRole("button", { name: "Remove account…" }));
+    // R6: a destructive confirmation; Cancel has the focus.
+    const question = await settingsQuestion();
+    expect(question).toHaveAccessibleName("Remove account");
+    expect(within(question).getByText("Remove the account “Personal”?")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(question).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+    expect(env.transport.data.accounts.map((a) => a.id)).toEqual(["acc-personal", "acc-work"]);
+    await user.click(screen.getByRole("button", { name: "Remove account…" }));
+    await confirmSettingsQuestion(user, "Remove account");
     await waitFor(() =>
       expect(screen.getByRole("textbox", { name: "Account name" })).toHaveValue("Work"),
     );
@@ -336,11 +414,29 @@ describe("account-settings", () => {
     expect(env.store.getState().windows).toEqual(["account-setup"]);
   });
 
+  it("asks before another account shows while one has unsaved changes", async () => {
+    const { user, env } = await accountSettings();
+    const name = screen.getByRole("textbox", { name: "Account name" });
+    await user.type(name, " mail");
+    expect(saveBar()).not.toBeNull();
+    const list = screen.getByRole("list", { name: "Accounts" });
+    await user.click(within(list).getByRole("button", { name: /Work/ }));
+    const prompt = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    // Save from the prompt: the change is written, then Work shows.
+    await user.click(within(prompt).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Account name" })).toHaveValue("Work");
+    });
+    const update = env.transport.requests.find((r) => r.type === "UpdateAccount");
+    expect(update).toMatchObject({ config: { id: "acc-personal", name: "Personal mail" } });
+    expect(saveBar()).toBeNull();
+  });
+
   it("edits the trusted receiving servers, with a suggestion to confirm", async () => {
     const user = userEvent.setup();
     const env = createEnv();
     env.transport.data.features.security.bySender = securityDemoBySender();
-    renderNode(widget("account-settings"), env);
+    renderSettings(env, "account-settings");
     const list = await screen.findByRole("list", { name: "Accounts" });
     await user.click(await within(list).findByRole("button", { name: /Work/ }));
     const field = screen.getByRole("textbox", { name: "Trusted receiving servers (authserv-id)" });
@@ -352,7 +448,7 @@ describe("account-settings", () => {
     // Nothing is trusted until the user saves.
     expect(env.transport.requests.some((r) => r.type === "UpdateAccount")).toBe(false);
     await user.type(field, ", mx2.work.example");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await saveSettingsDone(user);
     expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
     const update = env.transport.requests.find((r) => r.type === "UpdateAccount");
     expect(update?.type === "UpdateAccount" && update.config.authserv_ids).toEqual([
@@ -364,7 +460,9 @@ describe("account-settings", () => {
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(/Compare it with the source/),
     );
-    expect(field).toHaveValue("imap.example.org, mx2.work.example");
+    expect(
+      screen.getByRole("textbox", { name: "Trusted receiving servers (authserv-id)" }),
+    ).toHaveValue("imap.example.org mx2.work.example");
   });
 
   it("says when recent mail suggests no receiving server", async () => {
@@ -402,7 +500,7 @@ describe("account-settings", () => {
       options: { poll_interval_secs: null, max_poll_interval_secs: null },
     };
     expect(protocolChoices(personal.incoming).map((c) => c.value)).toEqual(["gmail"]);
-    renderNode(widget("account-settings"), env);
+    renderSettings(env, "account-settings");
     const protocol = await screen.findByRole("combobox", { name: "Protocol" });
     expect(protocol).toHaveValue("gmail");
     expect(
@@ -419,7 +517,7 @@ describe("account-settings", () => {
       screen.getByRole("spinbutton", { name: "Longest check interval (seconds)" }),
       "600",
     );
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await saveSettingsDone(user);
     expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
     const update = env.transport.requests.find((r) => r.type === "UpdateAccount");
     expect(update?.type === "UpdateAccount" && update.config.incoming).toMatchObject({
@@ -453,10 +551,11 @@ describe("virtual-account-editor", () => {
   it("creates a virtual account with a folder mapping and a domain rule", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderNode(widget("virtual-account-editor"), env);
+    renderSettings(env, "virtual-account-editor");
     expect(await screen.findByText(/No virtual accounts yet/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "New virtual account" }));
-    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+    // R6: the new virtual account is created by the page's Save.
+    expect(saveBar()).toBeNull();
     await user.type(screen.getByRole("textbox", { name: "Name" }), "Everything");
     expect(screen.getByRole("checkbox", { name: "Personal" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Merge Inbox, Sent/ })).toBeChecked();
@@ -478,7 +577,7 @@ describe("virtual-account-editor", () => {
       target: { value: "ada@work.example" },
     });
 
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await saveSettingsDone(user);
     expect(await screen.findByText("Virtual account saved.")).toBeInTheDocument();
     expect(env.transport.data.accountsConfig.virtual_accounts).toEqual([
       {
@@ -508,16 +607,18 @@ describe("virtual-account-editor", () => {
       name: "Both",
       default_identity: "ada@work.example",
     });
-    renderNode(widget("virtual-account-editor"), env);
+    renderSettings(env, "virtual-account-editor");
     await user.click(await screen.findByRole("checkbox", { name: "Work" }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await saveSettingsDone(user);
     await screen.findByText("Virtual account saved.");
     expect(env.transport.data.accountsConfig.virtual_accounts[0]).toMatchObject({
       members: ["acc-personal"],
       // The work identity left with the work account.
       default_identity: null,
     });
-    await user.click(screen.getByRole("button", { name: "Delete virtual account" }));
+    await user.click(screen.getByRole("button", { name: "Delete virtual account…" }));
+    expect(await settingsQuestion()).toHaveTextContent("Delete the virtual account “Both”?");
+    await confirmSettingsQuestion(user, "Delete virtual account");
     await waitFor(() => {
       expect(env.transport.data.accountsConfig.virtual_accounts).toEqual([]);
     });

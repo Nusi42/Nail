@@ -3,6 +3,7 @@ import { nailPerTest } from "../support/nail";
 import { expectResponsive } from "../support/responsive";
 import { openSettingsTab } from "../support/views";
 import { pickTheme } from "../support/appearance";
+import { discardSettings } from "../support/settings";
 
 /**
  * R2 shared pickers (ADR 0222) on the real core (`demo-multi`): fields that
@@ -80,7 +81,7 @@ test("a folder picker searches the account's folder tree and picks by keyboard",
   await expect(tree).toBeHidden();
 
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Inboxes");
-  await page.getByRole("button", { name: "Create" }).click();
+  await saveSettings(page);
   await expect(page.getByText("Virtual account saved.")).toBeVisible();
 });
 
@@ -125,6 +126,8 @@ test("the pickers fit at 1024×700 and keep their looks in a dark theme and high
   // A dark theme and the high-contrast theme: the popup takes the card's
   // background, the highlighted row stands out.
   for (const theme of ["Nocturne", "High contrast"]) {
+    // R6: the unsaved new virtual account would ask before Appearance shows.
+    await discardSettings(page);
     const appearance = await openSettingsTab(page, "Appearance");
     await pickTheme(appearance, new RegExp(theme));
     const themed = await sourceRow(page);

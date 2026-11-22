@@ -12,9 +12,12 @@ import {
 import { appRegistry } from "../registry";
 import { rowStates } from "../../widgets/MessageList";
 import { failingBodies } from "./mock";
-import { SYNC_FOLDER_DIALOG, SyncFolderDialog } from "./Sync";
+import { SYNC_FOLDER_DIALOG } from "./Sync";
 import { syncStoreFor } from "./store";
 import { requestsOf, actionContext } from "../../test/env";
+import { renderSettings, saveBar, saveSettings, saveSettingsDone } from "../settings/testing";
+import { withCloseGuard } from "../../test/closeGuard";
+import { WindowLayer } from "../../layout/WindowLayer";
 import { INBOX } from "../../test/mockIds";
 
 let restoreSizes: () => void;
@@ -43,7 +46,7 @@ describe("sync-folder-policies", () => {
   it("writes a folder's body policy and removes it again", async () => {
     const user = userEvent.setup();
     const env = createEnv();
-    renderWithProviders(<NodeView node={widget("sync-folder-policies")} path="t" />, env);
+    renderSettings(env, "sync-folder-policies");
     const section = await screen.findByRole("region", { name: "Synchronization per folder" });
     // The folder is a folder picker: type to search the tree, Enter picks.
     const folder = await within(section).findByRole("combobox", { name: "Folder" });
@@ -58,11 +61,15 @@ describe("sync-folder-policies", () => {
     await user.selectOptions(within(section).getByLabelText("Download"), "recent");
     const days = within(section).getByLabelText("Days to keep in full");
     await user.clear(days);
-    await user.click(within(section).getByRole("button", { name: "Save" }));
+    // R6: nothing is written yet; an invalid draft cannot be saved.
     expect(await within(section).findByRole("alert")).toHaveTextContent("at least 1 day");
+    const bar = saveBar();
+    expect(bar && within(bar).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(requestsOf(env, "SetFolderSyncPolicy")).toEqual([]);
     await user.type(days, "14");
     await user.selectOptions(within(section).getByLabelText(/Watch for new mail/), "yes");
-    await user.click(within(section).getByRole("button", { name: "Save" }));
+    expect(within(section).queryByRole("button", { name: "Save" })).toBeNull();
+    await saveSettingsDone(user);
     expect(await within(section).findByText("Saved to accounts.kdl.")).toBeVisible();
     expect(requestsOf(env, "SetFolderSyncPolicy")[0]).toEqual({
       type: "SetFolderSyncPolicy",
@@ -77,7 +84,7 @@ describe("sync-folder-policies", () => {
     // "As the account" everywhere removes the folder's rule.
     await user.selectOptions(within(section).getByLabelText("Download"), "default");
     await user.selectOptions(within(section).getByLabelText(/Watch for new mail/), "default");
-    await user.click(within(section).getByRole("button", { name: "Save" }));
+    await saveSettings(user);
     await waitFor(() => {
       expect(requestsOf(env, "SetFolderSyncPolicy")[1]).toMatchObject({
         bodies: null,
@@ -97,15 +104,50 @@ describe("sync-folder-policies", () => {
     await actions.dispatch("sync.folder-policy");
     expect(env.store.getState().windows).toEqual([SYNC_FOLDER_DIALOG]);
     expect(syncStoreFor(env.store).getState().folderId).toBe(INBOX);
-    renderWithProviders(<SyncFolderDialog />, env);
-    await user.selectOptions(await screen.findByLabelText("Download"), "headers-only");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    withCloseGuard(env);
+    renderWithProviders(<WindowLayer layout={env.transport.data.layout} />, env);
+    const dialog = await screen.findByRole("dialog", { name: "Folder synchronization" });
+    // R6: Cancel with a change asks; Keep editing goes back to the dialog.
+    await user.selectOptions(await within(dialog).findByLabelText("Download"), "headers-only");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    const prompt = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    await user.click(within(prompt).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([SYNC_FOLDER_DIALOG]);
+    });
+    expect(requestsOf(env, "SetFolderSyncPolicy")).toEqual([]);
+    // Save writes and closes.
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(requestsOf(env, "SetFolderSyncPolicy")[0]).toMatchObject({
         folder_id: INBOX,
         bodies: { mode: "headers-only" },
       });
     });
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+  });
+
+  it("asks before another folder shows while one has unsaved changes", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    renderSettings(env, "sync-folder-policies");
+    const section = await screen.findByRole("region", { name: "Synchronization per folder" });
+    await within(section).findByDisplayValue("Inbox");
+    await user.selectOptions(await within(section).findByLabelText("Download"), "headers-only");
+    const folder = within(section).getByRole("combobox", { name: "Folder" });
+    await user.clear(folder);
+    await user.type(folder, "Arch");
+    await within(section).findByRole("treeitem", { name: /Archive/ });
+    await user.keyboard("{Enter}");
+    const prompt = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    await user.click(within(prompt).getByRole("button", { name: "Don't save" }));
+    await waitFor(() => {
+      expect(folder).toHaveValue("Archive");
+    });
+    expect(saveBar()).toBeNull();
+    expect(requestsOf(env, "SetFolderSyncPolicy")).toEqual([]);
   });
 });
 

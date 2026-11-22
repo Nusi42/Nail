@@ -8,7 +8,8 @@
  */
 import type { Feature, FeatureEventHandler } from "../types";
 import { ContextIndicator } from "./ContextIndicator";
-import { McpClients } from "./McpClients";
+import { MCP_REVOKE_DIALOG, McpClients } from "./McpClients";
+import { SettingsConfirmDialog } from "../settings/confirm";
 import { mcpKeys } from "./queries";
 import { mcpStore } from "./state";
 import { UiContextReporter } from "./UiContextReporter";
@@ -17,6 +18,15 @@ import { UiContextReporter } from "./UiContextReporter";
 export const widgets: Feature["widgets"] = {
   "mcp-clients": McpClients,
   "mcp-context-indicator": ContextIndicator,
+};
+
+/** R6 (ADR 0239): "Revoke…" asks in a modal confirmation window. */
+export const dialogs: NonNullable<Feature["dialogs"]> = {
+  [MCP_REVOKE_DIALOG]: SettingsConfirmDialog,
+};
+
+export const windows: NonNullable<Feature["windows"]> = {
+  [MCP_REVOKE_DIALOG]: { confirmation: true },
 };
 
 /** Action ids → handlers. */

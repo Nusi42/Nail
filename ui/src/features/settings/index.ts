@@ -23,12 +23,18 @@ import type { ActionInfo } from "../../actions/palette";
 import type { ActionContext } from "../../actions/registry";
 import type { SettingsWidgetInfo } from "../../layout/settingsIndex";
 import { SETTINGS_SEARCH_ACTION, SETTINGS_SECTION_ACTION, viewDef } from "../../layout/views";
-import { UI_STATE_SETTINGS_SECTION, applyUiStateChange } from "../../state/uiState";
+import {
+  UI_STATE_SETTINGS_SECTION,
+  applyUiStateChange,
+  uiStateKey,
+  type UiStateMap,
+} from "../../state/uiState";
 import { askToLeave } from "../../layout/closeGuard";
 import { showView } from "../shell";
 import type { Feature } from "../types";
-import { BUILTIN_SETTINGS } from "./builtins";
-import { resolveSettingsTarget, SETTINGS_WINDOW } from "./model";
+import { ACCOUNT_REMOVE_DIALOG, BUILTIN_SETTINGS, VIRTUAL_ACCOUNT_DELETE_DIALOG } from "./builtins";
+import { SettingsConfirmDialog } from "./confirm";
+import { currentSection, resolveSettingsTarget, SETTINGS_WINDOW } from "./model";
 import { settingsStoreFor } from "./store";
 import { SettingsPage } from "./widgets";
 
@@ -63,6 +69,20 @@ export const widgets: Feature["widgets"] = {
   "settings-page": SettingsPage,
 };
 
+/**
+ * R6 (ADR 0239): the questions of the built-in settings widgets, each a
+ * modal confirmation window (`./confirm.tsx`).
+ */
+export const dialogs: NonNullable<Feature["dialogs"]> = {
+  [ACCOUNT_REMOVE_DIALOG]: SettingsConfirmDialog,
+  [VIRTUAL_ACCOUNT_DELETE_DIALOG]: SettingsConfirmDialog,
+};
+
+export const windows: NonNullable<Feature["windows"]> = {
+  [ACCOUNT_REMOVE_DIALOG]: { confirmation: true },
+  [VIRTUAL_ACCOUNT_DELETE_DIALOG]: { confirmation: true },
+};
+
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   [SETTINGS_SECTION_ACTION]: {
@@ -71,8 +91,13 @@ export const actions: Feature["actions"] = {
       if (typeof id !== "string") return;
       const target = resolveSettingsTarget(ctx.layout, id);
       if (target === null) return;
-      // R6 (ADR 0239): unsaved changes of the shown section ask first.
+      // R6 (ADR 0239): unsaved changes of the shown section ask first
+      // (not for a deep link into the section already shown).
       const page = settingsStoreFor(ctx.store).getState().guardKey;
+      const shown = currentSection(
+        ctx.layout,
+        ctx.queryClient.getQueryData<UiStateMap>(uiStateKey)?.[UI_STATE_SETTINGS_SECTION],
+      );
       const proceed = () => {
         rememberSection(ctx, target.section);
         if (target.node !== null || target.widget !== null) {
@@ -85,7 +110,7 @@ export const actions: Feature["actions"] = {
         }
         openSettingsPage(ctx);
       };
-      if (page === null) proceed();
+      if (page === null || target.section === shown) proceed();
       else askToLeave(ctx.store, page, proceed);
     },
     enabled: (ctx, args) =>

@@ -42,7 +42,8 @@ Every key has a trust level:
 | Rejected | You rejected it: Nail never encrypts to it or trusts its signatures. |
 
 To change it, choose **Your decision** → *Verified*, *Rejected* or *Not
-decided* and **Save trust**. Only mark a key as verified after comparing
+decided* and press **Save** in the bar at the bottom of the section. Only
+mark a key as verified after comparing
 the fingerprint with its owner in person or by phone. Your decision is
 kept even if you delete the key and import it again.
 

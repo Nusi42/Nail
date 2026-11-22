@@ -78,6 +78,23 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   with "Keep meeting" focused; the recurring-event question names its verb
   ("Save changes" / "Delete events").
 
+### Changed — settings save with the bar (ADR 0240)
+
+- Every settings section applies nothing before the bar's Save, switches and
+  choices included (Desktop app, Updates, key lookup and indexing, folder
+  sync, junk filter, notifications, server rules and vacation reply,
+  accounts and identities, virtual accounts, MCP access and limits, remote
+  access and users' access, key trust, smartcards); the widgets' own Save,
+  Save access, Save limits, Save trust and Undo changes buttons are gone.
+  Choosing another account, client, user, folder or key inside a section
+  with unsaved changes asks first.
+- Remove account…, Delete virtual account…, Reset the filter…, Revoke…,
+  Delete key…, turning encryption at rest on or off and the remote access
+  actions ask in the shared confirmation instead of an inline row.
+- The Add account wizard has Cancel on every step and Done at the end, and
+  asks before typed details are thrown away; the folder synchronization
+  dialog has Save / Cancel and asks when changed.
+
 ### Fixed — large selections (ADR 0235)
 
 - Acting on more than 500 selected conversations failed with "Too many

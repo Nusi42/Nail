@@ -9,6 +9,7 @@ import { CENTER_DIALOG } from "../agents";
 import { seedAgentsDemo } from "../agents/mockSeed";
 import { DEFAULT_RATE_LIMITS, rateLimitIssues, WRITE_SCOPES } from "./queries";
 import { runtimeIds } from "./messages";
+import { renderSettings, saveBar, saveSettingsDone } from "../settings/testing";
 
 async function settle(env: Env) {
   await waitFor(() => {
@@ -26,7 +27,7 @@ describe("MCP client settings (M4a)", () => {
   it("grants writing scopes next to reading ones, in a stable order", async () => {
     const env = createEnv();
     const user = userEvent.setup();
-    renderNode(widget("mcp-clients"), env);
+    renderSettings(env, "mcp-clients");
     await settle(env);
     const writes = screen.getByRole("group", { name: "What it may change" });
     for (const scope of WRITE_SCOPES) {
@@ -34,7 +35,7 @@ describe("MCP client settings (M4a)", () => {
     }
     await user.click(within(writes).getByRole("checkbox", { name: "Send mail" }));
     await user.click(within(writes).getByRole("checkbox", { name: "Organize mail" }));
-    await user.click(screen.getByRole("button", { name: "Save access" }));
+    await saveSettingsDone(user);
     await settle(env);
     expect(demo(env).grant.scopes).toEqual(["read", "context", "organize", "send"]);
     expect(runtimeIds()).toContain("mcp-scope-permanent-delete-hint");
@@ -43,7 +44,7 @@ describe("MCP client settings (M4a)", () => {
   it("edits rate limits, with no limit and the core's checks", async () => {
     const env = createEnv();
     const user = userEvent.setup();
-    renderNode(widget("mcp-clients"), env);
+    renderSettings(env, "mcp-clients");
     await settle(env);
     const form = screen.getByRole("form", { name: "Limits for Claude Desktop" });
     const sends = within(form).getByRole("spinbutton", { name: "Messages sent per hour" });
@@ -53,12 +54,13 @@ describe("MCP client settings (M4a)", () => {
     expect(within(form).getByRole("alert")).toHaveTextContent(
       "A limit cannot be 0. Remove the client's permissions instead.",
     );
-    expect(within(form).getByRole("button", { name: "Save limits" })).toBeDisabled();
+    const bar = saveBar();
+    expect(bar && within(bar).getByRole("button", { name: "Save" })).toBeDisabled();
     await user.clear(sends);
     await user.type(sends, "3");
     await user.click(within(form).getByRole("checkbox", { name: "No limit for calls" }));
     expect(within(form).queryByRole("spinbutton", { name: "Calls per minute" })).toBeNull();
-    await user.click(within(form).getByRole("button", { name: "Save limits" }));
+    await saveSettingsDone(user);
     await settle(env);
     expect(demo(env).rate_limits).toEqual({
       requests_per_minute: null,

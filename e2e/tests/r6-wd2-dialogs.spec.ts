@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { saveSettingsSection } from "../support/appearance";
+import { saveSettings } from "../support/settings";
 import { openCalendar } from "../support/calendar";
 import { nailPerTest } from "../support/nail";
 import { openMail, openSettings, showView, viewRegion, windowById } from "../support/views";
@@ -133,6 +133,6 @@ test("Settings → Appearance applies a picked theme only on Save", async ({ pag
   await expect(bar).toContainText("Unsaved changes to “Appearance”");
   await expectDialogFooter(bar, { os: "windows", roles: ["primary", "cancel"] });
   expect(await accent()).toBe(before);
-  await saveSettingsSection(page);
+  await saveSettings(page);
   await expect.poll(accent).not.toBe(before);
 });

@@ -25,6 +25,8 @@ import { isEmail } from "../state/addresses";
 import { usePlatformFeature } from "../state/platform";
 import { queryKeys, useAccountsConfig, useClient } from "../state/queries";
 import { useUi } from "../state/uiStore";
+import { useCloseGuard } from "../layout/closeGuard";
+import { DialogFooter } from "./dialog";
 import {
   IncomingFields,
   OutgoingFields,
@@ -378,6 +380,25 @@ export function AccountSetup({ node }: WidgetProps) {
     closeWindow(SETUP_WINDOW);
   };
 
+  // R6 (ADR 0239): Cancel, × and Esc ask once something was typed; the
+  // wizard cannot save half an account, so the prompt offers Discard changes.
+  useCloseGuard({
+    name: () => t("setup-label"),
+    isDirty: () => step !== "done" && (name.trim() !== "" || email.trim() !== ""),
+    discard: () => {
+      if (oauth !== null && oauthOutcome === undefined) {
+        void client.request({ type: "CancelOAuth", flow_id: oauth.flowId }, "Done").catch(() => {
+          // The flow ends on its own when it times out.
+        });
+      }
+    },
+  });
+  const cancel = {
+    onClick: () => {
+      closeWindow(SETUP_WINDOW);
+    },
+  };
+
   const testOk =
     result !== null && result.incoming.error === null && (result.outgoing?.error ?? null) === null;
 
@@ -435,17 +456,15 @@ export function AccountSetup({ node }: WidgetProps) {
               setExchangeHost(host);
             }}
           />
-          <div data-part="account-setup.actions">
-            <button
-              type="submit"
-              data-part="form.button"
-              data-action="next"
-              data-variant="primary"
-              disabled={busy}
-            >
-              {t(busy ? "setup-discovering" : "setup-continue")}
-            </button>
-          </div>
+          <DialogFooter
+            primary={{
+              label: t(busy ? "setup-discovering" : "setup-continue"),
+              submit: true,
+              action: "next",
+            }}
+            cancel={cancel}
+            busy={busy}
+          />
         </form>
       )}
 
@@ -671,27 +690,23 @@ export function AccountSetup({ node }: WidgetProps) {
               )}
             </div>
           )}
-          <div data-part="account-setup.actions">
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="back"
-              onClick={() => {
+          <DialogFooter
+            primary={{
+              label: t(busy ? "setup-testing" : "setup-test"),
+              submit: true,
+              action: "next",
+              disabled: !credentialsReady || redirectUnconfirmed,
+            }}
+            secondary={{
+              label: t("common-back"),
+              action: "back",
+              onClick: () => {
                 setStep("address");
-              }}
-            >
-              {t("common-back")}
-            </button>
-            <button
-              type="submit"
-              data-part="form.button"
-              data-action="next"
-              data-variant="primary"
-              disabled={busy || !credentialsReady || redirectUnconfirmed}
-            >
-              {t(busy ? "setup-testing" : "setup-test")}
-            </button>
-          </div>
+              },
+            }}
+            cancel={cancel}
+            busy={busy}
+          />
         </form>
       )}
 
@@ -704,28 +719,22 @@ export function AccountSetup({ node }: WidgetProps) {
             <EndpointResult slot="incoming" result={result.incoming} />
             {result.outgoing && <EndpointResult slot="outgoing" result={result.outgoing} />}
           </ul>
-          <div data-part="account-setup.actions">
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="back"
-              onClick={() => {
+          <DialogFooter
+            primary={{
+              label: t(testOk ? "setup-save" : "setup-save-anyway"),
+              action: "save",
+              onClick: () => void save(),
+            }}
+            secondary={{
+              label: t("common-back"),
+              action: "back",
+              onClick: () => {
                 setStep("servers");
-              }}
-            >
-              {t("common-back")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="save"
-              data-variant={testOk ? "primary" : undefined}
-              disabled={busy}
-              onClick={() => void save()}
-            >
-              {t(testOk ? "setup-save" : "setup-save-anyway")}
-            </button>
-          </div>
+              },
+            }}
+            cancel={cancel}
+            busy={busy}
+          />
         </div>
       )}
 
@@ -734,17 +743,7 @@ export function AccountSetup({ node }: WidgetProps) {
           <p data-part="account-setup.notice" role="status">
             {t("setup-done", { name: saved.name })}
           </p>
-          <div data-part="account-setup.actions">
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="finish"
-              data-variant="primary"
-              onClick={finish}
-            >
-              {t("setup-finish")}
-            </button>
-          </div>
+          <DialogFooter done={{ onDone: finish }} />
         </div>
       )}
     </section>

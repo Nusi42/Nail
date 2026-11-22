@@ -19,6 +19,7 @@ import { tempDir } from "../support/nail";
 import { commandManifest, writePluginFolder, pluginDevConsole } from "../support/plugins";
 import { startUpdateServer, updateKey } from "../support/updates";
 import { composerWindow, openSettingsTab } from "../support/views";
+import { saveSettings } from "../support/settings";
 
 /**
  * The Windows integration of wave M4b (plan WP115, ADR 0092) on the real
@@ -71,8 +72,9 @@ test("the first run, About Nail and the desktop settings", async () => {
   await expect(closeToTray).toBeChecked();
   const startWithWindows = settings.getByRole("checkbox", { name: "Start Nail with Windows" });
   await expect(startWithWindows).not.toBeChecked();
-  // Saved through the core (the switch follows its answer).
+  // Saved through the core with the section's Save (R6).
   await startWithWindows.click();
+  await saveSettings(page);
   await expect(startWithWindows).toBeChecked();
   await expect(
     settings.getByRole("checkbox", { name: "Start in the notification area, without a window" }),
@@ -253,6 +255,7 @@ test("nail plugin dev loads a plug-in into the desktop app", async () => {
   await settings
     .getByRole("checkbox", { name: "Allow “nail plugin dev” to load plug-ins into this app" })
     .click();
+  await saveSettings(page);
   await expect(settings.locator('[data-part="desktop-settings.endpoint"]')).toContainText(
     /Listening on http:\/\/127\.0\.0\.1:\d+/,
   );
@@ -302,5 +305,6 @@ test("nail plugin dev loads a plug-in into the desktop app", async () => {
   await settings
     .getByRole("checkbox", { name: "Allow “nail plugin dev” to load plug-ins into this app" })
     .click();
+  await saveSettings(page);
   await expect.poll(() => existsSync(endpointFile)).toBe(false);
 });

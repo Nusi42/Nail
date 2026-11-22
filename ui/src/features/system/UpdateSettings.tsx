@@ -19,26 +19,27 @@ import { systemKeys, useInstallation, useUpdateStatus } from "./queries";
 import { QueryProblem } from "./QueryProblem";
 import { UpdateStatusPanel } from "./UpdateStatus";
 import { useBusyAction } from "../../state/busyAction";
+import { useSettingsForm } from "../settings/draft";
 
-/** Automatic checks / downloads; every change is saved at once. */
-function UpdateOptions() {
+/** Automatic checks / downloads; R6 (ADR 0239): the edits wait for the settings page's Save. */
+function UpdateOptions({ saved, off }: { saved: Settings; off: boolean }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
-  const status = useUpdateStatus();
   const { busy, problem, run } = useBusyAction();
-  if (!status.data) return null;
-  const { settings } = status.data;
-  const off = status.data.state.state === "disabled";
-
-  const save = async (next: Settings) => {
-    await run(async () => {
-      const answer = await client.request(
-        { type: "SetUpdateSettings", settings: next },
-        "UpdateStatus",
-      );
-      queryClient.setQueryData(systemKeys.updates, answer.status);
-    });
+  const form = useSettingsForm(saved, {
+    save: (next) =>
+      run(async () => {
+        const answer = await client.request(
+          { type: "SetUpdateSettings", settings: next },
+          "UpdateStatus",
+        );
+        queryClient.setQueryData(systemKeys.updates, answer.status);
+      }),
+  });
+  const settings = form.value;
+  const save = (next: Settings) => {
+    form.set(next);
   };
 
   return (
@@ -50,7 +51,9 @@ function UpdateOptions() {
           type="checkbox"
           checked={settings.auto_check}
           disabled={off}
-          onChange={(e) => void save({ ...settings, auto_check: e.target.checked })}
+          onChange={(e) => {
+            save({ ...settings, auto_check: e.target.checked });
+          }}
         />
         <span data-part="form.check.label">{t("system-update-auto-check")}</span>
       </label>
@@ -60,7 +63,9 @@ function UpdateOptions() {
           type="checkbox"
           checked={settings.auto_download}
           disabled={off}
-          onChange={(e) => void save({ ...settings, auto_download: e.target.checked })}
+          onChange={(e) => {
+            save({ ...settings, auto_download: e.target.checked });
+          }}
         />
         <span data-part="form.check.label">{t("system-update-auto-download")}</span>
       </label>
@@ -104,7 +109,12 @@ export function UpdateSection({
       {status.data && (
         <>
           <UpdateStatusPanel status={status.data} />
-          {showOptions && <UpdateOptions />}
+          {showOptions && (
+            <UpdateOptions
+              saved={status.data.settings}
+              off={status.data.state.state === "disabled"}
+            />
+          )}
         </>
       )}
     </>

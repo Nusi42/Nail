@@ -17,6 +17,7 @@ import { useLabel, useT } from "../../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
 import { usePlatformFeature } from "../../state/platform";
 import { useClient } from "../../state/queries";
+import { useSettingsForm } from "../settings/draft";
 import { QueryProblem } from "./QueryProblem";
 import { systemKeys, useDesktopSettings } from "./queries";
 
@@ -89,97 +90,105 @@ function Check({
   );
 }
 
-/** Widget `desktop-settings`. */
-export function DesktopSettingsWidget({ node }: WidgetProps) {
+/** The loaded settings: the edits wait for the settings page's Save (R6, ADR 0239). */
+function DesktopForm({
+  data,
+  showDev,
+}: {
+  data: NonNullable<ReturnType<typeof useDesktopSettings>["data"]>;
+  showDev: boolean;
+}) {
   const t = useT();
   const startup = usePlatformFeature("start-with-system");
-  const label = useLabel();
-  const query = useDesktopSettings();
   const { busy, problem, save } = useSaveDesktopSettings();
-  const showDev = optionBool(node, "show-dev-endpoint", true);
-  const title = node.label ? label(node.label) : t("system-desktop-title");
-  const data = query.data;
+  const form = useSettingsForm<DesktopSettings>(data.settings, { save });
+  const settings = form.value;
   const change = (patch: Partial<DesktopSettings>) => {
-    if (data) void save({ ...data.settings, ...patch });
+    form.set((current) => ({ ...current, ...patch }));
   };
   return (
-    <section
-      data-part="desktop-settings"
-      data-node-id={node.id ?? undefined}
-      aria-label={title}
-      aria-busy={busy}
-    >
-      <h3 data-part="desktop-settings.title">{t("system-desktop-title")}</h3>
-      {query.isError && <QueryProblem error={query.error} part="desktop-settings.error" />}
+    <>
       {problem && (
         <p data-part="desktop-settings.error" role="alert">
           {t(problem.id, problem.args)}
         </p>
       )}
-      {data && (
-        <>
-          <fieldset data-part="form.section" data-section="tray" disabled={busy}>
-            <legend data-part="form.section.title">{t("system-desktop-tray")}</legend>
-            <Check
-              field="close-to-tray"
-              checked={data.settings.close_to_tray}
-              label={t("system-desktop-close-to-tray")}
-              hint={t("system-desktop-close-to-tray-hint")}
-              onChange={(close_to_tray) => {
-                change({ close_to_tray });
-              }}
-            />
-          </fieldset>
-          {startup && (
-            <fieldset data-part="form.section" data-section="startup" disabled={busy}>
-              <legend data-part="form.section.title">{t("system-desktop-startup")}</legend>
-              <Check
-                field="start-with-windows"
-                checked={data.settings.start_with_windows}
-                disabled={data.startWithWindowsManaged}
-                label={t("system-desktop-start-with-windows")}
-                hint={t(
-                  data.startWithWindowsManaged
-                    ? "system-desktop-start-with-windows-managed"
-                    : "system-desktop-start-with-windows-hint",
-                )}
-                onChange={(start_with_windows) => {
-                  change({ start_with_windows });
-                }}
-              />
-              <Check
-                field="start-hidden"
-                checked={data.settings.start_hidden}
-                disabled={!data.settings.start_with_windows}
-                label={t("system-desktop-start-hidden")}
-                hint={t("system-desktop-start-hidden-hint")}
-                onChange={(start_hidden) => {
-                  change({ start_hidden });
-                }}
-              />
-            </fieldset>
-          )}
-          {showDev && (
-            <fieldset data-part="form.section" data-section="developer" disabled={busy}>
-              <legend data-part="form.section.title">{t("system-desktop-developer")}</legend>
-              <Check
-                field="dev-endpoint"
-                checked={data.settings.plugin_dev_endpoint}
-                label={t("system-desktop-dev-endpoint")}
-                hint={t("system-desktop-dev-endpoint-hint")}
-                onChange={(plugin_dev_endpoint) => {
-                  change({ plugin_dev_endpoint });
-                }}
-              />
-              {data.devEndpointUrl !== null && (
-                <p data-part="desktop-settings.endpoint" role="status">
-                  {t("system-desktop-dev-endpoint-running", { url: data.devEndpointUrl })}
-                </p>
-              )}
-            </fieldset>
-          )}
-        </>
+      <fieldset data-part="form.section" data-section="tray" disabled={busy}>
+        <legend data-part="form.section.title">{t("system-desktop-tray")}</legend>
+        <Check
+          field="close-to-tray"
+          checked={settings.close_to_tray}
+          label={t("system-desktop-close-to-tray")}
+          hint={t("system-desktop-close-to-tray-hint")}
+          onChange={(close_to_tray) => {
+            change({ close_to_tray });
+          }}
+        />
+      </fieldset>
+      {startup && (
+        <fieldset data-part="form.section" data-section="startup" disabled={busy}>
+          <legend data-part="form.section.title">{t("system-desktop-startup")}</legend>
+          <Check
+            field="start-with-windows"
+            checked={settings.start_with_windows}
+            disabled={data.startWithWindowsManaged}
+            label={t("system-desktop-start-with-windows")}
+            hint={t(
+              data.startWithWindowsManaged
+                ? "system-desktop-start-with-windows-managed"
+                : "system-desktop-start-with-windows-hint",
+            )}
+            onChange={(start_with_windows) => {
+              change({ start_with_windows });
+            }}
+          />
+          <Check
+            field="start-hidden"
+            checked={settings.start_hidden}
+            disabled={!settings.start_with_windows}
+            label={t("system-desktop-start-hidden")}
+            hint={t("system-desktop-start-hidden-hint")}
+            onChange={(start_hidden) => {
+              change({ start_hidden });
+            }}
+          />
+        </fieldset>
       )}
+      {showDev && (
+        <fieldset data-part="form.section" data-section="developer" disabled={busy}>
+          <legend data-part="form.section.title">{t("system-desktop-developer")}</legend>
+          <Check
+            field="dev-endpoint"
+            checked={settings.plugin_dev_endpoint}
+            label={t("system-desktop-dev-endpoint")}
+            hint={t("system-desktop-dev-endpoint-hint")}
+            onChange={(plugin_dev_endpoint) => {
+              change({ plugin_dev_endpoint });
+            }}
+          />
+          {data.devEndpointUrl !== null && (
+            <p data-part="desktop-settings.endpoint" role="status">
+              {t("system-desktop-dev-endpoint-running", { url: data.devEndpointUrl })}
+            </p>
+          )}
+        </fieldset>
+      )}
+    </>
+  );
+}
+
+/** Widget `desktop-settings`. */
+export function DesktopSettingsWidget({ node }: WidgetProps) {
+  const t = useT();
+  const label = useLabel();
+  const query = useDesktopSettings();
+  const showDev = optionBool(node, "show-dev-endpoint", true);
+  const title = node.label ? label(node.label) : t("system-desktop-title");
+  return (
+    <section data-part="desktop-settings" data-node-id={node.id ?? undefined} aria-label={title}>
+      <h3 data-part="desktop-settings.title">{t("system-desktop-title")}</h3>
+      {query.isError && <QueryProblem error={query.error} part="desktop-settings.error" />}
+      {query.data && <DesktopForm data={query.data} showDev={showDev} />}
     </section>
   );
 }

@@ -32,12 +32,12 @@ export const notMessages: readonly string[] = [
   "remote-audit",
   "remote-content",
   "remote-content-allows",
-  // Dialog name.
+  // Dialog names.
   "remote-pair",
+  "remote-confirm",
   // Part names without a dot.
   "remote-login",
   "remote-reauth",
-  "remote-confirm",
   "remote-fingerprint",
   "remote-qr",
   "remote-totp",

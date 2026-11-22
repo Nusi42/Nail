@@ -1,6 +1,14 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createEnv, renderNode, widget } from "../../test/harness";
+import { createEnv } from "../../test/harness";
+import {
+  confirmSettingsQuestion,
+  discardSettings,
+  renderSettings,
+  saveBar,
+  saveSettings,
+  settingsQuestion,
+} from "../settings/testing";
 import { handleRemoteEvent } from "./index";
 import { groupFingerprint } from "./model";
 import { requestsOf, wireEvents } from "../../test/env";
@@ -9,9 +17,16 @@ async function open() {
   const user = userEvent.setup();
   const env = createEnv();
   wireEvents(env, handleRemoteEvent);
-  renderNode(widget("remote-settings"), env);
+  renderSettings(env, "remote-settings");
   const form = await screen.findByRole("form", { name: "Remote access" });
   return { user, env, form };
+}
+
+/** The bar's Save (R6: the form has none of its own). */
+function barSave(): HTMLElement {
+  const bar = saveBar();
+  if (bar === null) throw new Error("no unsaved changes");
+  return within(bar).getByRole("button", { name: "Save" });
 }
 
 describe("remote-settings", () => {
@@ -26,7 +41,8 @@ describe("remote-settings", () => {
     expect(internet).toHaveAccessibleDescription(
       /Locked: internet access stays off until an external security test/,
     );
-    expect(within(form).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(within(form).queryByRole("button", { name: "Save" })).toBeNull();
+    expect(saveBar()).toBeNull();
   });
 
   it("serves on the LAN with TLS and shows the addresses and the fingerprint (keyboard only)", async () => {
@@ -48,15 +64,15 @@ describe("remote-settings", () => {
     expect(within(form).getByRole("list", { name: "Problems" })).toHaveTextContent(
       "Encryption is required when other devices can connect.",
     );
-    const save = within(form).getByRole("button", { name: "Save" });
-    expect(save).toBeDisabled();
+    expect(barSave()).toBeDisabled();
     await user.selectOptions(
       within(form).getByRole("combobox", { name: "Encryption (TLS)" }),
       "self-signed",
     );
     const networks = within(form).getByRole("textbox", { name: "Allowed networks" });
     await user.type(networks, "192.168.1.0/24");
-    save.focus();
+    expect(requestsOf(env, "UpdateRemoteUiSettings")).toEqual([]);
+    barSave().focus();
     await user.keyboard("{Enter}");
 
     expect(await screen.findByText("Remote access settings saved.")).toBeInTheDocument();
@@ -81,17 +97,16 @@ describe("remote-settings", () => {
     await env.queryClient.invalidateQueries();
     const status = await screen.findByRole("region", { name: "Status" });
     await user.click(await within(status).findByRole("button", { name: "Make a new certificate" }));
-    const ask = within(status).getByRole("group");
+    const ask = await settingsQuestion();
     expect(ask).toHaveTextContent(/Browsers that trusted the old certificate/);
     // Escape keeps the old one.
     await user.keyboard("{Escape}");
-    expect(within(status).queryByRole("group")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+    expect(requestsOf(env, "RegenerateRemoteCertificate")).toEqual([]);
     await user.click(within(status).getByRole("button", { name: "Make a new certificate" }));
-    await user.click(
-      within(within(status).getByRole("group")).getByRole("button", {
-        name: "Make a new certificate",
-      }),
-    );
+    await confirmSettingsQuestion(user, "Make a new certificate");
     expect(await within(status).findByText("A new certificate is in use.")).toBeInTheDocument();
     const after = env.transport.data.features.remote.certificate.fingerprint_sha256;
     expect(after).not.toBe(before);
@@ -106,10 +121,13 @@ describe("remote-settings", () => {
     );
     await user.type(within(form).getByRole("spinbutton", { name: "Port" }), "4790");
     env.transport.data.features.remote.unsupported = ["UpdateRemoteUiSettings"];
-    await user.click(within(form).getByRole("button", { name: "Save" }));
+    await saveSettings(user);
     expect(await within(form).findByRole("alert")).toHaveTextContent(/not supported/i);
-    await user.click(within(form).getByRole("button", { name: "Undo changes" }));
+    // A failed save keeps the changes and the bar; Discard takes them back.
+    expect(saveBar()).not.toBeNull();
+    await discardSettings(user);
     expect(within(form).getByRole("spinbutton", { name: "Port" })).toHaveValue(4780);
+    expect(saveBar()).toBeNull();
   });
 
   it("checks host names and custom addresses as the core does", async () => {

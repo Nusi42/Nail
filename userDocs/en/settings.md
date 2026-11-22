@@ -71,7 +71,25 @@ Discard puts the saved values back.
 
 If you open another section or close Settings with unsaved changes, Nail
 asks first: **Save changes to “…”?** with **Save**, **Don't save** and
-**Cancel** (stay in the section).
+**Cancel** (stay in the section). The same question comes when you pick
+another item inside a section while the shown one has unsaved changes —
+another account, virtual account, folder, MCP client, remote user or key.
+When a change cannot be saved yet (a field shows what is wrong), **Save**
+in the bar is disabled and the question offers **Discard changes** or
+**Keep editing**.
+
+This holds for every setting, switches and choices included: turning
+notifications off, choosing a folder's download policy, granting an MCP
+client a scope or changing the tray behaviour all wait for **Save**. If
+saving fails, the section keeps your changes and the bar, and shows why.
+
+Actions are not settings and happen when you choose them, after a
+question where they cannot be undone: **Remove account…**, **Delete
+virtual account…**, **Reset the filter…**, **Revoke…**, **Delete key…**,
+turning encryption at rest on or off, and the remote access actions
+(delete a user or passkey, revoke a device, make a new certificate). The
+question names what happens; for anything that deletes, the safe button
+(**Cancel**) has the focus and Enter does not confirm.
 
 ## Searching
 

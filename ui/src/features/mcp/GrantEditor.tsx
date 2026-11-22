@@ -4,53 +4,51 @@
  * pickers, R3). Nothing is granted until the user saves a grant here.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type SubmitEvent } from "react";
+import { useState } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { McpClient, McpGrant, McpScope } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useAccounts, useClient } from "../../state/queries";
 import { CheckField, Section } from "../../widgets/forms";
 import { PickerListField } from "../../widgets/pickers";
+import { useSettingsForm } from "../settings/draft";
 import { ALL_SCOPES, READ_SCOPES, WRITE_SCOPES, grantIsEmpty, mcpKeys, toggled } from "./queries";
 
-/** The grant of `client`, editable unless the client is revoked. */
+/**
+ * The grant of `client`, editable unless the client is revoked. R6 (ADR
+ * 0239): the edits wait for the settings page's Save.
+ */
 export function GrantEditor({ client }: { client: McpClient }) {
   const t = useT();
   const nail = useClient();
   const queryClient = useQueryClient();
   const accounts = useAccounts();
-  const [grant, setGrant] = useState<McpGrant>(client.grant);
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ id: string; error: boolean } | null>(null);
-  const revoked = client.revoked_at !== null;
-  const disabled = revoked || busy;
-  const all = accounts.data ?? [];
-  const inScope = grant.all_accounts ? all : all.filter((a) => grant.accounts.includes(a.id));
-  const dirty = JSON.stringify(grant) !== JSON.stringify(client.grant);
-
-  const change = (next: McpGrant) => {
-    if (disabled) return;
-    setGrant(next);
-    setNotice(null);
-  };
-
-  const save = async (event: SubmitEvent) => {
-    event.preventDefault();
-    if (disabled) return;
-    setBusy(true);
-    setNotice(null);
-    try {
+  const form = useSettingsForm<McpGrant>(client.grant, {
+    save: async (grant) => {
       await nail.request(
         { type: "UpdateMcpGrants", client_id: client.id, grant },
         "McpClientSaved",
       );
       await queryClient.invalidateQueries({ queryKey: mcpKeys.clients });
+    },
+    onSaved: () => {
       setNotice({ id: "mcp-grant-saved", error: false });
-    } catch (e) {
+    },
+    onError: (e) => {
       setNotice({ id: errorMessageIdOf(e), error: true });
-    } finally {
-      setBusy(false);
-    }
+    },
+  });
+  const grant = form.value;
+  const revoked = client.revoked_at !== null;
+  const disabled = revoked;
+  const all = accounts.data ?? [];
+  const inScope = grant.all_accounts ? all : all.filter((a) => grant.accounts.includes(a.id));
+
+  const change = (next: McpGrant) => {
+    if (disabled) return;
+    form.set(next);
+    setNotice(null);
   };
 
   return (
@@ -60,7 +58,9 @@ export function GrantEditor({ client }: { client: McpClient }) {
       data-state={revoked ? "revoked" : grantIsEmpty(grant) ? "empty" : "granted"}
       aria-label={t("mcp-grant-label", { name: client.name })}
       noValidate
-      onSubmit={(e) => void save(e)}
+      onSubmit={(e) => {
+        e.preventDefault();
+      }}
     >
       {grantIsEmpty(grant) && !revoked && (
         <div data-part="mcp-grants.empty" role="note">
@@ -116,17 +116,7 @@ export function GrantEditor({ client }: { client: McpClient }) {
           </Section>
         )}
       </fieldset>
-      <div data-part="mcp-grants.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-action="save-grant"
-          data-variant="primary"
-          disabled={disabled || !dirty}
-        >
-          {t("common-save-access")}
-        </button>
-      </div>
+
       {notice && (
         <div
           data-part="mcp-grants.message"

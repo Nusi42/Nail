@@ -5,6 +5,7 @@
  * device" for each. There are no default credentials: a new user has no
  * password and can only sign in from a device paired with a code.
  */
+import { useLeaveDrafts, useSettingsForm } from "../settings/draft";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type SubmitEvent } from "react";
 import { errorMessageIdOf } from "../../api/client";
@@ -138,34 +139,49 @@ function CreateUser({ onCreated }: { onCreated: (id: RemoteUserId) => void }) {
   );
 }
 
+/** What the access form edits. */
+interface AccessDraft {
+  preset: RemoteAccessPreset | "custom";
+  admin: boolean;
+}
+
 function Access({ user }: { user: RemoteUser }) {
   const t = useT();
-  const { client, busy, notice, run } = useAccessRequest();
+  const { client, notice, run } = useAccessRequest();
   const current = presetOf(user.grant);
-  const [preset, setPreset] = useState<RemoteAccessPreset | "custom">(current);
-  const [admin, setAdmin] = useState(user.grant.admin);
-  const dirty = preset !== current || admin !== user.grant.admin;
-
-  const save = () =>
-    void run(
-      () =>
-        client.request(
-          {
-            type: "UpdateRemoteUser",
-            user_id: user.id,
-            update: {
-              display_name: null,
-              disabled: null,
-              grant:
-                preset === "custom"
-                  ? { ...user.grant, admin }
-                  : presetGrant(preset, { admin, scopes: extrasOf(user.grant) }),
-            },
-          },
-          "RemoteUserSaved",
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm<AccessDraft>(
+    { preset: current, admin: user.grant.admin },
+    {
+      save: ({ preset, admin }) =>
+        run(
+          () =>
+            client.request(
+              {
+                type: "UpdateRemoteUser",
+                user_id: user.id,
+                update: {
+                  display_name: null,
+                  disabled: null,
+                  grant:
+                    preset === "custom"
+                      ? { ...user.grant, admin }
+                      : presetGrant(preset, { admin, scopes: extrasOf(user.grant) }),
+                },
+              },
+              "RemoteUserSaved",
+            ),
+          "remote-user-access-saved",
         ),
-      "remote-user-access-saved",
-    );
+    },
+  );
+  const { preset, admin } = form.value;
+  const setPreset = (next: AccessDraft["preset"]) => {
+    form.set((d) => ({ ...d, preset: next }));
+  };
+  const setAdmin = (next: boolean) => {
+    form.set((d) => ({ ...d, admin: next }));
+  };
 
   return (
     <fieldset data-part="form.section" data-section="access">
@@ -185,15 +201,6 @@ function Access({ user }: { user: RemoteUser }) {
       <p data-part="form.hint">{t(`remote-preset-${preset}-hint`)}</p>
       <Toggle labelId="remote-access-admin" name="admin" checked={admin} onChange={setAdmin} />
       <p data-part="form.hint">{t("remote-access-narrowing")}</p>
-      <button
-        type="button"
-        data-part="form.button"
-        data-action="save-access"
-        disabled={busy || !dirty}
-        onClick={save}
-      >
-        {t("common-save-access")}
-      </button>
       <NoticeLine notice={notice} />
     </fieldset>
   );
@@ -567,7 +574,7 @@ function UserDetail({ user }: { user: RemoteUser }) {
           {t("remote-pair-open-dialog")}
         </button>
       </div>
-      <Access key={JSON.stringify(user.grant)} user={user} />
+      <Access user={user} />
       <Password user={user} />
       <Totp user={user} />
       <div data-part="form.section" data-section="passkeys">
@@ -627,6 +634,7 @@ export function RemoteUsersWidget({ node }: WidgetProps) {
   const label = useLabel();
   const users = useRemoteUsers();
   const [selected, setSelected] = useState<RemoteUserId | null>(null);
+  const leave = useLeaveDrafts();
   const list = users.data ?? [];
   const current = list.find((u) => u.id === selected) ?? list[0];
 
@@ -656,7 +664,11 @@ export function RemoteUsersWidget({ node }: WidgetProps) {
                 data-state={`${u.disabled ? "disabled" : "active"}${u.id === current?.id ? " selected" : ""}`}
                 aria-pressed={u.id === current?.id}
                 onClick={() => {
-                  setSelected(u.id);
+                  if (u.id === current?.id) return;
+                  // R6: another user asks first when this one has unsaved changes.
+                  leave(() => {
+                    setSelected(u.id);
+                  });
                 }}
               >
                 <span data-part="remote-users.name">{u.display_name ?? u.name}</span>

@@ -23,6 +23,7 @@ import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccountsConfig, useClient, useFolders } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
+import { useFormNotice, useSettingsForm } from "../settings/draft";
 import { CheckField, SelectField } from "../../widgets/forms";
 import { PickerField } from "../../widgets/pickers";
 import {
@@ -235,56 +236,47 @@ function AccountOverrides({
   );
 }
 
-function Editor({
-  settings: saved,
-  notice,
-  setNotice,
-}: {
-  settings: NotificationSettings;
-  /** Kept by the widget: a save re-creates the editor. */
-  notice: string | null;
-  setNotice: (id: string | null) => void;
-}) {
+/** The problems of notification settings, as messages. */
+function issuesOf(settings: NotificationSettings): LocalizedMessage[] {
+  return notificationIssues(settings).map((i) => ({ id: NOTIFICATION_ISSUE_MESSAGE_IDS[i] }));
+}
+
+function Editor({ settings: saved }: { settings: NotificationSettings }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const config = useAccountsConfig();
-  const [draft, setDraft] = useState(saved);
-  const [problems, setProblems] = useState<LocalizedMessage[]>([]);
+  const { notice, setNotice, outcome, failed, clear, problems: withFailure } = useFormNotice();
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm(saved, {
+    ...outcome("notification-settings-saved"),
+    canSave: (settings) => notificationIssues(settings).length === 0,
+    save: async (settings) => {
+      const answer = await client.request(
+        { type: "UpdateNotificationSettings", settings },
+        "NotificationSettings",
+      );
+      queryClient.setQueryData(triageKeys.notifications, answer.settings);
+    },
+  });
+  const draft = form.value;
+  const problems = withFailure(issuesOf(draft));
   const [permission, setPermission] = useState(() =>
     webNotificationsAvailable() ? Notification.permission : null,
   );
 
   const change = (next: NotificationSettings) => {
-    setDraft(next);
-    setNotice(null);
-  };
-
-  const save = async () => {
-    const issues = notificationIssues(draft);
-    if (issues.length > 0) {
-      setProblems(issues.map((i) => ({ id: NOTIFICATION_ISSUE_MESSAGE_IDS[i] })));
-      return;
-    }
-    setProblems([]);
-    try {
-      const answer = await client.request(
-        { type: "UpdateNotificationSettings", settings: draft },
-        "NotificationSettings",
-      );
-      setNotice("notification-settings-saved");
-      queryClient.setQueryData(triageKeys.notifications, answer.settings);
-    } catch (error) {
-      setProblems([errorMessageOf(error)]);
-    }
+    form.set(next);
+    clear();
   };
 
   const test = async () => {
+    clear();
     try {
       await client.request({ type: "TestNotification" }, "Done");
       setNotice("notification-test-sent");
     } catch (error) {
-      setProblems([errorMessageOf(error)]);
+      failed(error);
     }
   };
 
@@ -375,12 +367,9 @@ function Editor({
         <button
           type="button"
           data-part="form.button"
-          data-variant="primary"
-          onClick={() => void save()}
+          data-action="test-notification"
+          onClick={() => void test()}
         >
-          {t("common-save")}
-        </button>
-        <button type="button" data-part="form.button" onClick={() => void test()}>
           {t("notification-test")}
         </button>
       </div>
@@ -393,7 +382,6 @@ export function NotificationSettingsWidget({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
   const settings = useNotificationSettings();
-  const [notice, setNotice] = useState<string | null>(null);
   let content;
   if (settings.isError) {
     const message = errorMessageOf(settings.error);
@@ -405,14 +393,7 @@ export function NotificationSettingsWidget({ node }: WidgetProps) {
   } else if (!settings.data) {
     content = <p data-part="notification-settings.loading">{t("notification-settings-loading")}</p>;
   } else {
-    content = (
-      <Editor
-        key={JSON.stringify(settings.data)}
-        settings={settings.data}
-        notice={notice}
-        setNotice={setNotice}
-      />
-    );
+    content = <Editor settings={settings.data} />;
   }
   return (
     <section

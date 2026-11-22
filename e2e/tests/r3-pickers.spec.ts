@@ -4,6 +4,7 @@ import { nailPerTest } from "../support/nail";
 import { expectChips, openChoices, pickOption } from "../support/pickers";
 import { expectResponsive } from "../support/responsive";
 import { openSettingsTab } from "../support/views";
+import { saveSettings } from "../support/settings";
 
 /**
  * R3 pickers everywhere (ADR 0227) on the real core (`demo-multi`) at
@@ -79,7 +80,7 @@ test("'Also my addresses' takes several addresses as chips and saves them", asyn
 
   await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
   await vacation.getByRole("textbox", { name: "Message" }).fill("Away until Monday.");
-  await vacation.getByRole("button", { name: "Save", exact: true }).click();
+  await saveSettings(page);
   await expect(vacation.getByText(/^Saved/)).toBeVisible();
   // Read back from the core.
   await page.reload();
@@ -137,9 +138,12 @@ test("searchable decrypted mail is a multi-account picker", async ({ page }) => 
   const label = "Accounts with searchable decrypted mail";
   await pickOption(section, label, /^Work/);
   await expectChips(section, label, ["Work"]);
+  // R6: the warning follows the saved setting.
+  await saveSettings(page);
   await expect(settings.getByText(/Decrypted text is indexed/)).toBeVisible();
   await section.getByRole("button", { name: "Remove Work" }).click();
   await expectChips(section, label, []);
+  await saveSettings(page);
   await expect(settings.getByText(/Decrypted text is indexed/)).toBeHidden();
 });
 
@@ -151,7 +155,7 @@ test("an MCP grant picks its accounts and hidden folders", async ({ page }) => {
   // The hidden folders offer the granted account's folder tree.
   await pickOption(access, "Folders it cannot see", /^Archive/);
   await expectChips(access, "Folders it cannot see", [/Archive/]);
-  await access.getByRole("button", { name: "Save access" }).click();
+  await saveSettings(page);
   await expect(access.getByRole("status")).toHaveText("Access saved.");
 });
 

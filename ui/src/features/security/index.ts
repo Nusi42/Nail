@@ -20,6 +20,8 @@
  * Components for other packages to mount (the composer, the reader, the
  * account settings) are re-exported at the end of this file.
  */
+import { SECURITY_KEY_DELETE_DIALOG } from "./KeyDetail";
+import { SettingsConfirmDialog } from "../settings/confirm";
 import type { MessageBody } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
 import { queryKeys } from "../../state/queries";
@@ -44,7 +46,7 @@ import {
 import { SMARTCARDS_WIDGET, SmartcardsWidget } from "./Smartcards";
 import { SecurityMessageWidget } from "./MessageSecurity";
 import { applyVaultStatus, securityKeys } from "./queries";
-import { SecuritySettingsWidget } from "./SecuritySettings";
+import { SECURITY_VAULT_DIALOG, SecuritySettingsWidget } from "./SecuritySettings";
 import { SecurityWarningsWidget } from "./Warnings";
 
 /** Layout widget kinds → components. */
@@ -145,6 +147,9 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
   [RECOVERY_VERIFY_DIALOG]: RecoveryVerifyDialog,
   [RECOVERY_RESTORE_DIALOG]: RecoveryRestoreDialog,
   [PIN_DIALOG]: PinPromptDialog,
+  // R6 (ADR 0239): the settings' questions.
+  [SECURITY_VAULT_DIALOG]: SettingsConfirmDialog,
+  [SECURITY_KEY_DELETE_DIALOG]: SettingsConfirmDialog,
 };
 
 /**
@@ -170,6 +175,8 @@ export const windows: NonNullable<Feature["windows"]> = {
     min_size: { width: 480, height: 420 },
   },
   [PIN_DIALOG]: { confirmation: true, size: { width: 440, height: 320 } },
+  [SECURITY_VAULT_DIALOG]: { confirmation: true },
+  [SECURITY_KEY_DELETE_DIALOG]: { confirmation: true },
 };
 
 /** Message queries of the reader (`queryKeys.message` in `state/queries.ts`). */

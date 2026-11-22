@@ -16,6 +16,7 @@ import {
   closeWindow,
 } from "../support/views";
 import { saveRule } from "../support/rules";
+import { saveSettings } from "../support/settings";
 
 /**
  * Wave M2c (ADR 0048) against the `demo-multi` mock servers: server-side
@@ -67,7 +68,7 @@ test("a rule runs on the server and the vacation reply is uploaded", async ({ pa
   // The Server rules & vacation section: the ManageSieve card.
   const section = settings.locator('[data-part="sieve-status"]');
   await section.getByRole("checkbox", { name: "Run rules on the server when possible" }).check();
-  await section.getByRole("button", { name: "Save", exact: true }).click();
+  await saveSettings(page);
   await expect(section.getByText("Up to date on the server")).toBeVisible({ timeout: 20_000 });
   const placement = section.getByRole("row", { name: /^Receipts/ });
   await expect(placement.getByRole("cell").first()).toHaveText("Server", { timeout: 20_000 });
@@ -79,7 +80,7 @@ test("a rule runs on the server and the vacation reply is uploaded", async ({ pa
   const vacation = settings.locator('[data-part="vacation-editor"]');
   await vacation.getByRole("checkbox", { name: "Send a vacation reply" }).check();
   await vacation.getByRole("textbox", { name: "Message" }).fill("I am away until Monday.");
-  await vacation.getByRole("button", { name: "Save", exact: true }).click();
+  await saveSettings(page);
   await expect(vacation.getByText("Saved. Nail uploads the reply with your rules.")).toBeVisible();
   await expect.poll(nailScript, { timeout: 20_000 }).toContain("I am away until Monday.");
   expect(await nailScript()).toContain("vacation");
@@ -106,7 +107,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
     .check();
   await junk.getByRole("spinbutton", { name: "Junk threshold (percent)" }).fill("60");
   await junk.getByRole("spinbutton", { name: "Training needed" }).fill("1");
-  await junk.getByRole("button", { name: "Save", exact: true }).click();
+  await saveSettings(page);
   await expect(junk.getByText("Saved.", { exact: true })).toBeVisible();
   await showView(page, "Mail");
 
@@ -219,7 +220,7 @@ test("new mail notifies, and quiet hours suppress it", async ({ page, context })
   await form.getByRole("checkbox", { name: "No notifications during quiet hours" }).check();
   await form.getByLabel("From").fill("11:00");
   await form.getByLabel("Until").fill("13:00");
-  await form.getByRole("button", { name: "Save", exact: true }).click();
+  await saveSettings(page);
   await expect(form.getByText("Saved.", { exact: true })).toBeVisible();
   await showView(page, "Mail");
   await deliver("Quiet please", "Shh.", "quiet-1");

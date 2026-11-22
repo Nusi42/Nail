@@ -12,6 +12,13 @@ import { INDICATOR_MS, mcpStore } from "./state";
 import { readerSelection, REPORT_DELAY_MS, UiContextReporter } from "./UiContextReporter";
 import { must } from "../../test/must";
 import { requestsOf } from "../../test/env";
+import {
+  confirmSettingsQuestion,
+  renderSettings,
+  saveBar,
+  saveSettingsDone,
+  settingsQuestion,
+} from "../settings/testing";
 
 /** Feeds core events to the feature's event handler, as the app shell does. */
 function wireEvents(env: Env) {
@@ -79,13 +86,14 @@ describe("mcp-clients", () => {
     const user = userEvent.setup();
     const env = createEnv();
     wireEvents(env);
-    renderNode(widget("mcp-clients"), env);
+    renderSettings(env, "mcp-clients");
     const clients = await screen.findByRole("list", { name: "MCP clients" });
     await user.type(screen.getByRole("textbox", { name: "Client name" }), "Agent");
     await user.click(screen.getByRole("button", { name: "Create client" }));
     const form = await screen.findByRole("form", { name: "Access of Agent" });
-    const save = within(form).getByRole("button", { name: "Save access" });
-    expect(save).toBeDisabled();
+    // R6: no Save of its own; the page's bar shows once something changed.
+    expect(within(form).queryByRole("button", { name: "Save access" })).toBeNull();
+    expect(saveBar()).toBeNull();
     // Found by label (getByRole over this large form is several times slower
     // in jsdom), then checked to be a checkbox in the accessibility tree.
     const checkbox = (name: string | RegExp) => {
@@ -104,8 +112,8 @@ describe("mcp-clients", () => {
     await waitFor(() => {
       expect(chipsOf(form, "Folders it cannot see")).toEqual(["Archive"]);
     });
-    expect(save).toBeEnabled();
-    await user.click(save);
+    expect(requestsOf(env, "UpdateMcpGrants")).toEqual([]);
+    await saveSettingsDone(user);
 
     expect(await within(form).findByRole("status")).toHaveTextContent("Access saved.");
     const update = requestsOf(env, "UpdateMcpGrants")[0];
@@ -130,12 +138,13 @@ describe("mcp-clients", () => {
     const user = userEvent.setup();
     const env = createEnv();
     wireEvents(env);
-    renderNode(widget("mcp-clients"), env);
+    renderSettings(env, "mcp-clients");
     await screen.findByRole("list", { name: "MCP clients" });
-    await user.click(await screen.findByRole("button", { name: "Revoke" }));
+    await user.click(await screen.findByRole("button", { name: "Revoke…" }));
     expect(requestsOf(env, "RevokeMcpClient")).toHaveLength(0);
-    expect(screen.getByText(/Revoke “Claude Desktop”\?/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Revoke client" }));
+    const question = await settingsQuestion();
+    expect(within(question).getByText("Revoke “Claude Desktop”?")).toBeInTheDocument();
+    await confirmSettingsQuestion(user, "Revoke client");
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Claude Desktop/ })).toHaveAttribute(
@@ -144,7 +153,7 @@ describe("mcp-clients", () => {
       ),
     );
     expect(requestsOf(env, "RevokeMcpClient")[0]).toMatchObject({ client_id: "mcp-1" });
-    expect(screen.queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revoke…" })).not.toBeInTheDocument();
     const form = screen.getByRole("form", { name: "Access of Claude Desktop" });
     expect(within(form).getByRole("checkbox", { name: "Read mail" })).toBeDisabled();
   });

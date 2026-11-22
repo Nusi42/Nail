@@ -7,6 +7,7 @@ import { AUDIT_PAGE } from "../../state/queries";
 import { remoteStore } from "./state";
 import { PASSWORD, createAda, pairedBrowser } from "./testUtil";
 import { wireEvents } from "../../test/env";
+import { confirmSettingsQuestion, renderSettings, settingsQuestion } from "../settings/testing";
 
 afterEach(() => {
   // Unmount before resetting module-level stores.
@@ -62,14 +63,17 @@ describe("remote-devices", () => {
 
   it("revokes a device after confirming, which ends its sessions", async () => {
     const { env, phone, user } = await twoDevices();
-    renderNode(widget("remote-devices"), env);
+    renderSettings(env, "remote-devices");
     const devices = await screen.findByRole("list", { name: "Devices" });
     const item = within(devices).getByRole("listitem", { name: "Phone" });
     await user.click(within(item).getByRole("button", { name: "Revoke" }));
-    const ask = within(item).getByRole("group");
+    // R6: a destructive question; Cancel has the focus and Enter never revokes.
+    const ask = await settingsQuestion();
     expect(ask).toHaveTextContent(/must be paired again/);
-    expect(within(ask).getByRole("button", { name: "Revoke device" })).toHaveFocus();
-    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(within(ask).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    await confirmSettingsQuestion(user, "Revoke device");
     expect(await within(item).findByText(/^Revoked /)).toBeInTheDocument();
     expect(phone.browser.session()).toBeNull();
     const status = await phone.browser.send({ type: "Status" });
@@ -78,7 +82,7 @@ describe("remote-devices", () => {
 
   it("renames a device and signs everyone out", async () => {
     const { env, laptop, user } = await twoDevices();
-    renderNode(widget("remote-devices"), env);
+    renderSettings(env, "remote-devices");
     const devices = await screen.findByRole("list", { name: "Devices" });
     await user.click(within(devices).getByRole("button", { name: "Rename Laptop" }));
     await user.clear(within(devices).getByRole("textbox", { name: "New name" }));
@@ -86,10 +90,8 @@ describe("remote-devices", () => {
     expect(await within(devices).findByText("Work laptop")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Sign out everyone" }));
-    expect(screen.getByRole("group")).toHaveTextContent("Sign out all 2 signed-in sessions?");
-    await user.click(
-      within(screen.getByRole("group")).getByRole("button", { name: "Sign out everyone" }),
-    );
+    expect(await settingsQuestion()).toHaveTextContent("Sign out all 2 signed-in sessions?");
+    await confirmSettingsQuestion(user, "Sign out everyone");
     expect(await screen.findByText("Nobody is signed in.")).toBeInTheDocument();
     expect(laptop.browser.session()).toBeNull();
   });

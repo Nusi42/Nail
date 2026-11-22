@@ -11,7 +11,9 @@ import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { CheckField, TextField } from "../../widgets/forms";
-import { useUi } from "../../state/uiStore";
+import { useUi, useUiStoreApi } from "../../state/uiStore";
+import { askSettingsQuestion } from "../settings/confirm";
+import { useLeaveDrafts } from "../settings/draft";
 import { CENTER_DIALOG } from "../agents/names";
 import { PolicyEditor } from "../agents/PolicyEditor";
 import { pendingOf, usePendingConfirmations } from "../agents/queries";
@@ -19,6 +21,9 @@ import { AuditLog, formatAuditTime } from "./AuditLog";
 import { RateLimitsEditor } from "./RateLimits";
 import { GrantEditor } from "./GrantEditor";
 import { emptyGrant, grantIsEmpty, mcpKeys, useMcpClients, useMcpServerInfo } from "./queries";
+
+/** The confirmation window of "Revoke…". */
+export const MCP_REVOKE_DIALOG = "revoke-mcp-client";
 
 /** State of a client for the list (`data-state`). */
 export function clientState(client: McpClient): "revoked" | "no-access" | "granted" {
@@ -154,19 +159,19 @@ function ClientDetail({ client }: { client: McpClient }) {
   const t = useT();
   const nail = useClient();
   const queryClient = useQueryClient();
-  const [confirm, setConfirm] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const ui = useUiStoreApi();
   const revoked = client.revoked_at !== null;
 
-  const revoke = async () => {
-    setError(null);
-    try {
-      await nail.request({ type: "RevokeMcpClient", client_id: client.id }, "Done");
-      setConfirm(false);
-      await queryClient.invalidateQueries({ queryKey: mcpKeys.all });
-    } catch (e) {
-      setError(errorMessageIdOf(e));
-    }
+  const revoke = () => {
+    askSettingsQuestion(ui, MCP_REVOKE_DIALOG, {
+      question: t("mcp-client-revoke-question", { name: client.name }),
+      detail: t("mcp-client-revoke-detail"),
+      action: t("mcp-client-revoke-yes"),
+      run: async () => {
+        await nail.request({ type: "RevokeMcpClient", client_id: client.id }, "Done");
+        await queryClient.invalidateQueries({ queryKey: mcpKeys.all });
+      },
+    });
   };
 
   return (
@@ -181,49 +186,15 @@ function ClientDetail({ client }: { client: McpClient }) {
       />
       {!revoked && (
         <div data-part="mcp-clients.revoke">
-          {!confirm ? (
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="revoke"
-              data-variant="danger"
-              onClick={() => {
-                setConfirm(true);
-              }}
-            >
-              {t("common-revoke")}
-            </button>
-          ) : (
-            <span data-part="mcp-clients.confirm" role="group">
-              <span data-part="mcp-clients.confirm.text">
-                {t("mcp-client-revoke-confirm", { name: client.name })}
-              </span>
-              <button
-                type="button"
-                data-part="form.button"
-                data-action="revoke"
-                data-variant="danger"
-                onClick={() => void revoke()}
-              >
-                {t("mcp-client-revoke-yes")}
-              </button>
-              <button
-                type="button"
-                data-part="form.button"
-                data-action="cancel"
-                onClick={() => {
-                  setConfirm(false);
-                }}
-              >
-                {t("common-cancel")}
-              </button>
-            </span>
-          )}
-        </div>
-      )}
-      {error && (
-        <div data-part="mcp-clients.error" role="alert">
-          {t(error)}
+          <button
+            type="button"
+            data-part="form.button"
+            data-action="revoke"
+            data-variant="danger"
+            onClick={revoke}
+          >
+            {t("mcp-client-revoke")}
+          </button>
         </div>
       )}
     </div>
@@ -240,6 +211,7 @@ export function McpClients({ node }: WidgetProps) {
   const [selected, setSelected] = useState<McpClientId | null>(null);
   const [created, setCreated] = useState<{ name: string; token: string } | null>(null);
   const [allActivity, setAllActivity] = useState(false);
+  const leave = useLeaveDrafts();
   const list = clients.data ?? [];
   const current = list.find((c) => c.id === selected) ?? list[0] ?? null;
 
@@ -296,7 +268,11 @@ export function McpClients({ node }: WidgetProps) {
                   data-access={clientState(client)}
                   aria-pressed={active}
                   onClick={() => {
-                    setSelected(client.id);
+                    if (active) return;
+                    // R6: another client asks first when this one has unsaved changes.
+                    leave(() => {
+                      setSelected(client.id);
+                    });
                   }}
                 >
                   <span data-part="mcp-clients.client.name">{client.name}</span>

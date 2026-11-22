@@ -4,6 +4,7 @@ import { nailFixture, control, serverMessages, type NailServer } from "../suppor
 import { axeViolations } from "../support/axe";
 import { openSettings, rail, showView, closeWindow, openMail } from "../support/views";
 import { defined } from "../support/defined";
+import { saveSettings } from "../support/settings";
 
 /**
  * Wave M4a (plan WP105, ADR 0084): an AI agent (MCP client) writes through
@@ -184,7 +185,7 @@ test("the summarize_thread prompt returns the thread and the rate limit trips", 
   // At most 2 changes per minute, saved in the client's settings.
   const limits = settings.getByRole("form", { name: "Limits for Claude" });
   await limits.getByRole("spinbutton", { name: /Changes per minute/ }).fill("2");
-  await limits.getByRole("button", { name: "Save limits" }).click();
+  await saveSettings(limits.page());
   await expect(limits.getByRole("status")).toHaveText("Limits saved.");
   await draft(mcp, "One");
   await draft(mcp, "Two");

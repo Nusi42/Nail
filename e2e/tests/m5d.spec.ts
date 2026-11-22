@@ -15,7 +15,7 @@ import {
   openMail,
   messageList,
 } from "../support/views";
-import { saveSettingsSection } from "../support/appearance";
+import { saveSettings } from "../support/settings";
 
 /**
  * Wave M5d (ADRs 0131–0137) against `nail serve --seed demo`: the in-app
@@ -385,7 +385,7 @@ async function openWithAccent(page: Page): Promise<Locator> {
   const settings = await openSettings(page, "Appearance");
   const appearance = settings.getByRole("region", { name: "Appearance" });
   await appearance.getByRole("textbox", { name: "Accent colour", exact: true }).fill("#aa3366");
-  await saveSettingsSection(page);
+  await saveSettings(page);
   await expect.poll(themeFile).toContain('color "accent" "#aa3366"');
   return appearance;
 }
@@ -409,7 +409,7 @@ test("appearance: accent and corner radius go to theme.kdl and undo", async ({ p
   await radius.focus();
   for (let i = 0; i < 4; i += 1) await page.keyboard.press("ArrowRight");
   expect(themeFile()).not.toMatch(/radius "md"/);
-  await saveSettingsSection(page);
+  await saveSettings(page);
   await expect.poll(themeFile).toMatch(new RegExp(`radius "md" ${String(start + 4)}\\b`));
   await expect.poll(() => rootToken(page, "--nail-radius-md")).toBe(`${String(start + 4)}px`);
 

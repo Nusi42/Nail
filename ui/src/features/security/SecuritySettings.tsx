@@ -25,7 +25,13 @@ import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { CheckField, SelectField } from "../../widgets/forms";
 import { PickerListField } from "../../widgets/pickers";
+import { useUiStoreApi } from "../../state/uiStore";
+import { askSettingsQuestion } from "../settings/confirm";
+import { useSettingsForm } from "../settings/draft";
 import { applyVaultStatus, securityKeys, useSecuritySettings, useVaultStatus } from "./queries";
+
+/** The confirmation window of turning encryption at rest on or off. */
+export const SECURITY_VAULT_DIALOG = "switch-vault-encryption";
 
 export const LOOKUP_POLICIES: readonly KeyLookupPolicy[] = KEY_LOOKUP_POLICY_VALUES;
 export const LOOKUP_SOURCES: readonly KeyLookupSource[] = KEY_LOOKUP_SOURCE_VALUES;
@@ -43,20 +49,33 @@ function Vault() {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
+  const ui = useUiStoreApi();
   const vault = useVaultStatus();
-  const [confirm, setConfirm] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const status = vault.data;
 
+  const write = async (enabled: boolean) => {
+    const answer = await client.request({ type: "SetVaultEncryption", enabled }, "VaultStatus");
+    applyVaultStatus(queryClient, answer.status);
+  };
   const set = async (enabled: boolean) => {
     setError(null);
-    setConfirm(null);
     try {
-      const answer = await client.request({ type: "SetVaultEncryption", enabled }, "VaultStatus");
-      applyVaultStatus(queryClient, answer.status);
+      await write(enabled);
     } catch (e) {
       setError(errorMessageIdOf(e));
     }
+  };
+  /** R6 (ADR 0239): turning it on or off asks in the shared confirmation. */
+  const ask = (enabled: boolean) => {
+    setError(null);
+    askSettingsQuestion(ui, SECURITY_VAULT_DIALOG, {
+      question: t(enabled ? "security-vault-question-on" : "security-vault-question-off"),
+      detail: t(enabled ? "security-vault-confirm-on" : "security-vault-confirm-off"),
+      action: t(enabled ? "security-vault-confirm-on-yes" : "security-vault-confirm-off-yes"),
+      risk: enabled ? "normal" : "destructive",
+      run: () => write(enabled),
+    });
   };
 
   if (vault.isError) {
@@ -126,44 +145,18 @@ function Vault() {
           </button>
         </div>
       )}
-      {!migrating && confirm === null && (
+      {!migrating && (
         <button
           type="button"
           data-part="form.button"
           data-variant={on ? undefined : "primary"}
           data-action={on ? "vault-off" : "vault-on"}
           onClick={() => {
-            setConfirm(!on);
+            ask(!on);
           }}
         >
           {t(on ? "security-vault-turn-off" : "security-vault-turn-on")}
         </button>
-      )}
-      {confirm !== null && (
-        <div data-part="security-vault.confirm" role="group" aria-label={t("security-vault-title")}>
-          <p data-part="security-vault.confirm.text">
-            {t(confirm ? "security-vault-confirm-on" : "security-vault-confirm-off")}
-          </p>
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant={confirm ? "primary" : "danger"}
-            data-action="vault-confirm"
-            onClick={() => void set(confirm)}
-          >
-            {t(confirm ? "security-vault-confirm-on-yes" : "security-vault-confirm-off-yes")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="cancel"
-            onClick={() => {
-              setConfirm(null);
-            }}
-          >
-            {t("security-cancel")}
-          </button>
-        </div>
       )}
       {error && (
         <p data-part="security-vault.error" role="alert">
@@ -174,25 +167,28 @@ function Vault() {
   );
 }
 
-function LookupAndIndex({ settings }: { settings: Settings }) {
+function LookupAndIndex({ settings: saved }: { settings: Settings }) {
   const t = useT();
   const client = useClient();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-
-  const save = async (next: Settings) => {
-    setError(null);
-    queryClient.setQueryData(securityKeys.settings, next);
-    try {
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm(saved, {
+    save: async (next) => {
+      setError(null);
       const answer = await client.request(
         { type: "UpdateSecuritySettings", settings: next },
         "SecuritySettings",
       );
       queryClient.setQueryData(securityKeys.settings, answer.settings);
-    } catch (e) {
+    },
+    onError: (e) => {
       setError(errorMessageIdOf(e));
-      await queryClient.invalidateQueries({ queryKey: securityKeys.settings });
-    }
+    },
+  });
+  const settings = form.value;
+  const save = (next: Settings) => {
+    form.set(next);
   };
 
   return (
@@ -203,7 +199,9 @@ function LookupAndIndex({ settings }: { settings: Settings }) {
           labelId="security-lookup-policy"
           name="lookup-policy"
           value={settings.key_lookup}
-          onChange={(v) => void save({ ...settings, key_lookup: v as KeyLookupPolicy })}
+          onChange={(v) => {
+            save({ ...settings, key_lookup: v as KeyLookupPolicy });
+          }}
           choices={LOOKUP_POLICIES.map((p) => ({ value: p, label: `security-lookup-policy-${p}` }))}
         />
         <p data-part="form.hint">{t(`security-lookup-policy-${settings.key_lookup}-hint`)}</p>
@@ -214,14 +212,14 @@ function LookupAndIndex({ settings }: { settings: Settings }) {
               labelId={`security-lookup-source-${source}`}
               name={`lookup-source-${source}`}
               checked={settings.lookup_sources.includes(source)}
-              onChange={(on) =>
-                void save({
+              onChange={(on) => {
+                save({
                   ...settings,
                   lookup_sources: LOOKUP_SOURCES.filter((s) =>
                     s === source ? on : settings.lookup_sources.includes(s),
                   ),
-                })
-              }
+                });
+              }}
             />
           ))}
       </section>
@@ -233,7 +231,9 @@ function LookupAndIndex({ settings }: { settings: Settings }) {
           labelId="security-index-accounts"
           name="index-accounts"
           values={settings.index_decrypted}
-          onChange={(index_decrypted) => void save({ ...settings, index_decrypted })}
+          onChange={(index_decrypted) => {
+            save({ ...settings, index_decrypted });
+          }}
         />
       </section>
       {error && (

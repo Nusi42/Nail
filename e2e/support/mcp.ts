@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { defined } from "./defined";
+import { saveSettings } from "./settings";
 import { openSettingsTab } from "./views";
 /**
  * A minimal MCP client over Streamable HTTP (JSON-RPC over POST; answers
@@ -143,6 +144,6 @@ export async function grantMcpAccess(access: Locator, scopes: readonly string[])
     await access.getByRole("checkbox", { name: scope, exact: true }).check();
   }
   await access.getByRole("checkbox", { name: /All accounts/ }).check();
-  await access.getByRole("button", { name: "Save access" }).click();
+  await saveSettings(access.page());
   await expect(access.getByRole("status")).toHaveText("Access saved.");
 }

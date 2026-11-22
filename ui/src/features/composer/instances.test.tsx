@@ -614,6 +614,14 @@ describe("window model", () => {
     "smartcard-pin",
     // R6 (ADR 0239): the close guard's shared unsaved-changes prompt.
     UNSAVED_PROMPT,
+    // R6: the settings sections' questions (`features/settings/confirm.tsx`).
+    "remove-account",
+    "delete-virtual-account",
+    "reset-junk-filter",
+    "revoke-mcp-client",
+    "switch-vault-encryption",
+    "delete-key",
+    "remote-confirm",
   ]);
 
   it("makes only confirmations modal", () => {

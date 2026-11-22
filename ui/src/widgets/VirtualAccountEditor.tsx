@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type SubmitEvent } from "react";
+import { useState } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type {
   AccountConfig,
@@ -12,7 +12,11 @@ import type {
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { type WidgetProps } from "../layout/widgetRegistry";
 import { queryKeys, useAccountsConfig, useClient, useVirtualAccounts } from "../state/queries";
-import { NoticeView, useNoticeRun, type Notice } from "./AccountSettings";
+import { VIRTUAL_ACCOUNT_DELETE_DIALOG } from "../features/settings/builtins";
+import { askSettingsQuestion } from "../features/settings/confirm";
+import { useLeaveDrafts, useSettingsForm } from "../features/settings/draft";
+import { useUiStoreApi } from "../state/uiStore";
+import { NoticeView, type Notice } from "./AccountSettings";
 import { CheckField, Section, SelectField, TextField, type Choice } from "./forms";
 import { PickerField } from "./pickers";
 
@@ -172,6 +176,26 @@ function MappingEditor({
   );
 }
 
+/**
+ * What Save writes: mappings without unchosen sources, rules of members
+ * only (cleaned only when saving: valid sources must not vanish while editing).
+ */
+function prunedForSave(
+  config: VirtualAccountConfig,
+  identities: readonly Identity[],
+): VirtualAccountConfig {
+  return pruneToMembers(
+    {
+      ...config,
+      folder_mappings: config.folder_mappings.map((m) => ({
+        ...m,
+        sources: m.sources.filter((s) => s.path !== ""),
+      })),
+    },
+    identities,
+  );
+}
+
 function VirtualForm({
   initial,
   accounts,
@@ -185,11 +209,33 @@ function VirtualForm({
 }) {
   const t = useT();
   const client = useClient();
+  const ui = useUiStoreApi();
   const queryClient = useQueryClient();
-  const [config, setConfig] = useState(initial);
-  const { busy, run } = useNoticeRun(setMessage);
   const isNew = initial.id === "";
   const identities = accounts.flatMap((a) => a.identities);
+  // R6 (ADR 0239): the edits (and a new virtual account) wait for the settings page's Save.
+  const form = useSettingsForm(initial, {
+    canSave: (draft) => virtualProblems(prunedForSave(draft, identities)).length === 0,
+    save: async (draft) => {
+      setMessage(null);
+      const response = await client.request(
+        isNew
+          ? { type: "AddVirtualAccount", config: prunedForSave(draft, identities) }
+          : { type: "UpdateVirtualAccount", config: prunedForSave(draft, identities) },
+        "VirtualAccountSaved",
+      );
+      await refresh();
+      onDone(response.config.id);
+    },
+    onSaved: () => {
+      setMessage({ id: "virtual-saved", error: false });
+    },
+    onError: (e) => {
+      setMessage({ id: errorMessageIdOf(e), error: true });
+    },
+  });
+  const config = form.value;
+  const setConfig = form.set;
   const memberAccounts = accounts.filter((a) => config.members.includes(a.id));
   const memberIdentities = identities.filter((i) => config.members.includes(i.account_id));
   const identityChoices: Choice[] = memberIdentities.map((i) => ({
@@ -197,18 +243,7 @@ function VirtualForm({
     label: i.name ? `${i.name} <${i.email}>` : i.email,
     literal: true,
   }));
-  // Clean mappings and rules only when saving (valid sources must not vanish while editing).
-  const toSave = pruneToMembers(
-    {
-      ...config,
-      folder_mappings: config.folder_mappings.map((m) => ({
-        ...m,
-        sources: m.sources.filter((s) => s.path !== ""),
-      })),
-    },
-    identities,
-  );
-  const problems = virtualProblems(toSave);
+  const problems = virtualProblems(prunedForSave(config, identities));
 
   const refresh = () =>
     Promise.all([
@@ -217,30 +252,19 @@ function VirtualForm({
       queryClient.invalidateQueries({ queryKey: queryKeys.allFolders }),
     ]);
 
-  const save = (event: SubmitEvent) => {
-    event.preventDefault();
-    if (problems.length > 0) return;
-    void run(async () => {
-      const response = await client.request(
-        isNew
-          ? { type: "AddVirtualAccount", config: toSave }
-          : { type: "UpdateVirtualAccount", config: toSave },
-        "VirtualAccountSaved",
-      );
-      setConfig(response.config);
-      await refresh();
-      onDone(response.config.id);
-      return "virtual-saved";
+  const remove = () => {
+    askSettingsQuestion(ui, VIRTUAL_ACCOUNT_DELETE_DIALOG, {
+      question: t("virtual-delete-question", { name: initial.name }),
+      action: t("virtual-delete"),
+      run: async () => {
+        await client.request({ type: "RemoveVirtualAccount", account_id: initial.id }, "Done");
+        form.discard();
+        await refresh();
+        onDone(null);
+        setMessage({ id: "virtual-removed", error: false });
+      },
     });
   };
-
-  const remove = () =>
-    run(async () => {
-      await client.request({ type: "RemoveVirtualAccount", account_id: config.id }, "Done");
-      await refresh();
-      onDone(null);
-      return "virtual-removed";
-    });
 
   const toggleMember = (id: string, on: boolean) => {
     setConfig({
@@ -263,7 +287,9 @@ function VirtualForm({
       data-part="virtual-editor.form"
       data-account={config.id || undefined}
       noValidate
-      onSubmit={save}
+      onSubmit={(event) => {
+        event.preventDefault();
+      }}
     >
       <TextField
         labelId="virtual-name"
@@ -404,29 +430,19 @@ function VirtualForm({
           {t(problem)}
         </div>
       ))}
-      <div data-part="virtual-editor.actions">
-        <button
-          type="submit"
-          data-part="form.button"
-          data-action="save"
-          data-variant="primary"
-          disabled={busy || problems.length > 0}
-        >
-          {t(isNew ? "virtual-create" : "virtual-save")}
-        </button>
-        {!isNew && (
+      {!isNew && (
+        <div data-part="virtual-editor.actions">
           <button
             type="button"
             data-part="form.button"
             data-action="delete"
             data-variant="danger"
-            disabled={busy}
-            onClick={() => void remove()}
+            onClick={remove}
           >
-            {t("virtual-delete")}
+            {t("virtual-delete-account")}
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </form>
   );
 }
@@ -443,6 +459,7 @@ export function VirtualAccountEditor({ node }: WidgetProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const leave = useLeaveDrafts();
   const list = virtualAccounts.data ?? [];
   const accounts = accountsConfig.data?.accounts ?? [];
   const current = creating ? null : (list.find((v) => v.id === selected) ?? list[0] ?? null);
@@ -466,9 +483,12 @@ export function VirtualAccountEditor({ node }: WidgetProps) {
                   data-state={active ? "selected" : undefined}
                   aria-pressed={active}
                   onClick={() => {
-                    setCreating(false);
-                    setSelected(va.id);
-                    setNotice(null);
+                    if (active) return;
+                    leave(() => {
+                      setCreating(false);
+                      setSelected(va.id);
+                      setNotice(null);
+                    });
                   }}
                 >
                   {va.name}
@@ -483,8 +503,11 @@ export function VirtualAccountEditor({ node }: WidgetProps) {
           data-action="new"
           disabled={accounts.length === 0}
           onClick={() => {
-            setCreating(true);
-            setNotice(null);
+            if (creating) return;
+            leave(() => {
+              setCreating(true);
+              setNotice(null);
+            });
           }}
         >
           {t("virtual-new")}

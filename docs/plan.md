@@ -1482,6 +1482,11 @@ mirrored order with `emulateViewerOs(page, "macos")`; no "OK", "Yes", "No" or "A
 editor with changes ask with the shared prompt; every settings section applies nothing before Save and asks when
 left; the maintainer's human gate on the 0.8.10 installer, then release.
 
+*Status (WD3):* done (ADR 0240): every settings section of the package saves with the bar
+(`useSettingsForm`), the sections' questions are `ConfirmDialog` windows (`askSettingsQuestion`), the Add account
+wizard and the folder sync dialog follow the pattern; e2e `r6-wd3-settings.spec.ts`. Open: the agents feature's
+confirmation policy in the MCP clients section and the layout card's presets still apply at once.
+
 *Status (contract):* done (ADR 0239). Shared pieces in `ui/src/widgets/dialog/` and `ui/src/layout/closeGuard.ts`,
 the settings page's save bar and guard, `dialog.ftl`, the `dialog.*` theme rules, e2e helpers, reference
 migrations (Delete permanently, New / Rename theme). Next: WD1–WD4 in parallel.

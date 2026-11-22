@@ -1,13 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { AccountConnection } from "../features/connlog";
-import { useState, type SubmitEvent } from "react";
+import { useState } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type { AccountConfig, Identity, SecretInput } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { type WidgetProps } from "../layout/widgetRegistry";
 import { isEmail } from "../state/addresses";
 import { queryKeys, useAccountsConfig, useAccountStatuses, useClient } from "../state/queries";
-import { useUi } from "../state/uiStore";
+import { useUi, useUiStoreApi } from "../state/uiStore";
+import { ACCOUNT_REMOVE_DIALOG } from "../features/settings/builtins";
+import { askSettingsQuestion } from "../features/settings/confirm";
+import { useLeaveDrafts, useSettingsForm } from "../features/settings/draft";
 import {
   ExchangeOptionsFields,
   ExchangeSignInFields,
@@ -136,13 +139,11 @@ export function parseAuthservIds(text: string): string[] {
 function SenderChecks({
   accountId,
   ids,
-  disabled,
   onChange,
   setMessage,
 }: {
   accountId: string;
   ids: readonly string[];
-  disabled: boolean;
   onChange: (ids: string[]) => void;
   setMessage: (notice: Notice) => void;
 }) {
@@ -188,7 +189,7 @@ function SenderChecks({
         type="button"
         data-part="form.button"
         data-action="suggest-authserv"
-        disabled={disabled || asking}
+        disabled={asking}
         onClick={() => void suggest()}
       >
         {t("settings-authserv-suggest")}
@@ -233,6 +234,12 @@ export function useNoticeRun(setMessage: (notice: Notice) => void) {
   return { busy, run };
 }
 
+/** What the account form edits: the account and a new password (empty: unchanged). */
+interface AccountDraft {
+  config: AccountConfig;
+  password: string;
+}
+
 function AccountForm({
   account,
   onRemoved,
@@ -244,11 +251,49 @@ function AccountForm({
 }) {
   const t = useT();
   const client = useClient();
+  const ui = useUiStoreApi();
   const queryClient = useQueryClient();
-  const [config, setConfig] = useState(account);
-  const [password, setPassword] = useState("");
-  const { busy, run } = useNoticeRun(setMessage);
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  // R6 (ADR 0239): the edits wait for the settings page's Save.
+  const form = useSettingsForm<AccountDraft>(
+    { config: account, password: "" },
+    {
+      canSave: (draft) => accountProblems(draft.config).length === 0,
+      save: async ({ config, password }) => {
+        setMessage(null);
+        const secrets: SecretInput[] =
+          config.incoming.protocol === "exchange"
+            ? exchangeSecretsFor(config, password, null)
+            : accountSignIn(config).kind === "password"
+              ? secretsFor(config, password, null)
+              : [];
+        // New identities are identified by their address (IdentityId rules).
+        const identities = config.identities.map((i) => ({
+          ...i,
+          id: i.id || i.email,
+          account_id: config.id,
+        }));
+        await client.request(
+          { type: "UpdateAccount", config: { ...config, identities }, secrets },
+          "AccountSaved",
+        );
+        await refresh();
+      },
+      onSaved: () => {
+        setMessage({ id: "settings-saved", error: false });
+      },
+      onError: (e) => {
+        setMessage({ id: errorMessageIdOf(e), error: true });
+      },
+    },
+  );
+  const config = form.value.config;
+  const password = form.value.password;
+  const setConfig = (next: AccountConfig) => {
+    form.set((draft) => ({ ...draft, config: next }));
+  };
+  const setPassword = (next: string) => {
+    form.set((draft) => ({ ...draft, password: next }));
+  };
   const problems = accountProblems(config);
 
   const refresh = () =>
@@ -258,40 +303,20 @@ function AccountForm({
       queryClient.invalidateQueries({ queryKey: queryKeys.allIdentities }),
     ]);
 
-  const save = (event: SubmitEvent) => {
-    event.preventDefault();
-    if (problems.length > 0) return;
-    void run(async () => {
-      const secrets: SecretInput[] =
-        config.incoming.protocol === "exchange"
-          ? exchangeSecretsFor(config, password, null)
-          : accountSignIn(config).kind === "password"
-            ? secretsFor(config, password, null)
-            : [];
-      // New identities are identified by their address (IdentityId rules).
-      const identities = config.identities.map((i) => ({
-        ...i,
-        id: i.id || i.email,
-        account_id: config.id,
-      }));
-      const { config: stored } = await client.request(
-        { type: "UpdateAccount", config: { ...config, identities }, secrets },
-        "AccountSaved",
-      );
-      setConfig(stored);
-      setPassword("");
-      await refresh();
-      return "settings-saved";
+  const remove = () => {
+    askSettingsQuestion(ui, ACCOUNT_REMOVE_DIALOG, {
+      question: t("settings-remove-question", { name: account.name }),
+      detail: t("settings-remove-detail"),
+      action: t("settings-remove"),
+      run: async () => {
+        await client.request({ type: "RemoveAccount", account_id: account.id }, "Done");
+        form.discard();
+        await refresh();
+        onRemoved();
+        setMessage({ id: "settings-removed", error: false });
+      },
     });
   };
-
-  const remove = () =>
-    run(async () => {
-      await client.request({ type: "RemoveAccount", account_id: config.id }, "Done");
-      await refresh();
-      onRemoved();
-      return "settings-removed";
-    });
 
   const setIdentity = (index: number, identity: Identity) => {
     setConfig({
@@ -302,7 +327,14 @@ function AccountForm({
 
   const incoming = config.incoming;
   return (
-    <form data-part="account-settings.form" data-account={config.id} noValidate onSubmit={save}>
+    <form
+      data-part="account-settings.form"
+      data-account={config.id}
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+      }}
+    >
       <Section titleId="settings-general">
         <TextField
           labelId="settings-name"
@@ -493,9 +525,9 @@ function AccountForm({
         </button>
       </Section>
       <SenderChecks
+        key={form.revision}
         accountId={config.id}
         ids={config.authserv_ids ?? []}
-        disabled={busy}
         onChange={(authserv_ids) => {
           setConfig({ ...config, authserv_ids });
         }}
@@ -508,54 +540,14 @@ function AccountForm({
       ))}
       <div data-part="account-settings.actions">
         <button
-          type="submit"
+          type="button"
           data-part="form.button"
-          data-action="save"
-          data-variant="primary"
-          disabled={busy || problems.length > 0}
+          data-action="remove"
+          data-variant="danger"
+          onClick={remove}
         >
-          {t("common-save")}
+          {t("settings-remove-account")}
         </button>
-        {!confirmRemove ? (
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="remove"
-            data-variant="danger"
-            disabled={busy}
-            onClick={() => {
-              setConfirmRemove(true);
-            }}
-          >
-            {t("settings-remove")}
-          </button>
-        ) : (
-          <span data-part="account-settings.confirm" role="group">
-            <span data-part="account-settings.confirm.text">
-              {t("settings-remove-confirm", { name: config.name })}
-            </span>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="remove"
-              data-variant="danger"
-              disabled={busy}
-              onClick={() => void remove()}
-            >
-              {t("common-remove")}
-            </button>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="cancel"
-              onClick={() => {
-                setConfirmRemove(false);
-              }}
-            >
-              {t("common-cancel")}
-            </button>
-          </span>
-        )}
       </div>
     </form>
   );
@@ -568,6 +560,7 @@ export function AccountSettings({ node }: WidgetProps) {
   const config = useAccountsConfig();
   const statuses = useAccountStatuses();
   const openWindow = useUi((s) => s.openWindow);
+  const leave = useLeaveDrafts();
   const [selected, setSelected] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const accounts = config.data?.accounts ?? [];
@@ -593,8 +586,12 @@ export function AccountSettings({ node }: WidgetProps) {
                   data-status={status?.state}
                   aria-pressed={active}
                   onClick={() => {
-                    setSelected(account.id);
-                    setNotice(null);
+                    if (active) return;
+                    // R6: another account asks first when this one has unsaved changes.
+                    leave(() => {
+                      setSelected(account.id);
+                      setNotice(null);
+                    });
                   }}
                 >
                   <span data-part="account-settings.account.name">{account.name}</span>

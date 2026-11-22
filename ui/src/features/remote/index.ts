@@ -16,6 +16,8 @@
  *
  * Components for the app shell and the reader are re-exported at the end.
  */
+import { REMOTE_CONFIRM_DIALOG } from "./fields";
+import { SettingsConfirmDialog } from "../settings/confirm";
 import type { JsonValue, MessageBody, RemoteContentScope } from "../../api/generated";
 import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
@@ -97,6 +99,8 @@ export const actions: Feature["actions"] = {
 export const dialogs: NonNullable<Feature["dialogs"]> = {
   [PAIR_DIALOG]: PairDeviceDialog,
   [REAUTH_WINDOW]: ReauthWindow,
+  // R6 (ADR 0239): the questions of `ConfirmButton`.
+  [REMOTE_CONFIRM_DIALOG]: SettingsConfirmDialog,
 };
 
 /**
@@ -105,6 +109,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
  * (`confirmation: true`) are modal. The layout's `window` properties win.
  */
 export const windows: NonNullable<Feature["windows"]> = {
+  [REMOTE_CONFIRM_DIALOG]: { confirmation: true },
   [PAIR_DIALOG]: { size: { width: 520, height: 600 }, min_size: { width: 420, height: 480 } },
   // "Confirm it’s you": a modal confirmation (M5c).
   [REAUTH_WINDOW]: {

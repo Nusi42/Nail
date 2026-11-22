@@ -39,7 +39,16 @@ closing a window.
   save, Cancel) instead of dropping them.
 - **Settings save when you say so** — a section with changes shows a bar
   with **Save** and **Discard**; leaving the section asks first. See
-  [Settings](settings.md#saving-your-changes).
+  [Settings](settings.md#saving-your-changes). This holds for every
+  setting, switches included, and for choosing another account, client or
+  key inside a section; the sections' own Save and Undo buttons are gone.
+- **Questions instead of inline "Are you sure"** — **Remove account…**,
+  **Delete virtual account…**, **Reset the filter…**, **Revoke…**,
+  **Delete key…** and the remote access actions ask in a window that names
+  what happens.
+- **Add account** — **Cancel** on every step and one **Done** at the end;
+  closing the wizard after typing your address asks before it is thrown
+  away.
 - **Questions that delete never default to it** — the red button names the
   action, Cancel has the focus, and `Enter` never deletes ("Delete
   permanently?" first; also "Delete folder", "Delete label", the Exchange

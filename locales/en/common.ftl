@@ -208,7 +208,6 @@ common-revoked = Revoked
 common-revoke = Revoke
 common-copied = Copied
 common-permissions = Permissions
-common-save-access = Save access
 common-access-saved = Access saved.
 common-refresh = Refresh
 common-time = Time
