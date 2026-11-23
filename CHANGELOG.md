@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.10] — 2026-11-23
+
 ### Added — select all and large mail actions (ADR 0235)
 
 - A mail action can name a whole message list except some rows: the new
@@ -578,6 +580,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.10]: https://github.com/Nusi42/Nail/releases/tag/v0.8.10
 [0.8.9]: https://github.com/Nusi42/Nail/releases/tag/v0.8.9
 [0.8.8]: https://github.com/Nusi42/Nail/releases/tag/v0.8.8
 [0.8.6]: https://github.com/Nusi42/Nail/releases/tag/v0.8.6
