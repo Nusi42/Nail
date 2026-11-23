@@ -1519,6 +1519,10 @@ confirmation policy moved to `useSettingsForm` at integration.
 the settings page's save bar and guard, `dialog.ftl`, the `dialog.*` theme rules, e2e helpers, reference
 migrations (Delete permanently, New / Rename theme). Next: WD1–WD4 in parallel.
 
+*Status (follow-up, quick retries):* done (ADR 0245): a replay pass that defers writes retries the account's queue
+soon on its own (2 s doubling up to a minute, five times, or the server's `Retry-After`), then waits for the polls
+as before; no setting.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

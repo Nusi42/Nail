@@ -525,7 +525,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        exchange/batch.rs (RunningEngine.batch = the concrete Graph / EWS engine for write_many);
                        tests/mail_actions.rs; R4 (ADR 0230): ops_summary.rs (GetOpsSummary, coalesced OpsChanged,
                        RetryFailedOps / DismissFailedOps); R5 (ADR 0235): mail_lists.rs (the rows of a list target;
-                       ADR 0236: ROWS_PER_STORE_CALL, the `mark-<n>` as_of mark, actions in parts with one undo)
+                       ADR 0236: ROWS_PER_STORE_CALL, the `mark-<n>` as_of mark, actions in parts with one undo; ADR 0245:
+                       replay_retry.rs, quick retries of deferred replay passes)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -1596,7 +1597,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   { code, localized, message }` (`From<String>` = class `internal`), so `OpFailure` names the real reason after a
   restart. `Store::write_queue_counts` also counts pending `folder_ops`, `gmail_label_ops` and `exchange_ops`
   (failures only of `op_queue`, which Retry / Dismiss act on). A deferred pass logs one INFO line ("writes
-  deferred; retrying later"; the text at DEBUG). `ingest::resolve_id` skips a server message while a move or delete
+  deferred; retrying later"; the text at DEBUG). It then schedules a quick retry (ADR 0245, `replay_retry.rs`
+  `ReplayRetries` under `Inner::replay_retries`: `RetryPolicy` waits from `EngineTiming::replay_retry` up to a minute,
+  five times, or the server's `Retry-After`; reset by a pass that defers nothing). `ingest::resolve_id` skips a server message while a move or delete
   of the same Message-ID out of that folder waits or failed (`Store::held_move_outs`, read once per batch) and lists
   its UID in `sync_refetch` (`Store::record_refetch`; `sync.rs` `retry_skipped` fetches `refetch_uids` once no write
   holds them back, ADR 0233): no duplicate rows after a UIDVALIDITY reset, and no copy lost. Test helpers `nail_core::testing::store_op_id` / `wire_op_id`. The lag tests: `app/src-tauri`

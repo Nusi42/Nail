@@ -24,8 +24,9 @@
 //!   "delete when deleted locally" policy.
 //!
 //! A retryable failure (offline, timeout) keeps the operation queued and
-//! ends the account's pass; a permanent one fails it (the next sync then
-//! shows the server's state again).
+//! ends the account's pass, which then retries soon
+//! ([`crate::replay_retry`], ADR 0245); a permanent one fails it (the next
+//! sync then shows the server's state again).
 
 use std::sync::Arc;
 
@@ -112,8 +113,16 @@ struct EventReplayer<'a> {
     service: &'a Service,
     executor: &'a dyn OpExecutor,
     policy: ReplayPolicy,
-    /// The error class that deferred the pass, for its one log line.
-    deferred_by: std::sync::Mutex<Option<ErrorCode>>,
+    /// What deferred the pass: the error class (for its one log line) and
+    /// the server's requested wait (for the quick retry).
+    deferred_by: std::sync::Mutex<Option<Deferral>>,
+}
+
+/// The first retryable failure of a pass.
+#[derive(Debug, Clone, Copy)]
+struct Deferral {
+    code: ErrorCode,
+    retry_after_secs: Option<u32>,
 }
 
 /// The stored form of a failed attempt: its class and user-facing text
@@ -133,7 +142,10 @@ impl EventReplayer<'_> {
             Ok(()) => ReplayOutcome::Done,
             Err(err) if err.retryable && op.attempts < self.policy.max_attempts => {
                 tracing::debug!(op = %op.id, %err, "write deferred");
-                crate::service::lock(&self.deferred_by).get_or_insert(err.code);
+                crate::service::lock(&self.deferred_by).get_or_insert(Deferral {
+                    code: err.code,
+                    retry_after_secs: err.retry_after_secs,
+                });
                 ReplayOutcome::Retry(op_error(err))
             }
             Err(err) => {
@@ -187,7 +199,7 @@ pub(crate) async fn replay_account(
     let replayer = EventReplayer {
         service,
         executor,
-        policy: ReplayPolicy::default(),
+        policy: replay_policy(),
         deferred_by: std::sync::Mutex::new(None),
     };
     let report = service
@@ -197,13 +209,16 @@ pub(crate) async fn replay_account(
     // The pass's final state, also when it stopped early (ADR 0230).
     let summary = service.broadcast_ops_changed().await;
     let report = report?;
-    if !report.deferred.is_empty() {
-        let code = *crate::service::lock(&replayer.deferred_by);
+    if report.deferred.is_empty() {
+        service.inner.replay_retries.passed(account);
+    } else {
+        let deferral = *crate::service::lock(&replayer.deferred_by);
         log_deferred_pass(
             account,
             summary.as_ref(),
-            code.unwrap_or(ErrorCode::Internal),
+            deferral.map_or(ErrorCode::Internal, |d| d.code),
         );
+        retry_soon(service, account, deferral.and_then(|d| d.retry_after_secs));
     }
     if !report.failed.is_empty() {
         // Failed writes: clients show the store's state again.
@@ -212,6 +227,35 @@ pub(crate) async fn replay_account(
         });
     }
     Ok(report)
+}
+
+/// The queue's limits: the quick retries (ADR 0245) come on top of the
+/// attempts the polls used to have, so an operation is not given up
+/// sooner than before.
+fn replay_policy() -> ReplayPolicy {
+    let default = ReplayPolicy::default();
+    ReplayPolicy {
+        max_attempts: default.max_attempts + crate::replay_retry::QUICK_RETRIES,
+    }
+}
+
+/// Schedules a quick retry of `account`'s deferred writes (ADR 0245),
+/// unless one is waiting or they are used up (the next poll retries then).
+fn retry_soon(service: &Service, account: &AccountId, retry_after_secs: Option<u32>) {
+    let policy = crate::replay_retry::policy(service.inner.timing.replay_retry);
+    let trigger = {
+        let service = service.clone();
+        let account = account.clone();
+        move || service.request_replay(&account)
+    };
+    if let Some(wait) =
+        service
+            .inner
+            .replay_retries
+            .deferred(account, policy, retry_after_secs, trigger)
+    {
+        tracing::debug!(%account, wait_ms = wait.as_millis(), "deferred writes retry soon");
+    }
 }
 
 /// One line per deferred pass (ADR 0230), visible in a diagnostics bundle:
@@ -1307,6 +1351,7 @@ impl Service {
 mod tests {
     use std::fmt::Write as _;
     use std::sync::Mutex;
+    use std::time::Duration;
 
     use nail_api::{FlagChange, FolderRole, LocalizedMessage};
     use tracing::field::{Field, Visit};
@@ -1363,6 +1408,19 @@ mod tests {
         AccountId::new(DEMO_ACCOUNT_ID)
     }
 
+    /// A quiet service with the demo corpus whose quick retries (ADR 0245)
+    /// start after `replay_retry`.
+    fn seeded(replay_retry: Duration) -> TempService {
+        let t = TempService::quiet_with(&[], |o| o.timing.replay_retry = replay_retry);
+        crate::demo::seed_demo(t.service.store(), t.service.blobs()).unwrap();
+        t
+    }
+
+    /// The writes still waiting in the queue.
+    async fn waiting(t: &TempService) -> u32 {
+        t.service.ops_summary().await.unwrap().waiting()
+    }
+
     /// Queues a flag change on `n` demo messages without waking the
     /// engines.
     fn queue_flags(t: &TempService, n: usize) {
@@ -1406,7 +1464,8 @@ mod tests {
     /// up stays a warning.
     #[tokio::test]
     async fn a_deferred_pass_logs_once_at_info_without_the_text() {
-        let t = TempService::seeded();
+        // No quick retry within the test: it counts the passes itself.
+        let t = seeded(Duration::from_hours(1));
         queue_flags(&t, 3);
         let offline = Failing(EngineError::temporary(
             ErrorCode::Network,
@@ -1429,7 +1488,7 @@ mod tests {
         // The first write's last attempt gives up (a warning); the next
         // one defers the pass again (one INFO line).
         let mut lines = Vec::new();
-        for _ in 1..ReplayPolicy::default().max_attempts {
+        for _ in 1..replay_policy().max_attempts {
             lines = logged_pass(&t, &offline).await;
         }
         assert!(
@@ -1441,6 +1500,42 @@ mod tests {
         assert!(deferred[0].1.contains("waiting=2"), "{deferred:?}");
         let summary = t.service.ops_summary().await.unwrap();
         assert_eq!((summary.waiting(), summary.failed), (2, 1));
+    }
+
+    /// ADR 0245: a deferred pass retries on its own soon, without waiting
+    /// for the next poll.
+    #[tokio::test]
+    async fn a_deferred_pass_retries_soon_on_its_own() {
+        let t = seeded(Duration::from_millis(50));
+        queue_flags(&t, 3);
+        let offline = Failing(EngineError::temporary(ErrorCode::Network, "down"));
+        replay_account(&t.service, &demo(), &offline).await.unwrap();
+        assert_eq!(waiting(&t).await, 3);
+        // The quick retry replays the demo account locally (it has no
+        // server), so the writes go through.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while waiting(&t).await > 0 {
+            assert!(tokio::time::Instant::now() < deadline, "no quick retry");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(t.service.ops_summary().await.unwrap().failed, 0);
+    }
+
+    /// ADR 0245: a server asking for a longer wait than a quick retry
+    /// follows leaves the writes to the next poll; the queue gives an
+    /// operation the quick retries on top of the polls' attempts.
+    #[tokio::test]
+    async fn a_long_server_wait_leaves_the_retry_to_the_poll() {
+        let t = seeded(Duration::from_millis(10));
+        queue_flags(&t, 2);
+        let busy = Failing(EngineError::rate_limited("busy", 3600));
+        replay_account(&t.service, &demo(), &busy).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(waiting(&t).await, 2);
+        assert_eq!(
+            replay_policy().max_attempts,
+            ReplayPolicy::default().max_attempts + crate::replay_retry::QUICK_RETRIES
+        );
     }
 
     /// ADR 0230: a failed write keeps its error class and user-facing text

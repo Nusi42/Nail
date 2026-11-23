@@ -52,6 +52,9 @@ pub struct EngineTiming {
     /// Delay before the first retry of a send that failed temporarily
     /// (doubles per attempt, at most an hour).
     pub send_retry: Duration,
+    /// First quick retry of writes a replay pass deferred (timeout, busy
+    /// server); doubles per retry up to a minute, five times (ADR 0245).
+    pub replay_retry: Duration,
     /// Overrides every account's poll interval (full passes, POP3 fetches).
     pub poll_override: Option<Duration>,
     /// An IMAP session (or IDLE watcher connection) that lasted this long
@@ -79,6 +82,7 @@ impl Default for EngineTiming {
             reconnect_min: Duration::from_secs(2),
             reconnect_max: Duration::from_mins(5),
             send_retry: Duration::from_mins(1),
+            replay_retry: Duration::from_secs(2),
             poll_override: None,
             healthy_after: Duration::from_mins(1),
             draft_upload: Duration::from_secs(5),
@@ -97,6 +101,7 @@ impl EngineTiming {
             reconnect_min: Duration::from_millis(200),
             reconnect_max: Duration::from_secs(1),
             send_retry: Duration::from_secs(1),
+            replay_retry: Duration::from_millis(100),
             poll_override: None,
             healthy_after: Duration::from_secs(5),
             draft_upload: Duration::from_millis(300),
@@ -276,6 +281,8 @@ pub(crate) struct Inner {
     pub(crate) rules_wake: Notify,
     /// Pending uploads of drafts to the server's Drafts folder.
     pub(crate) draft_uploads: crate::composer::DraftUploads,
+    /// Quick retries of deferred replay passes (ADR 0245).
+    pub(crate) replay_retries: crate::replay_retry::ReplayRetries,
     /// The running MCP server's address, once started (ADR 0025).
     pub(crate) mcp_info: Mutex<Option<nail_api::mcp::McpServerInfo>>,
     /// End-to-end encryption state (M2a): unlock caches, trust anchors,
@@ -503,6 +510,7 @@ impl Service {
                 rules,
                 rules_wake: Notify::new(),
                 draft_uploads: crate::composer::DraftUploads::default(),
+                replay_retries: crate::replay_retry::ReplayRetries::default(),
                 mcp_info: Mutex::new(None),
                 crypto,
                 vault,
@@ -643,6 +651,7 @@ impl Service {
         self.inner.opened_files.clear();
         crate::pim::stop(self);
         self.inner.smartcard.logout_all();
+        self.inner.replay_retries.stop_all();
         self.inner.engines.stop_all().await;
     }
 
