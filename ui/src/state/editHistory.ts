@@ -14,6 +14,7 @@
  * a file changed on disk; offer "Undo anyway" (`force`).
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import type { NailClient } from "../api/client";
 import type { EditHistory, HistoryScope } from "../api/generated";
 import { useClient } from "./queries";
 
@@ -25,16 +26,19 @@ export function emptyHistory(scope: HistoryScope): EditHistory {
   return { scope, revision: "none", undo: [], redo: [] };
 }
 
+/** Asks the core for the scope's history. */
+async function fetchEditHistory(client: NailClient, scope: HistoryScope): Promise<EditHistory> {
+  const response = await client.call({ type: "GetEditHistory", scope });
+  // A core without the request: nothing to undo.
+  return response.type === "EditHistory" ? response.history : emptyHistory(scope);
+}
+
 /** The scope's undo history; `EditHistoryChanged` keeps it current. */
 export function useEditHistory(scope: HistoryScope) {
   const client = useClient();
   return useQuery({
     queryKey: editHistoryKey(scope),
-    queryFn: async (): Promise<EditHistory> => {
-      const response = await client.call({ type: "GetEditHistory", scope });
-      // A core without the request: nothing to undo.
-      return response.type === "EditHistory" ? response.history : emptyHistory(scope);
-    },
+    queryFn: () => fetchEditHistory(client, scope),
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
@@ -43,6 +47,25 @@ export function useEditHistory(scope: HistoryScope) {
 /** Puts a history (event or answer) into the cache. */
 export function applyEditHistory(queryClient: QueryClient, history: EditHistory): void {
   queryClient.setQueryData(editHistoryKey(history.scope), history);
+}
+
+/** The scope's revision as the cache knows it (`undefined` before the first answer). */
+export function cachedRevision(queryClient: QueryClient, scope: HistoryScope): string | undefined {
+  return queryClient.getQueryData<EditHistory>(editHistoryKey(scope))?.revision;
+}
+
+/**
+ * Reads the scope's history into the cache after a write whose answer
+ * carries none (`UpdateLayout` answers `Done`). Its `EditHistoryChanged`
+ * may arrive after the answer, and an edit sent before it would name the
+ * revision the write replaced and answer `conflict` (R8).
+ */
+export async function refreshEditHistory(
+  queryClient: QueryClient,
+  client: NailClient,
+  scope: HistoryScope,
+): Promise<void> {
+  applyEditHistory(queryClient, await fetchEditHistory(client, scope));
 }
 
 /** The next entry Undo / Redo would take, `null` when there is none. */

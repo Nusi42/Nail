@@ -1752,6 +1752,17 @@ mock's answers, shared texts, the `pim-actions.ftl` slot, release slots. Past ag
 colour instead of 55 % opacity (they failed the contrast scan whenever the clock put a demo event in the past).
 Next: P1–P4 in parallel.
 
+*Status (P4):* done (ADR 0252). Causes fixed, each product fix with a regression test: WebSocket answers that
+overtook their request's events (`nail-server` `ws.rs` sends answers after them), layout edits sent with the
+revision the last write replaced (`useLayoutEdit`), a UI state answer that brought an older settings section back
+(`useSetUiState`), a forced Sieve upload lost when an earlier upload ended (`SieveCtl::force`), a removed shared
+mailbox's folders written back by a running pass (`apply_hierarchy`); in the tests: the `replay` log capture, the
+benchmark's reopen and wall-time budgets, the plug-in dev reload test's non-atomic saves, the bulk IMAP fixture's
+short deadline, the CBC padding test, the listing tests (`eventually_progressing`). New e2e: rule list drag and the
+dialogs without e2e. Left: the WebKit specs under load (their work nears the 30 s budget), the Exchange categories
+test and the a11y connection-log step (not reproduced), the Exchange move race hook and the auto-schedule e2e (need
+mock hooks), the reader card's empty classify window (feature stores per UI store, found by the new e2e).
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

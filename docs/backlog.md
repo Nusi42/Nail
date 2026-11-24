@@ -185,19 +185,14 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | --- | --- | --- | --- |
 | Interop against real servers | The interop suite (Dovecot, Stalwart, Radicale) and the ManageSieve tests against Dovecot Pigeonhole and Stalwart have not run (they need Docker locally). | plan.md M2c follow-ups, M3 gate (ADR 0201) | M |
 | Smartcard PIN dialog scan | A Playwright scan of the smartcard PIN dialog (needs a soft token in `nail serve`). | plan.md M4c follow-ups (ADR 0100) | S |
-| Auto-schedule e2e | No e2e for the RFC 6638 auto-schedule path (core tests cover it). | plan.md M3b follow-ups | S |
+| Auto-schedule e2e | No e2e for the RFC 6638 auto-schedule path (core tests cover it): `nail serve --seed demo-multi` has no test control that switches the mock CalDAV server's auto-scheduling on. | plan.md M3b follow-ups | S |
 | Mock coverage | The Gmail mock's search terms are limited; the EWS mock has no monthly / yearly expansion. | plan.md M3b, M3c follow-ups | S |
-| Rule list drag | A Playwright drag scenario for the rule list. | plan.md R2 deferrals | S |
 | Select-all gate | A 1 200-row e2e variant of the select-all gate. | plan.md R5 follow-ups | S |
-| Dialogs without e2e | E2e for Automatic replies, the mailbox editor, the classify dialog, the Exchange category / mailbox deletes and the Outbox discard question (unit tests only). | plan.md R6 follow-ups | M |
 | OS-level desktop checks | The OS notification look, the tray's OS menu and `contextmenu` after Shift+F10 in WebView2 are not checked automatically. | plan.md M2c, M4b follow-ups | M |
-| Exchange move race | A deterministic mock hook for the Exchange move race. (check) | plan.md M5c follow-ups (ADR 0120) | S |
-| Flaky: m5d customize layout | e2e `m5d` "customize layout … Undo and Redo" times out under heavy load (passes alone). | memory r4-status, r6-status | S |
-| Flaky: connection-log step | e2e `a11y-windows` connection-log step times out under heavy load (passes alone). | memory r6-status | S |
-| Flaky: rules window | e2e `r2-rules-window` times out under heavy load (passes alone). | memory r6-status | S |
-| Flaky: card height on WebKit | e2e `p3-card-height` times out on WebKit under load (passes alone). | plan.md R4 status | S |
-| Flaky: Exchange core tests | `nail-core` `tests/exchange.rs` (categories / automatic replies / rooms, shared mailboxes / sending / free-busy, the two interrupted-listing tests) failed once each on a machine about 5x slower. | memory r5-status | S |
-| Listing throughput budgets | Throughput budgets of the 520-message listing tests at very high parallel load. (check) | plan.md M5c follow-ups | S |
+| Exchange move race | A deterministic mock hook for the Exchange move race: the mock Graph server needs a hook that runs between two requests (e.g. move a message after one folder's listing), which it does not have yet. | plan.md M5c follow-ups (ADR 0120) | S |
+| Flaky: connection-log step | e2e `a11y-windows` connection-log step times out under heavy load (passes alone; not reproduced in R8). | memory r6-status | S |
+| Flaky: WebKit specs under load | e2e `p3-card-height` (also `mail-links`, `remote-content`, `app-chrome`) on WebKit run out of their 30 s while `cargo test --workspace` runs: about 18 s alone, twice that under load, pages not painting for seconds; fewer WebKit workers did not help (ADR 0252). | plan.md R4 status | S |
+| Flaky: Exchange categories test | `nail-core` `tests/exchange.rs` `categories_automatic_replies_and_rooms` failed once on a machine about 5x slower; not reproduced under parallel load in R8 (the other Exchange flakes are fixed, ADR 0252). | memory r5-status | S |
 
 ## Performance
 

@@ -80,47 +80,60 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
     }
 
     // Events: forward what the core broadcasts; a remote session only what
-    // its (current) grant covers (`Service::remote_event`).
+    // its (current) grant covers (`Service::remote_event`). Answers go out
+    // through the same task, after every event the core broadcast before
+    // the answer was made: a client that acts on an answer has seen what
+    // the request changed (R8: the layout editor's next edit named the
+    // revision its last write had replaced, because that write's
+    // `EditHistoryChanged` came after its `Done`).
+    let (answer_tx, mut answers) = mpsc::channel::<ServerMessage>(OUTBOX);
     let forwarder = {
-        let tx = tx.clone();
-        let service = service.clone();
-        let mut events = service.subscribe();
-        let own_session = session.as_ref().map(|s| current(s).session.id);
-        let session = session.clone();
-        let end_tx = end_tx.clone();
+        let events = service.subscribe();
+        let out = Forward {
+            tx: tx.clone(),
+            service: service.clone(),
+            own_session: session.as_ref().map(|s| current(s).session.id),
+            session: session.clone(),
+            end_tx: end_tx.clone(),
+        };
         tokio::spawn(async move {
+            let mut events = events;
             loop {
-                let batch = match events.recv().await {
-                    Ok(event) => vec![event],
-                    Err(broadcast::error::RecvError::Lagged(missed)) => {
-                        // The client missed changes; tell it the current
-                        // state so it refetches instead of staying stale.
-                        tracing::warn!(missed, "a WebSocket client missed events; resyncing it");
-                        service.resync_events().await
+                tokio::select! {
+                    received = events.recv() => {
+                        let batch = match received {
+                            Ok(event) => vec![event],
+                            Err(broadcast::error::RecvError::Lagged(missed)) => {
+                                out.lagged(missed).await
+                            }
+                            Err(broadcast::error::RecvError::Closed) => break,
+                        };
+                        if !out.events(batch).await {
+                            return;
+                        }
                     }
-                    Err(broadcast::error::RecvError::Closed) => break,
-                };
-                for event in batch {
-                    let ends = matches!(
-                        (&event, &own_session),
-                        (Event::RemoteSessionEnded { session_id, .. }, Some(own)) if session_id == own
-                    );
-                    let event = match &session {
-                        Some(session) => {
-                            let ctx = current(session);
-                            match service.remote_event(&ctx, event).await {
-                                Some(event) => event,
-                                None => continue,
+                    answer = answers.recv() => {
+                        let Some(answer) = answer else { break };
+                        // Broadcasting is synchronous: what the request
+                        // broadcast is queued here already.
+                        loop {
+                            let batch = match events.try_recv() {
+                                Ok(event) => vec![event],
+                                Err(broadcast::error::TryRecvError::Lagged(missed)) => {
+                                    out.lagged(missed).await
+                                }
+                                Err(
+                                    broadcast::error::TryRecvError::Empty
+                                    | broadcast::error::TryRecvError::Closed,
+                                ) => break,
+                            };
+                            if !out.events(batch).await {
+                                return;
                             }
                         }
-                        None => event,
-                    };
-                    if tx.send(event.into()).await.is_err() {
-                        return;
-                    }
-                    if ends {
-                        let _ = end_tx.send(true);
-                        return;
+                        if out.tx.send(answer).await.is_err() {
+                            return;
+                        }
                     }
                 }
             }
@@ -168,7 +181,7 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
         match serde_json::from_str::<RpcRequest>(text.as_str()) {
             Ok(RpcRequest { id, request }) => {
                 let service = service.clone();
-                let tx = tx.clone();
+                let answer_tx = answer_tx.clone();
                 // Every request re-reads the session: a re-authentication
                 // or a narrowed grant applies at once, an ended session
                 // closes the socket.
@@ -185,7 +198,11 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                                 "the remote session has ended",
                             )
                             .into();
-                            drop(tx.send(ServerMessage::Response { id, response }).await);
+                            drop(
+                                answer_tx
+                                    .send(ServerMessage::Response { id, response })
+                                    .await,
+                            );
                             break;
                         }
                     }
@@ -196,7 +213,11 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                         Some(ctx) => service.handle_remote(&ctx, request).await,
                         None => service.handle(request).await,
                     };
-                    drop(tx.send(ServerMessage::Response { id, response }).await);
+                    drop(
+                        answer_tx
+                            .send(ServerMessage::Response { id, response })
+                            .await,
+                    );
                 });
             }
             Err(err) => {
@@ -208,17 +229,71 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                 tracing::debug!(%err, ?id, "malformed request frame");
                 if let Some(id) = id {
                     let response = ApiError::invalid_request(err.to_string()).into();
-                    drop(tx.send(ServerMessage::Response { id, response }).await);
+                    drop(
+                        answer_tx
+                            .send(ServerMessage::Response { id, response })
+                            .await,
+                    );
                 }
             }
         }
     }
 
-    forwarder.abort();
+    // In-flight handlers hold answer senders; the forwarder sends their
+    // answers and ends once they are done.
+    drop(answer_tx);
     if let Some(refresher) = refresher {
         refresher.abort();
     }
     drop(tx);
+    drop(forwarder.await);
     // In-flight handlers hold senders; the writer ends once they are done.
     drop(writer.await);
+}
+
+/// What the forwarding task needs to send events to one client.
+struct Forward {
+    tx: mpsc::Sender<ServerMessage>,
+    service: Service,
+    session: Option<Session>,
+    own_session: Option<nail_api::RemoteSessionId>,
+    end_tx: watch::Sender<bool>,
+}
+
+impl Forward {
+    /// The client missed changes: the current state, so it refetches
+    /// instead of staying stale.
+    async fn lagged(&self, missed: u64) -> Vec<Event> {
+        tracing::warn!(missed, "a WebSocket client missed events; resyncing it");
+        self.service.resync_events().await
+    }
+
+    /// Sends `batch` (a remote session only what its grant covers).
+    /// `false` when the socket is closing.
+    async fn events(&self, batch: Vec<Event>) -> bool {
+        for event in batch {
+            let ends = matches!(
+                (&event, &self.own_session),
+                (Event::RemoteSessionEnded { session_id, .. }, Some(own)) if session_id == own
+            );
+            let event = match &self.session {
+                Some(session) => {
+                    let ctx = current(session);
+                    match self.service.remote_event(&ctx, event).await {
+                        Some(event) => event,
+                        None => continue,
+                    }
+                }
+                None => event,
+            };
+            if self.tx.send(event.into()).await.is_err() {
+                return false;
+            }
+            if ends {
+                let _ = self.end_tx.send(true);
+                return false;
+            }
+        }
+        true
+    }
 }

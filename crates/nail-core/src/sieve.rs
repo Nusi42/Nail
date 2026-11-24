@@ -76,7 +76,13 @@ fn uploaded_key(account: &AccountId) -> String {
 #[derive(Default)]
 pub(crate) struct SieveCtl {
     uploaded: Mutex<HashMap<AccountId, Uploaded>>,
+    /// Accounts whose upload runs now.
     uploading: Mutex<HashSet<AccountId>>,
+    /// Accounts with a forced upload (`SyncSieve`) the upload task has not
+    /// started yet. Kept apart from `uploading`: an earlier upload that
+    /// ends meanwhile must not drop the request (R8: it did, and the
+    /// forced upload never ran).
+    forced: Mutex<HashSet<AccountId>>,
     /// Accounts whose ManageSieve service is missing (last attempt).
     unavailable: Mutex<HashSet<AccountId>>,
     /// Accounts waiting for the upload task (`None` entries: all).
@@ -84,6 +90,35 @@ pub(crate) struct SieveCtl {
     /// Accounts whose last attempt failed, with the time to retry.
     retry_at: Mutex<HashMap<AccountId, i64>>,
     wake: Notify,
+}
+
+impl SieveCtl {
+    /// Asks for an upload even when the inputs did not change.
+    fn force(&self, id: &AccountId) {
+        lock(&self.uploaded).remove(id);
+        lock(&self.retry_at).remove(id);
+        lock(&self.forced).insert(id.clone());
+    }
+
+    /// Takes a forced upload's request (the upload starts now).
+    fn take_forced(&self, id: &AccountId) -> bool {
+        lock(&self.forced).remove(id)
+    }
+
+    /// Whether an upload runs or a forced one waits.
+    fn busy(&self, id: &AccountId) -> bool {
+        lock(&self.uploading).contains(id) || lock(&self.forced).contains(id)
+    }
+
+    /// Starts an upload.
+    fn start(&self, id: &AccountId) {
+        lock(&self.uploading).insert(id.clone());
+    }
+
+    /// Ends an upload (a forced one asked for meanwhile still waits).
+    fn finish(&self, id: &AccountId) {
+        lock(&self.uploading).remove(id);
+    }
 }
 
 /// Handles one of this module's requests.
@@ -117,8 +152,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             // Forced: also when the inputs did not change.
             service.forget_sieve_upload(&account_id).await;
-            lock(&service.inner.sieve.retry_at).remove(&account_id);
-            lock(&service.inner.sieve.uploading).insert(account_id.clone());
+            service.inner.sieve.force(&account_id);
             service.queue_sieve(Some(&account_id));
             service.broadcast(Event::SieveStatusChanged {
                 account_id: account_id.clone(),
@@ -472,7 +506,7 @@ impl Service {
             (Some(inputs), Some(uploaded)) => uploaded.digest == inputs.digest(),
             _ => false,
         };
-        if lock(&self.inner.sieve.uploading).contains(&account.id) {
+        if self.inner.sieve.busy(&account.id) {
             status.state = SieveState::Uploading;
         } else if status.state != SieveState::Disabled
             && lock(&self.inner.sieve.unavailable).contains(&account.id)
@@ -504,6 +538,7 @@ impl Service {
     async fn sync_sieve_account(&self, account: &AccountConfig) -> bool {
         let id = account.id.clone();
         if !sieve_enabled(account) {
+            self.inner.sieve.take_forced(&id);
             let recorded = {
                 let lookup = id.clone();
                 self.store()
@@ -529,12 +564,13 @@ impl Service {
             Ok(loaded) => loaded,
             Err(err) => {
                 tracing::warn!(account = %id, %err, "cannot prepare the Sieve script");
+                self.inner.sieve.take_forced(&id);
                 return false;
             }
         };
         let here = location(&inputs.endpoint, &inputs.script_name);
         let digest = inputs.digest();
-        let forced = lock(&self.inner.sieve.uploading).contains(&id);
+        let forced = self.inner.sieve.take_forced(&id);
         let unchanged = lock(&self.inner.sieve.uploaded)
             .get(&id)
             .is_some_and(|u| u.digest == digest);
@@ -546,7 +582,7 @@ impl Service {
         if unchanged && !forced && !recompile_due {
             return false;
         }
-        lock(&self.inner.sieve.uploading).insert(id.clone());
+        self.inner.sieve.start(&id);
         self.broadcast(Event::SieveStatusChanged {
             account_id: id.clone(),
         });
@@ -560,7 +596,7 @@ impl Service {
             self.remove_sieve_script(account, Some(old)).await;
         }
         let outcome = self.upload_sieve(account, &inputs).await;
-        lock(&self.inner.sieve.uploading).remove(&id);
+        self.inner.sieve.finish(&id);
         let now = self.triage_now();
         match outcome {
             Ok(report) => {
@@ -853,6 +889,7 @@ pub(crate) async fn run_sieve(service: Service) {
         }
         // Forced uploads of accounts that vanished meanwhile end.
         lock(&service.inner.sieve.uploading).retain(|id| config.account(id).is_some());
+        lock(&service.inner.sieve.forced).retain(|id| config.account(id).is_some());
         tokio::select! {
             () = tokio::time::sleep(tick) => {}
             () = service.inner.sieve.wake.notified() => {}
@@ -907,6 +944,22 @@ pub(crate) fn account_status(account: &AccountConfig, record: SieveRecord) -> Si
 mod tests {
     use super::*;
     use nail_api::ErrorCode;
+
+    /// Regression (R8, ADR 0213's race): a forced upload asked for while
+    /// an earlier upload runs survives that upload's end, shows as
+    /// uploading meanwhile and is taken once by the next pass.
+    #[test]
+    fn a_forced_upload_survives_an_earlier_upload_ending() {
+        let ctl = SieveCtl::default();
+        let id = AccountId::new("work");
+        ctl.start(&id);
+        ctl.force(&id);
+        ctl.finish(&id);
+        assert!(ctl.busy(&id), "the forced upload still waits");
+        assert!(ctl.take_forced(&id));
+        assert!(!ctl.busy(&id));
+        assert!(!ctl.take_forced(&id), "taken once");
+    }
 
     fn account(sieve: Option<ManageSieveConfig>) -> AccountConfig {
         AccountConfig {

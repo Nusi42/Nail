@@ -66,6 +66,29 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   distinct palette colours (display only; palette colours stay as picked);
   the demo seeds' calendars have distinct colours.
 - A taller event card's icons no longer cover the end of its title.
+### Fixed — stable tests and the races they found (ADR 0252)
+
+- A forced Sieve upload (`SyncSieve`) asked for while an upload runs is no
+  longer lost when that upload ends.
+- A sync pass no longer writes a removed shared Exchange mailbox's folders
+  back.
+- The layout editor sends the revision its last write left, so an edit right
+  after another no longer answers `conflict`.
+- The WebSocket sends an answer after the events its request broadcast, so
+  the UI never acts on an answer before it has seen what the request
+  changed.
+- A `SetUiState` answer no longer replaces newer UI state the UI already
+  shows (a settings section lost its unsaved changes when shown right after
+  switching to Settings).
+- Flaky tests fixed at their causes: log capture in the replay tests, the
+  benchmark's reopen and budgets, the CBC padding test, the bulk IMAP
+  fixture's deadline, the Exchange listing tests' waits.
+
+### Added — tests
+
+- Playwright scenarios for dragging rules in the rule list and for the
+  Exchange mailbox, category, automatic-replies and classify dialogs and
+  the Outbox's discard question.
 
 ## [0.8.11] — 2026-11-24
 

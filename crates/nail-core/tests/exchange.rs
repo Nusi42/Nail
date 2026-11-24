@@ -13,9 +13,9 @@
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
 use common::{
-    api_service, assert_distinct_palette_colors, by_subject, eventually, folder_at, folders,
-    messages, messages_in, mock_oauth, next_matching, oauth_provider, ok, online, send_now,
-    until_some,
+    api_service, assert_distinct_palette_colors, by_subject, eventually, eventually_progressing,
+    folder_at, folders, messages, messages_in, mock_oauth, next_matching, oauth_provider, ok,
+    online, send_now, until_some,
 };
 use nail_core::testing::TempService;
 
@@ -1136,6 +1136,12 @@ fn new_mail(count: &Arc<std::sync::atomic::AtomicUsize>) -> usize {
     count.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+/// How many requests the mock Graph server answered: the progress of a
+/// long listing ([`eventually_progressing`]).
+fn graph_requests(env: &Env) -> impl Fn() -> usize + '_ {
+    || env.graph.requests().len()
+}
+
 /// More old messages than the Graph engine reads in one call (5 pages of
 /// 100): a listing then takes several calls.
 const BULK: usize = 520;
@@ -1166,7 +1172,7 @@ async fn an_interrupted_first_listing_is_not_new_mail() {
             .into_iter()
             .find(|f| f.role == FolderRole::Inbox)
     };
-    eventually("the whole inbox", || async {
+    eventually_progressing("the whole inbox", graph_requests(&env), || async {
         match inbox_folder().await {
             Some(f) => all_in(service, &f).await.len() == BULK + 2,
             None => false,
@@ -1199,7 +1205,7 @@ async fn an_interrupted_relisting_merges_after_its_last_page() {
     })
     .await;
     let service = &env.service;
-    eventually("the bulk folder", || async {
+    eventually_progressing("the bulk folder", graph_requests(&env), || async {
         match folder_at(service, GRAPH, "Bulk").await {
             Some(f) => all_in(service, &f).await.len() == BULK,
             None => false,
@@ -1234,7 +1240,7 @@ async fn an_interrupted_relisting_merges_after_its_last_page() {
     )
     .await;
     let fewest = Arc::new(std::sync::atomic::AtomicUsize::new(usize::MAX));
-    eventually("the deleted message gone", || {
+    eventually_progressing("the deleted message gone", graph_requests(&env), || {
         let fewest = fewest.clone();
         let bulk = bulk.clone();
         async move {

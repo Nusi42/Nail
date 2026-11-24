@@ -23,6 +23,10 @@ nail-store.workspace = true
 nail-testkit.workspace = true
 # The IMAP settings of the synced account (ImapConfig / Credentials).
 nail-proto-imap.workspace = true
+# The search index's directory and its writer lock file: a stopped service
+# is reopened only once the lock is free (`run.rs` `close`).
+nail-search.workspace = true
+tantivy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

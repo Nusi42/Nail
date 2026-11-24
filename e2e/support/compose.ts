@@ -6,8 +6,8 @@
  * `gmail-sent`).
  */
 import { expect, type Locator, type Page } from "@playwright/test";
-import { control, type NailServer } from "./nail";
-import { composerWindow } from "./views";
+import { control, serverMessages, type NailServer } from "./nail";
+import { composerWindow, DEMO_MULTI_CONVERSATIONS, messageRows, runFromPalette } from "./views";
 
 /**
  * Lengthens the composer's autosave (`__nailAutosaveMs`, read by the UI) for
@@ -44,6 +44,36 @@ export async function newMessage(page: Page, message: NewMessage): Promise<Locat
     await composer.getByRole("textbox", { name: "Message" }).fill(message.text);
   }
   return composer;
+}
+
+/**
+ * Writes a draft `subject` (with `text`) on `demo-multi`, waits until the
+ * autosave put it into the server's Drafts, reloads (the open composer is
+ * gone) and opens the Outbox; returns the draft's entry there.
+ */
+export async function draftInOutbox(
+  page: Page,
+  server: NailServer,
+  subject: string,
+  text: string,
+): Promise<Locator> {
+  const composer = await newMessage(page, { subject });
+  await composer.getByRole("textbox", { name: "Message" }).fill(text);
+  // Autosave: shortly after the last edit, locally and to the server's Drafts.
+  await expect(composer.locator('[data-part="composer.saved"]')).toHaveText("Draft saved.", {
+    timeout: 10_000,
+  });
+  await expect
+    .poll(async () => (await serverMessages(server, "Drafts")).map((m) => m.subject))
+    .toContain(subject);
+  // A reload forgets the open composer; the outbox window lists the draft.
+  await page.reload();
+  await expect(messageRows(page)).toHaveCount(DEMO_MULTI_CONVERSATIONS);
+  await runFromPalette(page, "outbox", "Outbox");
+  return page
+    .getByRole("region", { name: "Drafts" })
+    .locator('[data-part="outbox.item"]')
+    .filter({ hasText: subject });
 }
 
 /** Sends `composer` and waits until the status bar reports the message sent. */

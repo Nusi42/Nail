@@ -669,21 +669,32 @@ const DEV_JS_2: &str = r#"
 export default { activate() { nail.log.info("dev two"); } };
 "#;
 
+/// Saves `text` to `path` the way editors do: written beside it under a
+/// dot name (the dev watcher ignores those) and renamed over it. A plain
+/// `std::fs::write` truncates first, and a reload that ran between the
+/// truncate and the write read an empty locale file (R8: the plug-in's name
+/// resolved to its key, `name`, under load).
+fn save(path: &Path, text: &str) {
+    let name = path.file_name().unwrap().to_string_lossy();
+    let temp = path.with_file_name(format!(".{name}.saving"));
+    std::fs::write(&temp, text).unwrap();
+    std::fs::rename(&temp, path).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn dev_folders_load_and_reload() {
     let f = setup();
     let folder = f.files.path().join("dev-plugin");
     std::fs::create_dir_all(folder.join("locales")).unwrap();
     let write_manifest = |version: &str| {
-        std::fs::write(
-            folder.join("manifest.json"),
-            manifest("devplug", version, &["storage"]).to_string(),
-        )
-        .unwrap();
+        save(
+            &folder.join("manifest.json"),
+            &manifest("devplug", version, &["storage"]).to_string(),
+        );
     };
     write_manifest("1.0.0");
-    std::fs::write(folder.join("index.js"), DEV_JS_1).unwrap();
-    std::fs::write(folder.join("locales/en.ftl"), EN_FTL).unwrap();
+    save(&folder.join("index.js"), DEV_JS_1);
+    save(&folder.join("locales/en.ftl"), EN_FTL);
 
     assert_eq!(
         error_of(
@@ -715,7 +726,7 @@ async fn dev_folders_load_and_reload() {
     // host's reload notices and the stored state (post-M4c: the event
     // stream with a 20 s bound flaked under load).
     let mut reloads = f.service.subscribe_plugin_reloads();
-    std::fs::write(folder.join("index.js"), DEV_JS_2).unwrap();
+    save(&folder.join("index.js"), DEV_JS_2);
     write_manifest("1.0.1");
     wait_reloaded(&f, &mut reloads, "the reload to 1.0.1", |plugin, logs| {
         plugin.manifest.version == "1.0.1"
@@ -733,11 +744,10 @@ async fn dev_folders_load_and_reload() {
     // A change of only the plug-in's locale file (the manifest stays the
     // same) reloads its texts too (post-M2 verify finding).
     let reloads_before = names.len();
-    std::fs::write(
-        folder.join("locales/en.ftl"),
+    save(
+        &folder.join("locales/en.ftl"),
         "name = Follow-up reminders, edited\nfollow-up = Follow up…\n",
-    )
-    .unwrap();
+    );
     wait_reloaded(
         &f,
         &mut reloads,

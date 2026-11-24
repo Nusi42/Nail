@@ -154,12 +154,52 @@ fn service_options(
     nail_core::demo::demo_options(options)
 }
 
-/// Stops a service and waits until its files are free (the search index
-/// writer holds a lock until the last clone of the service is gone).
-async fn close(service: Service) {
+/// How long [`close`] waits for the stopped service's files.
+const RELEASE_TIMEOUT: Duration = Duration::from_mins(1);
+
+/// Stops a service and waits until its files are free. The search index's
+/// writer lock and the store's connections go with the last clone of the
+/// service, which aborted tasks drop only some time after `shutdown` (a
+/// store call already running finishes first). A service opened before
+/// that searches in memory only, or finds the database locked (R8: a fixed
+/// pause of 750 ms was too short on a busy machine).
+async fn close(service: Service, data_dir: &Path) -> Result<(), BenchError> {
     service.shutdown().await;
     drop(service);
-    tokio::time::sleep(Duration::from_millis(750)).await;
+    let lock = data_dir
+        .join(nail_search::INDEX_DIR_NAME)
+        .join(&tantivy::directory::INDEX_WRITER_LOCK.filepath);
+    // SQLite deletes the write-ahead log when the last connection closes.
+    let wal = data_dir.join(format!("{}-wal", nail_store::DB_FILE_NAME));
+    let deadline = Instant::now() + RELEASE_TIMEOUT;
+    while writer_locked(&lock)? || wal.exists() {
+        if Instant::now() >= deadline {
+            return Err(BenchError::Core(format!(
+                "{} is still in use {RELEASE_TIMEOUT:?} after the service stopped",
+                data_dir.display()
+            )));
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    Ok(())
+}
+
+/// Whether an index writer holds the lock file `lock` (the same OS file
+/// lock `tantivy` takes; a missing file is no lock).
+fn writer_locked(lock: &Path) -> Result<bool, BenchError> {
+    let file = match std::fs::OpenOptions::new().write(true).open(lock) {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err.into()),
+    };
+    match file.try_lock() {
+        Ok(()) => {
+            file.unlock()?;
+            Ok(false)
+        }
+        Err(std::fs::TryLockError::WouldBlock) => Ok(true),
+        Err(std::fs::TryLockError::Error(err)) => Err(err.into()),
+    }
 }
 
 fn unexpected(what: &str, response: &Response) -> BenchError {
@@ -449,7 +489,7 @@ pub async fn run(options: &RunOptions) -> Result<(Vec<Metric>, RunFacts), BenchE
     });
 
     // --- Cold start ---------------------------------------------------------
-    close(service).await;
+    close(service, &data_dir).await?;
     let started = Instant::now();
     let service = Service::open(service_options(&data_dir, &config_dir, &secrets))?;
     let inbox = folders(&service, &account)
@@ -477,7 +517,7 @@ pub async fn run(options: &RunOptions) -> Result<(Vec<Metric>, RunFacts), BenchE
         value: ms(cold),
         samples: 1,
     });
-    close(service).await;
+    close(service, &data_dir).await?;
 
     // The data is handed to `nail serve` (Playwright) as a local account:
     // the mock server is gone, and accounts without a configured server

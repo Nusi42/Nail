@@ -287,7 +287,13 @@ Where shared things live (Q2, ADRs 0172–0177):
 - One English text under two ids is a Fluent reference
   (`id = { common-… }`; generic labels in `locales/en/common.ftl`).
 - Vitest `must` / `mailEnv` / the fake `ResizeObserver` (`resizeObserver.ts`) live in `ui/src/test`; e2e `windowById` /
-  `closeWindow` / `screenshotFile` in `e2e/support`.
+  `closeWindow` / `screenshotFile` in `e2e/support`, the Exchange e2e helpers (`enableContoso`, `graphSettingsOf`,
+  `FIXTURE_NOW`) in `e2e/support/exchange.ts`.
+- Waiting in the core's integration tests (`crates/nail-core/tests/common`): `eventually` / `until_some` fail after
+  `TIMEOUT`; work that takes many server round trips (a listing of hundreds of messages) waits with
+  `eventually_progressing`, which fails only when its progress (e.g. the mock server's request count) stood still
+  for `TIMEOUT` (ADR 0252). A layout edit reads the history after its write (`refreshEditHistory`,
+  `ui/src/state/editHistory.ts`) before the next one may start.
 - UI state helpers shared by features: cached-data lookups in
   `ui/src/state/mailOps.ts` (`findSummary`, `cachedFolder`), query options in
   `ui/src/state/queries.ts` (`foldersQueryOptions`), the query language's

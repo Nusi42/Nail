@@ -1830,3 +1830,12 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `sieve.uploaded.<account>`. `Recurrence.periods` (`nail-ical` read / write / expand / edit). Server hits:
   `nail_search::imap::may_match`. Unified lists: `thread/activity.rs` `SENT_JOIN_PAGE_SQL`. Schema v26
   (`junk_verdicts.unsure`).
+- P4 (ADR 0252): `nail-server` `ws.rs` sends answers through the event task, after the events queued before them
+  (`Forward`); a forced Sieve upload is `SieveCtl::force` / `take_forced` (`crates/nail-core/src/sieve.rs`), kept
+  apart from the uploads in progress; `exchange/sync.rs` `apply_hierarchy` writes another mailbox's folders only
+  while that mailbox is configured (checked in the same store call); `useLayoutEdit` refreshes the layout history
+  after each write (`refreshEditHistory` / `cachedRevision`, `ui/src/state/editHistory.ts`); a `SetUiState` answer
+  sets only its own key, and only from the newest write of it (`useSetUiState`); `nail-bench` `close`
+  waits for the search index's writer lock and the store's write-ahead log to go. Tests: `replay` tests capture logs through a process-wide recorder
+  (`capture_on_this_thread`), `nail-core` tests wait on progress with `eventually_progressing`; e2e
+  `r8-p4-rule-drag.spec.ts`, `r8-p4-dialogs.spec.ts`, Exchange helpers in `e2e/support/exchange.ts`.

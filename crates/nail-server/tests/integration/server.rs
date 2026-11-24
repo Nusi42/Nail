@@ -139,6 +139,49 @@ async fn concurrent_requests_are_correlated_by_id() {
     assert_eq!(ids, (10..20).collect::<Vec<_>>());
 }
 
+/// Regression (R8): an answer never overtakes the events its request
+/// broadcast. Many writes at once keep the event forwarding busy; each
+/// `SetUiState` answer must come after its own `UiStateChanged`.
+#[tokio::test(flavor = "multi_thread")]
+async fn answers_come_after_the_events_their_requests_broadcast() {
+    const WRITES: u64 = 100;
+    let f = service();
+    let (_server, mut socket) = start_connected(&f.service).await;
+    ready(&mut socket).await;
+    for id in 10..10 + WRITES {
+        send(
+            &mut socket,
+            id,
+            Request::SetUiState {
+                key: format!("r8.order.n{id}"),
+                value: Some(serde_json::json!(id)),
+            },
+        )
+        .await;
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut answered = 0;
+    while answered < WRITES {
+        match receive(&mut socket).await {
+            ServerMessage::Event {
+                event: Event::UiStateChanged { key, .. },
+            } => {
+                seen.insert(key);
+            }
+            ServerMessage::Response { id, response } => {
+                assert!(matches!(response, Response::UiState { .. }), "{response:?}");
+                let key = format!("r8.order.n{id}");
+                assert!(
+                    seen.contains(&key),
+                    "the answer to {id} came before its event"
+                );
+                answered += 1;
+            }
+            ServerMessage::Event { .. } => {}
+        }
+    }
+}
+
 #[tokio::test]
 async fn malformed_frames_get_an_error_when_the_id_is_readable() {
     let f = service();

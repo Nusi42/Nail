@@ -788,8 +788,17 @@ fn server_count(f: &Fixture, mailbox: &str, needle: &str) -> usize {
 
 /// The mock server with a Trash and `n` messages "Bulk <i>" in its INBOX,
 /// synced.
+///
+/// The IMAP commands keep the product's deadline ([`nail_net::DEFAULT_TIMEOUT`])
+/// instead of the short test one: a command over thousands of messages (a
+/// `UID SEARCH`, chunked `UID FETCH` / `UID MOVE`) took longer than 10 s
+/// while other suites kept the machine busy (R8), which a real account of
+/// that size may also need.
 async fn bulk_fixture(n: usize) -> Fixture {
-    let f = setup("secret").await;
+    let f = setup_with("secret", |config| {
+        config.with_timeout(nail_net::DEFAULT_TIMEOUT)
+    })
+    .await;
     assert!(f.server.store().add_mailbox("Trash", FolderRole::Trash));
     append_bulk(&f, n);
     f.service.sync_account(&f.account).await.unwrap();

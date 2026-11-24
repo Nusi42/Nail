@@ -54,9 +54,29 @@ export function applyUiStateChange(
   });
 }
 
+/** The newest write of each key, per query client (see `useSetUiState`). */
+const latestWrites = new WeakMap<QueryClient, Map<string, number>>();
+
+/** Numbers a write of `key`; the number is the newest until the next write of that key. */
+function numberWrite(queryClient: QueryClient, key: string): number {
+  let writes = latestWrites.get(queryClient);
+  if (writes === undefined) {
+    writes = new Map();
+    latestWrites.set(queryClient, writes);
+  }
+  const write = (writes.get(key) ?? 0) + 1;
+  writes.set(key, write);
+  return write;
+}
+
 /**
  * Writes a key (`null` removes it). The cache changes at once; the core's
- * answer (the whole state) replaces it.
+ * answer then sets that key, unless a newer write of it was sent meanwhile.
+ * Only the written key is taken from the answer (the whole state): it can
+ * be older than writes of other keys sent after it, whose values are in
+ * the cache already, and `UiStateChanged` keeps every key current (R8: the
+ * answer to showing the Settings view brought the previous section back for
+ * a moment, and the section shown meanwhile lost its unsaved changes).
  */
 export function useSetUiState() {
   const client = useClient();
@@ -66,8 +86,12 @@ export function useSetUiState() {
       (await client.request({ type: "SetUiState", key, value }, "UiState")).state,
     onMutate: ({ key, value }) => {
       applyUiStateChange(queryClient, key, value);
+      return { write: numberWrite(queryClient, key) };
     },
-    onSuccess: (state) => queryClient.setQueryData(uiStateKey, state),
+    onSuccess: (state, { key }, context) => {
+      if (latestWrites.get(queryClient)?.get(key) !== context.write) return;
+      applyUiStateChange(queryClient, key, Object.hasOwn(state, key) ? (state[key] ?? null) : null);
+    },
   });
 }
 

@@ -840,20 +840,27 @@ mod tests {
         assert!(decrypt(&tampered, &[key(&alice, &alice_key)]).is_err());
     }
 
+    /// Damaged CBC padding is an error. The damage is deterministic: a
+    /// flipped bit of the next-to-last ciphertext block flips the same bit
+    /// of the last plaintext block (CBC), so the padding byte `0x0c` turns
+    /// into `0xf3`. Damage inside the last block would scramble it at
+    /// random and still end in valid padding about once in 256 runs (CBC
+    /// has no integrity check; R8 fixed the flaky test, not the cipher).
     #[test]
     fn cbc_padding_damage_is_an_error_not_garbage() {
         let alice = fixture_cert("alice.crt");
         let alice_key = fixture_key("alice.key");
-        let der = encrypt(
-            b"short",
-            std::slice::from_ref(&alice),
-            ContentCipher::Aes128Cbc,
-        )
-        .unwrap();
-        let mut tampered = der.clone();
-        let last = tampered.len() - 1;
-        tampered[last] ^= 0xff;
-        assert!(decrypt(&tampered, &[key(&alice, &alice_key)]).is_err());
+        // 20 bytes: two blocks, the last one padded with twelve 0x0c.
+        let text = b"twenty bytes of text";
+        let der = encrypt(text, std::slice::from_ref(&alice), ContentCipher::Aes128Cbc).unwrap();
+        let keys = [key(&alice, &alice_key)];
+        assert_eq!(plaintext(decrypt(&der, &keys).unwrap().1), text);
+        // The ciphertext ends the DER; its next-to-last block ends 16 bytes
+        // before the end.
+        let mut tampered = der;
+        let pad_byte = tampered.len() - 17;
+        tampered[pad_byte] ^= 0xff;
+        assert!(decrypt(&tampered, &keys).is_err());
     }
 
     #[test]

@@ -5,26 +5,38 @@
  * wrong node; the core writes the file (comments kept), records the undo
  * entry and pushes `ConfigChanged` + `EditHistoryChanged`.
  */
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { NailError, errorMessageOf } from "../../api/client";
 import type { LayoutPatch, LocalizedMessage } from "../../api/generated";
-import { useEditHistory, useEditHistoryStep } from "../../state/editHistory";
+import {
+  cachedRevision,
+  refreshEditHistory,
+  useEditHistory,
+  useEditHistoryStep,
+} from "../../state/editHistory";
 import { useClient } from "../../state/queries";
 import { editorStore, setMessage } from "./store";
 
-/** Sends `patches`; `done` is announced when they were written. */
+/**
+ * Sends `patches`; `done` is announced when they were written. The session
+ * stays busy until the history names the revision this write left, so the
+ * next edit (its buttons wait for `busy`) never sends the one it replaced.
+ */
 export function useLayoutEdit(): (
   patches: LayoutPatch[],
   done: LocalizedMessage,
   focusPane?: string | null,
 ) => Promise<boolean> {
   const client = useClient();
-  const history = useEditHistory("layout");
-  const revision = history.data?.revision;
+  const queryClient = useQueryClient();
+  // Keeps the history loaded: its revision goes with every write.
+  useEditHistory("layout");
   return useCallback(
     async (patches, done, focusPane = null) => {
       if (patches.length === 0) return false;
       editorStore.setState({ busy: true, moving: null, dragging: false, hover: null });
+      const revision = cachedRevision(queryClient, "layout");
       try {
         await client.request(
           revision === undefined
@@ -32,8 +44,6 @@ export function useLayoutEdit(): (
             : { type: "UpdateLayout", patches, base_revision: revision },
           "Done",
         );
-        editorStore.setState({ busy: false, message: { kind: "status", text: done }, focusPane });
-        return true;
       } catch (error) {
         editorStore.setState({
           busy: false,
@@ -41,8 +51,12 @@ export function useLayoutEdit(): (
         });
         return false;
       }
+      // Written; its `EditHistoryChanged` may still be on its way.
+      await refreshEditHistory(queryClient, client, "layout").catch(() => undefined);
+      editorStore.setState({ busy: false, message: { kind: "status", text: done }, focusPane });
+      return true;
     },
-    [client, revision],
+    [client, queryClient],
   );
 }
 

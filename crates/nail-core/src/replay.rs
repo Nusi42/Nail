@@ -1379,6 +1379,7 @@ mod tests {
 
     use nail_api::{FlagChange, FolderRole, LocalizedMessage};
     use tracing::field::{Field, Visit};
+    use tracing::subscriber::Interest;
     use tracing::{Level, Metadata, span};
 
     use super::*;
@@ -1398,8 +1399,23 @@ mod tests {
     /// A log line: its level and its fields as `name=value` text.
     type Line = (Level, String);
 
-    /// Records the events logged on this thread.
-    struct Recorder(Arc<Mutex<Vec<Line>>>);
+    /// Where this thread's log lines go while a test captures them.
+    type Sink = Arc<Mutex<Vec<Line>>>;
+
+    thread_local! {
+        static SINK: std::cell::RefCell<Option<Sink>> = const { std::cell::RefCell::new(None) };
+    }
+
+    /// Records the events logged on a thread that captures them
+    /// (`capture_on_this_thread`).
+    ///
+    /// It is the process-wide subscriber and asks about every event
+    /// (`Interest::sometimes`). A scoped subscriber (`set_default`) is not
+    /// enough while other tests run: with only one scoped subscriber alive,
+    /// `tracing-core` registers a callsite another thread reaches first
+    /// with *that* thread's subscriber (none), caches `Interest::never` and
+    /// this thread's events from that callsite are lost.
+    struct Recorder;
 
     struct Fields(String);
 
@@ -1411,8 +1427,11 @@ mod tests {
     }
 
     impl tracing::Subscriber for Recorder {
+        fn register_callsite(&self, _: &'static Metadata<'static>) -> Interest {
+            Interest::sometimes()
+        }
         fn enabled(&self, _: &Metadata<'_>) -> bool {
-            true
+            SINK.with(|sink| sink.borrow().is_some())
         }
         fn new_span(&self, _: &span::Attributes<'_>) -> span::Id {
             span::Id::from_u64(1)
@@ -1420,12 +1439,42 @@ mod tests {
         fn record(&self, _: &span::Id, _: &span::Record<'_>) {}
         fn record_follows_from(&self, _: &span::Id, _: &span::Id) {}
         fn event(&self, event: &tracing::Event<'_>) {
-            let mut fields = Fields(String::new());
-            event.record(&mut fields);
-            crate::service::lock(&self.0).push((*event.metadata().level(), fields.0));
+            SINK.with(|sink| {
+                if let Some(lines) = sink.borrow().as_ref() {
+                    let mut fields = Fields(String::new());
+                    event.record(&mut fields);
+                    crate::service::lock(lines).push((*event.metadata().level(), fields.0));
+                }
+            });
         }
         fn enter(&self, _: &span::Id) {}
         fn exit(&self, _: &span::Id) {}
+    }
+
+    /// Captures this thread's log lines until the guard drops.
+    struct Capture(Sink);
+
+    impl Capture {
+        fn lines(&self) -> Vec<Line> {
+            crate::service::lock(&self.0).clone()
+        }
+    }
+
+    impl Drop for Capture {
+        fn drop(&mut self) {
+            SINK.with(|sink| sink.borrow_mut().take());
+        }
+    }
+
+    fn capture_on_this_thread() -> Capture {
+        static INSTALL: std::sync::Once = std::sync::Once::new();
+        INSTALL.call_once(|| {
+            tracing::subscriber::set_global_default(Recorder)
+                .expect("no other test installs a global subscriber");
+        });
+        let lines = Sink::default();
+        SINK.with(|sink| *sink.borrow_mut() = Some(Arc::clone(&lines)));
+        Capture(lines)
     }
 
     fn demo() -> AccountId {
@@ -1470,10 +1519,32 @@ mod tests {
 
     /// One replay pass with `executor`, and what it logged on this thread.
     async fn logged_pass(t: &TempService, executor: &dyn OpExecutor) -> Vec<Line> {
-        let lines = Arc::new(Mutex::new(Vec::new()));
-        let _guard = tracing::subscriber::set_default(Recorder(Arc::clone(&lines)));
+        let capture = capture_on_this_thread();
         replay_account(&t.service, &demo(), executor).await.unwrap();
-        crate::service::lock(&lines).clone()
+        capture.lines()
+    }
+
+    /// A probe callsite for the capture's own test.
+    fn log_probe(n: u32) {
+        tracing::info!(n, "capture probe");
+    }
+
+    /// Regression (R8): an event is captured even when another thread,
+    /// which captures nothing, reaches its callsite first while this
+    /// thread captures. A scoped subscriber lost it then (the callsite's
+    /// interest was cached as "never").
+    #[test]
+    fn a_callsite_reached_first_by_another_thread_is_still_captured() {
+        let capture = capture_on_this_thread();
+        std::thread::spawn(|| log_probe(1)).join().unwrap();
+        log_probe(2);
+        let probes: Vec<Line> = capture
+            .lines()
+            .into_iter()
+            .filter(|(_, text)| text.contains("capture probe"))
+            .collect();
+        assert_eq!(probes.len(), 1, "{probes:?}");
+        assert!(probes[0].1.contains("n=2"), "{probes:?}");
     }
 
     /// No line at INFO or above names `text` (an error's text may name

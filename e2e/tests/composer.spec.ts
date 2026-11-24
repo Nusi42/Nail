@@ -4,14 +4,19 @@ import { expect, test, type Page } from "@playwright/test";
 import { control, nailPerTest, serverMessages } from "../support/nail";
 import {
   composerWindow,
-  runFromPalette,
   messageRow,
   messageRows,
   openMail,
   refreshList,
   DEMO_MULTI_CONVERSATIONS,
 } from "../support/views";
-import { newMessage, sendMessage, smtpMessageMatching, smtpMessages } from "../support/compose";
+import {
+  draftInOutbox,
+  newMessage,
+  sendMessage,
+  smtpMessageMatching,
+  smtpMessages,
+} from "../support/compose";
 
 /**
  * The rich composer (ADR 0023) against the `demo-multi` mock servers: HTML
@@ -160,22 +165,7 @@ test("replies quote the original in HTML and in Markdown", async ({ page }) => {
 
 test("drafts are autosaved to the server and continued after a reload", async ({ page }) => {
   await openApp(page);
-  const dialog = await newMessage(page, { subject: "Plans for Friday" });
-  await dialog.getByRole("textbox", { name: "Message" }).fill("Half-written thoughts");
-  // Autosave: shortly after the last edit, locally and to the server's Drafts.
-  await expect(dialog.locator('[data-part="composer.saved"]')).toHaveText("Draft saved.", {
-    timeout: 10_000,
-  });
-  await expect
-    .poll(async () => (await serverMessages(server, "Drafts")).map((m) => m.subject))
-    .toContain("Plans for Friday");
-
-  // A reload forgets the open composer; the outbox window lists the draft.
-  await page.reload();
-  await expect(messageRows(page)).toHaveCount(DEMO_MULTI_CONVERSATIONS);
-  await runFromPalette(page, "outbox", "Outbox");
-  const drafts = page.getByRole("region", { name: "Drafts" });
-  const item = drafts.locator('[data-part="outbox.item"]').filter({ hasText: "Plans for Friday" });
+  const item = await draftInOutbox(page, server, "Plans for Friday", "Half-written thoughts");
   await item.getByRole("button", { name: "Continue writing" }).click();
   const reopened = composerWindow(page);
   await expect(reopened.getByRole("textbox", { name: "Subject" })).toHaveValue("Plans for Friday");

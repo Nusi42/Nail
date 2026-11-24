@@ -73,6 +73,38 @@ where
     }
 }
 
+/// Waits until `check` holds while the work it waits for keeps going:
+/// fails only when `progress` (e.g. the requests a mock server answered)
+/// stood still for [`TIMEOUT`]. A long listing of hundreds of messages
+/// takes longer than [`TIMEOUT`] on a machine busy with other suites
+/// without being stuck (R8); a stall still fails after [`TIMEOUT`].
+pub(crate) async fn eventually_progressing<F, Fut>(
+    what: &str,
+    progress: impl Fn() -> usize,
+    mut check: F,
+) where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = bool>,
+{
+    let mut seen = progress();
+    let mut deadline = tokio::time::Instant::now() + TIMEOUT;
+    loop {
+        if check().await {
+            return;
+        }
+        let now = progress();
+        if now != seen {
+            seen = now;
+            deadline = tokio::time::Instant::now() + TIMEOUT;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "stalled while waiting for: {what} (progress {seen})"
+        );
+        tokio::time::sleep(POLL).await;
+    }
+}
+
 /// Waits until `check` yields a value.
 pub(crate) async fn until_some<T, F, Fut>(what: &str, mut check: F) -> T
 where

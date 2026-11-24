@@ -75,6 +75,15 @@ the list of agreed follow-ups, and steadier automated tests.
 - The plug-in manager window keeps its unsaved changes apart from the
   Settings page.
 - Settings → Appearance no longer repeats the section's title.
+- Server rules: "Upload now" always uploads the rules again, also when an
+  upload was still running when you asked.
+- Removing a shared Exchange mailbox removes its folders for good; a sync
+  that was running at that moment no longer brings them back.
+- Unsaved changes in a settings section are no longer lost when the section
+  is shown right after switching to Settings.
+- Customizing the layout: a change made right after another (for example
+  Reset to default just after moving a pane) no longer reports that
+  `layout.kdl` was changed outside Nail.
 
 ## Nail 0.8.11 (`0.8.11`)
 

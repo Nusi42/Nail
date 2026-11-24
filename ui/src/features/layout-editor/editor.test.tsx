@@ -42,16 +42,29 @@ afterEach(() => {
   setWindowWidth(1024);
 });
 
-/** Renders `children(layout)` with the layout the mock core announces. */
-function Live({ env, children }: { env: Env; children: (layout: ResolvedLayout) => ReactNode }) {
+/**
+ * Renders `children(layout)` with the layout the mock core announces;
+ * without `historyEvents`, the `EditHistoryChanged` events never arrive (as
+ * when they come after the write's answer).
+ */
+function Live({
+  env,
+  children,
+  historyEvents = true,
+}: {
+  env: Env;
+  children: (layout: ResolvedLayout) => ReactNode;
+  historyEvents?: boolean;
+}) {
   const [layout, setLayout] = useState(env.transport.data.layout);
   useEffect(
     () =>
       env.client.subscribe((event) => {
         if (event.type === "ConfigChanged") setLayout(event.layout);
-        if (event.type === "EditHistoryChanged") applyEditHistory(env.queryClient, event.history);
+        if (event.type === "EditHistoryChanged" && historyEvents)
+          applyEditHistory(env.queryClient, event.history);
       }),
-    [env],
+    [env, historyEvents],
   );
   return (
     <Providers env={env} layout={layout}>
@@ -60,9 +73,9 @@ function Live({ env, children }: { env: Env; children: (layout: ResolvedLayout) 
   );
 }
 
-function renderMail(env: Env, extra?: ReactNode) {
+function renderMail(env: Env, extra?: ReactNode, historyEvents = true) {
   return render(
-    <Live env={env}>
+    <Live env={env} historyEvents={historyEvents}>
       {(layout) => (
         <>
           <WindowView layout={layout} name="mail" />
@@ -142,6 +155,30 @@ describe("customize-layout mode", () => {
     expect(within(palette).getByRole("button", { name: "Move Mini month" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
     expect(await violations(region)).toEqual([]);
+  });
+
+  it("sends the revision the last write left, also before its history event (R8)", async () => {
+    const env = createEnv();
+    renderMail(env, undefined, false);
+    await settleQueries(env);
+    act(() => {
+      startEditing("mail");
+    });
+    await screen.findByRole("region", { name: "Customizing layout: Mail" });
+    await settleQueries(env);
+    hideFolders();
+    await waitFor(() => {
+      expect(pane("Folders")).toHaveAttribute("data-state", "hidden");
+    });
+    // A second edit right away: no conflict with the write before it.
+    fireEvent.click(within(pane("Messages")).getByRole("button", { name: "Hide Messages" }));
+    await waitFor(() => {
+      expect(pane("Messages")).toHaveAttribute("data-state", "hidden");
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Messages is hidden.");
+    const updates = env.transport.requests.filter((r) => r.type === "UpdateLayout");
+    expect(updates).toHaveLength(2);
+    await settleQueries(env);
   });
 
   it("hides and shows a pane with the eye", async () => {

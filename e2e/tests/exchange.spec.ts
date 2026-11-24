@@ -8,7 +8,6 @@ import {
   showView,
   viewRegion,
   messageRows,
-  syncAccount,
   DEMO_MULTI_CONVERSATIONS,
   openMail,
   moveSelectionTo,
@@ -19,6 +18,13 @@ import { defined } from "../support/defined";
 import { eventChip, syncCalendars } from "../support/calendar";
 import { expectSentThrough, newMessage } from "../support/compose";
 import { addFromMenu, saveRule } from "../support/rules";
+import {
+  enableAccount,
+  enableContoso,
+  FIXTURE_NOW,
+  graphMessageOf,
+  graphSettingsOf,
+} from "../support/exchange";
 
 /**
  * Wave M3c (ADR 0077) against `nail serve --seed demo-multi`: Exchange
@@ -28,14 +34,6 @@ import { addFromMenu, saveRule } from "../support/rules";
  * (`autodiscover.contoso.example`, `autodiscover.corp.example`). Controls:
  * `graph-*` (the mock Graph tenant), `ews-*` (the mock EWS server).
  */
-
-/**
- * The core's clock for these tests: before every dated item of the mock
- * tenants (their first reminders are due 2026-10-05 06:45 UTC), so no
- * reminder comes due — or is caught up — while a test runs, whatever the
- * day the suite runs on. Reminder toasts are `pim.spec.ts`'s subject.
- */
-const FIXTURE_NOW = Date.UTC(2026, 9, 1, 8, 0) / 1000;
 
 /**
  * The page's date for tests that answer a meeting in the calendar: the
@@ -49,28 +47,11 @@ const server = nailPerTest({ seed: "demo-multi" }, async (s) => {
   await control(s, "clock-set", { at: FIXTURE_NOW });
 });
 
-interface GraphMessage {
-  id: string;
-  folder: string;
-  subject: string;
-  read: boolean;
-  flag: string;
-  categories: string[];
-  inference: string;
-}
+const graphMessage = (subject: string) => graphMessageOf(server, subject);
+const graphSettings = () => graphSettingsOf(server);
 
-const graphMessages = (mailbox?: string) =>
-  control<GraphMessage[]>(server, "graph-messages", mailbox ? { mailbox } : {});
-const graphMessage = async (subject: string) =>
-  (await graphMessages()).find((m) => m.subject === subject);
 const graphFolders = () =>
   control<{ id: string; name: string; well_known: string | null }[]>(server, "graph-folders");
-const graphSettings = () =>
-  control<{
-    categories: { displayName: string }[];
-    automatic_replies: Record<string, unknown>;
-    rules: Record<string, unknown>[];
-  }>(server, "graph-settings");
 const graphPim = () =>
   control<{
     events: Record<string, unknown>[];
@@ -104,20 +85,6 @@ const ewsSettings = () =>
     oof: { state: string; internal: string; external: string };
     rules: { name: string | null; enabled: boolean }[];
   }>(server, "ews-settings");
-
-/** Settings → Accounts → Contoso → "Synchronize this account". */
-async function enableContoso(page: Page) {
-  await enableAccount(page, "Contoso", 2);
-}
-
-/** Settings → Accounts → `name` (an Exchange account) → "Synchronize this
- * account"; waits for `messages` rows in its inbox. */
-async function enableAccount(page: Page, name: string, messages: number) {
-  await syncAccount(page, name, messages, async (settings) => {
-    // An Exchange account shows its engine and options.
-    await expect(settings.getByRole("combobox", { name: "Protocol" })).toHaveValue("exchange");
-  });
-}
 
 /** Opens the Add account dialog and looks up `email`. */
 async function lookUp(page: Page, email: string): Promise<Locator> {

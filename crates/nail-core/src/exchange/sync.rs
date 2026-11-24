@@ -889,12 +889,18 @@ async fn apply_hierarchy(
         .call(move |s| {
             let mut changed = false;
             if let Some((root_id, address)) = &root {
-                let name = s
+                // Checked in the same store call as the writes: a mailbox
+                // removed while this pass listed its hierarchy keeps its
+                // folders gone (R8: the pass wrote them back after
+                // `RemoveExchangeMailbox` had forgotten them).
+                let Some(shown) = s
                     .exchange_mailboxes(&id, true)?
                     .into_iter()
                     .find(|m| &m.settings.address == address)
-                    .and_then(|m| m.settings.name)
-                    .unwrap_or_else(|| address.clone());
+                else {
+                    return Ok(false);
+                };
+                let name = shown.settings.name.unwrap_or_else(|| address.clone());
                 s.upsert_folder(&Folder {
                     id: root_id.clone(),
                     account_id: id.clone(),
@@ -2513,6 +2519,62 @@ mod tests {
         since.synced(&"a".into(), false);
         since.synced(&"inbox".into(), false);
         assert!(since.stale(all()).is_empty(), "{:?}", since.stale(all()));
+    }
+
+    /// Regression (R8): a pass that listed another mailbox's folders
+    /// before `RemoveExchangeMailbox` does not write them back after it.
+    #[tokio::test]
+    async fn a_removed_mailbox_gets_no_folders_back() {
+        let t = crate::testing::TempService::quiet();
+        crate::demo::seed_demo(t.service.store(), t.service.blobs()).unwrap();
+        let service = &t.service;
+        let account = AccountConfig {
+            id: AccountId::new(crate::demo::DEMO_ACCOUNT_ID),
+            ..nail_api::testing::imap_account()
+        };
+        let address = "support@example.com";
+        let inbox = ExchangeFolder {
+            remote_id: "inbox-1".into(),
+            change_key: None,
+            parent: None,
+            name: "Inbox".into(),
+            well_known: None,
+            class: ExchangeFolderClass::Mail,
+            total: None,
+            unread: None,
+        };
+        let listed = std::slice::from_ref(&inbox);
+        let folder = exchange_folder_id(&account.id, Some(address), "inbox-1");
+        let exists = |id: &FolderId| service.store().get_folder(id).is_ok();
+        service
+            .store()
+            .save_exchange_mailbox(
+                &account.id,
+                &nail_api::exchange::ExchangeMailboxSettings::shared(address),
+                nail_api::exchange::ExchangeMailboxOrigin::User,
+                0,
+            )
+            .unwrap();
+        // While the mailbox is shown, its listed folders are stored.
+        apply_hierarchy(service, &account, Some(address), listed, &[], true)
+            .await
+            .unwrap();
+        assert!(exists(&folder));
+        // Removed (as `RemoveExchangeMailbox` does), then the pass that
+        // listed it before goes on writing.
+        assert!(
+            service
+                .store()
+                .remove_exchange_mailbox(&account.id, address)
+                .unwrap()
+        );
+        forget_mailbox(service, &account.id, address).await.unwrap();
+        assert!(!exists(&folder));
+        apply_hierarchy(service, &account, Some(address), listed, &[], true)
+            .await
+            .unwrap();
+        assert!(!exists(&folder), "the removed mailbox's folder came back");
+        assert!(!exists(&mailbox_root_id(&account.id, address)));
     }
 
     #[test]
