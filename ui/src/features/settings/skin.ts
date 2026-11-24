@@ -26,7 +26,13 @@
 import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
 import { CONTROL_WIDTH_VAR } from "../../theme/skin";
 import { p } from "../../theme/selectors";
-import { QUIET_BUTTON, QUIET_HOVER, SECTION_LABEL } from "../../theme/declarations";
+import {
+  FOCUS_RING,
+  ONE_LINE,
+  QUIET_BUTTON,
+  QUIET_HOVER,
+  SECTION_LABEL,
+} from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 
 /** A part inside the settings page's cards. */
@@ -55,7 +61,7 @@ ${p("settings-page.header")} { display: grid; gap: ${T.xxs}; padding: ${T.xl} ${
 ${p("settings-page.breadcrumb")} { ${SECTION_LABEL} }
 ${p("settings-page.title")} { margin: 0; font-family: ${T.fontDisplay}; font-size: ${T.title}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("settings-page.title")}:focus { outline: none; }
-${p("settings-page.title")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("settings-page.title")}:focus-visible { ${FOCUS_RING} }
 ${p("settings-page.body")} {
   display: grid; align-content: start; gap: ${T.lg}; flex: 1 1 auto; min-height: 0; overflow: auto;
   ${SETTINGS_BODY_END}: ${T.xxl}; padding: ${T.xs} ${T.xxl} var(${SETTINGS_BODY_END});
@@ -106,7 +112,7 @@ ${p("settings-page.nav.item")}[aria-current="page"], ${p("settings-page.result.s
 }
 ${p("settings-page.nav.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
 ${p("settings-page.nav.item")}[aria-current="page"] ${p("settings-page.nav.icon")}, ${p("settings-page.result.section")}[aria-current="page"] ${p("settings-page.nav.icon")} { color: inherit; }
-${p("settings-page.nav.label")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("settings-page.nav.label")} { ${ONE_LINE} }
 ${p("settings-page.result.setting")} {
   min-height: calc(${T.control} - ${T.xs}); padding-inline-start: calc(${T.icon} + 2 * ${T.md});
   font-size: ${T.small}; color: ${T.muted};

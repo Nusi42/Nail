@@ -14,7 +14,7 @@ import { requestsOf } from "../../test/env";
 import { violations } from "../../test/axe";
 import { must } from "../../test/must";
 import { seedSchedulingDemo } from "../scheduling/mockSeed";
-import { EventPopoverHost, occurrenceFields } from "./EventPopover";
+import { EventPopoverHost, focusAfterDelete, occurrenceFields } from "./EventPopover";
 import { EVENT_DIALOG, SCOPE_DIALOG } from "./names";
 import { pimStoreFor } from "./store";
 import { localZone } from "./time";
@@ -163,7 +163,10 @@ describe("the quick look", () => {
       "data-status",
       "needs-action",
     );
-    expect(within(popover).getByText(/^Overlaps 2 events: /)).toHaveTextContent(/Sprint planning/);
+    // The core's overlaps (the invitation card's rule), asked once the answer is known.
+    expect(await within(popover).findByText(/^Overlaps 2 events: /)).toHaveTextContent(
+      /Sprint planning/,
+    );
     const answers = within(popover).getByRole("group", { name: "Your answer" });
     for (const name of ["Accept", "Maybe", "Decline"]) {
       expect(within(answers).getByRole("button", { name })).toHaveAttribute(
@@ -207,5 +210,50 @@ describe("the quick look", () => {
     const instance = { recurrence_id: rid } as unknown as EventInstance;
     expect(occurrenceFields(event, instance).title).toBe("Moved");
     expect(occurrenceFields(event, { ...instance, recurrence_id: null }).title).toBe("Series");
+  });
+});
+
+describe("focus after Delete", () => {
+  /** Cards `ids` and the grid's active slot in the document. */
+  function view(ids: string[]): HTMLElement[] {
+    const slot = document.createElement("button");
+    slot.dataset.part = "calendar.slot";
+    slot.tabIndex = 0;
+    const cards = ids.map((id) => {
+      const card = document.createElement("button");
+      card.dataset.event = id;
+      return card;
+    });
+    document.body.append(...cards, slot);
+    return [...cards, slot];
+  }
+
+  it("moves to the next card once the deleted card is gone, else the previous, else the slot", () => {
+    const [a, b, c, slot] = view(["a", "b", "c"]).map((e) => must(e));
+    b?.focus();
+    const refocus = focusAfterDelete("b");
+    b?.remove();
+    refocus();
+    expect(c).toHaveFocus();
+    const last = focusAfterDelete("c");
+    c?.remove();
+    last();
+    expect(a).toHaveFocus();
+    const only = focusAfterDelete("a");
+    a?.remove();
+    only();
+    expect(slot).toHaveFocus();
+    slot?.remove();
+  });
+
+  it("leaves a focus that found its own place alone", () => {
+    const [a, b, slot] = view(["a", "b"]).map((e) => must(e));
+    const outside = document.createElement("input");
+    document.body.append(outside);
+    const refocus = focusAfterDelete("a");
+    outside.focus();
+    refocus();
+    expect(outside).toHaveFocus();
+    for (const el of [a, b, slot, outside]) el?.remove();
   });
 });

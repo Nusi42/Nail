@@ -81,11 +81,6 @@ invitation-reply-from =
 invitation-counter-from = { $name } proposes another time:
 invitation-counter-location = Proposed place: { $location }
 invitation-comment-from = Note from { $name }
-invitation-attendees-summary =
-    { $count ->
-        [one] 1 person
-       *[other] { $count } people
-    }: { $accepted } accepted, { $tentative } maybe, { $declined } declined, { $pending } not answered
 invitation-attendee-room = Room
 invitation-attendee-resource = Resource
 invitation-conflicts-none = You have nothing else at this time.
@@ -188,7 +183,6 @@ freebusy-meeting-busy =
         [one] Busy at the chosen time: { $names }
        *[other] { $count } people are busy at the chosen time: { $names }
     }
-freebusy-suggestions-none = No free time for everyone on this day.
 freebusy-suggestion-pick = Move the meeting to { $day }, { $time }
 
 ## Find a time

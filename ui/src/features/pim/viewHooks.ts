@@ -1,7 +1,7 @@
 /**
  * Hooks of the calendar's views and shell (R7, ADR 0246): the zones a
  * widget shows (layout option, then the preferences, then the system's),
- * the width of an element, whether the window's layout shows the calendar
+ * the size of an element, whether the window's layout shows the calendar
  * sidebar (else the calendar offers it as a drawer) and a touch screen.
  */
 import { useContext, useLayoutEffect, useState, useSyncExternalStore, type RefObject } from "react";
@@ -21,14 +21,18 @@ export function useCalendarZones(node?: WidgetNode): ViewZones {
   });
 }
 
-/** The content width of the element of `ref` in CSS pixels (0 until measured, or without `ResizeObserver`). */
-export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
-  const [width, setWidth] = useState(0);
+/** The content size of the element of `ref` in CSS pixels (0 until measured, or without `ResizeObserver`). */
+export function useElementSize(ref: RefObject<HTMLElement | null>): {
+  width: number;
+  height: number;
+} {
+  const [size, setSize] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const measure = () => {
-      setWidth(Math.round(el.clientWidth));
+      const next = { width: Math.round(el.clientWidth), height: Math.round(el.clientHeight) };
+      setSize((s) => (s.width === next.width && s.height === next.height ? s : next));
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -37,7 +41,18 @@ export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
       observer.disconnect();
     };
   }, [ref]);
-  return width;
+  return size;
+}
+
+/** The root font size in CSS pixels (what `1rem` is; 16 when unknown). */
+export function rootFontPx(): number {
+  const size = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Number.isFinite(size) && size > 0 ? size : 16;
+}
+
+/** The content width of the element of `ref` in CSS pixels (see `useElementSize`). */
+export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
+  return useElementSize(ref).width;
 }
 
 /** Whether the window showing `node` shows the calendar sidebar at its current width. */

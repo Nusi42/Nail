@@ -30,13 +30,11 @@
  *   is the shared `card`)
  */
 import { p } from "../../theme/selectors";
-import { QUIET_HOVER, smallTag } from "../../theme/declarations";
+import { FOCUS_RING, QUIET_HOVER, smallTag } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 
 /** The panes of a preset's miniature: barely rounded at that size. */
 const PREVIEW_RADIUS = "3px";
-
-const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 
 const FRAME = `${p("layout-editor.frame")} {
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr);
@@ -98,7 +96,7 @@ ${p("layout-editor.handle")} {
   color: ${T.muted}; background-color: transparent; cursor: grab; touch-action: none;
 }
 ${p("layout-editor.handle")}:hover { ${QUIET_HOVER} }
-${p("layout-editor.handle")}:focus-visible { ${focusRing} outline-offset: -2px; }
+${p("layout-editor.handle")}:focus-visible { ${FOCUS_RING} outline-offset: -2px; }
 ${p("layout-editor.handle")}[aria-pressed="true"] { color: ${T.accent}; background-color: ${T.accentSoft}; }
 ${p("layout-editor.handle")}:disabled { opacity: ${T.disabled}; }
 ${p("layout-editor.handle.icon")}, ${p("layout-editor.pane-lock")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
@@ -130,7 +128,7 @@ ${p("layout-editor.target")}[data-zone="swap"], ${p("layout-editor.target")}[dat
 ${p("layout-editor.target")}:hover, ${p("layout-editor.target")}[data-state~="hover"], ${p("layout-editor.target")}:focus-visible {
   border-style: solid; color: ${T.accentFg}; background-color: ${T.accent};
 }
-${p("layout-editor.target")}:focus-visible { ${focusRing} }
+${p("layout-editor.target")}:focus-visible { ${FOCUS_RING} }
 ${p("layout-editor.target.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
 ${p("layout-editor.target.label")} { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }`;
 
@@ -146,7 +144,7 @@ ${p("layout-editor.preset")} {
   font-size: ${T.small}; color: ${T.fg}; background-color: ${T.bg}; text-align: center;
 }
 ${p("layout-editor.preset")}:hover { background-color: ${T.raised}; }
-${p("layout-editor.preset")}:focus-visible { ${focusRing} }
+${p("layout-editor.preset")}:focus-visible { ${FOCUS_RING} }
 ${p("layout-editor.preset")}[aria-pressed="true"] { border-color: ${T.accent}; box-shadow: 0 0 0 1px ${T.accent}; font-weight: ${T.semibold}; }
 ${p("layout-editor.preset")}:disabled { opacity: ${T.disabled}; }
 ${p("layout-editor.preset-preview")} { display: flex; height: calc(${T.control} + ${T.xs}); }
@@ -163,7 +161,7 @@ ${p("layout-editor.widget")} {
   font-size: ${T.small}; color: ${T.fg}; background-color: ${T.bg}; text-align: start; cursor: grab; touch-action: none;
 }
 ${p("layout-editor.widget")}:hover { background-color: ${T.raised}; }
-${p("layout-editor.widget")}:focus-visible { ${focusRing} }
+${p("layout-editor.widget")}:focus-visible { ${FOCUS_RING} }
 ${p("layout-editor.widget")}[aria-pressed="true"] { border-color: ${T.accent}; box-shadow: 0 0 0 1px ${T.accent}; }
 ${p("layout-editor.widget")}:disabled { opacity: ${T.disabled}; }
 ${p("layout-editor.widget-icon")} {

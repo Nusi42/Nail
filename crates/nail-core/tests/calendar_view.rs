@@ -225,6 +225,40 @@ async fn event_text_is_checked_and_read() {
     }
 }
 
+/// A service whose clock (the demo clock of seeded runs) shows `now` (RFC 3339).
+fn service_at(now: &str) -> TempService {
+    let clock = std::sync::Arc::new(nail_core::AdjustableClock::new());
+    let at = chrono::DateTime::parse_from_rfc3339(now).expect("a valid instant");
+    clock.set(at.timestamp());
+    TempService::quiet_with(&[], |options| {
+        options.clock = Some(clock.clone());
+    })
+}
+
+#[tokio::test]
+async fn event_text_without_now_reads_the_core_clock() {
+    // The core's clock (the demo clock in seeded runs) is a year ahead of
+    // the wall clock: "tomorrow" is the day after the core's today.
+    let temp = service_at("2027-11-25T10:40:00Z");
+    let Response::EventTextParsed { parsed } = ok(
+        &temp.service,
+        Request::ParseEventText {
+            text: "Lunch with Bob tomorrow 12:30".into(),
+            tz: "Europe/Berlin".into(),
+            now: None,
+            locale: None,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    assert_eq!(
+        parsed.start,
+        Some(PimTime::zoned("2027-11-26T12:30:00", "Europe/Berlin"))
+    );
+}
+
 async fn parse(service: &Service, text: &str, now: &str) -> ParsedEventText {
     match ok(
         service,
@@ -419,4 +453,107 @@ async fn instances_carry_the_users_own_answer() {
     assert_eq!(status("Declined"), Some(ParticipationStatus::Declined));
     assert_eq!(status("Organized"), None);
     assert_eq!(status("Not mine"), None);
+
+    // What "Organized" overlaps: the invitation card's rule, so the declined one does not count.
+    let organized = instances
+        .iter()
+        .find(|i| i.title == "Organized")
+        .expect("Organized")
+        .event_id
+        .clone();
+    let Response::EventOverlaps { overlaps } = ok(
+        &service,
+        Request::ListEventOverlaps {
+            event_id: organized,
+            from: "2026-11-26T09:00:00Z".into(),
+            to: "2026-11-26T10:00:00Z".into(),
+            tz: "UTC".into(),
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    let mut titles: Vec<&str> = overlaps.iter().map(|o| o.title.as_str()).collect();
+    titles.sort_unstable();
+    assert_eq!(titles, ["Invited", "Not mine", "Via the alias"]);
+}
+
+#[tokio::test]
+async fn search_files_a_repeating_event_by_its_next_occurrence() {
+    use nail_api::pim::calendar::Frequency;
+    use nail_api::pim::{PimItemKind, Recurrence, RecurrenceEnd, RecurrenceRule};
+    let temp = service_at("2026-11-25T10:40:00Z");
+    let service = &temp.service;
+    let calendar = calendars(service)
+        .await
+        .into_iter()
+        .find(|c| c.components.contains(&CalendarComponent::Event))
+        .expect("a local calendar")
+        .id;
+    let berlin = |local: &str| PimTime::zoned(local, "Europe/Berlin");
+    let create = |title: &str, start: &str, end: &str, recurrence: Option<Recurrence>| {
+        Request::CreateEvent {
+            calendar_id: calendar.clone(),
+            fields: Box::new(EventFields::new(title, berlin(start), berlin(end))),
+            recurrence,
+        }
+    };
+    // A daily stand-up from Tuesday 24 at 8:30: today's has passed, the next is tomorrow.
+    let daily = Recurrence::rule(RecurrenceRule::new(Frequency::Daily));
+    ok(
+        service,
+        create(
+            "Standup daily",
+            "2026-11-24T08:30:00",
+            "2026-11-24T08:45:00",
+            Some(daily),
+        ),
+    )
+    .await;
+    // A series that ended: its last occurrence.
+    let mut three = RecurrenceRule::new(Frequency::Weekly);
+    three.end = RecurrenceEnd::Count { count: 3 };
+    ok(
+        service,
+        create(
+            "Standup weekly",
+            "2026-10-01T09:00:00",
+            "2026-10-01T10:00:00",
+            Some(Recurrence::rule(three)),
+        ),
+    )
+    .await;
+    // A single event keeps its start.
+    ok(
+        service,
+        create(
+            "Standup once",
+            "2026-11-20T09:00:00",
+            "2026-11-20T10:00:00",
+            None,
+        ),
+    )
+    .await;
+    let Response::PimSearchResults { hits } = ok(
+        service,
+        Request::SearchPim {
+            query: "standup".into(),
+            kinds: vec![PimItemKind::Event],
+            limit: 10,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    let start = |title: &str| {
+        hits.iter()
+            .find(|h| h.title == title)
+            .and_then(|h| h.start.clone())
+            .unwrap_or_else(|| panic!("no hit {title}: {hits:?}"))
+    };
+    assert_eq!(start("Standup daily"), berlin("2026-11-26T08:30:00"));
+    assert_eq!(start("Standup weekly"), berlin("2026-10-15T09:00:00"));
+    assert_eq!(start("Standup once"), berlin("2026-11-20T09:00:00"));
 }

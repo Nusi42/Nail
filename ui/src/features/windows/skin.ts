@@ -24,7 +24,13 @@
  *   dragged window will fill when dropped
  */
 import { p } from "../../theme/selectors";
-import { QUIET_HOVER, VISUALLY_HIDDEN } from "../../theme/declarations";
+import {
+  FOCUS_RING,
+  ICON_BUTTON,
+  ONE_LINE,
+  QUIET_HOVER,
+  VISUALLY_HIDDEN,
+} from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 
 /** The grab width of an edge handle and the size of a corner handle. */
@@ -57,15 +63,11 @@ const TITLE_BAR = `${p("window-layer")} ${p("window.header")} {
 }
 ${p("window-layer")} ${p("window.header")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("window")}[data-mode] ${p("window.header")} { outline: 2px dashed ${T.accent}; outline-offset: -2px; }
-${p("window.title")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("window.title")} { ${ONE_LINE} }
 ${p("window.hint")}, ${p("window.status")} { ${VISUALLY_HIDDEN} }
-${p("window.maximize")} {
-  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
-  width: ${T.control}; height: ${T.control}; padding: 0;
-  border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent;
-}
+${p("window.maximize")} { ${ICON_BUTTON} flex: 0 0 auto; }
 ${p("window.maximize")}:hover { ${QUIET_HOVER} }
-${p("window.maximize")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("window.maximize")}:focus-visible { ${FOCUS_RING} }
 ${p("window.maximize.icon")} { width: ${T.icon}; height: ${T.icon}; }`;
 
 const edge = (name: string, rules: string) =>

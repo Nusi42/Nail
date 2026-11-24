@@ -13,10 +13,15 @@
  * part (the theme's own single-part rules stay valid); the skin styles new
  * parts only, so no theme rule overrides it (`skin.test.ts`).
  */
-import { ACCENT_BAR, FLOAT_INSET, floatingWidth, VISUALLY_HIDDEN } from "../../theme/declarations";
+import {
+  ACCENT_BAR,
+  FLOAT_INSET,
+  floatingWidth,
+  FOCUS_RING,
+  VISUALLY_HIDDEN,
+} from "../../theme/declarations";
+import { p } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
-
-const p = (part: string) => `[data-part="${part}"]`;
 
 /** One line of text in the strip and the lanes (their rows must not collapse). */
 const ROW = "1.6em";
@@ -115,7 +120,7 @@ ${p("pim.compact.place.input")} {
 ${p("pim.compact.place.input")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 1px; }
 ${p("pim.compact.more")} { border-top: 1px solid ${T.border}; padding-top: ${T.xs}; }
 ${p("pim.compact.more.summary")} { cursor: default; color: ${T.muted}; font-size: ${T.small}; }
-${p("pim.compact.more.summary")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("pim.compact.more.summary")}:focus-visible { ${FOCUS_RING} }
 ${p("pim.datetime.day")} {
   min-height: ${T.control}; padding: 0 ${T.sm}; border: ${T.controlBorder}; border-radius: ${T.rMd};
   font-family: ${T.fontUi}; font-size: ${T.body}; color: ${T.fg}; background-color: ${T.bg}; white-space: nowrap;
@@ -132,14 +137,14 @@ ${p("pim.reminder.split")} > ${p("pim.reminder.more")} {
   border: 1px solid ${T.border}; border-inline-start: none; border-radius: 0 ${T.rMd} ${T.rMd} 0; color: ${T.fg}; background-color: ${T.bg};
 }
 ${p("pim.reminder.more")}:hover { background-color: ${T.subtle}; }
-${p("pim.reminder.more")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("pim.reminder.more")}:focus-visible { ${FOCUS_RING} }
 ${p("pim.reminder.more.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("invitation.more")} {
   display: inline-flex; align-items: center; gap: ${T.xxs}; min-height: ${T.control}; padding: 0 ${T.sm};
   border: none; border-radius: ${T.rMd}; font: inherit; color: ${T.fg}; background-color: transparent;
 }
 ${p("invitation.more")}:hover { background-color: ${T.raised}; }
-${p("invitation.more")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("invitation.more")}:focus-visible { ${FOCUS_RING} }
 ${p("invitation.more.icon")} { order: 1; width: ${T.icon}; height: ${T.icon}; }
 ${p("invitation.from")} { margin: 0; color: ${T.muted}; font-size: ${T.small}; }
 ${p("invitation.strip.axis")} { color: ${T.muted}; font-size: ${T.label}; }
@@ -150,11 +155,12 @@ ${p("invitation.strip.block")}[data-state="tentative"] { border: 1px dashed ${T.
 ${p("invitation.strip.block")}[data-state="invitation"] { border: 1px dashed ${T.accent}; background-color: ${T.bg}; font-weight: ${T.semibold}; }
 ${p("invitation.strip.all-day")} { margin: 0; color: ${T.muted}; font-size: ${T.small}; }
 ${p("invitation.attendees.line")} { color: ${T.muted}; font-size: ${T.small}; }
-${p("segmented")}[data-field="answer"][data-state="open"] > ${p("segmented.option")}[data-action="accept"] { color: ${T.accent}; }
+${p("segmented")}[data-field="answer"][data-state="open"] > ${p("segmented.option")}[data-action="accept"] { font-weight: ${T.semibold}; color: ${T.accentFg}; background-color: ${T.accent}; }
+${p("scheduling.answer.row")} > ${p("form.button")}[data-action="propose-new-time"] { font-weight: ${T.regular}; color: ${T.muted}; }
 ${p("segmented")}[data-field="answer"] > ${p("segmented.option")}[data-action="accept"][aria-pressed="true"] { color: ${T.accentFg}; background-color: ${T.success}; }
 ${p("freebusy.frame")} { border: 2px solid ${T.accent}; border-radius: ${T.rSm}; background-color: color-mix(in srgb, ${T.accent} 12%, transparent); cursor: grab; }
 ${p("freebusy.frame")}[data-state="dragging"] { cursor: grabbing; }
-${p("freebusy.frame")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("freebusy.frame")}:focus-visible { ${FOCUS_RING} }
 ${p("freebusy.none")} { color: ${T.muted}; font-size: ${T.label}; background-image: repeating-linear-gradient(135deg, ${T.subtle} 0 0.4em, transparent 0.4em 0.8em); }
 ${p("freebusy.busy.text")} { padding: 0 ${T.xxs}; font-size: ${T.label}; color: ${T.accentFg}; }
 ${p("freebusy.unknown")}, ${p("freebusy.hint")} { margin: 0; color: ${T.muted}; font-size: ${T.small}; }`;

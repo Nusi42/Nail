@@ -50,7 +50,15 @@ import {
   preferencesIssue,
   tasksDue,
 } from "./mockCalendarView";
-import { endFor, expandEvent, instantOf, occurrenceStarts, sameOccurrence } from "./mockExpand";
+import {
+  conflictsIn,
+  endFor,
+  expandEvent,
+  instantOf,
+  nearestStart,
+  occurrenceStarts,
+  sameOccurrence,
+} from "./mockExpand";
 import { demoPim, emptyContactFields, emptyEventFields, emptyTaskFields } from "./mockSeed";
 import {
   dateString,
@@ -131,6 +139,7 @@ export const PIM_REQUESTS = [
   "SetCalendarPreferences",
   "ParseEventText",
   "ListTasksDue",
+  "ListEventOverlaps",
 ] as const satisfies readonly Request["type"][];
 
 export type PimRequest = Extract<Request, { type: (typeof PIM_REQUESTS)[number] }>;
@@ -1060,6 +1069,15 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
           userAddresses(core.data),
         ),
       };
+    case "ListEventOverlaps": {
+      const overlaps = conflictsIn(
+        listInstances(pim, request.from, request.to, null, request.tz, userAddresses(core.data)),
+        request.event_id,
+        instantMs(request.from),
+        instantMs(request.to),
+      );
+      return { type: "EventOverlaps", overlaps };
+    }
     case "GetEvent": {
       const event = pim.events.find((e) => e.id === request.event_id);
       return event
@@ -1609,7 +1627,7 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
                 detail: f.location,
                 calendar_id: e.calendar_id,
                 address_book_id: null,
-                start: f.start,
+                start: nearestStart(e, Date.now()),
               });
             }
           }

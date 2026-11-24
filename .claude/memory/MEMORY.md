@@ -15,4 +15,4 @@
 - [R4 status](r4-status.md) — bulk actions: queue summary + resync, no OpStatus for message writes, combobox Move window, drafts safety (ADRs 0230-0232); snapshot / vitest-cache pitfalls
 - [R5 status](r5-status.md) — select all (Ctrl+A, list targets with `as_of` marks), large actions in parts with one undo (ADRs 0235-0237); timings; slow-machine Exchange flakes; CONFIRMATIONS set
 - [R6 status](r6-status.md) — one dialog pattern everywhere integrated (ADRs 0239-0244): footer by role, ConfirmDialog, question window / pending slot, close guard, settings drafts (useSettingsForm), sweep checks × / Esc / footer per OS; fixture and common-text pitfalls
-- [R7 status](r7-status.md) — calendar that reads well integrated (ADRs 0246-0250): click = quick look, one rule for a new event's calendar / declined / week start, icons, fixture pitfalls
+- [R7 status](r7-status.md) — calendar that reads well integrated and review-fixed (ADRs 0246-0250): click = quick look, one rule for a new event's calendar / declined / week start, DueTaskItem + Plan, cascade by exposed height, fixture pitfalls

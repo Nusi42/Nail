@@ -52,12 +52,15 @@ impl Service {
 }
 
 /// Answers `ParseEventText`: checks the text and the zone, places "now" in
-/// the zone and lets `nail-event-text` read the text.
+/// the zone and lets `nail-event-text` read the text. Without a `now` in the
+/// request the core's clock (`clock_now`, the demo clock in seeded runs)
+/// says what "today" and "tomorrow" are, never the wall clock.
 pub(super) fn parse_event_text(
     text: &str,
     tz: &str,
     now: Option<&str>,
     locale: Option<&str>,
+    clock_now: DateTime<Utc>,
 ) -> Result<ParsedEventText> {
     if text.chars().count() > MAX_EVENT_TEXT {
         return Err(ApiError::invalid_request(format!(
@@ -70,7 +73,7 @@ pub(super) fn parse_event_text(
         Some(text) => DateTime::parse_from_rfc3339(text)
             .map_err(|_| ApiError::invalid_request(format!("invalid time {text:?}")))?
             .with_timezone(&Utc),
-        None => Utc::now(),
+        None => clock_now,
     };
     let context = nail_event_text::Context {
         now: now.with_timezone(&zone).naive_local(),

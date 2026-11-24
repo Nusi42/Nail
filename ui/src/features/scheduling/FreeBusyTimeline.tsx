@@ -33,6 +33,7 @@ import { useGeometry } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
 import { Problem } from "../pim/common";
 import { formatDay, formatHour } from "../pim/fmt";
+import { useCalendarPreferences, workHourRange } from "../pim/prefs";
 import { todayIn, toZoned, utcString } from "../pim/time";
 import { clockRange } from "./fmt";
 import { busyDuring, busySpans, ms, placeSpan, suggestSlots, type Span } from "./model";
@@ -107,8 +108,8 @@ export function FreeBusyTimeline({
   meeting,
   durationMinutes,
   tz,
-  hourStart = 8,
-  hourEnd = 18,
+  hourStart,
+  hourEnd,
   identityId = null,
   ignoreEventId = null,
   maxSuggestions = 5,
@@ -119,8 +120,10 @@ export function FreeBusyTimeline({
   const clock = useNow();
   const now = fixedNow ?? clock;
   const format = useDateFormat();
-  const start = Math.max(0, Math.min(23, hourStart));
-  const end = Math.max(start + 1, Math.min(24, hourEnd));
+  // The working hours of the preferences unless the caller says otherwise.
+  const work = workHourRange(useCalendarPreferences());
+  const start = Math.max(0, Math.min(23, hourStart ?? work.start));
+  const end = Math.max(start + 1, Math.min(24, hourEnd ?? work.end));
   const dayStart = toZoned(day, tz).toDate().getTime();
   const dayEnd = toZoned(day.add({ days: 1 }), tz)
     .toDate()

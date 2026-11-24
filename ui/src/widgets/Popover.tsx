@@ -98,14 +98,28 @@ export function usePopoverPosition(
   useLayoutEffect(() => {
     if (key === null) return;
     const rect = JSON.parse(key) as AnchorRect;
-    const box = ref.current?.getBoundingClientRect();
-    const next = placePopover(
-      rect,
-      { width: box?.width ?? 0, height: box?.height ?? 0 },
-      { width: window.innerWidth, height: window.innerHeight },
-      placement,
-    );
-    setPosition((p) => (p.x === next.x && p.y === next.y ? p : next));
+    const place = () => {
+      const box = ref.current?.getBoundingClientRect();
+      const next = placePopover(
+        rect,
+        { width: box?.width ?? 0, height: box?.height ?? 0 },
+        { width: window.innerWidth, height: window.innerHeight },
+        placement,
+      );
+      setPosition((p) => (p.x === next.x && p.y === next.y ? p : next));
+    };
+    place();
+    // The content can grow after opening (the quick look's details arrive
+    // later), and the window can shrink: place it again on either.
+    const element = ref.current;
+    const observer =
+      element !== null && typeof ResizeObserver !== "undefined" ? new ResizeObserver(place) : null;
+    if (element !== null) observer?.observe(element);
+    window.addEventListener("resize", place);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", place);
+    };
   }, [key, ref, placement]);
   return geom;
 }

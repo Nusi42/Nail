@@ -13,8 +13,9 @@ import type {
   EventInstance,
   LayoutNode,
   ParsedEventText,
-  ParsedPart,
   PimSearchHit,
+  PimTime,
+  Recurrence,
   ResolvedLayout,
 } from "../../api/generated";
 import { MINUTES_PER_DAY } from "../../api/generated";
@@ -32,6 +33,7 @@ import {
   overlapsDay,
   pimTimeIn,
   placeSpanning,
+  splitPimTime,
   toCalendarDate,
   toZoned,
   type CalendarDate,
@@ -314,14 +316,19 @@ export function heatLevel(minutes: number): number {
 // ---------------------------------------------------------------------------
 // Free time (C1)
 
-/** A busy stretch of the free-time track (fractions of the working day). */
+/**
+ * A busy stretch of the free-time track (fractions of the working day):
+ * overlapping busy occurrences merge into one block, so their labels never
+ * sit on top of each other.
+ */
 export interface BusyBlock {
-  instance: EventInstance;
+  /** The occurrences of the stretch, by start. */
+  instances: EventInstance[];
   left: number;
   width: number;
 }
 
-/** Busy timed occurrences of `day` inside the working day `[startMs, endMs)`, as fractions. */
+/** Busy timed occurrences of `day` inside the working day `[startMs, endMs)`, merged where they overlap. */
 export function busyBlocks(
   instances: readonly EventInstance[],
   day: CalendarDate,
@@ -330,13 +337,25 @@ export function busyBlocks(
   endMs: number,
 ): BusyBlock[] {
   const span = Math.max(1, endMs - startMs);
-  return instances
+  const pieces = instances
     .filter((i) => !isAllDayLike(i) && i.transparency === "busy" && overlapsDay(i, day, tz))
     .flatMap((instance) => {
       const left = Math.max(0, (instantMs(instance.start_utc) - startMs) / span);
       const right = Math.min(1, (instantMs(instance.end_utc) - startMs) / span);
-      return right > left ? [{ instance, left, width: right - left }] : [];
-    });
+      return right > left ? [{ instance, left, right }] : [];
+    })
+    .sort((a, b) => a.left - b.left || b.right - a.right);
+  const blocks: { instances: EventInstance[]; left: number; right: number }[] = [];
+  for (const piece of pieces) {
+    const last = blocks.at(-1);
+    if (last && piece.left < last.right) {
+      last.instances.push(piece.instance);
+      last.right = Math.max(last.right, piece.right);
+    } else {
+      blocks.push({ instances: [piece.instance], left: piece.left, right: piece.right });
+    }
+  }
+  return blocks.map((b) => ({ instances: b.instances, left: b.left, width: b.right - b.left }));
 }
 
 /** Busy all-day occurrences of `day` (the reason a whole day has no free time). */
@@ -460,18 +479,62 @@ export function bandOf(
 // ---------------------------------------------------------------------------
 // Quick add (S2)
 
+/** What a chip of the quick-add preview shows. */
+export type QuickChipKind = "title" | "date" | "time" | "recurrence" | "location" | "calendar";
+
 /** One chip of the quick-add preview. */
 export interface QuickChip {
-  kind: ParsedPart | "title";
+  kind: QuickChipKind;
   text: string;
 }
 
-/** The preview's chips: the title, then each recognised part as typed. */
-export function quickChips(text: string, parsed: ParsedEventText): QuickChip[] {
-  const parts = parsed.spans
-    .filter((s) => s.start >= 0 && s.end > s.start && s.end <= text.length)
-    .map((s): QuickChip => ({ kind: s.kind, text: text.slice(s.start, s.end).trim() }))
-    .filter((c) => c.text !== "");
+/** How the preview words what was understood (formatters of the UI language). */
+export interface QuickChipWords {
+  /** One day ("Thu, Nov 26"). */
+  day: (day: CalendarDate) => string;
+  /** Several whole days (first and last, inclusive). */
+  days: (first: CalendarDate, last: CalendarDate) => string;
+  /** A timed event's start and end ("12:30 – 1:30 PM"). */
+  range: (start: PimTime, end: PimTime) => string;
+  /** The words for an all-day event. */
+  allDay: string;
+  /** A repetition from `start`. */
+  recurrence: (recurrence: Recurrence, start: PimTime) => string;
+}
+
+/**
+ * The preview's chips: what the event will be, resolved (S2), not the
+ * words as typed: the title, the day, the time (or all day), the
+ * repetition, the place and the calendar it goes to (`times` from
+ * `quickTimes`, so the chips show exactly what Enter saves).
+ */
+export function quickChips(
+  parsed: ParsedEventText,
+  times: { start: PimTime; end: PimTime },
+  calendarName: string | null,
+  words: QuickChipWords,
+): QuickChip[] {
+  const chips: QuickChip[] = [];
   const title = parsed.title.trim();
-  return title === "" ? parts : [{ kind: "title", text: title }, ...parts];
+  if (title !== "") chips.push({ kind: "title", text: title });
+  const first = splitPimTime(times.start).day;
+  if (times.start.type === "date") {
+    const end = splitPimTime(times.end).day.add({ days: -1 });
+    const last = end.compare(first) > 0 ? end : first;
+    chips.push({
+      kind: "date",
+      text: last.compare(first) > 0 ? words.days(first, last) : words.day(first),
+    });
+    chips.push({ kind: "time", text: words.allDay });
+  } else {
+    chips.push({ kind: "date", text: words.day(first) });
+    chips.push({ kind: "time", text: words.range(times.start, times.end) });
+  }
+  if (parsed.recurrence !== null) {
+    chips.push({ kind: "recurrence", text: words.recurrence(parsed.recurrence, times.start) });
+  }
+  const place = parsed.location?.trim() ?? "";
+  if (place !== "") chips.push({ kind: "location", text: place });
+  if (calendarName !== null) chips.push({ kind: "calendar", text: calendarName });
+  return chips;
 }

@@ -12,11 +12,14 @@ import type {
   LayoutNode,
   PimSearchHit,
   PimTime,
+  Recurrence,
   ResolvedLayout,
 } from "../../api/generated";
 import { normalizeNode } from "../../api/normalize";
 import { must } from "../../test/must";
 import { emptyEventFields } from "./defaults";
+import { plainRecurrence } from "./recurrence";
+import { splitPimTime } from "./time";
 import { expandEvent } from "./mockExpand";
 import { WORK_HOUR_STEP, prefsValid, toggleWeekday, workHourChoices } from "./CalendarPrefsForm";
 import { quickFields, quickTimes } from "./QuickAdd";
@@ -261,10 +264,21 @@ describe("free time", () => {
     const free = occurrence("Free", at(MONDAY, 10), at(MONDAY, 11), { transparency: "free" });
     const offsite = occurrence("Offsite", allDay(MONDAY), allDay(MONDAY.add({ days: 1 })));
     const blocks = busyBlocks([meeting, early, free, offsite], MONDAY, TZ, start, end);
-    expect(blocks.map((b) => [b.instance.title, b.left, b.width])).toEqual([
-      ["Meeting", 0.5, 0.25],
-      ["Early", 0, 0.1],
+    expect(blocks.map((b) => [b.instances.map((i) => i.title), b.left, b.width])).toEqual([
+      [["Early"], 0, 0.1],
+      [["Meeting"], 0.5, 0.25],
     ]);
+    // Overlapping meetings are one block with every title (9:00, 9:30 and 9:45).
+    const sync = occurrence("Team sync", at(MONDAY, 9), at(MONDAY, 10));
+    const grace = occurrence("1:1", at(MONDAY, 9, 30), at(MONDAY, 10, 15));
+    const critique = occurrence("Design critique", at(MONDAY, 9, 45), at(MONDAY, 11));
+    const merged = busyBlocks([critique, grace, sync, meeting], MONDAY, TZ, start, end);
+    expect(merged.map((b) => b.instances.map((i) => i.title))).toEqual([
+      ["Team sync", "1:1", "Design critique"],
+      ["Meeting"],
+    ]);
+    expect(merged[0]?.left).toBeCloseTo(0.1);
+    expect(merged[0]?.width).toBeCloseTo(0.2);
     expect(busyAllDay([meeting, offsite], MONDAY, TZ).map((i) => i.title)).toEqual(["Offsite"]);
   });
 
@@ -394,17 +408,51 @@ describe("quick add", () => {
     ],
   };
 
-  it("previews the title and each recognised part as typed", () => {
-    expect(quickChips(text, parsed)).toEqual([
+  const words = {
+    day: (d: CalendarDate) => `day ${d.toString()}`,
+    days: (first: CalendarDate, last: CalendarDate) => `${first.toString()}..${last.toString()}`,
+    range: (start: PimTime, end: PimTime) => {
+      const minute = (time: PimTime) => {
+        const clock = splitPimTime(time).time;
+        return clock === null ? "" : String(clock.hour * 60 + clock.minute);
+      };
+      return `${minute(start)}-${minute(end)}`;
+    },
+    allDay: "all day",
+    recurrence: (r: Recurrence) => `repeats ${r.rules[0]?.freq ?? ""}`,
+  };
+
+  it("previews what Nail understood, resolved: the day, the times, the place and the calendar", () => {
+    const tuesday = MONDAY.add({ days: 1 });
+    expect(quickChips(parsed, quickTimes(parsed, MONDAY, TZ), "My calendar", words)).toEqual([
       { kind: "title", text: "Lunch with Bob" },
-      { kind: "date", text: "tomorrow" },
-      { kind: "time", text: "12:30" },
-      { kind: "location", text: "at Corner café" },
+      { kind: "date", text: `day ${tuesday.toString()}` },
+      { kind: "time", text: `${String(12 * 60 + 30)}-${String(13 * 60 + 30)}` },
+      { kind: "location", text: "Corner café" },
+      { kind: "calendar", text: "My calendar" },
     ]);
-    // Spans outside the text are ignored.
-    expect(
-      quickChips("x", { ...parsed, title: "", spans: [{ kind: "date", start: 3, end: 9 }] }),
-    ).toEqual([]);
+    // Nothing about time: the default the event gets (the day at nine), no empty title.
+    const plain = { ...parsed, title: "", start: null, end: null, location: null };
+    expect(quickChips(plain, quickTimes(plain, MONDAY, TZ), null, words)).toEqual([
+      { kind: "date", text: `day ${MONDAY.toString()}` },
+      { kind: "time", text: `${String(9 * 60)}-${String(10 * 60)}` },
+    ]);
+  });
+
+  it("previews several whole days and a repetition", () => {
+    const allDay = {
+      ...parsed,
+      start: { type: "date" as const, date: "2026-11-24" },
+      end: { type: "date" as const, date: "2026-11-27" },
+      recurrence: plainRecurrence("weekly"),
+    };
+    expect(quickChips(allDay, quickTimes(allDay, MONDAY, TZ), null, words)).toEqual([
+      { kind: "title", text: "Lunch with Bob" },
+      { kind: "date", text: "2026-11-24..2026-11-26" },
+      { kind: "time", text: "all day" },
+      { kind: "recurrence", text: "repeats weekly" },
+      { kind: "location", text: "Corner café" },
+    ]);
   });
 
   it("takes the parsed times, else the day at nine for the default length", () => {

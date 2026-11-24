@@ -17,38 +17,28 @@
  * press outside close it and the focus goes back to the card (the shared
  * `Popover`). The host is mounted once (the feature's `effects`).
  */
-import { useQueryClient } from "@tanstack/react-query";
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type {
   CalendarEvent,
   EventFields,
   EventInstance,
   InvitationResponse,
-  LocalizedMessage,
 } from "../../api/generated";
 import { errorMessageOf } from "../../api/client";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
-import { useClient } from "../../state/queries";
 import { Popover } from "../../widgets/Popover";
 import { nonEmpty } from "../../text/empty";
 import { isTextInput } from "../menus/targets";
 import { AnswerForm } from "../scheduling/Answer";
 import { isMine, RESPONSES } from "../scheduling/model";
-import { scheduleWrite, useMyAddresses, useSchedulingSettings } from "../scheduling/queries";
+import { useMyAddresses, useSchedulingRunner, useSchedulingSettings } from "../scheduling/queries";
 import { requestDelete } from "./changes";
 import { colorOf, geomId, Problem, Swatch, useChangeContext } from "./common";
 import { useOpenInstance } from "./EventItem";
-import {
-  joinLinkOf,
-  lengthText,
-  minutesOf,
-  myAttendee,
-  overlapsOf,
-  peopleSummary,
-} from "./eventLook";
+import { joinLinkOf, lengthText, minutesOf, myAttendee, peopleSummary } from "./eventLook";
 import { formatClock, formatDay, zoneLabel } from "./fmt";
-import { useCalendars, useEvent, useInstances } from "./queries";
+import { useCalendars, useEvent, useEventOverlaps } from "./queries";
 import { usePim, usePimStore } from "./store";
 import { instantMs, localZone, pimTimeIn, sameTime, splitPimTime, toCalendarDate } from "./time";
 
@@ -98,18 +88,13 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
   const t = useT();
   const format = useDateFormat();
   const ctx = useChangeContext();
-  const client = useClient();
-  const queryClient = useQueryClient();
   const openEditor = useOpenInstance();
   const event = useEvent(instance.event_id);
   const calendars = useCalendars();
   const settings = useSchedulingSettings();
   const mine = useMyAddresses();
   const tz = localZone();
-  const overlapping = useInstances({ from: instance.start_utc, to: instance.end_utc }, null, tz);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [done, setDone] = useState<LocalizedMessage | null>(null);
+  const { busy, problem, done, run } = useSchedulingRunner();
 
   const calendar = calendars.data?.find((c) => c.id === instance.calendar_id) ?? null;
   const title = nonEmpty(instance.title) ?? t("common-no-title");
@@ -119,22 +104,14 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
   const organizing = organizer !== null && isMine(organizer.email, mine);
   // The event's own attendee entry is the truth; the instance's until it loaded.
   const myStatus = organizing ? null : (me?.status ?? instance.my_status);
+  const overlapping = useEventOverlaps(
+    instance.event_id,
+    { from: instance.start_utc, to: instance.end_utc },
+    tz,
+    myStatus === "needs-action",
+  );
   const readOnly = instance.read_only || calendar?.read_only === true;
   const color = colorOf(calendars.data, instance.calendar_id, instance.color);
-
-  const run = async (write: () => Promise<unknown>, success: LocalizedMessage) => {
-    setBusy(true);
-    setProblem(null);
-    setDone(null);
-    try {
-      await write();
-      setDone(success);
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const edit = () => {
     close();
@@ -142,8 +119,9 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
   };
   const remove = () => {
     if (readOnly) return;
+    const refocus = focusAfterDelete(instance.event_id);
     close();
-    void requestDelete(ctx, instance).catch((error: unknown) => {
+    void requestDelete(ctx, instance).then(refocus, (error: unknown) => {
       ctx.pim.getState().pushToast({
         kind: "problem",
         id: `delete-${instance.event_id}-${String(Date.now())}`,
@@ -153,33 +131,25 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
   };
   const answer = (response: InvitationResponse, comment: string | null, send: boolean) =>
     void run(
-      () =>
-        scheduleWrite(
-          { client, queryClient },
-          {
-            type: "RespondToInvitation",
-            target: { type: "event", event_id: instance.event_id, recurrence_id: null },
-            response,
-            comment,
-            send,
-            calendar_id: null,
-          },
-        ),
+      {
+        type: "RespondToInvitation",
+        target: { type: "event", event_id: instance.event_id, recurrence_id: null },
+        response,
+        comment,
+        send,
+        calendar_id: null,
+      },
       { id: send ? `invitation-done-${response}-sent` : `invitation-done-${response}` },
     );
   const sendUpdate = () =>
     void run(
-      () =>
-        scheduleWrite(
-          { client, queryClient },
-          {
-            type: "SendInvitations",
-            event_id: instance.event_id,
-            recurrence_id: instance.overridden ? instance.recurrence_id : null,
-            attendees: [],
-            comment: null,
-          },
-        ),
+      {
+        type: "SendInvitations",
+        event_id: instance.event_id,
+        recurrence_id: instance.overridden ? instance.recurrence_id : null,
+        attendees: [],
+        comment: null,
+      },
       { id: "pim-look-update-sent" },
     );
 
@@ -195,7 +165,7 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
     }
   };
 
-  const conflicts = myStatus === "needs-action" ? overlapsOf(instance, overlapping.data ?? []) : [];
+  const conflicts = myStatus === "needs-action" ? (overlapping.data ?? []) : [];
   const attendees = fields?.attendees ?? [];
   const organizerListed =
     organizer !== null &&
@@ -353,6 +323,42 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
       </p>
     </div>
   );
+}
+
+/** The view's active slot (the time grid's roving tab stop). */
+const ACTIVE_SLOT = '[data-part="calendar.slot"][tabindex="0"]';
+
+/**
+ * Keeps the keyboard user's place when an event's card goes away (Delete
+ * in the quick look): remembers the card after it in the view (else the one
+ * before) now, and returns what moves the focus there, or to the time
+ * grid's active slot, once the delete is done, unless the focus has
+ * already found a place of its own.
+ */
+export function focusAfterDelete(eventId: string): () => void {
+  const cards = [...document.querySelectorAll<HTMLElement>("[data-event]")];
+  const index = cards.findIndex((c) => c.dataset.event === eventId);
+  const others = (list: HTMLElement[]) => list.find((c) => c.dataset.event !== eventId);
+  const neighbour =
+    index < 0
+      ? undefined
+      : (others(cards.slice(index + 1)) ?? others(cards.slice(0, index).reverse()));
+  const neighbourId = neighbour?.dataset.event ?? null;
+  return () => {
+    const active = document.activeElement;
+    const lost =
+      active === null ||
+      active === document.body ||
+      !active.isConnected ||
+      (active instanceof HTMLElement && active.dataset.event === eventId);
+    if (!lost) return;
+    const target =
+      (neighbourId === null
+        ? null
+        : document.querySelector<HTMLElement>(`[data-event="${CSS.escape(neighbourId)}"]`)) ??
+      document.querySelector<HTMLElement>(ACTIVE_SLOT);
+    target?.focus();
+  };
 }
 
 /** "Friday, November 27" and "3:00 – 4:00 PM · 1 hour · UTC" (or the all-day days). */

@@ -12083,17 +12083,6 @@
       "source": null
     },
     {
-      "selector": "scheduling.meeting.summary",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0",
-        "font-weight": "var(--nail-font-weight-medium)"
-      },
-      "source": null
-    },
-    {
       "selector": "scheduling.meeting.organizer",
       "states": [],
       "conditions": [],

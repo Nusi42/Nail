@@ -8,13 +8,14 @@
  *
  * Parts: `calendar.quick-add` (the form), `form.input`
  * (`data-field="quick-add"`), `calendar.quick-add.chips` /
- * `calendar.quick-add.chip` (`data-kind`: title, date, time, duration,
- * recurrence, location, all-day), `calendar.quick-add.status` (polite).
+ * `calendar.quick-add.chip` (`data-kind`: title, date, time, recurrence,
+ * location, calendar; resolved values, not the words as typed),
+ * `calendar.quick-add.status` (polite).
  */
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState, type KeyboardEvent } from "react";
 import type { CalendarDate } from "@internationalized/date";
-import type { EventFields, ParsedEventText, ParsedPart, PimTime } from "../../api/generated";
+import type { EventFields, ParsedEventText, PimTime } from "../../api/generated";
 import { DEFAULT_EVENT_MINUTES, MAX_EVENT_TEXT } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useLocale, useT } from "../../i18n/I18nProvider";
@@ -22,12 +23,19 @@ import { TYPING_PAUSE_MS, useDebounced } from "../../state/debounce";
 import { Icon } from "../../widgets/Icon";
 import { problemOf, useChangeContext } from "./common";
 import { emptyEventFields } from "./defaults";
-import { formatPimTime } from "./fmt";
+import { formatClock, formatDay, formatPimTime } from "./fmt";
 import { openNewEvent, defaultEventCalendar } from "./newEvent";
 import { parseEventText } from "./prefs";
+import { choiceOf } from "./recurrence";
+import { useRecurrenceText } from "./RecurrenceEditor";
 import { saveEvent, useCalendars } from "./queries";
 import { dateString, makePimTime, pimTimeIn, shiftPimTime, toCalendarDate } from "./time";
-import { DEFAULT_NEW_EVENT_TIME, quickChips } from "./viewsModel";
+import {
+  DEFAULT_NEW_EVENT_TIME,
+  quickChips,
+  type QuickChipKind,
+  type QuickChipWords,
+} from "./viewsModel";
 
 /** The start and end of a quick-created event: the parsed ones, else the day at the default time. */
 export function quickTimes(
@@ -55,15 +63,31 @@ export function quickFields(
   };
 }
 
-/** The label of each kind of recognised part in the preview. */
-export const QUICK_CHIP_LABELS: Readonly<Record<ParsedPart, string>> = {
+/** The label of each kind of chip in the preview (the title has none). */
+export const QUICK_CHIP_LABELS: Readonly<Record<Exclude<QuickChipKind, "title">, string>> = {
   date: "common-date",
   time: "common-time",
-  duration: "pim-views-quick-add-kind-duration",
   recurrence: "common-repeats",
   location: "pim-views-quick-add-kind-location",
-  "all-day": "common-all-day",
+  calendar: "common-calendar",
 };
+
+/** The preview's words in the UI language (`quickChips`). */
+function useQuickChipWords(tz: string): QuickChipWords {
+  const t = useT();
+  const format = useDateFormat();
+  const recurrenceText = useRecurrenceText();
+  const day = (d: CalendarDate) =>
+    formatDay(format, d, { weekday: "short", month: "short", day: "numeric" });
+  const clock = (time: PimTime) => formatClock(format, pimTimeIn(time, tz).toDate().getTime(), tz);
+  return {
+    day,
+    days: (first, last) => t("common-time-range-all-day", { start: day(first), end: day(last) }),
+    range: (start, end) => t("common-time-range", { start: clock(start), end: clock(end) }),
+    allDay: t("common-all-day"),
+    recurrence: (recurrence, start) => recurrenceText(choiceOf(recurrence, start), start),
+  };
+}
 
 export function QuickAdd({ day, tz }: { day: CalendarDate; tz: string }) {
   const t = useT();
@@ -83,7 +107,16 @@ export function QuickAdd({ day, tz }: { day: CalendarDate; tz: string }) {
     enabled: settled !== "",
   });
   const target = defaultEventCalendar(calendars.data ?? []);
-  const chips = settled !== "" && preview.data ? quickChips(settled, preview.data) : [];
+  const words = useQuickChipWords(tz);
+  const chips =
+    settled !== "" && preview.data
+      ? quickChips(
+          preview.data,
+          quickTimes(preview.data, day, tz),
+          target?.settings.name ?? null,
+          words,
+        )
+      : [];
 
   /** The reading of the current text (the preview's when it is current). */
   const parse = async (current: string) =>

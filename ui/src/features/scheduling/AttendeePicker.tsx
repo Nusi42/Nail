@@ -40,6 +40,7 @@ import {
 import { ATTENDEE_ROLES } from "../pim/constants";
 import { emptyEventFields } from "../pim/defaults";
 import { openNewEvent } from "../pim/newEvent";
+import { useCalendarPreferences, workHourRange } from "../pim/prefs";
 import { useContactSearch } from "../pim/queries";
 import { pimStoreFor } from "../pim/store";
 import { FreeBusyTimeline } from "./FreeBusyTimeline";
@@ -397,8 +398,14 @@ export function FindTime({
     (seed?.attendees ?? []).map((email) => newAttendee(email, null)),
   );
   const [duration, setDuration] = useState<number>(seed?.durationMinutes ?? defaultDuration);
+  const work = workHourRange(useCalendarPreferences());
   const [start, setStart] = useState<PimTime>(() =>
-    firstStart(tz, hourStart ?? 8, hourEnd ?? 18, seed?.durationMinutes ?? defaultDuration),
+    firstStart(
+      tz,
+      hourStart ?? work.start,
+      hourEnd ?? work.end,
+      seed?.durationMinutes ?? defaultDuration,
+    ),
   );
   const startMs = pimTimeIn(start, tz).toDate().getTime();
   const end = sameKindAs(start, fromAbsolute(startMs + duration * 60_000, tz));
@@ -466,12 +473,13 @@ export function FindTime({
 /** Layout widget `freebusy-timeline`: "find a time" in a layout window. */
 export function FreeBusyWidget({ node, nodeKey }: WidgetProps) {
   const zone = optionString(node, "time-zone", "");
+  const work = workHourRange(useCalendarPreferences());
   return (
     <section data-part="freebusy-timeline" data-node-id={node.id ?? undefined}>
       <FindTime
         nodeKey={nodeKey}
-        hourStart={optionNumber(node, "hour-start", 8)}
-        hourEnd={optionNumber(node, "hour-end", 18)}
+        hourStart={optionNumber(node, "hour-start", work.start)}
+        hourEnd={optionNumber(node, "hour-end", work.end)}
         defaultDuration={optionNumber(node, "duration", 30)}
         tz={zone && isKnownZone(zone) ? zone : localZone()}
       />

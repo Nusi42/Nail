@@ -1,18 +1,11 @@
 /**
  * Pure helpers of the quick look, the compact event editor and the reminder
  * toast (R7, ADR 0246): lengths as text, the reminder chip's choices, who
- * answered what, the user's own attendee entry, the call link to join and
- * the events an occurrence overlaps. No React, no requests: unit-tested in
- * `eventLook.test.ts`.
+ * answered what, the user's own attendee entry and the call link to join.
+ * No React, no requests: unit-tested in `eventLook.test.ts`.
  */
 import { MINUTES_PER_DAY } from "../../api/generated";
-import type {
-  Alarm,
-  Attendee,
-  ConferenceLink,
-  EventInstance,
-  ParticipationStatus,
-} from "../../api/generated";
+import type { Alarm, Attendee, ConferenceLink, ParticipationStatus } from "../../api/generated";
 import type { MessageArgs } from "../../i18n/localizer";
 import { answerCounts, isMine } from "../scheduling/model";
 import { instantMs } from "./time";
@@ -154,38 +147,9 @@ export function peopleSummary(t: T, locale: string, statuses: readonly Participa
 }
 
 // ---------------------------------------------------------------------------
-// Calls and overlaps
+// Calls
 
 /** The first call link that can be opened safely (https), else `null`. */
 export function joinLinkOf(conferences: readonly ConferenceLink[]): string | null {
   return conferences.find((c) => /^https:\/\//i.test(c.uri.trim()))?.uri.trim() ?? null;
-}
-
-/** Whether two occurrences are the same one. */
-function sameOccurrence(a: EventInstance, b: EventInstance): boolean {
-  return (
-    a.event_id === b.event_id && JSON.stringify(a.recurrence_id) === JSON.stringify(b.recurrence_id)
-  );
-}
-
-/**
- * The other busy occurrences that overlap `instance` in time (free ones
- * and declined invitations do not block), earliest first.
- */
-export function overlapsOf(
-  instance: EventInstance,
-  others: readonly EventInstance[],
-): EventInstance[] {
-  const start = instantMs(instance.start_utc);
-  const end = instantMs(instance.end_utc);
-  return others
-    .filter(
-      (o) =>
-        !sameOccurrence(o, instance) &&
-        o.transparency === "busy" &&
-        o.my_status !== "declined" &&
-        instantMs(o.start_utc) < end &&
-        start < instantMs(o.end_utc),
-    )
-    .sort((a, b) => instantMs(a.start_utc) - instantMs(b.start_utc));
 }

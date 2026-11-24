@@ -140,6 +140,29 @@ describe("attendee picker and free/busy timeline", () => {
     expect(earlier).toMatchObject({ local: expect.stringMatching(/T13:45:00$/) as unknown });
   });
 
+  it("spans the working hours of the calendar preferences unless told otherwise", async () => {
+    const env = setup();
+    env.transport.data.features.pim.preferences.work_hours = { start_minute: 600, end_minute: 930 };
+    const start = pimTimeIn(at(11), tz).toDate().getTime();
+    const { container } = renderWithProviders(
+      <FreeBusyTimeline
+        nodeKey="work-hours"
+        people={[{ email: "katherine@nasa.example", name: "Katherine Johnson" }]}
+        day={tomorrow}
+        onDay={() => undefined}
+        meeting={{ start, end: start + 3_600_000 }}
+        durationMinutes={60}
+        tz={tz}
+        onPick={() => undefined}
+      />,
+      env,
+    );
+    // 10:00–15:30 covers the hours 10 … 15 (six columns), not the old fixed 8 … 18.
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-part="freebusy.hour"]')).toHaveLength(6);
+    });
+  });
+
   it("says once that nobody's free time lines up, and offers the next day", async () => {
     const user = userEvent.setup();
     const env = setup();
@@ -247,6 +270,9 @@ describe("meeting panel", () => {
     const env = setup();
     renderWithProviders(<MeetingPanel event={event(env, "ev-review")} recurrenceId={null} />, env);
     const panel = await screen.findByRole("region", { name: /^Meeting: / });
+    // The people summary is the attendee picker's alone (one rule, no second count here).
+    expect(panel.querySelector('[data-part="scheduling.meeting.summary"]')).toBeNull();
+    expect(panel).not.toHaveTextContent(/not answered/);
     await user.type(within(panel).getByLabelText("Note in the mail (optional)"), "Agenda inside");
     await user.click(within(panel).getByRole("button", { name: "Send invitations" }));
     await within(panel).findByText("The invitations are on their way.");

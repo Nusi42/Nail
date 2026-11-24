@@ -67,8 +67,12 @@ describe("quick add (S2)", () => {
       "date",
       "time",
       "location",
+      "calendar",
     ]);
     expect(chips[0]).toHaveTextContent("Lunch with Bob");
+    // Resolved values, not the words as typed: the day after today, the end, the calendar.
+    expect(preview).not.toHaveTextContent("tomorrow");
+    expect(chips[2]).toHaveTextContent(/12:30.*1:30/);
     await user.keyboard("{Enter}");
     await waitFor(() => {
       expect(pimOf(env).events.some((e) => e.fields.title === "Lunch with Bob")).toBe(true);
@@ -345,7 +349,10 @@ describe("month (S8), year (C2) and free time (C1)", () => {
     expect(document.querySelectorAll('[data-part="calendar.free-time.tick"]')).toHaveLength(11);
     const totals = [...document.querySelectorAll('[data-part="calendar.free-time.total"]')];
     expect(totals.length).toBeGreaterThan(0);
-    for (const total of totals) expect(total.textContent).toMatch(/free$|^No free time$/);
+    // The total words its length like the rest of the calendar ("1 hour, 30 minutes free").
+    for (const total of totals) {
+      expect(total.textContent).toMatch(/^(\d+ (hours?|minutes?),? ?)+ free$|^No free time$/);
+    }
     const blocks = [...document.querySelectorAll('[data-part="calendar.free-time.block"]')];
     expect(blocks.some((b) => b.textContent === "Stand-up")).toBe(true);
   });
@@ -422,6 +429,52 @@ describe("Due this week (S12) and the task list's empty state", () => {
       taskId: task.id,
       title: "Buy groceries",
     });
+  });
+
+  it("drags an untitled task with its own (empty) title, not the placeholder", async () => {
+    const env = createEnv();
+    const task = dueToday(env);
+    pimOf(env).tasks = [{ ...task, fields: { ...task.fields, title: "" } }];
+    renderNode(widget("calendar-list"), env);
+    await settleQueries(env);
+    const item = must((await screen.findByRole("checkbox", { name: /^Mark / })).closest("li"));
+    const data = new Map<string, string>();
+    fireEvent.dragStart(item, {
+      dataTransfer: {
+        setData: (type: string, value: string) => data.set(type, value),
+        getData: (type: string) => data.get(type) ?? "",
+        effectAllowed: "none",
+      },
+    });
+    expect(JSON.parse(data.get("application/x-nail-task") ?? "{}")).toMatchObject({ title: "" });
+  });
+
+  it("plans a task at the slot chosen on the grid with the keyboard (no drag needed)", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    dueToday(env);
+    renderNode(widget("calendar-list"), env);
+    await settleQueries(env);
+    const tomorrow = dateString(today().add({ days: 1 }));
+    act(() => {
+      pimStoreFor(env.store)
+        .getState()
+        .setPlanSlot({ day: tomorrow, minute: 14 * 60 });
+    });
+    const panel = screen.getByRole("region", { name: "Due this week" });
+    const plan = await within(panel).findByRole("button", {
+      name: "Plan “Buy groceries” in the calendar",
+    });
+    plan.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(pimOf(env).events.some((e) => e.fields.title === "Buy groceries")).toBe(true);
+    });
+    const created = must(pimOf(env).events.find((e) => e.fields.title === "Buy groceries"));
+    expect(created.fields.start).toMatchObject({ local: `${tomorrow}T14:00:00` });
+    // The task stays open; the calendar shows the day.
+    expect(pimOf(env).tasks[0]?.fields.status).not.toBe("completed");
+    expect(pimStoreFor(env.store).getState().anchor).toBe(tomorrow);
   });
 
   it("shows an empty Tasks view with a reason", async () => {

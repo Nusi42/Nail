@@ -15,7 +15,7 @@ pim-grid-event-label = { $label }{ $answer ->
 
 ## Week numbers, tasks
 
-pim-grid-week-number = Wk { $week }
+pim-grid-week-number = { pim-views-week-short } { $week }
 pim-grid-tasks-due = Tasks due
 
 ## Drawing a new event
@@ -23,10 +23,3 @@ pim-grid-tasks-due = Tasks due
 pim-grid-new-event-when = { $day } · { $time }
 # The drawn range while dragging: its times and its length.
 pim-grid-draft-time = { $time } · { $length }
-pim-grid-length = { $hours ->
-        [0] { $minutes } min
-       *[other] { $minutes ->
-            [0] { $hours } h
-           *[other] { $hours } h { $minutes } min
-        }
-    }

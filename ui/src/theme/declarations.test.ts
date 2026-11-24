@@ -16,13 +16,16 @@ import {
   CAPS,
   CAPS_TIGHT,
   floatingWidth,
+  FOCUS_RING,
   HC_RING,
+  ICON_BUTTON,
   initialsAvatar,
   INITIALS_TRACKING,
   INLINE_GAP,
   INLINE_ROW,
   LINE_BOX,
   noticeStack,
+  ONE_LINE,
   QUIET_BUTTON,
   QUIET_HOVER,
   READER_MEASURE,
@@ -33,6 +36,7 @@ import {
   TINY_TEXT,
 } from "./declarations";
 import { FREEBUSY_NAME_COLUMN } from "./skinResponsive";
+import { T } from "./tokens";
 
 const theme = readFileSync(resolve(process.cwd(), "../defaults/theme.kdl"), "utf8");
 
@@ -54,6 +58,9 @@ describe("shared declarations", () => {
       initialsAvatar("2rem", "1rem"),
       smallTag("4px", "red", "blue"),
       INLINE_ROW,
+      ICON_BUTTON,
+      ONE_LINE,
+      FOCUS_RING,
       QUIET_BUTTON,
       QUIET_HOVER,
       SCROLL_BOX,
@@ -71,6 +78,10 @@ describe("shared declarations", () => {
     }
     expectInsertable(lists.map((list) => `[data-part="x"] { ${list} }`));
     expectInsertable([`@container nail-reader (max-width: ${READER_NARROW}) { p { margin: 0; } }`]);
+  });
+
+  it("draws the focus ring in the theme's focus colour", () => {
+    expect(FOCUS_RING).toContain(T.focus);
   });
 
   it("keeps notices off the window's edges on both sides", () => {

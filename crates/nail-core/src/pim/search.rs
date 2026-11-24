@@ -5,7 +5,10 @@
 
 use std::sync::Arc;
 
-use nail_api::pim::{PimItemKind, PimItemRef, PimSearchHit};
+use chrono::{DateTime, Duration, Utc};
+use chrono_tz::Tz;
+use nail_api::pim::{CalendarEvent, PimItemKind, PimItemRef, PimSearchHit, PimTime};
+use nail_ical::expand::ExpandOptions;
 use nail_search::{CommitPolicy, PimDocument, PimIndex};
 use nail_store::Store;
 
@@ -133,10 +136,49 @@ impl Service {
         let found = tokio::task::spawn_blocking(move || index.search(&query, &kinds, None, limit))
             .await??;
         let items: Vec<PimItemRef> = found.into_iter().map(|(item, _)| item).collect();
+        let now = self.pim_utc_now();
         Ok(self
             .inner
             .store
-            .call(move |s| s.pim_search_hits(&items))
+            .call(move |s| {
+                let mut hits = s.pim_search_hits(&items)?;
+                for hit in &mut hits {
+                    if let PimItemRef::Event { event_id } = &hit.item
+                        && let Some(event) = s.event(event_id)?
+                        && let Some(start) = nearest_start(&event, now)
+                    {
+                        hit.start = Some(start);
+                    }
+                }
+                Ok(hits)
+            })
             .await?)
     }
+}
+
+/// How far ahead the next occurrence of a series is looked for.
+const NEXT_OCCURRENCE_DAYS: i64 = 5 * 366;
+
+/// The occurrence of a repeating event a search hit stands for: the next
+/// one at or after `now` (one in progress counts), else the last one; `None`
+/// for a single event (its start is the hit's).
+fn nearest_start(event: &CalendarEvent, now: DateTime<Utc>) -> Option<PimTime> {
+    if !event.is_recurring() {
+        return None;
+    }
+    let ahead = ExpandOptions {
+        limit: 1,
+        ..ExpandOptions::range(now, now + Duration::days(NEXT_OCCURRENCE_DAYS), Tz::UTC)
+    };
+    if let Some(next) = nail_ical::expand::instances(event, &ahead)
+        .into_iter()
+        .next()
+    {
+        return Some(next.start);
+    }
+    let first = nail_ical::time::instant(&event.fields.start, Tz::UTC)?;
+    nail_ical::expand::instances(event, &ExpandOptions::range(first, now, Tz::UTC))
+        .into_iter()
+        .last()
+        .map(|last| last.start)
 }

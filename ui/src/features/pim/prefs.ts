@@ -17,6 +17,7 @@ import type {
   ParsedEventText,
   Task,
   Weekday,
+  WorkHours,
 } from "../../api/generated";
 import { DEFAULT_CALENDAR_PREFERENCES, MINUTES_PER_DAY } from "../../api/generated";
 import { DAY_MS } from "../../state/clock";
@@ -61,6 +62,21 @@ export function weekdayOf(day: CalendarDate): Weekday {
   // `toDate` at noon UTC: the weekday of the calendar date in any zone.
   const index = (day.toDate("UTC").getUTCDay() + 6) % 7;
   return WEEKDAYS[index] ?? "mon";
+}
+
+/** Whether working hours are usable: the core's `WorkHours::is_valid` (pinned by `calendar.json`). */
+export function workHoursValid(hours: WorkHours): boolean {
+  return hours.start_minute < hours.end_minute && hours.end_minute <= MINUTES_PER_DAY;
+}
+
+/**
+ * The whole hours the working hours cover (`end` exclusive; 9:30–17:15 is
+ * 9–18): the default window of the grid's opening scroll, the scheduling
+ * grid and Find a time.
+ */
+export function workHourRange(prefs: CalendarPreferences): { start: number; end: number } {
+  const { start_minute, end_minute } = prefs.work_hours;
+  return { start: Math.floor(start_minute / 60), end: Math.ceil(end_minute / 60) };
 }
 
 /** Whether `day` is a working day. */

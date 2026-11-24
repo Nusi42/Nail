@@ -49,20 +49,27 @@ export interface RecurrenceEditorProps {
   tz: string;
 }
 
-/** The readable summary of a choice ("Every week on Friday."). */
-function useSummary(value: RecurrenceChoice, start: PimTime): string {
+/** Words a choice for people ("Every week on Friday."). */
+export function useRecurrenceText(): (value: RecurrenceChoice, start: PimTime) => string {
   const t = useT();
   const format = useDateFormat();
-  if (value.type === "simple") {
-    const d = describe(
-      value.rule,
-      start,
-      (day: CalendarDate) => formatDay(format, day),
-      (day) => weekdayName(format, day, "long"),
-    );
-    return t(d.id, d.args);
-  }
-  return value.type === "custom" ? t("pim-recurrence-custom") : t("pim-recurrence-none");
+  return (value, start) => {
+    if (value.type === "simple") {
+      const d = describe(
+        value.rule,
+        start,
+        (day: CalendarDate) => formatDay(format, day),
+        (day) => weekdayName(format, day, "long"),
+      );
+      return t(d.id, d.args);
+    }
+    return value.type === "custom" ? t("pim-recurrence-custom") : t("pim-recurrence-none");
+  };
+}
+
+/** The readable summary of a choice ("Every week on Friday."). */
+function useSummary(value: RecurrenceChoice, start: PimTime): string {
+  return useRecurrenceText()(value, start);
 }
 
 export interface RepeatSelectProps {

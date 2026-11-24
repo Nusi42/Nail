@@ -93,14 +93,17 @@ test("quick add previews the text as chips and adds the event with Enter", async
   const preview = calendar.getByRole("list", { name: "What Nail understood" });
   await expect(preview.locator('[data-part="calendar.quick-add.chip"]').first()).toBeVisible();
   await expect(preview).toContainText("Lunch with Bob");
-  // The core's reader finds the date, the time and the place.
-  await expect(preview.locator('[data-part="calendar.quick-add.chip"]')).toHaveCount(4);
+  // The core's reader finds the date, the time and the place; the preview shows them resolved
+  // (the day, the start and end) with the calendar the event goes to.
+  await expect(preview.locator('[data-part="calendar.quick-add.chip"]')).toHaveCount(5);
   expect(
     await preview
       .locator('[data-part="calendar.quick-add.chip"]')
       .evaluateAll((chips) => chips.map((chip) => chip.getAttribute("data-kind"))),
-  ).toEqual(["title", "date", "time", "location"]);
+  ).toEqual(["title", "date", "time", "location", "calendar"]);
   await expect(preview).toContainText("Corner café");
+  await expect(preview).not.toContainText("tomorrow");
+  await expect(preview.locator('[data-kind="time"]')).toContainText(/12:30.*1:30/);
   await field.press("Enter");
   await expect(field).toHaveValue("");
   await expect(calendar.getByText(/^Added “Lunch with Bob” on .*12:30/)).toBeVisible();
@@ -149,6 +152,14 @@ test("the month view draws all-day events as bars, timed ones as lines and today
   const line = month.locator('[data-part="calendar.month.line"]').first();
   const dot = await line.evaluate((el) => getComputedStyle(el, "::before").borderLeftWidth);
   expect(dot).toBe("6px");
+  // The dot has the calendar's colour, not the text's, and comes before the time.
+  const colours = await line.evaluate((el) => ({
+    dot: getComputedStyle(el, "::before").borderLeftColor,
+    text: getComputedStyle(el).color,
+    order: getComputedStyle(el, "::before").order,
+  }));
+  expect(colours.dot).not.toBe(colours.text);
+  expect(colours.order).toBe("-2");
   // Today: a filled date, no frame around the cell.
   const today = month.locator('td[aria-current="date"]');
   expect(await today.evaluate((el) => getComputedStyle(el).boxShadow)).toBe("none");

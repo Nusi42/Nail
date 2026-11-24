@@ -1416,7 +1416,23 @@ now: string | null,
  * Language of the keywords (BCP 47, e.g. `en`); `null` = the UI
  * language; unknown languages fall back to English.
  */
-locale: string | null, } | { "type": "ListTasksDue", 
+locale: string | null, } | { "type": "ListEventOverlaps", 
+/**
+ * The event whose own occurrences are left out.
+ */
+event_id: EventId, 
+/**
+ * Range start (RFC 3339).
+ */
+from: string, 
+/**
+ * Range end (RFC 3339).
+ */
+to: string, 
+/**
+ * IANA zone that all-day and floating occurrences are placed in.
+ */
+tz: string, } | { "type": "ListTasksDue", 
 /**
  * Range start (RFC 3339).
  */

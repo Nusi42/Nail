@@ -11,7 +11,9 @@
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use nail_api::ids::EventId;
-use nail_api::pim::calendar::{CalendarEvent, EventInstance, EventStatus, Transparency};
+use nail_api::pim::calendar::{
+    CalendarEvent, EventInstance, EventStatus, ParticipationStatus, Transparency,
+};
 use nail_api::scheduling::{BusyKind, BusyPeriod, InvitationConflict};
 use nail_ical::expand::{self, ExpandOptions};
 use nail_ical::time;
@@ -131,8 +133,10 @@ fn overlaps(
     a_start < b_end && b_start < a_end
 }
 
-/// Instances of the user's calendars that overlap invited spans.
-/// `ignore` is the invitation's own event (already in a calendar).
+/// Instances of the user's calendars that overlap invited spans:
+/// cancelled, free and declined occurrences (the user's own answer, when
+/// the instances carry it) do not count. `ignore` is the invitation's own
+/// event (already in a calendar).
 pub fn find_conflicts(
     invited: &[InvitedSpan],
     instances: &[EventInstance],
@@ -143,6 +147,7 @@ pub fn find_conflicts(
         if Some(&i.event_id) == ignore
             || i.status == EventStatus::Cancelled
             || i.transparency == Transparency::Free
+            || i.my_status == Some(ParticipationStatus::Declined)
         {
             continue;
         }

@@ -126,6 +126,14 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::SetCalendarPreferences { preferences } => Response::CalendarPreferences {
             preferences: service.set_calendar_preferences(preferences).await?,
         },
+        Request::ListEventOverlaps {
+            event_id,
+            from,
+            to,
+            tz,
+        } => Response::EventOverlaps {
+            overlaps: service.event_overlaps(&event_id, &from, &to, &tz).await?,
+        },
         Request::ParseEventText {
             text,
             tz,
@@ -137,6 +145,7 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
                 &tz,
                 now.as_deref(),
                 locale.as_deref(),
+                service.pim_utc_now(),
             )?),
         },
         Request::GetTask { task_id } => Response::PimTask {
@@ -394,6 +403,29 @@ impl Service {
             .await?;
         instances.retain(|i| i.status != nail_api::pim::calendar::EventStatus::Cancelled);
         Ok(instances)
+    }
+
+    /// The user's busy occurrences overlapping `[from, to)`, without
+    /// `event_id`'s own (`ListEventOverlaps`): the invitation card's rule
+    /// (`nail_itip::conflicts::find_conflicts`).
+    async fn event_overlaps(
+        &self,
+        event_id: &EventId,
+        from: &str,
+        to: &str,
+        tz: &str,
+    ) -> Result<Vec<nail_api::scheduling::InvitationConflict>> {
+        let (start, end) = range(from, to)?;
+        let instances = self.event_instances(from, to, None, tz).await?;
+        let span = nail_itip::conflicts::InvitedSpan {
+            start: super::utc(start),
+            end: super::utc(end),
+        };
+        Ok(nail_itip::conflicts::find_conflicts(
+            &[span],
+            &instances,
+            Some(event_id),
+        ))
     }
 
     /// Tasks due in `[from, to)` (R7, ADR 0246): due dates and floating

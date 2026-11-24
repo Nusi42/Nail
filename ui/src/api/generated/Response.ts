@@ -60,6 +60,7 @@ import type { IdentityId } from "./IdentityId";
 import type { ImportPreview } from "./ImportPreview";
 import type { InstallationInfo } from "./InstallationInfo";
 import type { Invitation } from "./Invitation";
+import type { InvitationConflict } from "./InvitationConflict";
 import type { JobStatus } from "./JobStatus";
 import type { JunkStatus } from "./JunkStatus";
 import type { KeyEncoding } from "./KeyEncoding";
@@ -841,7 +842,11 @@ slots: Array<FreeSlot>, } | { "type": "CalendarPreferences",
 /**
  * The preferences.
  */
-preferences: CalendarPreferences, } | { "type": "EventTextParsed", 
+preferences: CalendarPreferences, } | { "type": "EventOverlaps", 
+/**
+ * The overlapping occurrences, by start.
+ */
+overlaps: Array<InvitationConflict>, } | { "type": "EventTextParsed", 
 /**
  * What the text describes.
  */

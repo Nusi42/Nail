@@ -13,6 +13,7 @@ import { VISUALLY_HIDDEN } from "../../theme/declarations";
 import { SKIN_CSS } from "../../theme/skin";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { HC_CARD_BORDER, SHORT_CARD_MIN_HEIGHT } from "./gridStyle";
 import { PIM_BASE_CSS } from "./parts";
 import { CALENDAR_CONTAINER, CALENDAR_NARROW, PIM_SKIN_CSS, PIM_SKIN_PARTS } from "./skin";
 import { cssBlocks, expectInsertable } from "../../test/css";
@@ -95,6 +96,57 @@ describe("PIM skin", () => {
     // No `border:` / `border-left:` shorthand that would reset the bar's colour.
     expect(rule).not.toMatch(/border(-left)?:\s/);
     expect(rule).not.toMatch(/border-left-color/);
+  });
+
+  it("lets a short card's time give way before its title, with room for High contrast's borders", () => {
+    const title = ruleOf(
+      '[data-part="calendar.event"][data-size="short"] > [data-part="event-card.title"]',
+    );
+    expect(title).toMatch(/flex: 0 0 auto;/);
+    expect(title).toMatch(/max-width: 100%;/);
+    const time = ruleOf(
+      '[data-part="calendar.event"][data-size="short"] > [data-part="event-card.time"]',
+    );
+    expect(time).toMatch(/flex: 0 1 auto;/);
+    expect(time).toMatch(/min-width: 0;/);
+    expect(PIM_SKIN_CSS).toContain(
+      `:root[data-nail-mode="high-contrast"] [data-part="calendar.event"][data-size="short"] { min-height: calc(${SHORT_CARD_MIN_HEIGHT} + 2 * ${HC_CARD_BORDER}); }`,
+    );
+  });
+
+  it("makes Accept the filled primary answer and Propose a new time a quiet one", () => {
+    const accept = ruleOf(
+      '[data-part="segmented"][data-field="answer"][data-state="open"] > [data-part="segmented.option"][data-action="accept"]',
+    );
+    expect(accept).toMatch(/background-color: var\(--nail-color-accent\);/);
+    expect(accept).toMatch(/color: var\(--nail-color-accent-fg\);/);
+    const propose = ruleOf(
+      '[data-part="scheduling.answer.row"] > [data-part="form.button"][data-action="propose-new-time"]',
+    );
+    expect(propose).toMatch(/font-weight: var\(--nail-font-weight-regular\);/);
+  });
+
+  it("never cuts a free stretch's times: the start only when narrow, nothing when tiny", () => {
+    expect(PIM_BASE_CSS).toContain(
+      '[data-part="calendar.free-time.slot"] { container-type: inline-size; }',
+    );
+    expect(PIM_BASE_CSS).toMatch(
+      /@container \(max-width: 9em\) \{ \[data-part="calendar.free-time.slot.text"\]\[data-size="full"\] \{ display: none; \}/,
+    );
+    expect(PIM_BASE_CSS).toMatch(
+      /@container \(max-width: 4\.5em\) \{ \[data-part="calendar.free-time.slot.text"\]\[data-size="start"\] \{ display: none; \}/,
+    );
+  });
+
+  it("keeps the calendar colour on the month view's dot lines, the dot first", () => {
+    const line = ruleOf('[data-part="calendar.month.line"][data-geom]');
+    // A `border:` shorthand would reset the colour the geometry rule sets (and the dot inherits).
+    expect(line).not.toMatch(/border(-left)?(-color)?:\s/);
+    expect(line).toMatch(/border-width: 0;/);
+    const dot = ruleOf('[data-part="calendar.month.line"]::before');
+    expect(dot).toMatch(/border-left-color: inherit;/);
+    // Before the time (which is moved first with order -1).
+    expect(dot).toMatch(/order: -2;/);
   });
 
   it("styles the calendar list's colour squares, menus and the colour choice", () => {
@@ -249,6 +301,10 @@ describe("PIM skin", () => {
       );
       expect(PIM_SKIN_CSS).toMatch(
         /@container nail-event \(max-height: [^)]+\) \{[^}]*-webkit-line-clamp: 1;/,
+      );
+      // A card with room for two lines lets its title wrap instead of cutting it after one.
+      expect(PIM_SKIN_CSS).toMatch(
+        /@container nail-event \(max-height: 3\.5rem\) \{[^}]*-webkit-line-clamp: 2;[^@]*@container nail-event \(max-height: 2\.25rem\) \{[^}]*-webkit-line-clamp: 1;/,
       );
       // The free-time slots cut their label with an ellipsis.
       expect(PIM_BASE_CSS).toMatch(/calendar\.free-time\.slot"\] \{[^}]*text-overflow: ellipsis;/);

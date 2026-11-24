@@ -1,6 +1,6 @@
 ---
 name: r7-status
-description: "Wave R7 (calendar that reads well; release 0.8.11): what was integrated (ADRs 0246-0250), the shared rules to use and the pitfalls met"
+description: "Wave R7 (calendar that reads well; release 0.8.11): what was integrated (ADRs 0246-0250) and fixed after review, the shared rules to use and the pitfalls met"
 metadata:
   type: project
 ---
@@ -25,6 +25,17 @@ release notes "Nail 0.8.11":**
 - Icons: `repeat` (recurring cards) and `video` (call link chip) are bundled; adding one = `nail-api` `icons.rs`
   `BUNDLED_ICONS` + `ui/src/widgets/lucideIcons.ts` + regenerate `crates/nail-api/fixtures/icons.json`
   (`NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api`).
+
+**Review fixes (after integration):**
+
+- The cascade decision depends on the measured grid scale (`sideBySideMinutes(pxPerMinute, rootFontPx())`), so
+  two events 15–29 minutes apart may stand side by side (narrower than 60 %); e2e checks "further right" and a
+  whole visible title line instead of a fixed width.
+- Use `DueTaskItem` for any due-task row (checkbox, drag with the raw title, Plan at `PimState.planSlot`),
+  `writableTaskLists`, `workHourRange` / `workHoursValid` (vectors `calendar.json`), `peopleSummary`,
+  `lengthText`, `useSchedulingRunner`, `useEventOverlaps` (core `ListEventOverlaps`) and the mock's
+  `conflictsIn`; `ONE_LINE`, `FOCUS_RING`, `ICON_BUTTON` live in `theme/declarations.ts`.
+- `SearchPim` hits of a series carry the next occurrence (the mock's `nearestStart` mirrors it).
 
 **Pitfalls:**
 

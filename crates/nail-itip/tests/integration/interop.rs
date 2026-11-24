@@ -170,8 +170,14 @@ fn google_invitation_accepted_and_recorded_by_the_organizer() {
             "2026-10-12T09:00:00Z",
         )
     };
-    let found = conflicts::find_conflicts(&spans, &[dentist], None);
+    let found = conflicts::find_conflicts(&spans, std::slice::from_ref(&dentist), None);
     assert_eq!(found.len(), 1);
+    // A declined occurrence is no conflict (the quick look's overlaps use the same rule).
+    let declined = EventInstance {
+        my_status: Some(ParticipationStatus::Declined),
+        ..dentist
+    };
+    assert_eq!(conflicts::find_conflicts(&spans, &[declined], None), []);
 
     // Bob adds it and accepts.
     let (bob_copy, bob_text) = store(&object, "bob-ev");

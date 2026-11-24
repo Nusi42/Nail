@@ -37,7 +37,8 @@
 mod keywords;
 mod scan;
 
-use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike};
+use chrono_tz::Tz;
 use nail_api::pim::calendar::{Recurrence, RecurrenceRule};
 use nail_api::pim::calendar_view::{DEFAULT_EVENT_MINUTES, ParsedPart, ParsedSpan};
 use nail_api::pim::{ParsedEventText, PimTime};
@@ -91,6 +92,12 @@ pub fn parse(text: &str, context: &Context) -> ParsedEventText {
     if let Some((from, to, place)) = place(text, &reader.words, &parts, k.at) {
         found.location = Some(place);
         parts.push((from, to, ParsedPart::Location));
+    }
+    // A day count makes an all-day event: a time read beside it is not
+    // used, so it stays in the title instead of showing as understood.
+    if matches!(found.length, Some(Length::Days(_))) {
+        parts.retain(|(_, _, kind)| *kind != ParsedPart::Time);
+        found.time = None;
     }
     parts.sort_by_key(|(from, ..)| *from);
     let bytes: Vec<(usize, usize, ParsedPart)> = parts
@@ -199,15 +206,14 @@ fn when(found: &Found, context: &Context) -> Option<(PimTime, PimTime)> {
     let zoned =
         |at: NaiveDateTime| PimTime::zoned(at.format("%Y-%m-%dT%H:%M:%S").to_string(), &context.tz);
     let date = |d: NaiveDate| PimTime::date(d.format("%Y-%m-%d").to_string());
-    // The day of a time without a date: today, or tomorrow once passed; a
-    // weekly repetition moves on to its first weekday.
+    // The day: the date given, else today, or tomorrow once the time has
+    // passed. A weekly repetition moves on to its first named weekday on or
+    // after that day (the start is always an occurrence, RFC 5545).
     let first_day = |time: Option<NaiveTime>| -> NaiveDate {
-        if let Some(day) = found.date {
-            return day;
-        }
-        let from = match time {
-            Some(t) if t < now => today + Duration::days(1),
-            _ => today,
+        let from = match (found.date, time) {
+            (Some(day), _) => day,
+            (None, Some(t)) if t < now => today + Duration::days(1),
+            (None, _) => today,
         };
         match &found.repeat {
             Some((_, days)) if !days.is_empty() => days
@@ -236,8 +242,8 @@ fn when(found: &Found, context: &Context) -> Option<(PimTime, PimTime)> {
                     end
                 }
             }
-            (None, Some(Length::Minutes(m))) => start + Duration::minutes(i64::from(m)),
-            _ => start + Duration::minutes(i64::from(DEFAULT_EVENT_MINUTES)),
+            (None, Some(Length::Minutes(m))) => later(start, m, &context.tz),
+            _ => later(start, DEFAULT_EVENT_MINUTES, &context.tz),
         };
         return Some((zoned(start), zoned(end)));
     }
@@ -248,9 +254,27 @@ fn when(found: &Found, context: &Context) -> Option<(PimTime, PimTime)> {
     }
     if let Some(Length::Minutes(m)) = found.length {
         let start = next_quarter(context.now);
-        return Some((zoned(start), zoned(start + Duration::minutes(i64::from(m)))));
+        return Some((zoned(start), zoned(later(start, m, &context.tz))));
     }
     None
+}
+
+/// The wall time `minutes` real minutes after the wall time `start` in
+/// `tz`: a length is added on the instant timeline, so "for 2 hours" over a
+/// summer-time change still lasts two hours. An unknown zone, or a start
+/// that does not exist there, adds wall-clock minutes.
+fn later(start: NaiveDateTime, minutes: u32, tz: &str) -> NaiveDateTime {
+    let plain = start + Duration::minutes(i64::from(minutes));
+    let Ok(zone) = tz.parse::<Tz>() else {
+        return plain;
+    };
+    zone.from_local_datetime(&start)
+        .earliest()
+        .map_or(plain, |at| {
+            (at + Duration::minutes(i64::from(minutes)))
+                .with_timezone(&zone)
+                .naive_local()
+        })
 }
 
 /// The next quarter hour at or after `now` (seconds dropped).

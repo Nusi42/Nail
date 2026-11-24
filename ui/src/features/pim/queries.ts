@@ -15,6 +15,7 @@ import type {
   EditScope,
   EventFields,
   EventInstance,
+  InvitationConflict,
   PimTime,
   Recurrence,
   ReminderId,
@@ -31,6 +32,8 @@ export const pimKeys = {
   calendars: ["pim", "calendars"] as const,
   instances: (from: string, to: string, ids: readonly string[] | null, tz: string) =>
     ["pim", "instances", from, to, ids, tz] as const,
+  overlaps: (eventId: string, from: string, to: string, tz: string) =>
+    ["pim", "overlaps", eventId, from, to, tz] as const,
   freeTime: (from: string, to: string, minutes: number, tz: string) =>
     ["pim", "free-time", from, to, minutes, tz] as const,
   event: (id: string | null) => ["pim", "event", id] as const,
@@ -114,6 +117,30 @@ export function useInstances(
       ).instances,
     enabled: range !== null,
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * What an occurrence of `eventId` in `[from, to)` overlaps (the core's
+ * `ListEventOverlaps`: the invitation card's conflict rule), while `enabled`.
+ */
+export function useEventOverlaps(
+  eventId: string,
+  range: { from: string; to: string },
+  tz: string,
+  enabled: boolean,
+) {
+  const client = useClient();
+  return useQuery({
+    queryKey: pimKeys.overlaps(eventId, range.from, range.to, tz),
+    queryFn: async (): Promise<InvitationConflict[]> =>
+      (
+        await client.request(
+          { type: "ListEventOverlaps", event_id: eventId, from: range.from, to: range.to, tz },
+          "EventOverlaps",
+        )
+      ).overlaps,
+    enabled,
   });
 }
 

@@ -100,6 +100,36 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 - MCP `find_free_time` takes `working_hours`; `list_tasks` takes
   `due_after` / `tz`.
 
+### Fixed — calendar review (ADRs 0246–0250)
+
+- Overlapping events cascade only when the earlier title stays visible (the
+  exposed height in pixels, `sideBySideMinutes`), else stand side by side;
+  titles wrap onto two lines on medium cards; on short cards the time gives
+  way before the title; High contrast keeps room for the card borders.
+- The shared popover places itself again when its content grows or the
+  window changes size; Delete in the quick look moves the focus to the next
+  card or the active slot.
+- Month dot lines keep the calendar colour, dot first.
+- `ParseEventText` without `now` reads the core's clock; the quick-add
+  chips show the resolved day, times, repetition, place and calendar.
+- `SearchPim` gives a repeating event's next occurrence (else its last).
+- New `ListEventOverlaps`: the quick look's "Overlaps …" uses the
+  invitation card's conflict rule, which now also skips declined
+  occurrences.
+- One people summary (organizer panel and invitation card included); the
+  scheduling grid and Find a time follow the working hours; Accept is the
+  filled primary answer.
+- Due tasks: one shared item for the all-day row and the panel (the raw
+  title on a drag) with a Plan button that uses the chosen slot.
+- Free time merges overlapping busy blocks and never cuts a stretch's
+  times; one length wording (`lengthText`) for the drawn range and the free
+  total; one week-number abbreviation; the working-hours rule pinned to
+  `WorkHours::is_valid` by test vectors.
+- `nail-event-text`: a repetition's start moves to its first named weekday
+  on or after a given date; lengths are added on the instant timeline
+  (summer time); a time beside a day count stays in the title.
+- A cancelled keyboard range no longer stays highlighted.
+
 ### Fixed — deferred writes are retried soon (ADR 0245)
 
 - A replay pass that defers writes retries the account's queue within

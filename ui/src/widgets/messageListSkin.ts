@@ -27,7 +27,7 @@
  * `selection-fg` on `selection` — pairs `tests/theme_contrast.rs` checks.
  */
 import { HC, p } from "../theme/selectors";
-import { HC_RING } from "../theme/declarations";
+import { HC_RING, ONE_LINE } from "../theme/declarations";
 import { T } from "../theme/tokens";
 
 const ROW = p("message-list.row");
@@ -54,7 +54,7 @@ ${p("message-list.row.participant-group")} { display: flex; flex: 0 1 auto; min-
 /* "me" never shrinks when the names do not fit (P2 integration). */
 ${p("message-list.row.participant-group")}[data-state~="me"] { flex-shrink: 0; }
 ${p("message-list.row.separator")}, ${p("message-list.row.suffix")} { flex: none; white-space: pre; }
-${p("message-list.row.participant")} { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("message-list.row.participant")} { flex: 0 1 auto; ${ONE_LINE} }
 ${p("message-list.row.participant")}[data-state~="unread"] { font-weight: ${T.semibold}; }
 ${p("message-list.row.latest-from")} { flex: 0 1 auto; max-width: 45%; font-size: ${T.small}; }
 ${p("message-list.row.latest-from")} ${p("message-list.row.participant")}[data-state~="unread"] { font-weight: inherit; }
@@ -90,7 +90,7 @@ ${p("message-list.child.rail")} {
   border-radius: 1px; background-color: ${T.border};
 }
 ${CHILD}[data-state~="selected"] ${p("message-list.child.rail")} { background-color: currentColor; }
-${p("message-list.child.from")}, ${p("message-list.child.preview")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("message-list.child.from")}, ${p("message-list.child.preview")} { ${ONE_LINE} }
 ${p("message-list.child.from")} { max-width: calc(12 * ${T.lg}); }
 ${CHILD}[data-state~="unread"] ${p("message-list.child.from")} { font-weight: ${T.semibold}; }
 ${p("message-list.child.preview")} { color: ${T.muted}; }

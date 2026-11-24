@@ -19,7 +19,13 @@ import { useNow } from "../../state/clock";
 import { useFormNotice, useSettingsForm } from "../settings/draft";
 import { Problem, useChangeContext } from "./common";
 import { formatMinutes, weekdayName } from "./fmt";
-import { prefsKeys, saveCalendarPreferences, useCalendarPreferences, weekdayOf } from "./prefs";
+import {
+  prefsKeys,
+  saveCalendarPreferences,
+  useCalendarPreferences,
+  weekdayOf,
+  workHoursValid,
+} from "./prefs";
 import { WEEKDAYS, localZone, startOfWeekFor, todayIn } from "./time";
 
 /** The steps the working hours are chosen in (minutes). */
@@ -32,8 +38,7 @@ export function workHourChoices(): number[] {
 
 /** Whether the preferences can be saved (the core's working-hours rule). */
 export function prefsValid(prefs: CalendarPreferences): boolean {
-  const { start_minute, end_minute } = prefs.work_hours;
-  return start_minute < end_minute && end_minute <= MINUTES_PER_DAY;
+  return workHoursValid(prefs.work_hours);
 }
 
 /** `days` with `day` added or taken out, in week order. */

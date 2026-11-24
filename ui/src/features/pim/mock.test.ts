@@ -13,7 +13,7 @@ import type { FeatureEventContext } from "../types";
 import { PIM_EVENTS, handlePimEvent, pimKeys, pimStoreFor } from ".";
 import { PIM_REQUESTS, createPimMockState, fireReminder, isPimRequest, parseImport } from "./mock";
 import { defaultPreferences } from "./mockCalendarView";
-import { expandEvent, occurrenceStarts } from "./mockExpand";
+import { expandEvent, nearestStart, occurrenceStarts } from "./mockExpand";
 import { emptyEventFields } from "./mockSeed";
 import { plainRecurrence } from "./recurrence";
 import { inTimeZone } from "../../test/env";
@@ -90,6 +90,28 @@ describe("recurrence expansion (mock)", () => {
     });
   });
 
+  it("files a series' search hit by its next occurrence, else its last (as the core)", () => {
+    const ev = series(
+      "n",
+      weekly(["mon", "wed"]),
+      fields("2026-10-19T09:00:00", "2026-10-19T10:00:00"),
+    );
+    // Thursday 22nd: the next is Monday 26th.
+    expect(nearestStart(ev, ms("2026-10-22T12:00:00Z"))).toMatchObject({
+      local: "2026-10-26T09:00:00",
+    });
+    const counted = series(
+      "m",
+      weekly(["mon", "wed"], { type: "count", count: 2 }),
+      fields("2026-10-19T09:00:00", "2026-10-19T10:00:00"),
+    );
+    expect(nearestStart(counted, ms("2026-12-01T00:00:00Z"))).toMatchObject({
+      local: "2026-10-21T09:00:00",
+    });
+    const single = { ...ev, recurrence: null };
+    expect(nearestStart(single, ms("2026-12-01T00:00:00Z"))).toBe(single.fields.start);
+  });
+
   it("honours COUNT, UNTIL, EXDATE, RDATE and overrides", () => {
     const counted = series("c", weekly(["mon"], { type: "count", count: 2 }));
     expect(occurrenceStarts(counted, ms("2027-01-01T00:00:00Z"), BERLIN)).toHaveLength(2);
@@ -162,7 +184,7 @@ describe("recurrence expansion (mock)", () => {
 describe("pim mock", () => {
   it("routes exactly its requests", () => {
     expect(new Set(PIM_REQUESTS).size).toBe(PIM_REQUESTS.length);
-    expect(PIM_REQUESTS).toHaveLength(56);
+    expect(PIM_REQUESTS).toHaveLength(57);
     expect(isPimRequest({ type: "ListPimSources" })).toBe(true);
     expect(isPimRequest({ type: "Ping" })).toBe(false);
   });
@@ -427,6 +449,13 @@ describe("pim mock", () => {
         preferences: defaultPreferences(),
       },
       ParseEventText: { type: "ParseEventText", text: "Lunch", tz: "UTC", now: null, locale: null },
+      ListEventOverlaps: {
+        type: "ListEventOverlaps",
+        event_id: "ev-planning",
+        from: "2026-11-23T00:00:00Z",
+        to: "2026-11-30T00:00:00Z",
+        tz: "UTC",
+      },
       ListTasksDue: {
         type: "ListTasksDue",
         from: "2026-11-23T00:00:00Z",

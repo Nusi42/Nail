@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultTheme } from "../api/mockData";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { geometry } from "../test/env";
+import { installFakeResizeObserver, resized } from "../test/resizeObserver";
 import { Popover, placePopover, type AnchorRect } from "./Popover";
 
 const VIEWPORT = { width: 1000, height: 800 };
@@ -98,5 +99,32 @@ describe("Popover", () => {
     expect(closed).toBe(0);
     await user.click(screen.getByText("Outside"));
     expect(closed).toBe(1);
+  });
+});
+
+describe("Popover re-placement", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("moves back inside the window when its content grows after opening", () => {
+    installFakeResizeObserver();
+    render(
+      <ThemeProvider theme={defaultTheme()}>
+        <Popover anchor={at(100, 600)} label={LABEL} onClose={() => undefined}>
+          <p>Loading</p>
+        </Popover>
+      </ThemeProvider>,
+    );
+    const dialog = screen.getByRole("dialog", { name: LABEL });
+    expect(geometry(dialog)).toMatchObject({ left: "204px", top: "600px" });
+    // The details arrive: the popover is now 300 px tall.
+    dialog.getBoundingClientRect = () => DOMRect.fromRect({ width: 300, height: 300 });
+    act(() => {
+      resized(dialog);
+    });
+    expect(geometry(dialog)).toMatchObject({
+      top: `${String(window.innerHeight - 300)}px`,
+    });
   });
 });

@@ -111,7 +111,7 @@ describe("time grid: drawing a new event", () => {
     // Pressed at 10:05, dragged to 11:31: 10:00 – 11:30.
     drawOnSlots(1008, 1152);
     const drawn = must(document.querySelector('[data-part="calendar.draft"]'));
-    expect(drawn.textContent).toContain("1 h 30 min");
+    expect(drawn.textContent).toMatch(/1 hour,? 30 minutes/);
     releaseSlots(1152);
     const { draft, title } = await draftTitle();
     expect(title).toHaveFocus();
@@ -162,13 +162,18 @@ describe("time grid: drawing a new event", () => {
     expect(document.querySelector('[data-part="calendar.draft"]')).toBeNull();
   });
 
+  /** Puts the focus on the grid's active slot (its roving tab stop). */
+  const focusActiveSlot = () => {
+    act(() => {
+      document.querySelector<HTMLElement>('[data-part="calendar.slot"][tabindex="0"]')?.focus();
+    });
+  };
+
   it("extends the range with Shift + arrows and saves it with Enter", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
     await renderDay(env, { "scroll-to": 9 });
-    act(() => {
-      document.querySelector<HTMLElement>('[data-part="calendar.slot"][tabindex="0"]')?.focus();
-    });
+    focusActiveSlot();
     await user.keyboard("{Shift>}{ArrowDown}{ArrowDown}{/Shift}");
     expect(document.querySelector('[data-part="calendar.slot-range"]')).not.toBeNull();
     expect(
@@ -182,6 +187,18 @@ describe("time grid: drawing a new event", () => {
     const saved = must(eventsTitled(env, "Workshop")[0]);
     expect(saved.fields.start).toMatchObject({ local: stringMatching(/T09:00:00$/) });
     expect(saved.fields.end).toMatchObject({ local: stringMatching(/T12:00:00$/) });
+  });
+
+  it("drops the keyboard range's highlight when its draft is cancelled", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    await renderDay(env, { "scroll-to": 9 });
+    focusActiveSlot();
+    await user.keyboard("{Shift>}{ArrowDown}{ArrowDown}{/Shift}{Enter}");
+    await draftTitle();
+    await user.keyboard("{Escape}");
+    expect(document.querySelector('[data-part="calendar.draft"]')).toBeNull();
+    expect(document.querySelector('[data-part="calendar.slot-range"]')).toBeNull();
   });
 
   it("blocks time for a task dropped on the grid", async () => {
@@ -220,11 +237,12 @@ describe("time grid: reading aids", () => {
     const today = must(document.querySelector('[data-part="calendar.now"][data-state="today"]'));
     expect(document.querySelector('[data-part="calendar.now"][data-state="week"]')).not.toBeNull();
     expect(document.querySelector('[data-part="calendar.now-label"]')?.textContent).toMatch(/\d/);
-    // At most the hour label next to now gives way to the now label.
+    // The hour label the now label lies on (and at most one close by) gives way to it.
     const nearNow = document.querySelectorAll(
       '[data-part="calendar.hour"][data-state~="near-now"]',
     );
-    expect(nearNow.length).toBeLessThanOrEqual(1);
+    expect(nearNow.length).toBeGreaterThanOrEqual(1);
+    expect(nearNow.length).toBeLessThanOrEqual(2);
     // Under the event layer: the line comes before the columns.
     const columns = must(document.querySelector('[data-part="calendar.columns"]'));
     expect(today.compareDocumentPosition(columns) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

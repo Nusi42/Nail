@@ -267,6 +267,21 @@ fn repetitions() {
         assert_eq!(parsed.start, Some(at(start)), "{text}");
         assert_eq!(parsed.end, Some(at(end)), "{text}");
     }
+    // A date that is not one of the repetition's weekdays moves on to the
+    // first one on or after it (the start is always an occurrence).
+    for (text, start) in [
+        ("Yoga every Monday tomorrow 7pm", "2026-11-30T19:00"),
+        ("Yoga Friday every Monday", "2026-11-30"),
+        ("Yoga every Monday Nov 30 7pm", "2026-11-30T19:00"),
+    ] {
+        let parsed = read(text);
+        assert_eq!(parsed.start, Some(at(start)), "{text}");
+        assert_eq!(
+            parsed.recurrence,
+            Some(Recurrence::rule(weekly(&[Weekday::Mon], 1))),
+            "{text}"
+        );
+    }
     // "every" without a unit is a word.
     let plain = read("Thanks for every thing");
     assert!(plain.recurrence.is_none() && plain.start.is_none());
@@ -329,6 +344,38 @@ fn times_are_zoned_in_the_context_zone() {
         parsed.start,
         Some(PimTime::zoned("2026-11-25T15:00:00", "America/New_York"))
     );
+}
+
+#[test]
+fn lengths_last_real_time_across_summer_time() {
+    let mut ctx = context("en");
+    // The day before summer time starts in Berlin (2027-03-28, 2:00 -> 3:00).
+    ctx.now = NaiveDate::from_ymd_opt(2027, 3, 27)
+        .and_then(|d| d.and_hms_opt(10, 0, 0))
+        .unwrap();
+    let parsed = parse("Call tomorrow 1:30am for 2 hours", &ctx);
+    assert_eq!(
+        parsed.start,
+        Some(PimTime::zoned("2027-03-28T01:30:00", TZ))
+    );
+    // Two real hours: 1:30 CET + 2 h = 4:30 CEST.
+    assert_eq!(parsed.end, Some(PimTime::zoned("2027-03-28T04:30:00", TZ)));
+    // An explicit end stays the wall time typed.
+    let range = parse("Night shift tomorrow 1am-5am", &ctx);
+    assert_eq!(range.end, Some(PimTime::zoned("2027-03-28T05:00:00", TZ)));
+}
+
+#[test]
+fn a_day_count_leaves_a_time_in_the_title() {
+    let parsed = read("Trip for 3 days at 9am");
+    assert_eq!(parsed.start, Some(at("2026-11-25")));
+    assert_eq!(parsed.end, Some(at("2026-11-28")));
+    assert!(
+        parsed.spans.iter().all(|s| s.kind != ParsedPart::Time),
+        "{:?}",
+        parsed.spans
+    );
+    assert!(parsed.title.contains("9am"), "{}", parsed.title);
 }
 
 #[test]

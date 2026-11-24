@@ -122,6 +122,11 @@ export interface PimState {
   removeCalendarId: CalendarId | null;
   /** The open quick look (R7), `null` = none. */
   quickLook: QuickLook | null;
+  /**
+   * The time grid's slot the user last chose (R7 S12; `day` `YYYY-MM-DD`,
+   * `minute` of the day): where a due task's Plan puts it. `null` = none yet.
+   */
+  planSlot: { day: string; minute: number } | null;
 
   setAnchor: (anchor: string | null) => void;
   setView: (view: ViewKind | null) => void;
@@ -143,6 +148,7 @@ export interface PimState {
   setNewCalendar: (target: NewCalendarTarget | null) => void;
   setRemoveCalendar: (id: CalendarId | null) => void;
   setQuickLook: (quickLook: QuickLook | null) => void;
+  setPlanSlot: (slot: { day: string; minute: number } | null) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PimState>>();
@@ -170,6 +176,7 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
     newCalendar: null,
     removeCalendarId: null,
     quickLook: null,
+    planSlot: null,
     setAnchor: (anchor) => {
       set({ anchor });
     },
@@ -229,6 +236,13 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
     },
     setQuickLook: (quickLook) => {
       set({ quickLook });
+    },
+    setPlanSlot: (planSlot) => {
+      set((s) =>
+        s.planSlot?.day === planSlot?.day && s.planSlot?.minute === planSlot?.minute
+          ? s
+          : { planSlot },
+      );
     },
   }));
   stores.set(ui, store);

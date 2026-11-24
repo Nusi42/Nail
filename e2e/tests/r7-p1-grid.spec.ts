@@ -86,20 +86,30 @@ test("overlapping events cascade so every title shows", async ({ page }) => {
     boxes.push(box);
   }
   if (!column) throw new Error("no column");
-  // Each later event is indented and keeps at least 60 % of the column.
+  // Each later event is further right: cascaded (indented, at least 60 % of the column) or,
+  // where a cascade would hide the earlier title, beside it in the same level.
   for (const [index, box] of boxes.entries()) {
-    expect(box.width).toBeGreaterThanOrEqual(column.width * 0.58);
+    expect(box.width).toBeGreaterThanOrEqual(column.width * 0.38);
     const before = boxes[index - 1];
     if (before) expect(box.x).toBeGreaterThan(before.x + column.width * 0.1);
   }
-  // Every title is on top where it is drawn: the card under its first letters is its own.
+  const first = boxes[0];
+  if (first) expect(first.width).toBeGreaterThanOrEqual(column.width * 0.98);
+  // Every title is on top where it is drawn (the card under its first letters is its own) and
+  // shows a whole line of text above the next card.
   for (const [index, card] of cards.entries()) {
     const own = await card.evaluate((el) => {
       const title = el.querySelector('[data-part="event-card.title"]');
       const r = title?.getBoundingClientRect();
-      if (!r) return false;
-      const hit = document.elementFromPoint(r.left + 6, r.top + r.height / 2);
-      return hit?.closest('[data-part="calendar.event"]') === el;
+      if (!title || !r) return false;
+      const line = Math.min(
+        r.height,
+        Number.parseFloat(getComputedStyle(title).lineHeight) || r.height,
+      );
+      return [r.top + 2, r.top + line - 2].every(
+        (y) =>
+          document.elementFromPoint(r.left + 6, y)?.closest('[data-part="calendar.event"]') === el,
+      );
     });
     expect(own, `title ${String(index + 1)} visible`).toBe(true);
   }
@@ -116,7 +126,9 @@ test("drawing on empty slots creates an event with the drawn times", async ({ pa
   await page.mouse.down();
   await page.mouse.move(grid.x, grid.y(15 * 60), { steps: 4 });
   await page.mouse.move(grid.x, grid.y(15 * 60 + 31), { steps: 4 });
-  await expect(calendar.locator('[data-part="calendar.draft"]')).toContainText("1 h 30 min");
+  await expect(calendar.locator('[data-part="calendar.draft"]')).toContainText(
+    /1 hour,? 30 minutes/,
+  );
   await page.mouse.up();
   const draft = page.getByRole("dialog", { name: "New event", exact: true });
   const title = draft.getByRole("textbox", { name: "Title", exact: true });

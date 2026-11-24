@@ -29,6 +29,7 @@ calendar_id: CalendarId | null,
  */
 address_book_id: AddressBookId | null, 
 /**
- * Start of an event (its first occurrence) or due date of a task.
+ * Start of an event (for a repeating one the next occurrence from now,
+ * else its last) or due date of a task.
  */
 start: PimTime | null, };

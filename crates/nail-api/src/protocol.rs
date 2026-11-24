@@ -96,8 +96,8 @@ use crate::remote::{
 use crate::remote_content::{RemoteContentAllow, RemoteContentScope};
 use crate::rules::{Rule, RuleMatch, RuleRun};
 use crate::scheduling::{
-    CancelScope, FreeBusyResult, Invitation, InvitationResponse, InvitationTarget,
-    SchedulingResult, SchedulingSettings,
+    CancelScope, FreeBusyResult, Invitation, InvitationConflict, InvitationResponse,
+    InvitationTarget, SchedulingResult, SchedulingSettings,
 };
 use crate::search::{SavedSearch, SearchError, SearchHit, SearchQuery, ServerSearch};
 use crate::security::{
@@ -1824,6 +1824,22 @@ pub enum Request {
         /// language; unknown languages fall back to English.
         #[serde(default)]
         locale: Option<String>,
+    },
+    /// The user's busy occurrences that overlap `[from, to)`, other than
+    /// those of `event_id` (the quick look's "Overlaps …", R7): the same
+    /// rule as an invitation card's conflicts (cancelled, free and
+    /// declined occurrences do not count), by start. Answered with
+    /// [`Response::EventOverlaps`]; `invalid_request` for a range over 400
+    /// days.
+    ListEventOverlaps {
+        /// The event whose own occurrences are left out.
+        event_id: EventId,
+        /// Range start (RFC 3339).
+        from: String,
+        /// Range end (RFC 3339).
+        to: String,
+        /// IANA zone that all-day and floating occurrences are placed in.
+        tz: String,
     },
     /// Tasks whose due date / time falls in `[from, to)` (dates resolved in
     /// `tz`), by due, for the calendar views. Answered with
@@ -4064,6 +4080,11 @@ pub enum Response {
     CalendarPreferences {
         /// The preferences.
         preferences: CalendarPreferences,
+    },
+    /// Answer to [`Request::ListEventOverlaps`].
+    EventOverlaps {
+        /// The overlapping occurrences, by start.
+        overlaps: Vec<InvitationConflict>,
     },
     /// Answer to [`Request::ParseEventText`].
     EventTextParsed {

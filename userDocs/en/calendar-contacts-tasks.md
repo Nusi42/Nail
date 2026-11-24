@@ -37,14 +37,16 @@ bar in the colour on their leading edge.
 
 - **Quick add:** the field under the toolbar reads a sentence such as
   “Lunch with Bob tomorrow 12:30 at Corner café”. While you type, chips
-  show what Nail understood (title, date, time, length, repetition, place,
-  all day). **Enter** adds the event to your default calendar and shows its
+  show what Nail understood, worked out: the title, the day (“Thu, Nov 26”),
+  the start and end (“12:30 – 1:30 PM”, or all day), the repetition, the
+  place and the calendar the event goes to. **Enter** adds the event to your default calendar and shows its
   day, **Tab** opens the event editor with everything filled in, **Esc**
   empties the field. Without a date or time the event goes on the shown day
   at 9:00.
 - **Search:** the search field (**/** puts the cursor there) finds events
-  by title, place and notes. The results are grouped into **Upcoming**
-  (soonest first) and **Past** (latest first); **↓ / ↑** and **Enter**, or
+  by title, place and notes. A repeating event is listed by its next
+  occurrence (or its last, once the series has ended). The results are
+  grouped into **Upcoming** (soonest first) and **Past** (latest first); **↓ / ↑** and **Enter**, or
   a click, show the event's day.
 - **Time zones:** the chip with the globe names the zone the views show
   (and a second zone, if you added one). Choose it to show the calendar in
@@ -58,7 +60,7 @@ bar in the colour on their leading edge.
 | Month | Every day of the month (days of the months before and after are dimmed, today's date is a filled circle). Events of a day or more are one bar across their days; other events are lines with a dot in the calendar's colour, the start time and the title. **n more** opens the day when not all fit |
 | Year | Twelve small months with their names. Each day is shaded by how many hours are booked (the darker, the busier), today is ringed. Choose a day to see it |
 | Agenda | The events of the next days as a list: a time column, the calendar's colour as a dot, the title and the place. The day headers (**Today**, **Tomorrow**, then the date) stay on top while you scroll, past events are faded and a red line marks now. An event that runs past midnight shows **until 1:00 AM** on its second day |
-| Free time | When you are free during the working hours (from your calendar preferences, at least 30 minutes by default) of the next five working days, starting with the shown day; weekends are left out. An hour axis runs above the days, busy times show their titles, each day says how much time is free, and a day without free time says why (for example **Busy all day: Team offsite**). Choose a free stretch to plan an event there |
+| Free time | When you are free during the working hours (from your calendar preferences, at least 30 minutes by default) of the next five working days, starting with the shown day; weekends are left out. An hour axis runs above the days, busy times show their titles (overlapping meetings as one block), each day says how much time is free, and a day without free time says why (for example **Busy all day: Team offsite**). Choose a free stretch to plan an event there |
 
 When there is nothing in the days shown, the view says so and offers **Back
 to today** and **New event**, and names the nearest event before or after
@@ -118,7 +120,9 @@ when you move to it with a screen reader.
   the range by an hour, **Enter** asks for the title of an event over it.
 - **Drag a task** (from the all-day row or the **Due this week** list) onto
   a time to block that time for it: an event with the task's title and a length of an
-  hour; the task stays.
+  hour; the task stays. Without a mouse, or on a touch screen, use the task's
+  **Plan** button (the calendar with a plus): it puts the event at the slot
+  you last chose in the grid, or at the next whole hour today.
 
 The **mini-month** (a small calendar for any window) and **today's agenda**
 follow the same day: choosing a day in the mini-month shows it in every
@@ -136,14 +140,15 @@ day (**Working day starts** / **ends**, 8:00 to 18:00 by default), the
 **Work days** (Monday to Friday), the day the **Week starts on**, **Show
 week numbers** (ISO weeks, as printed in European calendars) and **Show
 declined invitations** (struck through; off leaves them out). Changes apply
-with the page's **Save**. The free-time view uses the working day; the time
-grid shades the time outside it.
+with the page's **Save**. The free-time view, the scheduling grid and **Find
+a time** use the working day; the time grid shades the time outside it.
 
 ### Due this week
 
 Below the calendars, **Due this week** lists the open tasks due this week.
 Tick one to complete it, or add a task due today with the field below the
-list. Drag a task onto the week to block time for it (the task stays).
+list. Drag a task onto the week, or press its **Plan** button, to block time
+for it (the task stays).
 
 ### Moving events
 

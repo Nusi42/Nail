@@ -3498,7 +3498,6 @@ theme "default" mode="system" {
     part "scheduling.suggestions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
     part "scheduling.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
     part "scheduling.meeting" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "1px solid $color.accent"; border-radius "$radius.md"; }
-    part "scheduling.meeting.summary" { margin 0; font-weight "$font-weight.medium"; }
     part "scheduling.meeting.organizer" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
     part "scheduling.meeting.recipients" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
     part "scheduling.meeting.people" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }

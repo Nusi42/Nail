@@ -61,8 +61,19 @@ export function smallTag(radius: string, color: string, background: string): str
 export const VISUALLY_HIDDEN =
   "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;";
 
+/** One line of text, cut with an ellipsis (also inside a flex row). */
+export const ONE_LINE =
+  "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+
+/** The keyboard focus ring of controls that draw their own (`:focus-visible`). */
+export const FOCUS_RING = "outline: 2px solid var(--nail-color-focus-ring); outline-offset: 2px;";
+
 /** A row of inline items centred on one line. */
 export const INLINE_ROW = "display: inline-flex; align-items: center;";
+
+/** A square icon-only button the size of a control (window close / maximize), quiet like `QUIET_BUTTON`. */
+export const ICON_BUTTON =
+  "display: inline-flex; align-items: center; justify-content: center; width: var(--nail-size-control); height: var(--nail-size-control); padding: 0; border: none; border-radius: var(--nail-radius-sm); color: var(--nail-color-fg-muted); background-color: transparent;";
 
 /** A quiet (borderless, muted) small button. */
 export const QUIET_BUTTON =

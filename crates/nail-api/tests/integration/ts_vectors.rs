@@ -1359,3 +1359,28 @@ fn ops_vectors() {
     }
     v.check("ops");
 }
+
+#[test]
+fn calendar_vectors() {
+    use nail_api::pim::calendar_view::{MINUTES_PER_DAY, WorkHours};
+    let mut v = Vectors::default();
+    for (start, end) in [
+        (480, 1080),
+        (0, MINUTES_PER_DAY),
+        (600, 600),
+        (700, 600),
+        (0, MINUTES_PER_DAY + 30),
+        (1410, MINUTES_PER_DAY),
+    ] {
+        let hours = WorkHours {
+            start_minute: start,
+            end_minute: end,
+        };
+        v.case(
+            "workHoursValid",
+            json!([{ "start_minute": start, "end_minute": end }]),
+            hours.is_valid(),
+        );
+    }
+    v.check("calendar");
+}

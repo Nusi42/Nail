@@ -41,22 +41,23 @@ import { useGeometry } from "../../theme/ThemeProvider";
 import type { AnchorRect } from "../../widgets/Popover";
 import { movedTimes, requestMove } from "./changes";
 import { geomId, problemOf, useChangeContext } from "./common";
+import { DueTaskItem, type DueTaskParts } from "./DueTaskItem";
 import { EventItem, type DragMode } from "./EventItem";
 import { dayDate, formatClock, formatDay, formatHour, formatInstant, zoneLabel } from "./fmt";
 import { keepInitialScroll } from "./initialScroll";
-import { NewEventDraft, lengthArgs, useRangeText } from "./NewEventDraft";
+import { lengthText } from "./eventLook";
+import { NewEventDraft, useRangeText } from "./NewEventDraft";
 import { NEW_EVENT_MINUTES, createEventIn, defaultEventCalendar, openNewEvent } from "./newEvent";
 import {
   TASK_DRAG_TYPE,
   isoWeekNumber,
   isWorkDay,
   offHours,
-  setTaskDrag,
   taskOfDrag,
   useCalendarPreferences,
   useTasksDue,
 } from "./prefs";
-import { pimWrite } from "./queries";
+import { rootFontPx, useElementSize } from "./viewHooks";
 import { usePimStore } from "./store";
 import {
   clickRange,
@@ -68,7 +69,9 @@ import {
   pimTimeIn,
   placeDay,
   placeSpanning,
+  nowLabelCovers,
   rangeInstants,
+  sideBySideMinutes,
   snap,
   toCalendarDate,
   todayIn,
@@ -198,9 +201,6 @@ function minuteTime(minutes: number): { hour: number; minute: number } {
   return { hour: Math.floor(minutes / 60), minute: minutes % 60 };
 }
 
-/** Minutes around now within which the now label hides an hour label. */
-const NOW_LABEL_MINUTES = 20;
-
 export function TimeGrid({
   nodeKey,
   days,
@@ -257,6 +257,13 @@ export function TimeGrid({
     to: Math.max(slot.hour, slot.extent ?? slot.hour),
   };
   const slotKeyboard = useRef(false);
+  // A due task's Plan goes to the slot chosen here (R7 S12).
+  const slotDay = days[slot.day];
+  const planDay = slotDay ? dateString(slotDay) : null;
+  const planMinute = slot.hour * 60;
+  useEffect(() => {
+    if (planDay !== null) pim.getState().setPlanSlot({ day: planDay, minute: planMinute });
+  }, [pim, planDay, planMinute]);
 
   // Only when the view is shown or its hours change, not on every render
   // (and again while the layout settles, until the user scrolls).
@@ -288,6 +295,9 @@ export function TimeGrid({
   const columnsGeom = geomId(nodeKey, "columns");
   useGeometry(slotsGeom, repeat);
   useGeometry(columnsGeom, repeat);
+  // Side by side or cascaded: from the height a cascade leaves visible.
+  const columnsHeight = useElementSize(columnsRef).height;
+  const together = sideBySideMinutes(columnsHeight / visibleMinutes, rootFontPx());
 
   const zones = secondaryTz ? 2 : 1;
   const spanning = placeSpanning(shown, days, tz);
@@ -658,6 +668,7 @@ export function TimeGrid({
                     geom={geomId(nodeKey, "task", task.id)}
                     column={dayIndex + 1}
                     row={spanRows + i + 1}
+                    tz={tz}
                   />
                 )),
               )}
@@ -674,11 +685,7 @@ export function TimeGrid({
                 key={hour}
                 data-part="calendar.hour"
                 // The now label takes the place of an hour label it would cover.
-                data-state={
-                  showNow && Math.abs(nowWall - hour * 60) < NOW_LABEL_MINUTES
-                    ? "near-now"
-                    : undefined
-                }
+                data-state={showNow && nowLabelCovers(hour, nowWall) ? "near-now" : undefined}
               >
                 {formatHour(format, hour)}
               </span>
@@ -819,7 +826,7 @@ export function TimeGrid({
             )}
             <div ref={columnsRef} data-part="calendar.columns" data-geom={columnsGeom}>
               {days.map((day, dayIndex) => {
-                const placed = placeDay(shown, day, tz);
+                const placed = placeDay(shown, day, tz, together);
                 return (
                   <ul
                     key={dateString(day)}
@@ -909,7 +916,7 @@ export function TimeGrid({
                   <span data-part="calendar.draft.time">
                     {t("pim-grid-draft-time", {
                       time: rangeText(drawn.range),
-                      length: t("pim-grid-length", lengthArgs(drawn.range)),
+                      length: lengthText(t, format.locale, drawn.range.end - drawn.range.start),
                     })}
                   </span>
                 </Positioned>
@@ -927,6 +934,8 @@ export function TimeGrid({
           calendars={calendars}
           onClose={() => {
             setDraft(null);
+            // A keyboard range ends with its draft (saved or cancelled).
+            setSlot((s) => (s.extent === null ? s : { ...s, extent: null }));
           }}
         />
       )}
@@ -934,56 +943,30 @@ export function TimeGrid({
   );
 }
 
+/** The parts of a task due on a day of the view, in the all-day row (R7 S12). */
+const ALL_DAY_TASK_PARTS: DueTaskParts = {
+  item: "calendar.task",
+  check: "calendar.task.check",
+  title: "calendar.task.title",
+  plan: "calendar.task.plan",
+};
+
 /** A task due on a day of the view, in the all-day row (R7 S12). */
 function DueTask({
   task,
   geom,
   column,
   row,
+  tz,
 }: {
   task: Task;
   geom: string;
   column: number;
   row: number;
+  tz: string;
 }) {
-  const t = useT();
-  const ctx = useChangeContext();
   useGeometry(geom, { "grid-column": String(column), "grid-row": String(row) });
-  const title = task.fields.title || t("common-no-title");
-  return (
-    <li
-      data-part="calendar.task"
-      data-geom={geom}
-      data-task={task.id}
-      data-state={task.read_only ? "read-only" : undefined}
-      draggable={!task.read_only}
-      onDragStart={(event) => {
-        setTaskDrag(event.dataTransfer, { taskId: task.id, title: task.fields.title });
-      }}
-    >
-      <input
-        type="checkbox"
-        data-part="calendar.task.check"
-        checked={false}
-        disabled={task.read_only}
-        aria-label={t("pim-task-complete", { title })}
-        onChange={() => {
-          pimWrite(
-            ctx,
-            { type: "CompleteTask", task_id: task.id, completed: true },
-            "TaskSaved",
-          ).catch((error: unknown) => {
-            ctx.pim.getState().pushToast({
-              kind: "problem",
-              id: `task-${String(Date.now())}`,
-              message: problemOf(error),
-            });
-          });
-        }}
-      />
-      <span data-part="calendar.task.title">{title}</span>
-    </li>
-  );
+  return <DueTaskItem task={task} parts={ALL_DAY_TASK_PARTS} tz={tz} geom={geom} />;
 }
 
 function AllDayCell({

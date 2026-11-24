@@ -4612,6 +4612,7 @@ name = "nail-event-text"
 version = "0.8.10"
 dependencies = [
  "chrono",
+ "chrono-tz",
  "nail-api",
  "nail-util",
  "serde_json",

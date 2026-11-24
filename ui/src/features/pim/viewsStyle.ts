@@ -12,7 +12,14 @@
  * cell lets a spanning bar run into the next cells and drops the today
  * frame) and `calendar-list.toggle` (a larger colour square).
  */
-import { CAPS, VISUALLY_HIDDEN } from "../../theme/declarations";
+import {
+  CAPS,
+  FOCUS_RING,
+  ONE_LINE,
+  QUIET_BUTTON,
+  QUIET_HOVER,
+  VISUALLY_HIDDEN,
+} from "../../theme/declarations";
 import { hc, p, ps } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
 
@@ -34,6 +41,10 @@ const FAB = "56px";
 const SQUARE = "16px";
 /** One lane (bar or line) of a month cell. */
 const LANE = "1.4em";
+/** A free stretch narrower than this shows only its start time ("8:00 AM"). */
+const SLOT_FULL = "9em";
+/** A free stretch narrower than this shows no text (its accessible name keeps the times). */
+const SLOT_START = "4.5em";
 /** The free-time axis' height. */
 const AXIS = "1.4em";
 /** The zone chip's widest and the search field's basis. */
@@ -62,7 +73,6 @@ const HEAT_DARK = 52;
 
 const list = (...parts: string[]) => `${ps(...parts)} { list-style: none; margin: 0; padding: 0; }`;
 const mix = (color: string, pct: number) => `color-mix(in srgb, ${color} ${String(pct)}%, ${T.bg})`;
-const oneLine = "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
 
 /** Structure of the package's parts (selectors through `[data-part]` only; one rule per line). */
 export const VIEWS_BASE_CSS = [
@@ -89,19 +99,24 @@ export const VIEWS_BASE_CSS = [
   `${p("calendar.drawer.header")} { display: flex; align-items: center; justify-content: space-between; }`,
   `${p("calendar.fab")} { position: absolute; inset-inline-end: ${T.lg}; bottom: ${T.lg}; z-index: 35; display: inline-grid; place-items: center; }`,
   `${p("calendar.month.lane")} { position: relative; height: ${LANE}; }`,
-  `${p("calendar.month.bar")} { position: relative; z-index: 1; display: flex; box-sizing: border-box; height: 100%; align-items: center; text-align: start; font: inherit; ${oneLine} }`,
-  `${p("calendar.month.line")} { display: flex; align-items: center; text-align: start; font: inherit; ${oneLine} }`,
+  `${p("calendar.month.bar")} { position: relative; z-index: 1; display: flex; box-sizing: border-box; height: 100%; align-items: center; text-align: start; font: inherit; ${ONE_LINE} }`,
+  `${p("calendar.month.line")} { display: flex; align-items: center; text-align: start; font: inherit; ${ONE_LINE} }`,
   `${ps("calendar.agenda.day-head", "agenda.list.day-head")} { position: sticky; top: 0; z-index: 1; }`,
   `${ps("calendar.agenda.entry", "agenda.list.entry")} { display: grid; grid-template-columns: ${AGENDA_TIME} auto minmax(0, 1fr); align-items: baseline; width: 100%; text-align: start; font: inherit; }`,
   `${ps("calendar.agenda.place", "agenda.list.place")} { grid-column: 3; }`,
   `${p("calendar.free-time.axis")} { position: relative; height: ${AXIS}; }`,
   `${p("calendar.free-time.tick")} { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }`,
-  `${p("calendar.free-time.block")} { position: absolute; top: 0; bottom: 0; box-sizing: border-box; ${oneLine} }`,
+  `${p("calendar.free-time.block")} { position: absolute; top: 0; bottom: 0; box-sizing: border-box; ${ONE_LINE} }`,
+  // A free stretch shows its times, only its start when narrow, nothing (but its name) when tiny: never a cut text.
+  `${p("calendar.free-time.slot")} { container-type: inline-size; }`,
+  `${p("calendar.free-time.slot.text")}[data-size="start"] { display: none; }`,
+  `@container (max-width: ${SLOT_FULL}) { ${p("calendar.free-time.slot.text")}[data-size="full"] { display: none; } ${p("calendar.free-time.slot.text")}[data-size="start"] { display: inline; } }`,
+  `@container (max-width: ${SLOT_START}) { ${p("calendar.free-time.slot.text")}[data-size="start"] { display: none; } }`,
   `${p("calendar.free-time.head")} { display: flex; align-items: baseline; justify-content: space-between; gap: 1em; }`,
   `${p("pim.empty")} { display: flex; flex-direction: column; align-items: center; text-align: center; }`,
   `${p("pim.empty.actions")} { display: flex; flex-wrap: wrap; justify-content: center; }`,
   `${p("due-tasks.item")} { display: flex; align-items: baseline; min-width: 0; }`,
-  `${p("due-tasks.name")} { flex: 1 1 auto; ${oneLine} }`,
+  `${p("due-tasks.name")} { flex: 1 1 auto; ${ONE_LINE} }`,
   `${p("calendar-prefs.hours")} { display: flex; flex-wrap: wrap; }`,
   `${p("calendar-prefs.days")} { display: flex; flex-wrap: wrap; margin: 0; min-width: 0; }`,
 ].join("\n");
@@ -112,9 +127,9 @@ const TOOLBAR = `${p("calendar.zone-chip")} {
   font: inherit; font-size: ${T.label}; color: ${T.muted}; background-color: ${T.bg};
 }
 ${p("calendar.zone-chip")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
-${p("calendar.zone-chip")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("calendar.zone-chip")}:focus-visible { ${FOCUS_RING} }
 ${ps("calendar.zone-chip.icon", "calendar.search.icon", "calendar.quick-add.icon")} { width: ${T.icon}; height: ${T.icon}; flex: 0 0 auto; color: ${T.muted}; }
-${p("calendar.zone-chip.label")} { ${oneLine} }
+${p("calendar.zone-chip.label")} { ${ONE_LINE} }
 ${p("calendar.zone-popover")} {
   display: flex; flex-direction: column; gap: ${T.sm}; width: min(${POPOVER_WIDTH}, calc(${VIEWPORT_WIDTH} - 2 * ${T.md}));
   padding: ${T.md}; border: 1px solid ${T.border}; border-radius: ${T.rMd}; background-color: ${T.bg}; box-shadow: ${T.overlay};
@@ -132,7 +147,7 @@ ${p("calendar.search.group.title")} { padding: ${T.xs} ${T.md} ${T.xxs}; ${CAPS}
 ${p("calendar.search.hit")} { gap: ${T.xs} ${T.sm}; padding: ${T.xs} ${T.md}; font-size: ${T.body}; }
 ${p("calendar.search.hit")}:hover, ${p("calendar.search.hit")}[data-state~="active"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
 ${p("calendar.search.hit.dot")} { width: ${AGENDA_DOT}; height: ${AGENDA_DOT}; border-radius: 50%; background-color: ${T.accent}; }
-${p("calendar.search.hit.title")} { ${oneLine} }
+${p("calendar.search.hit.title")} { ${ONE_LINE} }
 ${p("calendar.search.hit.when")} { font-size: ${T.small}; opacity: 0.8; font-variant-numeric: tabular-nums; }
 ${p("calendar.search.hit.detail")} { grid-column: 2 / -1; font-size: ${T.small}; opacity: 0.8; }
 ${p("calendar.search.empty")} { margin: 0; padding: ${T.sm} ${T.md}; color: ${T.muted}; }
@@ -174,13 +189,13 @@ ${p("calendar.month.bar")} { gap: ${T.xs}; padding: 0 ${T.xs}; border: 0; border
 ${p("calendar.month.bar")}[data-state~="continues-before"] { border-start-start-radius: 0; border-end-start-radius: 0; }
 ${p("calendar.month.bar")}[data-state~="continues-after"] { border-start-end-radius: 0; border-end-end-radius: 0; }
 ${ps("calendar.month.bar")} > ${p("event-card.time")}, ${p("calendar.month.bar")} > ${p("event-card.location")}, ${p("calendar.month.bar")} > ${p("event-card.badge")} { display: none; }
-${p("calendar.month.bar")} > ${p("event-card.title")} { ${oneLine} font-weight: ${T.medium}; }
+${p("calendar.month.bar")} > ${p("event-card.title")} { ${ONE_LINE} font-weight: ${T.medium}; }
 ${p("calendar.month.bar")}:focus-visible, ${p("calendar.month.line")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
-${p("calendar.month.line")}[data-geom] { gap: ${T.xs}; width: 100%; padding: 0 ${T.xxs}; border: 0; border-radius: ${T.rSm}; font-size: ${T.label}; color: ${T.fg}; background-color: transparent; cursor: pointer; }
-${p("calendar.month.line")}::before { content: ""; flex: 0 0 auto; width: 0; height: ${DOT}; border-left: ${DOT} solid ${T.accent}; border-left-color: inherit; border-radius: 50%; }
+${p("calendar.month.line")}[data-geom] { gap: ${T.xs}; width: 100%; padding: 0 ${T.xxs}; border-style: none; border-width: 0; border-radius: ${T.rSm}; font-size: ${T.label}; color: ${T.fg}; background-color: transparent; cursor: pointer; }
+${p("calendar.month.line")}::before { content: ""; order: -2; flex: 0 0 auto; width: 0; height: ${DOT}; border-left: ${DOT} solid ${T.accent}; border-left-color: inherit; border-radius: 50%; }
 ${p("calendar.month.line")}:hover { background-color: ${T.raised}; }
 ${p("calendar.month.line")} > ${p("event-card.time")} { order: -1; flex: 0 0 auto; color: ${T.muted}; font-variant-numeric: tabular-nums; }
-${p("calendar.month.line")} > ${p("event-card.title")} { ${oneLine} }
+${p("calendar.month.line")} > ${p("event-card.title")} { ${ONE_LINE} }
 ${p("calendar.month.line")} > ${p("event-card.location")}, ${p("calendar.month.line")} > ${p("event-card.badge")} { display: none; }
 ${hc("calendar.month.bar")} { border: 1px solid ${T.fg}; border-left-width: ${BAR_EDGE}; background-color: ${T.bg}; }`;
 
@@ -223,8 +238,8 @@ ${p(`${part}.time`)} { display: flex; flex-direction: column; font-size: ${T.sma
 ${p(`${part}.time.end`)} { color: ${T.muted}; }
 ${p(`${part}.entry`)}[data-time="until"] ${p(`${part}.time`)}, ${p(`${part}.entry`)}[data-time="all-day"] ${p(`${part}.time`)} { color: ${T.muted}; }
 ${p(`${part}.dot`)} { align-self: center; width: ${AGENDA_DOT}; height: ${AGENDA_DOT}; box-sizing: border-box; border: 2px solid ${T.accent}; border-radius: 50%; background-color: ${T.accent}; }
-${p(`${part}.title`)} { ${oneLine} font-weight: ${T.medium}; }
-${p(`${part}.place`)} { ${oneLine} font-size: ${T.small}; color: ${T.muted}; }
+${p(`${part}.title`)} { ${ONE_LINE} font-weight: ${T.medium}; }
+${p(`${part}.place`)} { ${ONE_LINE} font-size: ${T.small}; color: ${T.muted}; }
 ${p(`${part}.now`)} { display: flex; align-items: center; gap: ${T.xs}; margin: 1px 0; font-size: ${T.label}; font-weight: ${T.semibold}; color: ${T.danger}; }
 ${p(`${part}.now`)}::after { content: ""; flex: 1 1 auto; height: 2px; border-radius: 1px; background-color: ${T.danger}; }`;
 
@@ -241,7 +256,7 @@ ${p("pim.empty.icon")} { width: calc(${T.icon} * 2.5); height: calc(${T.icon} * 
 ${p("pim.empty.text")} { margin: 0; font-size: ${T.body}; color: ${T.fg}; }
 ${p("pim.empty.actions")} { gap: ${T.sm}; }
 ${p("pim.empty.nearest")} { padding: ${T.xxs} ${T.xs}; border: 0; border-radius: ${T.rSm}; font: inherit; font-size: ${T.small}; color: ${T.accent}; background-color: transparent; text-decoration: underline; cursor: pointer; }
-${p("pim.empty.nearest")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }`;
+${p("pim.empty.nearest")}:focus-visible { ${FOCUS_RING} }`;
 
 const SIDEBAR = `${p("due-tasks")} { display: flex; flex-direction: column; gap: ${T.xs}; padding: ${T.sm}; border-top: 1px solid ${T.border}; }
 ${p("due-tasks.title")} { margin: 0; padding: 0 ${T.xs}; ${CAPS} font-size: ${T.label}; font-weight: ${T.semibold}; color: ${T.muted}; }
@@ -250,6 +265,10 @@ ${p("due-tasks.item")} { gap: ${T.sm}; padding: ${T.xxs} ${T.xs}; border-radius:
 ${p("due-tasks.item")}:hover { background-color: ${T.raised}; }
 ${p("due-tasks.due")} { flex: 0 0 auto; font-size: ${T.label}; color: ${T.muted}; font-variant-numeric: tabular-nums; }
 ${p("due-tasks.item")}[data-state~="overdue"] ${p("due-tasks.due")} { color: ${T.danger}; }
+${ps("due-tasks.plan", "calendar.task.plan")} { display: inline-grid; place-items: center; flex: 0 0 auto; margin-inline-start: auto; padding: 1px; ${QUIET_BUTTON} cursor: pointer; }
+${ps("due-tasks.plan", "calendar.task.plan")}:hover { ${QUIET_HOVER} }
+${ps("due-tasks.plan", "calendar.task.plan")}:focus-visible { ${FOCUS_RING} }
+${ps("due-tasks.plan.icon", "calendar.task.plan.icon")} { width: 1em; height: 1em; }
 ${p("due-tasks.empty")} { margin: 0; padding: 0 ${T.xs}; font-size: ${T.small}; color: ${T.muted}; }
 ${p("calendar-list.toggle")} { width: ${SQUARE}; height: ${SQUARE}; }
 ${p("calendar-list.toggle")}:checked { box-shadow: inset 0 0 0 2px ${T.bg}; }

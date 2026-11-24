@@ -1779,3 +1779,12 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`pim::collections::backfill_calendar_colors`) colours existing calendars once; Graph's `hexColor` arrives as
   `ExchangePimFolder::hex_color` (`exchange/pim.rs` `server_color`). MCP: `find_free_time` `working_hours` (the
   preferences' working hours and days), `list_tasks` `due_after` / `tz` (`ListTasksDue`).
+- Review fixes: `ListEventOverlaps` (`pim/events.rs` `event_overlaps`) answers the quick look's "Overlaps …" with
+  `nail_itip::conflicts::find_conflicts`, the invitation card's rule (cancelled, free and declined occurrences do
+  not count); `SearchPim` hits of a series carry the next occurrence (`pim/search.rs` `nearest_start`);
+  `ParseEventText` without `now` uses the core's clock. UI: `time.ts` `sideBySideMinutes` (cascade only when a
+  title line of the earlier card stays visible, from the grid's measured scale), `Popover` re-places itself on
+  resize (`ResizeObserver`), `DueTaskItem.tsx` (all-day row and "Due this week": checkbox, drag, Plan at
+  `PimState.planSlot`), `newEvent.ts` `writableTaskLists`, `prefs.ts` `workHourRange` / `workHoursValid` (pinned by
+  `ts-vectors/calendar.json`), `eventLook.ts` `lengthText` is the one length wording, `peopleSummary` the one
+  people summary, `EventPopover.tsx` `focusAfterDelete`. e2e `r7-p3-tasks.spec.ts`.

@@ -1,0 +1,64 @@
+{
+  "cases": [
+    {
+      "args": [
+        {
+          "end_minute": 1080,
+          "start_minute": 480
+        }
+      ],
+      "fn": "workHoursValid",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "end_minute": 1440,
+          "start_minute": 0
+        }
+      ],
+      "fn": "workHoursValid",
+      "out": true
+    },
+    {
+      "args": [
+        {
+          "end_minute": 600,
+          "start_minute": 600
+        }
+      ],
+      "fn": "workHoursValid",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "end_minute": 600,
+          "start_minute": 700
+        }
+      ],
+      "fn": "workHoursValid",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "end_minute": 1470,
+          "start_minute": 0
+        }
+      ],
+      "fn": "workHoursValid",
+      "out": false
+    },
+    {
+      "args": [
+        {
+          "end_minute": 1440,
+          "start_minute": 1410
+        }
+      ],
+      "fn": "workHoursValid",
+      "out": true
+    }
+  ]
+}

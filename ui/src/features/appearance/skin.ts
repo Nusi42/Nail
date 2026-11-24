@@ -14,6 +14,7 @@ import { FIELDS_NARROW } from "../settings/skin";
 import { FIELDS_CONTAINER } from "../../theme/skinResponsive";
 import { p } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
+import { FOCUS_RING } from "../../theme/declarations";
 
 /** The editor's own parts. */
 const e = (part: string) => p(`theme-editor.${part}`);
@@ -45,8 +46,6 @@ export const THEME_PANEL_STACKED = "40rem";
 /** A field of the light / dark pair. */
 const PAIR_FIELD = `${p("appearance.pair")} > ${p("form.field")}`;
 
-const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
-
 export const APPEARANCE_SKIN_CSS = `${p("appearance.header")} { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: ${T.sm}; }
 ${p("appearance.history")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.xs}; }
 ${p("appearance.history")} > ${p("form.error")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; flex-basis: 100%; }
@@ -64,7 +63,7 @@ ${p("appearance.pair")} > ${p("form.field")} + ${p("form.field")} { border-top: 
 }
 ${p("appearance.slider")} { display: flex; align-items: center; gap: ${T.md}; }
 ${p("appearance.range")} { flex: 1 1 auto; min-width: 0; accent-color: ${T.accent}; }
-${p("appearance.range")}:focus-visible { ${focusRing} }
+${p("appearance.range")}:focus-visible { ${FOCUS_RING} }
 ${p("appearance.range-value")} { min-width: calc(8 * ${T.md}); font-size: ${T.small}; color: ${T.muted}; font-variant-numeric: tabular-nums; }
 /* ADR 0161: why the accent is off while a high-contrast theme is active. */
 ${p("appearance.accent-note")} { margin: 0; font-size: ${T.small}; color: ${T.muted}; }
@@ -99,13 +98,13 @@ ${e("token.name")}, ${e("part.selector")}, ${e("property.name")}, ${e("property.
 ${e("token.controls")} { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: ${T.xs}; min-width: 0; }
 ${e("token.controls")} > ${p("form.input")} { flex: 1 1 auto; width: auto; min-width: 0; }
 ${e("token.color")} { width: calc(${T.control} + ${T.md}); height: ${T.control}; padding: ${T.xxs}; border: 1px solid ${T.line}; border-radius: ${T.rSm}; background: none; }
-${e("token.color")}:focus-visible { ${focusRing} }
+${e("token.color")}:focus-visible { ${FOCUS_RING} }
 ${e("parts")} { display: grid; grid-template-columns: minmax(calc(12 * ${T.lg}), 1fr) minmax(0, 2fr); gap: ${T.lg}; align-items: start; }
 ${e("part-picker")} { display: flex; flex-direction: column; gap: ${T.sm}; min-width: 0; }
 ${e("part-list")} { max-height: calc(24 * ${T.lg}); overflow: auto; }
 ${e("part-button")} { display: block; width: 100%; padding: ${T.xs} ${T.sm}; border: 0; background: none; color: ${T.fg}; font-family: ${T.fontMono}; font-size: ${T.small}; text-align: start; overflow-wrap: anywhere; cursor: pointer; border-radius: ${T.rSm}; transition: background-color ${T.fast} ${T.ease}; }
 ${e("part-button")}:hover { background-color: ${T.raised}; }
-${e("part-button")}:focus-visible { ${focusRing} }
+${e("part-button")}:focus-visible { ${FOCUS_RING} }
 ${e("part-button")}[aria-pressed="true"] { background-color: ${T.selection}; color: ${T.selectionFg}; }
 ${e("part-button")}[data-state~="own"] { font-weight: ${T.semibold}; }
 ${e("part")} { display: flex; flex-direction: column; gap: ${T.md}; min-width: 0; }

@@ -16,12 +16,22 @@ import type {
   CalendarEvent,
   EventFields,
   EventInstance,
+  InvitationConflict,
   PimTime,
   RecurrenceRule,
   Weekday,
 } from "../../api/generated";
 import { weekdayOf } from "./recurrence";
-import { WEEKDAYS, likeAt, localString, parseDay, parseLocal, pimTimeIn, utcString } from "./time";
+import {
+  WEEKDAYS,
+  instantMs,
+  likeAt,
+  localString,
+  parseDay,
+  parseLocal,
+  pimTimeIn,
+  utcString,
+} from "./time";
 import { DAY_MS } from "../../state/clock";
 
 /** Most occurrences one series produces in the mock. */
@@ -278,4 +288,55 @@ export function expandEvent(
     else add({ ...event.fields, start, end: endFor(event.fields, start) }, start, false);
   }
   return instances;
+}
+
+/** How far ahead (ms) `nearestStart` looks for a series' next occurrence (as the core). */
+const NEXT_OCCURRENCE_MS = 5 * 366 * 24 * 60 * 60 * 1000;
+
+/**
+ * The start a search hit of `event` shows (the core's `SearchPim`): a
+ * single event's start; for a series the next occurrence at or after
+ * `nowMs` (one in progress counts), else its last.
+ */
+export function nearestStart(event: CalendarEvent, nowMs: number): PimTime {
+  if (event.recurrence === null) return event.fields.start;
+  const next = expandEvent(event, nowMs, nowMs + NEXT_OCCURRENCE_MS, "UTC", false)[0];
+  if (next) return next.start;
+  const past = expandEvent(event, instantOf(event.fields.start, "UTC"), nowMs, "UTC", false);
+  return past.at(-1)?.start ?? event.fields.start;
+}
+
+/**
+ * The occurrences of `instances` that overlap `[startMs, endMs)`, other
+ * than `ignore`'s, as conflicts: the core's
+ * `nail_itip::conflicts::find_conflicts` (cancelled, free and declined
+ * occurrences do not count). The invitation card and the quick look's
+ * `ListEventOverlaps` both use it.
+ */
+export function conflictsIn(
+  instances: readonly EventInstance[],
+  ignore: string | null,
+  startMs: number,
+  endMs: number,
+): InvitationConflict[] {
+  return instances
+    .filter(
+      (i) =>
+        i.event_id !== ignore &&
+        i.transparency === "busy" &&
+        i.status !== "cancelled" &&
+        i.my_status !== "declined" &&
+        instantMs(i.start_utc) < endMs &&
+        startMs < instantMs(i.end_utc),
+    )
+    .map((i) => ({
+      event_id: i.event_id,
+      calendar_id: i.calendar_id,
+      recurrence_id: i.recurrence_id,
+      title: i.title,
+      start_utc: i.start_utc,
+      end_utc: i.end_utc,
+      all_day: i.all_day,
+      tentative: i.status === "tentative",
+    }));
 }

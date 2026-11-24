@@ -25,7 +25,7 @@
 
 import { CUSTOMIZER_PART, SETTINGS_PART } from "./ids";
 import { p } from "../../theme/selectors";
-import { CAPS_TIGHT, LINE_BOX } from "../../theme/declarations";
+import { CAPS_TIGHT, LINE_BOX, ONE_LINE } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 
 const c = (part: string) => p(`toolbar-customizer.${part}`);
@@ -109,7 +109,7 @@ ${c("item")}[data-kind="header"] ${c("item.label")} {
   padding-inline-end: 0.2em;
 }
 ${c("item.icon")} { width: ${T.icon}; height: ${T.icon}; flex: none; }
-${c("item.label")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${c("item.label")} { ${ONE_LINE} }
 ${c("list")}[data-orientation="vertical"] ${c("item.label")} { flex: 1; }
 ${c("item.badge")} {
   flex: none; padding: 0 ${T.xs}; border-radius: ${T.pill}; font-size: ${T.label};

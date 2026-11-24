@@ -527,9 +527,15 @@ impl Service {
             return Vec::new();
         }
         let (start, end) = (from.timestamp(), to.timestamp());
+        // With the user's own answers: a declined occurrence is no conflict.
+        let me = self.me(None);
         let instances = self
             .store()
-            .call(move |s| s.list_event_instances(start, end, None, &tz, &Expander::default()))
+            .call(move |s| {
+                s.list_event_instances_for(start, end, None, &tz, &Expander::default(), &|email| {
+                    me.contains(email)
+                })
+            })
             .await
             .unwrap_or_default();
         nail_itip::conflicts::find_conflicts(&spans, &instances, own)

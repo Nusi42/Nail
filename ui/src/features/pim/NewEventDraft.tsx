@@ -16,12 +16,6 @@ import { createEventIn, defaultEventCalendar, openNewEventIn } from "./newEvent"
 import { usePimStore } from "./store";
 import type { CalendarDate, MinuteRange } from "./time";
 
-/** The length of a range as Fluent arguments (`pim-grid-length`). */
-export function lengthArgs(range: MinuteRange): { hours: number; minutes: number } {
-  const total = Math.max(0, range.end - range.start);
-  return { hours: Math.floor(total / 60), minutes: total % 60 };
-}
-
 /** `10:00 AM – 11:30 AM` for a range of minutes after midnight. */
 export function useRangeText(): (range: MinuteRange) => string {
   const t = useT();

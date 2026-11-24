@@ -38,6 +38,7 @@ import { EVENT_DIALOG } from "../pim/names";
 import { pimStoreFor } from "../pim/store";
 import { localZone, pimTimeIn, splitPimTime, todayIn, utcString } from "../pim/time";
 import { formatClock } from "../pim/fmt";
+import { peopleSummary } from "../pim/eventLook";
 import { PimMenu } from "../pim/PimMenu";
 import { useGeometry } from "../../theme/ThemeProvider";
 import {
@@ -50,7 +51,6 @@ import {
 } from "./Answer";
 import { clockRange, recurrenceText, timeRangeText } from "./fmt";
 import {
-  answerCounts,
   canRespond,
   hoursOf,
   isMine,
@@ -252,7 +252,6 @@ function InvitationView({
   const organizerText = invitation.organizer
     ? (invitation.organizer.name ?? invitation.organizer.email)
     : null;
-  const counts = answerCounts(invitation.attendees.map((a) => a.status));
   const counter = invitation.counter;
   const answering = canRespond(invitation);
   const sender =
@@ -468,13 +467,11 @@ function InvitationView({
         <details data-part="invitation.attendees" open={attendeesOpen || undefined}>
           <summary data-part="invitation.attendees.summary">
             <span data-part="invitation.attendees.count">
-              {t("invitation-attendees-summary", {
-                count: invitation.attendees.length,
-                accepted: counts.accepted,
-                declined: counts.declined,
-                tentative: counts.tentative,
-                pending: counts["needs-action"],
-              })}
+              {peopleSummary(
+                t,
+                format.locale,
+                invitation.attendees.map((a) => a.status),
+              )}
             </span>
             <span data-part="invitation.attendees.line">
               {attendeeLine(t, format.locale, invitation, myAddresses)}

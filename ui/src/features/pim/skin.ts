@@ -26,7 +26,9 @@ import { hc, p, ps, pss } from "../../theme/selectors";
 import {
   ACCENT_BAR,
   AVATAR_FG,
+  FOCUS_RING,
   INLINE_ROW,
+  ONE_LINE,
   QUIET_BUTTON,
   QUIET_HOVER,
   SECTION_LABEL,
@@ -34,13 +36,15 @@ import {
   VISUALLY_HIDDEN,
 } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
-import { GRID_SKIN_CSS } from "./gridStyle";
+import { GRID_SKIN_CSS, HC_CARD_BORDER } from "./gridStyle";
 import { LOOK_SKIN_CSS } from "./lookStyle";
 import { VIEWS_SKIN_CSS } from "./viewsStyle";
 
-const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
-/** One line, cut with an ellipsis. */
-const oneLine = "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+/** Event cards up to this tall clamp their title to two lines (taller ones to three). */
+const TWO_TITLE_LINES = "3.5rem";
+
+/** Event cards up to this tall clamp their title to one line. */
+const ONE_TITLE_LINE = "2.25rem";
 
 /** A field's flex basis in the date / time row and the contact list's toolbar. */
 const FIELD_BASIS = "10rem";
@@ -71,7 +75,7 @@ const TOOLBAR = `${p("calendar.toolbar")} {
 ${p("calendar.toolbar")} > * { flex: 0 0 auto; }
 ${p("calendar.nav")} { display: flex; flex-wrap: nowrap; align-items: center; gap: ${T.xxs}; }
 ${p("calendar.title")} {
-  flex: 1 1 auto; ${oneLine} margin: 0 0 0 ${T.xs};
+  flex: 1 1 auto; ${ONE_LINE} margin: 0 0 0 ${T.xs};
   font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight};
 }
 ${p("calendar.toolbar")} > ${p("calendar.title")} { flex: 1 1 auto; }
@@ -97,15 +101,15 @@ const CARDS = `${ps(...CARD_PARTS)} {
   transition: box-shadow ${T.fast} ${T.ease};
 }
 ${pss(":hover", ...CARD_PARTS)} { box-shadow: ${T.raisedShadow}; }
-${pss(":focus-visible", ...CARD_PARTS)} { ${focusRing} }
+${pss(":focus-visible", ...CARD_PARTS)} { ${FOCUS_RING} }
 ${pss('[data-state~="selected"]', ...CARD_PARTS)} { box-shadow: 0 0 0 2px ${T.accent}; }
 ${pss('[data-state~="tentative"]', ...CARD_PARTS)} { border-left-style: dashed; }
 ${pss('[data-state~="free"]', ...CARD_PARTS)} { border-left-style: dotted; }
 ${p("calendar.event")} { gap: 1px; padding: ${T.xxs} ${T.xs}; }
 ${pss(':not([data-state~="read-only"])', "calendar.event", "calendar.chip")} { cursor: grab; }
-${p("event-card.title")} { ${oneLine} font-weight: ${T.semibold}; color: inherit; }
-${p("event-card.time")} { ${oneLine} font-size: ${T.label}; font-variant-numeric: tabular-nums; color: inherit; }
-${p("event-card.location")} { ${oneLine} font-size: ${T.label}; color: inherit; }
+${p("event-card.title")} { ${ONE_LINE} font-weight: ${T.semibold}; color: inherit; }
+${p("event-card.time")} { ${ONE_LINE} font-size: ${T.label}; font-variant-numeric: tabular-nums; color: inherit; }
+${p("event-card.location")} { ${ONE_LINE} font-size: ${T.label}; color: inherit; }
 ${p("event-card.badge")} { display: none; }
 ${p("calendar.event")} > ${p("event-card.title")} {
   flex: 0 0 auto; white-space: normal; overflow-wrap: anywhere;
@@ -115,13 +119,15 @@ ${p("calendar.event")} > ${p("event-card.title")} {
    them into half a line); a short event shows its title on one line so the time still fits. */
 ${p("calendar.event")} > ${p("event-card.time")}, ${p("calendar.event")} > ${p("event-card.location")} { flex: 0 0 auto; }
 ${p("calendar.event")} { container: nail-event / size; }
-@container nail-event (max-height: 3.5rem) { ${p("calendar.event")} > ${p("event-card.title")} { -webkit-line-clamp: 1; } }
+/* R7 M2: a title wraps onto a second line while the card has room for it, before the time and place. */
+@container nail-event (max-height: ${TWO_TITLE_LINES}) { ${p("calendar.event")} > ${p("event-card.title")} { -webkit-line-clamp: 2; } }
+@container nail-event (max-height: ${ONE_TITLE_LINE}) { ${p("calendar.event")} > ${p("event-card.title")} { -webkit-line-clamp: 1; } }
 ${p("calendar.chip")} { align-items: baseline; gap: ${T.xs}; padding: 1px ${T.xs}; white-space: nowrap; }
 ${p("calendar.chip")} > ${p("event-card.time")} { order: -1; flex: 0 0 auto; }
 ${p("calendar.chip")} > ${p("event-card.location")} { display: none; }
 ${hc(...CARD_PARTS)} {
   background-color: ${T.bg};
-  border-top: 2px solid ${T.fg}; border-right: 2px solid ${T.fg}; border-bottom: 2px solid ${T.fg};
+  border-top: ${HC_CARD_BORDER} solid ${T.fg}; border-right: ${HC_CARD_BORDER} solid ${T.fg}; border-bottom: ${HC_CARD_BORDER} solid ${T.fg};
   border-left-width: ${EVENT_BAR}; border-left-style: solid;
 }`;
 
@@ -148,14 +154,14 @@ ${p("calendar.month.day")}[data-state~="drop-target"] { color: ${T.selectionFg};
 ${p("calendar.month.day")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("calendar.month.date")} { display: block; margin-bottom: ${T.xxs}; padding: 0 ${T.xxs}; font-size: ${T.small}; font-variant-numeric: tabular-nums; }
 ${p("calendar.month.events")} { display: grid; gap: 1px; min-width: 0; }
-${p("calendar.month.events")} > * { ${oneLine} }
+${p("calendar.month.events")} > * { ${ONE_LINE} }
 ${p("calendar.month.more")} { padding: 0 ${T.xs}; font-size: ${T.label}; ${QUIET_BUTTON} }
 ${p("calendar.month.more")}:hover { ${QUIET_HOVER} }
-${p("calendar.month.more")}:focus-visible { ${focusRing} }`;
+${p("calendar.month.more")}:focus-visible { ${FOCUS_RING} }`;
 
 const MINI_MONTH = `${p("mini-month")} { padding: ${T.sm}; }
 ${p("mini-month.header")} { display: flex; align-items: center; gap: ${T.xxs}; margin-bottom: ${T.xs}; }
-${p("mini-month.title")} { flex: 1; margin: 0; ${oneLine} font-size: ${T.small}; font-weight: ${T.semibold}; text-align: center; }
+${p("mini-month.title")} { flex: 1; margin: 0; ${ONE_LINE} font-size: ${T.small}; font-weight: ${T.semibold}; text-align: center; }
 ${p("mini-month.grid")} { width: 100%; border-collapse: separate; border-spacing: 2px; font-size: ${T.label}; font-variant-numeric: tabular-nums; }
 ${p("mini-month.grid.weekday")} { font-weight: ${T.semibold}; color: ${T.muted}; }
 ${p("mini-month.grid.day")} { padding: ${T.xxs} 0; border-radius: ${T.rSm}; text-align: center; }
@@ -172,7 +178,7 @@ const CALENDAR_LIST = `${p("calendar-list")} { display: flex; flex-direction: co
 ${p("calendar-list.source")} { display: grid; gap: 1px; }
 ${p("calendar-list.source.header")} { display: flex; align-items: center; justify-content: space-between; gap: ${T.xs}; padding: 0 0 0 ${T.xs}; }
 ${p("calendar-list.source.name")} {
-  margin: 0; ${oneLine} ${SECTION_LABEL}
+  margin: 0; ${ONE_LINE} ${SECTION_LABEL}
 }
 ${ps(...MENU_BUTTONS)} {
   display: inline-grid; place-items: center; flex: 0 0 auto; width: calc(${T.control} - ${T.sm}); height: calc(${T.control} - ${T.sm});
@@ -193,8 +199,8 @@ ${p("calendar-list.toggle")} {
   border: 2px solid ${T.accent}; border-radius: ${MARK_RADIUS}; background-color: ${T.accent};
 }
 ${p("calendar-list.toggle")}:not(:checked) { background-color: transparent; }
-${p("calendar-list.toggle")}:focus-visible { ${focusRing} }
-${p("calendar-list.name")} { ${oneLine} }
+${p("calendar-list.toggle")}:focus-visible { ${FOCUS_RING} }
+${p("calendar-list.name")} { ${ONE_LINE} }
 ${p("calendar-list.item")}[data-state~="hidden"] ${p("calendar-list.name")} { color: ${T.muted}; }
 ${p("calendar-list.kind")} { ${smallTag(T.rSm, T.muted, T.subtle)} }
 ${p("calendar-list.buttons")} { display: inline-flex; gap: ${T.xxs}; }
@@ -213,7 +219,7 @@ ${p("pim.colors.option")} { position: relative; display: inline-grid; place-item
 ${p("pim.colors.input")} { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; }
 ${p("pim.colors.swatch")} { width: calc(${T.control} - ${T.md}); height: calc(${T.control} - ${T.md}); border-radius: ${T.pill}; background-color: ${T.accent}; }
 ${p("pim.colors.option")}:has(:checked) { box-shadow: 0 0 0 2px ${T.fg}; }
-${p("pim.colors.option")}:has(:focus-visible) { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("pim.colors.option")}:has(:focus-visible) { ${FOCUS_RING} }
 ${p("pim.colors.name")} { ${VISUALLY_HIDDEN} }
 ${p("pim-settings")} { display: grid; gap: ${T.lg}; }`;
 
@@ -231,7 +237,7 @@ ${p("contact-list.item")} {
   display: grid; grid-template-columns: ${T.avatar} minmax(0, 1fr); column-gap: ${T.md}; align-items: center;
   padding: ${T.sm} ${T.md}; border-radius: ${T.rMd};
 }
-${p("contact-list.item")} > :not(${p("contact-list.avatar")}) { grid-column: 2; ${oneLine} }
+${p("contact-list.item")} > :not(${p("contact-list.avatar")}) { grid-column: 2; ${ONE_LINE} }
 ${p("contact-list.item")}:hover { background-color: ${T.subtle}; }
 ${p("contact-list.item")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("contact-list.item")}[aria-selected="true"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
@@ -248,7 +254,7 @@ const VIEW_HEADER = `${p("pim.view-header")} {
   padding-bottom: ${T.sm}; border-bottom: 1px solid ${T.border};
 }
 ${p("pim.view-header.title")} {
-  flex: 1 1 auto; margin: 0; ${oneLine}
+  flex: 1 1 auto; margin: 0; ${ONE_LINE}
   font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight};
 }
 ${p("pim.view-header")} > [data-field="search"] { flex: 1 1 100%; order: 3; display: grid; gap: ${T.xxs}; }

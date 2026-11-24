@@ -1,9 +1,12 @@
 import { CalendarDate, fromAbsolute } from "@internationalized/date";
 import type { EventInstance, PimTime } from "../../api/generated";
 import {
+  CASCADE_EXPOSED_REM,
   CASCADE_INDENT,
   CASCADE_MIN_WIDTH,
   SIDE_BY_SIDE_MINUTES,
+  nowLabelCovers,
+  sideBySideMinutes,
   SHORT_EVENT_MINUTES,
   clickRange,
   dragRange,
@@ -217,6 +220,35 @@ describe("placing events", () => {
     }
     // Short events get the minimum height; a separate cluster takes the whole column.
     expect(byId.lunch).toMatchObject({ layer: 0, left: 0, width: 1, endMinute: 735 });
+  });
+
+  it("cascades only when one title line of the earlier card stays visible", () => {
+    // 48 px per hour, 16 px per rem: a title line (1.5 rem = 24 px) is 30 minutes.
+    expect(CASCADE_EXPOSED_REM).toBe(1.5);
+    const together = sideBySideMinutes(48 / 60, 16);
+    expect(together).toBe(30);
+    // A tall grid keeps the 15-minute floor; an unmeasured one falls back to it.
+    expect(sideBySideMinutes(4, 16)).toBe(SIDE_BY_SIDE_MINUTES);
+    expect(sideBySideMinutes(0, 16)).toBe(SIDE_BY_SIDE_MINUTES);
+    const byId = Object.fromEntries(
+      placeDay(
+        [
+          instance("sync", at("09:00"), at("10:00")),
+          instance("grace", at("09:30"), at("10:15")),
+          instance("critique", at("09:45"), at("11:00")),
+        ],
+        day,
+        "UTC",
+        together,
+      ).map((p) => [p.instance.event_id, p]),
+    );
+    // 9:30 leaves 30 minutes (one line) of Team sync visible: it cascades.
+    expect(byId.sync).toMatchObject({ layer: 0 });
+    expect(byId.grace).toMatchObject({ layer: 1, left: CASCADE_INDENT });
+    // 9:45 would leave only 15 minutes of 1:1 with Grace: it stands beside it instead.
+    expect(byId.critique).toMatchObject({ layer: 1 });
+    expect(byId.critique?.left).toBeGreaterThan(byId.grace?.left ?? 1);
+    expect(byId.grace?.width).toBeCloseTo((1 - CASCADE_INDENT) / 2);
   });
 
   it("indents less when there are many levels, so the top card keeps 60 %", () => {
@@ -470,5 +502,17 @@ describe("week start preference", () => {
         viewRange("month", anchor, "en-US", { ...DEFAULT_VIEW_OPTIONS, weekStart: "mon" }).start,
       ),
     ).toBe("2026-10-26");
+  });
+});
+
+describe("nowLabelCovers", () => {
+  it("hides the label of the hour now is in, and of an hour starting or ending close by", () => {
+    const at = (h: number, m: number) => h * 60 + m;
+    // 8:59: the 8 AM row holds the label, 9 AM starts a minute later.
+    expect([7, 8, 9, 10].filter((h) => nowLabelCovers(h, at(8, 59)))).toEqual([8, 9]);
+    // 8:30: only 8 AM.
+    expect([7, 8, 9].filter((h) => nowLabelCovers(h, at(8, 30)))).toEqual([8]);
+    // 9:05: 9 AM, and 8 AM whose row ended five minutes ago.
+    expect([7, 8, 9, 10].filter((h) => nowLabelCovers(h, at(9, 5)))).toEqual([8, 9]);
   });
 });

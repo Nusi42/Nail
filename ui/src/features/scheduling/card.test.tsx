@@ -50,7 +50,9 @@ describe("invitation card", () => {
     ).toBeInTheDocument();
     expect(within(card).getByText(/overlaps one event/)).toBeInTheDocument();
     expect(within(card).getByText("Design review")).toBeInTheDocument();
-    expect(within(card).getByText(/4 people: 2 accepted, 1 maybe/)).toBeInTheDocument();
+    expect(
+      within(card).getByText("4 people · 2 accepted, 1 maybe, 1 not answered"),
+    ).toBeInTheDocument();
     for (const name of ["Accept", "Maybe", "Decline", "Propose a new time", "More"]) {
       expect(within(card).getByRole("button", { name })).toBeInTheDocument();
     }

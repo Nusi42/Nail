@@ -37,6 +37,7 @@ import { Swatch, colorOf, geomId, useChangeContext, useFollowingDay } from "./co
 import { useDayDrag } from "./dayDrag";
 import { EventItem, useOpenInstance } from "./EventItem";
 import { dayDate, formatClock, formatDay, formatHour } from "./fmt";
+import { lengthText } from "./eventLook";
 import { MonthGrid } from "./MonthGrid";
 import { openNewEvent } from "./newEvent";
 import { useCalendarPreferences, weekStartOf } from "./prefs";
@@ -591,6 +592,7 @@ export function FreeTimeView({
   const free = useFreeTime(instants, minutes, tz);
   const ticks = hourTicks(dayStartHour, dayEndHour);
   const noTitle = t("common-no-title");
+  const list = new Intl.ListFormat(locale, { type: "unit", style: "short" });
 
   return (
     <div data-part="calendar.free-time" aria-busy={free.isPending}>
@@ -628,32 +630,40 @@ export function FreeTimeView({
                   data-part="calendar.free-time.total"
                   data-state={total === 0 ? "none" : undefined}
                 >
-                  {t("pim-views-free-total", {
-                    hours: Math.floor(total / 60),
-                    minutes: total % 60,
-                  })}
+                  {total === 0
+                    ? t("pim-views-free-none")
+                    : t("pim-views-free-total", { length: lengthText(t, locale, total) })}
                 </span>
               )}
             </div>
             <div data-part="calendar.free-time.track">
-              {blocks.map(({ instance, left, width }) => (
-                <Segment
-                  key={`${instance.event_id}-${instance.start_utc}`}
-                  geom={geomId(nodeKey, "busy", instance.event_id, instance.start_utc)}
-                  part="calendar.free-time.block"
-                  left={left}
-                  width={width}
-                  label={t("pim-views-free-busy", {
-                    title: instance.title || noTitle,
-                    time: t("common-time-range", {
-                      start: formatClock(format, instance.start_utc, tz),
-                      end: formatClock(format, instance.end_utc, tz),
-                    }),
-                  })}
-                >
-                  {instance.title || noTitle}
-                </Segment>
-              ))}
+              {blocks.map(({ instances: busy, left, width }) => {
+                const [first] = busy;
+                if (!first) return null;
+                const titles = list.format(busy.map((i) => i.title || noTitle));
+                return (
+                  <Segment
+                    key={`${first.event_id}-${first.start_utc}`}
+                    geom={geomId(nodeKey, "busy", first.event_id, first.start_utc)}
+                    part="calendar.free-time.block"
+                    left={left}
+                    width={width}
+                    label={list.format(
+                      busy.map((instance) =>
+                        t("pim-views-free-busy", {
+                          title: instance.title || noTitle,
+                          time: t("common-time-range", {
+                            start: formatClock(format, instance.start_utc, tz),
+                            end: formatClock(format, instance.end_utc, tz),
+                          }),
+                        }),
+                      ),
+                    )}
+                  >
+                    {titles}
+                  </Segment>
+                );
+              })}
               {slots.map((slot) => {
                 const left = Math.max(0, position(instantMs(slot.start)));
                 const right = Math.min(1, position(instantMs(slot.end)));
@@ -674,7 +684,12 @@ export function FreeTimeView({
                       openNewEvent(ctx, day, { hour: start.hour, minute: start.minute }, tz);
                     }}
                   >
-                    {text}
+                    <span data-part="calendar.free-time.slot.text" data-size="full">
+                      {text}
+                    </span>
+                    <span data-part="calendar.free-time.slot.text" data-size="start">
+                      {formatClock(format, slot.start, tz)}
+                    </span>
                   </Segment>
                 );
               })}

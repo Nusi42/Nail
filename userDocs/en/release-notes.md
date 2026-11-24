@@ -35,7 +35,8 @@ new events drawn straight onto the week.
 - **Type an event as a sentence** — type “Lunch with Bob tomorrow 12:30 at
   Corner café”, “Yoga every Monday 7pm”, “Offsite Dec 4 all day” or “Sync
   3-4pm” in the quick-add field under the calendar toolbar: chips show what
-  Nail understood (day, time, length, repetition, place), `Enter` adds the
+  Nail understood, worked out (the day, the start and end, the repetition,
+  the place and the calendar), `Enter` adds the
   event and `Tab` opens the editor with it filled in (English).
 - **Today and now at a glance** — today's date in a filled circle, the now
   line with a dot and the time beside the hours, under the events instead of
@@ -87,6 +88,18 @@ new events drawn straight onto the week.
   ([MCP](mcp.md)).
 
 ### Corrected in 0.8.11
+
+- **Calendar review fixes** — titles of overlapping and short events stay
+  readable (a later meeting only cascades when the earlier title stays
+  visible, titles wrap onto a second line, the time gives way before the
+  title); the quick look stays inside the window when its details load and
+  `Delete` keeps your place; month dots have their calendar's colour;
+  “tomorrow” in quick add follows Nail's clock; search lists a repeating
+  event by its next occurrence; one people summary everywhere; the
+  scheduling grid and **Find a time** follow your working hours; **Accept**
+  is the primary answer; tasks can be planned with a **Plan** button (no
+  drag needed); free-time labels no longer collide; lengths read the same
+  everywhere.
 
 - **Changes wait seconds, not minutes, after a slow answer** — when the
   server is busy or slow for a moment, Nail tries your queued changes

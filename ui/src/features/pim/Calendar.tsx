@@ -54,7 +54,7 @@ import { CalendarSearch } from "./CalendarSearch";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { DueTasks } from "./DueTasks";
 import { CalendarEmpty } from "./EmptyState";
-import { useCalendarPreferences, weekStartOf } from "./prefs";
+import { useCalendarPreferences, weekStartOf, workHourRange } from "./prefs";
 import { QuickAdd } from "./QuickAdd";
 import { MiniMonthView } from "./SmallWidgets";
 import {
@@ -400,14 +400,9 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
     );
   } else {
     // The layout's hours win; else the working hours of the preferences.
-    const workStart = clampHour(
-      optionNumber(node, "work-start", Math.floor(prefs.work_hours.start_minute / 60)),
-      0,
-    );
-    const workEnd = clampHour(
-      optionNumber(node, "work-end", Math.ceil(prefs.work_hours.end_minute / 60)),
-      24,
-    );
+    const work = workHourRange(prefs);
+    const workStart = clampHour(optionNumber(node, "work-start", work.start), 0);
+    const workEnd = clampHour(optionNumber(node, "work-end", work.end), 24);
     body = (
       <FreeTimeView
         nodeKey={nodeKey}

@@ -16,11 +16,7 @@ import type {
   PimTime,
   Task,
 } from "../../api/generated";
-import {
-  DEFAULT_CALENDAR_PREFERENCES,
-  DEFAULT_EVENT_MINUTES,
-  MINUTES_PER_DAY,
-} from "../../api/generated";
+import { DEFAULT_CALENDAR_PREFERENCES, DEFAULT_EVENT_MINUTES } from "../../api/generated";
 import {
   dateString,
   instantMs,
@@ -30,6 +26,7 @@ import {
   todayIn,
   toZoned,
 } from "./time";
+import { workHoursValid } from "./prefs";
 
 /** A fresh copy of the default preferences (the mock state owns it). */
 export function defaultPreferences(): CalendarPreferences {
@@ -42,8 +39,7 @@ export function defaultPreferences(): CalendarPreferences {
 
 /** The first problem with preferences, like `CalendarPreferences::issues` and the core's zone check. */
 export function preferencesIssue(prefs: CalendarPreferences): PimIssue | null {
-  const { start_minute, end_minute } = prefs.work_hours;
-  if (!(start_minute < end_minute && end_minute <= MINUTES_PER_DAY)) return "invalid-work-hours";
+  if (!workHoursValid(prefs.work_hours)) return "invalid-work-hours";
   if (new Set(prefs.work_days).size !== prefs.work_days.length) return "too-many";
   for (const zone of [prefs.time_zone, prefs.second_time_zone]) {
     if (zone !== null && !isKnownZone(zone)) return "invalid-time-zone";

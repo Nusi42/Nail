@@ -7,12 +7,15 @@
  * edits this file during R7 (ADR 0246), so the packages never touch the
  * same stylesheet; the integrator may fold it into `parts.ts` / `skin.ts`.
  */
-import { ACCENT_BAR } from "../../theme/declarations";
+import { ACCENT_BAR, ONE_LINE } from "../../theme/declarations";
 import { HC, p, ps, pss } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
 
 /** R7 M3: the smallest height of a short event card (a 15-minute event is never a sliver). */
 export const SHORT_CARD_MIN_HEIGHT = "18px";
+
+/** The top, right and bottom border of an event card in High contrast (`skin.ts`). */
+export const HC_CARD_BORDER = "2px";
 
 /** R7 S4: below this card width the icons give their room to the title. */
 const ICONS_MIN_CARD = "6rem";
@@ -22,9 +25,6 @@ const NOW_DOT = "8px";
 
 /** The draft of a new event is drawn above every cascade level. */
 const DRAFT_LAYER = "50";
-
-/** One line, cut with an ellipsis. */
-const ONE_LINE = "min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
 
 /** Diagonal hatching in `color` (time outside the working hours, free events). */
 const hatch = (color: string) =>
@@ -77,8 +77,9 @@ ${p("calendar.draft")} {
 }
 ${p("calendar.draft.time")} { display: block; overflow-wrap: anywhere; }
 ${p("calendar.event")}[data-size="short"] { gap: ${T.xs}; padding-block: 0; }
-${p("calendar.event")}[data-size="short"] > ${p("event-card.title")} { display: block; flex: 0 1 auto; white-space: nowrap; }
-${p("calendar.event")}[data-size="short"] > ${p("event-card.time")} { flex: 0 0 auto; }
+${p("calendar.event")}[data-size="short"] > ${p("event-card.title")} { display: block; flex: 0 0 auto; max-width: 100%; white-space: nowrap; }
+${p("calendar.event")}[data-size="short"] > ${p("event-card.time")} { flex: 0 1 auto; min-width: 0; }
+${HC} ${p("calendar.event")}[data-size="short"] { min-height: calc(${SHORT_CARD_MIN_HEIGHT} + 2 * ${HC_CARD_BORDER}); }
 ${p("calendar.event")}[data-size="short"] > ${p("event-card.icons")}, ${p("calendar.chip")} > ${p("event-card.icons")} { margin-inline-start: auto; }
 ${p("event-card.icons")} { gap: 2px; padding: 1px; border-radius: ${T.rSm}; color: ${T.muted}; background-color: inherit; }
 ${p("event-card.icon")} { width: 0.9em; height: 0.9em; flex: 0 0 auto; }

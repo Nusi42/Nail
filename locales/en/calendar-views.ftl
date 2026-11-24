@@ -12,7 +12,6 @@ pim-views-quick-add-placeholder = Add an event, e.g. “Lunch with Bob tomorrow 
 pim-views-quick-add-preview = What Nail understood
 pim-views-quick-add-hint = Enter adds it · Tab opens the editor · Esc cancels
 pim-views-quick-add-added = Added “{ $title }” on { $when }.
-pim-views-quick-add-kind-duration = Lasts
 pim-views-quick-add-kind-location = Where
 
 ## Toolbar: search (S9)
@@ -65,19 +64,8 @@ pim-views-agenda-entry =
 
 ## Free time (C1)
 
-pim-views-free-total =
-    { $hours ->
-        [0]
-            { $minutes ->
-                [0] No free time
-               *[other] { $minutes } min free
-            }
-       *[other]
-            { $minutes ->
-                [0] { $hours } h free
-               *[other] { $hours } h { $minutes } min free
-            }
-    }
+pim-views-free-total = { $length } free
+pim-views-free-none = No free time
 pim-views-free-busy = Busy: { $title }, { $time }
 pim-views-free-busy-all-day = Busy all day: { $titles }
 
@@ -93,6 +81,7 @@ pim-views-tasks-empty = No open tasks. Add one with the field above or “New ta
 ## Due this week (S12)
 
 pim-views-due-title = Due this week
+pim-views-task-plan = Plan “{ $title }” in the calendar
 pim-views-due-empty = Nothing due this week.
 pim-views-due-add = Add a task due today to { $list }
 

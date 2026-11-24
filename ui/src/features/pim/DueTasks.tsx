@@ -3,12 +3,13 @@
  * tasks due in the week shown from today's week (`ListTasksDue`), each
  * with a checkbox (`CompleteTask`), its title and when it is due, and a
  * field that adds a task due today to the first task list. A task can be
- * dragged onto the time grid to block time for it (`setTaskDrag`; the
- * grid creates the event, the task stays).
+ * dragged onto the time grid, or planned with its Plan button, to block
+ * time for it (`DueTaskItem`; the event is created, the task stays).
  *
  * Parts: `due-tasks`, `due-tasks.title`, `due-tasks.items`,
  * `due-tasks.item` (`data-state~="overdue"`), `due-tasks.check`,
- * `due-tasks.name`, `due-tasks.due`, `due-tasks.add`, `due-tasks.empty`.
+ * `due-tasks.name`, `due-tasks.due`, `due-tasks.plan`, `due-tasks.add`,
+ * `due-tasks.empty`.
  */
 import { useId, useState, type SubmitEvent } from "react";
 import type { CalendarId, LocalizedMessage, Task } from "../../api/generated";
@@ -18,10 +19,20 @@ import { useNow } from "../../state/clock";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { emptyTaskFields } from "./defaults";
 import { formatPimTime } from "./fmt";
-import { setTaskDrag, useCalendarPreferences, useTasksDue, weekStartOf } from "./prefs";
+import { DueTaskItem, type DueTaskParts } from "./DueTaskItem";
+import { writableTaskLists } from "./newEvent";
+import { useCalendarPreferences, useTasksDue, weekStartOf } from "./prefs";
 import { pimWrite, useCalendars } from "./queries";
 import { AddTaskForm, dueMs } from "./TaskList";
 import { DEFAULT_VIEW_OPTIONS, dateString, rangeInstants, todayIn, viewRange } from "./time";
+
+/** The parts of a task in the panel. */
+const DUE_TASK_PARTS: DueTaskParts = {
+  item: "due-tasks.item",
+  check: "due-tasks.check",
+  title: "due-tasks.name",
+  plan: "due-tasks.plan",
+};
 
 export function DueTasks({
   tz,
@@ -42,9 +53,8 @@ export function DueTasks({
   const week = viewRange("week", today, locale, { ...DEFAULT_VIEW_OPTIONS, weekStart });
   const tasks = useTasksDue(rangeInstants(week, tz), lists, tz);
   const calendars = useCalendars();
-  const target = (calendars.data ?? []).find(
-    (c) =>
-      c.components.includes("task") && !c.read_only && (lists === null || lists.includes(c.id)),
+  const target = writableTaskLists(calendars.data ?? []).find(
+    (c) => lists === null || lists.includes(c.id),
   );
   const [title, setTitle] = useState("");
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
@@ -73,35 +83,19 @@ export function DueTasks({
     if (saved) setTitle("");
   };
 
-  const row = (task: Task) => {
-    const name = task.fields.title || t("common-no-title");
-    const overdue = dueMs(task, tz) < now;
-    return (
-      <li
-        key={task.id}
-        data-part="due-tasks.item"
-        data-task={task.id}
-        data-state={overdue ? "overdue" : undefined}
-        draggable={!task.read_only}
-        onDragStart={(event) => {
-          setTaskDrag(event.dataTransfer, { taskId: task.id, title: name });
-        }}
-      >
-        <input
-          type="checkbox"
-          data-part="due-tasks.check"
-          checked={false}
-          disabled={task.read_only}
-          aria-label={t("pim-task-complete", { title: name })}
-          onChange={() => void run({ type: "CompleteTask", task_id: task.id, completed: true })}
-        />
-        <span data-part="due-tasks.name">{name}</span>
-        {task.fields.due && (
-          <span data-part="due-tasks.due">{formatPimTime(format, task.fields.due, tz)}</span>
-        )}
-      </li>
-    );
-  };
+  const row = (task: Task) => (
+    <DueTaskItem
+      key={task.id}
+      task={task}
+      parts={DUE_TASK_PARTS}
+      tz={tz}
+      overdue={dueMs(task, tz) < now}
+    >
+      {task.fields.due && (
+        <span data-part="due-tasks.due">{formatPimTime(format, task.fields.due, tz)}</span>
+      )}
+    </DueTaskItem>
+  );
 
   return (
     <section data-part="due-tasks" aria-labelledby={titleId}>

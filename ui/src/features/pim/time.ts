@@ -551,11 +551,41 @@ export const CASCADE_MIN_WIDTH = 0.6;
 
 /**
  * R7 M2: overlapping events that start less than this many minutes apart
- * (in the same 15-minute slot) stand side by side, since a cascade would
- * hide the earlier one's title under the later one; events that start
- * later cascade over them.
+ * (in the same 15-minute slot) always stand side by side; the real limit
+ * comes from the exposed height (`sideBySideMinutes`).
  */
 export const SIDE_BY_SIDE_MINUTES = 15;
+
+/**
+ * R7 M2: the height (rem) of the earlier card a later cascaded card must
+ * leave visible: one title line with the card's padding and borders.
+ */
+export const CASCADE_EXPOSED_REM = 1.5;
+
+/**
+ * R7 M2: overlapping events that start less than this many minutes apart
+ * stand side by side, since a cascade would leave less than one title line
+ * (`CASCADE_EXPOSED_REM`) of the earlier card visible; events that start
+ * later cascade over them. `pxPerMinute` is the grid's scale, `remPx` the
+ * root font size; unknown (0) falls back to `SIDE_BY_SIDE_MINUTES`.
+ */
+export function sideBySideMinutes(pxPerMinute: number, remPx: number): number {
+  if (!(pxPerMinute > 0) || !(remPx > 0)) return SIDE_BY_SIDE_MINUTES;
+  return Math.max(SIDE_BY_SIDE_MINUTES, Math.ceil((CASCADE_EXPOSED_REM * remPx) / pxPerMinute));
+}
+
+/** R7 M6: how far (minutes) the gutter's now label reaches above and below now. */
+export const NOW_LABEL_MINUTES = 20;
+
+/**
+ * Whether the now label at `nowWall` (minute of the day) covers the label
+ * of `hour`: its row (`[hour, hour + 1)`) widened by the now label's reach,
+ * so the label of the hour now is in, and of an hour that starts or ended
+ * close by, gives way.
+ */
+export function nowLabelCovers(hour: number, nowWall: number): boolean {
+  return nowWall >= hour * 60 - NOW_LABEL_MINUTES && nowWall < (hour + 1) * 60 + NOW_LABEL_MINUTES;
+}
 
 interface Slot {
   startMinute: number;
@@ -569,15 +599,15 @@ const overlap = (a: Slot, b: Slot) => a.startMinute < b.endMinute && b.startMinu
  * first): cascade levels, side-by-side columns within a level, and the
  * expansion of each card into the free columns to its right.
  */
-function layoutCluster(cluster: PlacedInstance[]): void {
+function layoutCluster(cluster: PlacedInstance[], together: number): void {
   // Levels: one above every overlapping event that started well before,
   // the same as those that started together.
   cluster.forEach((item, index) => {
     let level = 0;
     for (const earlier of cluster.slice(0, index)) {
       if (!overlap(earlier, item)) continue;
-      const together = item.startMinute - earlier.startMinute < SIDE_BY_SIDE_MINUTES;
-      level = Math.max(level, together ? earlier.layer : earlier.layer + 1);
+      const beside = item.startMinute - earlier.startMinute < together;
+      level = Math.max(level, beside ? earlier.layer : earlier.layer + 1);
     }
     item.layer = level;
   });
@@ -631,12 +661,14 @@ function layoutCluster(cluster: PlacedInstance[]): void {
  * events cascaded (R7 M2, ADR 0246): each later overlapping event one
  * level up, indented by `CASCADE_INDENT` (less when there are many levels,
  * so the top card keeps `CASCADE_MIN_WIDTH`), events that start together
- * side by side, every card expanded into the free columns to its right.
+ * side by side (closer than `together` minutes, see `sideBySideMinutes`),
+ * every card expanded into the free columns to its right.
  */
 export function placeDay(
   instances: readonly EventInstance[],
   day: CalendarDate,
   tz: string,
+  together = SIDE_BY_SIDE_MINUTES,
 ): PlacedInstance[] {
   const dayStart = toZoned(day, tz).toDate().getTime();
   const dayEnd = toZoned(day.add({ days: 1 }), tz)
@@ -672,13 +704,13 @@ export function placeDay(
   let clusterEnd = -1;
   for (const item of items) {
     if (item.startMinute >= clusterEnd && cluster.length > 0) {
-      layoutCluster(cluster);
+      layoutCluster(cluster, together);
       cluster = [];
     }
     cluster.push(item);
     clusterEnd = Math.max(clusterEnd, item.endMinute);
   }
-  if (cluster.length > 0) layoutCluster(cluster);
+  if (cluster.length > 0) layoutCluster(cluster, together);
   return items;
 }
 

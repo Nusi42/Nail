@@ -2,13 +2,13 @@
 /**
  * The pure helpers of the quick look, the compact editor and the reminder
  * toast (R7, ADR 0246): lengths as text, the reminder chip, people
- * summaries, the call link and overlaps — with the English catalog.
+ * summaries and the call link — with the English catalog.
  */
 import { FluentBundle, FluentResource } from "@fluent/bundle";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { Alarm, EventInstance } from "../../api/generated";
+import type { Alarm } from "../../api/generated";
 import type { MessageArgs } from "../../i18n/localizer";
 import {
   alarmsForChoice,
@@ -17,7 +17,6 @@ import {
   lengthText,
   minutesOf,
   myAttendee,
-  overlapsOf,
   peopleSummary,
   reminderChoiceOf,
   reminderChoices,
@@ -46,31 +45,6 @@ const relative = (minutes: number): Alarm => ({
   repeat: null,
   acknowledged: null,
 });
-
-function instance(over: Partial<EventInstance>): EventInstance {
-  return {
-    event_id: "ev",
-    calendar_id: "cal",
-    recurrence_id: null,
-    start: { type: "zoned", local: "2026-11-27T15:00:00", tz: "UTC" },
-    end: { type: "zoned", local: "2026-11-27T16:00:00", tz: "UTC" },
-    start_utc: "2026-11-27T15:00:00Z",
-    end_utc: "2026-11-27T16:00:00Z",
-    all_day: false,
-    title: "Kickoff",
-    location: null,
-    status: "confirmed",
-    transparency: "busy",
-    color: null,
-    recurring: false,
-    overridden: false,
-    has_attendees: false,
-    has_alarms: false,
-    read_only: false,
-    my_status: null,
-    ...over,
-  };
-}
 
 describe("lengths", () => {
   it("splits minutes into days, hours and minutes", () => {
@@ -123,7 +97,7 @@ describe("the reminder chip", () => {
   });
 });
 
-describe("people, calls and overlaps", () => {
+describe("people and calls", () => {
   it("summarizes who answered what, leaving out zero counts", () => {
     expect(peopleSummary(t, "en", ["accepted", "needs-action", "delegated"])).toBe(
       "3 people · 1 accepted, 2 not answered",
@@ -155,30 +129,5 @@ describe("people, calls and overlaps", () => {
         { uri: " https://meet.example.com/x ", label: null, features: ["video"] },
       ]),
     ).toBe("https://meet.example.com/x");
-  });
-
-  it("lists the busy occurrences that overlap, not itself, free or declined ones", () => {
-    const me = instance({});
-    const others = [
-      me,
-      instance({
-        event_id: "a",
-        start_utc: "2026-11-27T15:30:00Z",
-        end_utc: "2026-11-27T17:00:00Z",
-      }),
-      instance({
-        event_id: "b",
-        start_utc: "2026-11-27T14:00:00Z",
-        end_utc: "2026-11-27T15:15:00Z",
-      }),
-      instance({
-        event_id: "touch",
-        start_utc: "2026-11-27T16:00:00Z",
-        end_utc: "2026-11-27T17:00:00Z",
-      }),
-      instance({ event_id: "free", transparency: "free" }),
-      instance({ event_id: "declined", my_status: "declined" }),
-    ];
-    expect(overlapsOf(me, others).map((o) => o.event_id)).toEqual(["b", "a"]);
   });
 });

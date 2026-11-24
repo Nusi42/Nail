@@ -4,12 +4,14 @@
  * (`RespondToInvitation`, `CancelMeeting`, …) go to the core, which queues
  * the calendar changes in the PIM queue and the iMIP mail in the outbox.
  */
-import { useQuery, type QueryClient } from "@tanstack/react-query";
-import type { NailClient } from "../../api/client";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { errorMessageOf, type NailClient } from "../../api/client";
 import type {
   EventId,
   IdentityId,
   Invitation,
+  LocalizedMessage,
   MessageId,
   Request,
   SchedulingResult,
@@ -162,4 +164,33 @@ export async function scheduleWrite(
     void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.message(messageId) });
   }
   return result;
+}
+
+/**
+ * Runs scheduling writes for a form (the meeting panel, the quick look):
+ * `busy` while one runs, the `problem` it met or the `done` message it
+ * earned; `run` answers whether it worked.
+ */
+export function useSchedulingRunner() {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const [done, setDone] = useState<LocalizedMessage | null>(null);
+  const run = async (request: SchedulingWrite, success: LocalizedMessage): Promise<boolean> => {
+    setBusy(true);
+    setProblem(null);
+    setDone(null);
+    try {
+      await scheduleWrite({ client, queryClient }, request);
+      setDone(success);
+      return true;
+    } catch (error) {
+      setProblem(errorMessageOf(error));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, problem, done, run };
 }

@@ -405,6 +405,7 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::SetCalendarPreferences { .. } => ("SetCalendarPreferences", Scope(S::Calendar)),
         Request::ParseEventText { .. } => ("ParseEventText", Scope(S::Read)),
         Request::ListTasksDue { .. } => ("ListTasksDue", Scope(S::Read)),
+        Request::ListEventOverlaps { .. } => ("ListEventOverlaps", Scope(S::Read)),
         Request::ListAddressBooks { .. } => ("ListAddressBooks", Scope(S::Read)),
         Request::CreateAddressBook { .. } => ("CreateAddressBook", Scope(S::Pim)),
         Request::UpdateAddressBook { .. } => ("UpdateAddressBook", Scope(S::Pim)),

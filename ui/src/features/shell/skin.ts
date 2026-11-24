@@ -19,7 +19,13 @@
  * rail about 60 px wide, a 34 px app mark (`size.avatar`), a 16 px badge.
  */
 import { p } from "../../theme/selectors";
-import { initialsAvatar, QUIET_HOVER, TINY_TEXT, VISUALLY_HIDDEN } from "../../theme/declarations";
+import {
+  FOCUS_RING,
+  initialsAvatar,
+  QUIET_HOVER,
+  TINY_TEXT,
+  VISUALLY_HIDDEN,
+} from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 
 /** The rail button: control + 10 px (42 px in Comfortable). */
@@ -50,7 +56,7 @@ ${p("nav-rail.item")} {
   transition: background-color ${T.fast} ${T.ease}, color ${T.fast} ${T.ease};
 }
 ${p("nav-rail.item")}:hover { ${QUIET_HOVER} }
-${p("nav-rail.item")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("nav-rail.item")}:focus-visible { ${FOCUS_RING} }
 ${p("nav-rail.item")}:disabled { opacity: ${T.disabled}; }
 ${p("nav-rail.item")}[aria-current="page"], ${p("nav-rail.item")}[data-state~="active"] {
   color: ${T.accent}; background-color: ${T.accentSoft};

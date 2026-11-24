@@ -16,7 +16,13 @@
  */
 import { p, ps } from "../theme/selectors";
 import { READER_SLOTS } from "../theme/skin";
-import { ACCENT_BAR, AVATAR_FG, READER_MEASURE, READER_NARROW } from "../theme/declarations";
+import {
+  ACCENT_BAR,
+  AVATAR_FG,
+  FOCUS_RING,
+  READER_MEASURE,
+  READER_NARROW,
+} from "../theme/declarations";
 import { T } from "../theme/tokens";
 
 /** The strip's rows: half the list's row padding above and below. */
@@ -182,7 +188,7 @@ ${inCard("message-view.text-block")}, ${inCard("message-view.quote")} {
 }
 ${inCard("message-view.quote")} { padding-inline-start: ${T.sm}; border-inline-start: ${ACCENT_BAR} solid ${T.quote}; color: ${T.muted}; }
 ${inCard("message-view.quote-toggle")} { width: fit-content; font-size: ${T.small}; color: ${T.accent}; cursor: pointer; }
-${inCard("message-view.quote-toggle")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${inCard("message-view.quote-toggle")}:focus-visible { ${FOCUS_RING} }
 ${inCard("message-view.body")} { background-color: transparent; }
 @container nail-reader (max-width: ${READER_NARROW}) {
   ${p("thread-view")}[data-mode="cards"] { padding: ${T.md} ${T.pane} ${T.lg}; }

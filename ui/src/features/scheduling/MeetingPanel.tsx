@@ -23,7 +23,6 @@ import type {
   CancelScope,
   InvitationResponse,
   InvitationTarget,
-  LocalizedMessage,
   PimTime,
   SchedulingSettings,
 } from "../../api/generated";
@@ -39,14 +38,13 @@ import { localZone } from "../pim/time";
 import { AnswerForm, ProposeTimeForm } from "./Answer";
 import { timeRangeText } from "./fmt";
 import { CANCEL_SCOPES, SETTING_SWITCHES } from "./messages";
-import { answerCounts, isMine, RESPONSES } from "./model";
+import { isMine, RESPONSES } from "./model";
 import { CANCEL_DIALOG } from "./names";
 import {
-  scheduleWrite,
   schedulingKeys,
   useMyAddresses,
+  useSchedulingRunner,
   useSchedulingSettings,
-  type SchedulingWrite,
 } from "./queries";
 import { schedulingStoreFor, useScheduling } from "./store";
 import { useBusyAction } from "../../state/busyAction";
@@ -59,30 +57,6 @@ export interface MeetingPanelProps {
   event: CalendarEvent;
   /** The occurrence the editor shows, `null` = the series / a single event. */
   recurrenceId: PimTime | null;
-}
-
-function useRunner() {
-  const client = useClient();
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [done, setDone] = useState<LocalizedMessage | null>(null);
-  const run = async (request: SchedulingWrite, success: LocalizedMessage): Promise<boolean> => {
-    setBusy(true);
-    setProblem(null);
-    setDone(null);
-    try {
-      await scheduleWrite({ client, queryClient }, request);
-      setDone(success);
-      return true;
-    } catch (error) {
-      setProblem(errorMessageOf(error));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-  return { busy, problem, done, run };
 }
 
 /** The meeting panel; renders nothing for events without attendees. */
@@ -106,12 +80,11 @@ function OrganizerPanel({
   const t = useT();
   const store = useUiStoreApi();
   const ids = { comment: useId(), who: useId() };
-  const { busy, problem, done, run } = useRunner();
+  const { busy, problem, done, run } = useSchedulingRunner();
   const [who, setWho] = useState<"everyone" | "chosen">("everyone");
   const [chosen, setChosen] = useState<string[]>([]);
   const [comment, setComment] = useState("");
   const others = event.fields.attendees.filter((a) => !isMine(a.email, mine));
-  const counts = answerCounts(others.map((a) => a.status));
 
   return (
     <section
@@ -121,15 +94,6 @@ function OrganizerPanel({
         title: event.fields.title || t("common-no-title"),
       })}
     >
-      <p data-part="scheduling.meeting.summary">
-        {t("invitation-attendees-summary", {
-          count: others.length,
-          accepted: counts.accepted,
-          declined: counts.declined,
-          tentative: counts.tentative,
-          pending: counts["needs-action"],
-        })}
-      </p>
       <fieldset data-part="scheduling.meeting.recipients">
         <legend data-part="form.section.title">{t("scheduling-send-legend")}</legend>
         {(["everyone", "chosen"] as const).map((value) => (
@@ -224,7 +188,7 @@ function AttendeePanel({
 }: MeetingPanelProps & { mine: readonly string[] }) {
   const t = useT();
   const settings = useSchedulingSettings();
-  const { busy, problem, done, run } = useRunner();
+  const { busy, problem, done, run } = useSchedulingRunner();
   const [onlyThis, setOnlyThis] = useState(recurrenceId !== null);
   const [proposing, setProposing] = useState(false);
   const me = event.fields.attendees.find((a) => isMine(a.email, mine));
@@ -331,7 +295,7 @@ export function CancelMeetingDialog({ close }: DialogProps) {
   const store = useUiStoreApi();
   const target = useScheduling((s) => s.cancelTarget);
   const ids = { scope: useId(), note: useId() };
-  const { busy, problem, run } = useRunner();
+  const { busy, problem, run } = useSchedulingRunner();
   const [scope, setScope] = useState<CancelScope>(
     target?.recurring && target.recurrenceId ? "occurrence" : "meeting",
   );

@@ -10,9 +10,13 @@ import {
   taskOfDrag,
   viewZonesOf,
   weekdayOf,
+  workHourRange,
+  workHoursValid,
 } from "./prefs";
 import { localZone, parseDay } from "./time";
 import { must } from "../../test/must";
+import { describeVectors } from "../../test/vectors";
+import calendarVectors from "../../../../crates/nail-api/fixtures/ts-vectors/calendar.json";
 
 const day = (text: string) => must(parseDay(text));
 const prefs: CalendarPreferences = {
@@ -44,6 +48,15 @@ describe("working time", () => {
     expect(offHours(prefs, day("2026-11-29"))).toEqual([[0, 1440]]);
     const allDay = { ...prefs, work_hours: { start_minute: 0, end_minute: 1440 } };
     expect(offHours(allDay, day("2026-11-25"))).toEqual([]);
+  });
+});
+
+describe("working hour range", () => {
+  it("covers the working hours in whole hours", () => {
+    expect(workHourRange(prefs)).toEqual({ start: 8, end: 18 });
+    expect(
+      workHourRange({ ...prefs, work_hours: { start_minute: 570, end_minute: 1035 } }),
+    ).toEqual({ start: 9, end: 18 });
   });
 });
 
@@ -104,3 +117,6 @@ describe("task drag", () => {
     expect(taskOfDrag(t)).toBeNull();
   });
 });
+
+// The working-hours rule is the core's `WorkHours::is_valid` (the form and the mock use this port).
+describeVectors("calendar", calendarVectors, { workHoursValid });

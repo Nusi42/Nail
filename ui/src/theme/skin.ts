@@ -58,14 +58,17 @@
  */
 import { HC, p, ps, pss } from "./selectors";
 import {
-  floatingWidth,
   ACCENT_BAR,
   AVATAR_FG,
   CAPS_TIGHT,
+  floatingWidth,
+  FOCUS_RING,
   HC_RING,
-  initialsAvatar,
+  ICON_BUTTON,
   INITIALS_TRACKING,
+  initialsAvatar,
   INLINE_ROW,
+  ONE_LINE,
   QUIET_HOVER,
   READER_MEASURE,
   READER_NARROW,
@@ -138,8 +141,6 @@ const FOLDER_ROW = `display: grid; grid-template-columns: ${T.icon} minmax(0, 1f
 /** Menus: as wide as their items, never wider than 30em or the window. */
 const MENU_MAX_WIDTH = `min(30em, calc(100vw - 2 * ${T.sm}))`;
 
-const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
-
 const BUTTONS = `${p("form.button")} {
   display: inline-flex; align-items: center; justify-content: center; gap: ${T.sm};
   min-height: ${T.control}; padding: 0 ${T.md};
@@ -151,7 +152,7 @@ const BUTTONS = `${p("form.button")} {
 }
 ${p("form.button")}:hover { background-color: ${T.subtle}; }
 ${p("form.button")}:active { background-color: ${T.raised}; }
-${p("form.button")}:focus-visible { ${focusRing} }
+${p("form.button")}:focus-visible { ${FOCUS_RING} }
 ${p("form.button")}:disabled, ${p("form.button")}[aria-disabled="true"] { opacity: ${T.disabled}; }
 ${p("form.button")}[data-variant~="primary"] {
   border-color: transparent; color: ${T.accentFg}; background-color: ${T.accent}; font-weight: ${T.semibold};
@@ -187,9 +188,9 @@ ${ps("toolbar.button.icon", "toolbar.more.icon")} { flex: 0 0 auto; width: ${T.i
 ${p("toolbar.separator")} { align-self: center; flex: 0 0 auto; width: 1px; height: calc(${T.control} - 2 * ${T.xs}); margin: 0 ${T.xs}; background-color: ${T.border}; }
 ${p("toolbar.separator")}[data-wrap-edge="start"] { display: none; }
 ${p("toolbar.separator")}[data-wrap-edge="end"] { visibility: hidden; }
-${p("window.close")} { display: inline-flex; align-items: center; justify-content: center; width: ${T.control}; height: ${T.control}; padding: 0; border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent; }
+${p("window.close")} { ${ICON_BUTTON} }
 ${p("window.close")}:hover { ${QUIET_HOVER} }
-${p("window.close")}:focus-visible { ${focusRing} }
+${p("window.close")}:focus-visible { ${FOCUS_RING} }
 ${p("window.close.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("composer.format.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("composer.format.icon")} + ${p("composer.format.label")} { ${VISUALLY_HIDDEN} }`;
@@ -268,7 +269,7 @@ const SWITCH = `${p("switch")} {
   background-color: ${T.bg}; transition: background-color ${T.fast} ${T.ease};
 }
 ${p("switch")}[aria-checked="true"] { border-color: transparent; background-color: ${T.accent}; }
-${p("switch")}:focus-visible { ${focusRing} }
+${p("switch")}:focus-visible { ${FOCUS_RING} }
 ${p("switch")}:disabled { opacity: ${T.disabled}; }
 ${p("switch.thumb")} {
   position: absolute; inset-block-start: 1px; inset-inline-start: 1px;
@@ -288,7 +289,7 @@ const CHIPS_TAGS_BADGES = `${ps("chip", "message-list.row.chip")} {
   font-size: ${T.small}; line-height: ${T.tight}; color: ${T.muted}; background-color: ${T.bg};
 }
 ${p("chip")}[aria-pressed="true"], ${p("chip")}[data-state~="selected"] { border-color: transparent; color: ${T.accent}; background-color: ${T.accentSoft}; font-weight: ${T.semibold}; }
-${p("chip")}:focus-visible { ${focusRing} }
+${p("chip")}:focus-visible { ${FOCUS_RING} }
 ${p("tag")} {
   display: inline-flex; align-items: center; gap: ${T.xs}; min-width: 0;
   padding: 0 ${T.sm}; border-radius: ${T.rSm};
@@ -471,7 +472,7 @@ ${p("message-view.header.label")} { min-width: 0; }
 ${p("message-view.header.value")} { min-width: 0; overflow-wrap: anywhere; }
 ${p("message-view.text")} { max-width: ${READER_MEASURE}; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
 ${p("message-view.text-link")} { color: ${T.accent}; text-decoration: underline; overflow-wrap: anywhere; cursor: pointer; }
-${p("message-view.text-link")}:focus-visible { ${focusRing} }
+${p("message-view.text-link")}:focus-visible { ${FOCUS_RING} }
 ${p("message-view.body")} { display: block; flex: 0 0 auto; box-sizing: border-box; width: 100%; height: calc(12 * ${T.lg}); border: none; background-color: ${T.bg}; }
 ${p("message-view.column")}:has(> ${p("message-view.body")}) { max-width: none; }
 ${p("message-view.link-dock")} { position: sticky; bottom: 0; z-index: 1; flex: 0 0 auto; height: 0; overflow: visible; pointer-events: none; }
@@ -505,9 +506,9 @@ ${p("security-warnings.toggle")} {
   font-family: ${T.fontUi}; font-size: ${T.small}; font-weight: ${T.medium}; color: ${T.accent};
 }
 ${p("security-warnings.toggle")}:hover { background-color: ${T.accentSoft}; }
-${p("security-warnings.toggle")}:focus-visible { ${focusRing} }
+${p("security-warnings.toggle")}:focus-visible { ${FOCUS_RING} }
 ${p("message-view.attachments.toggle")}:hover { background-color: ${T.accentSoft}; }
-${p("message-view.attachments.toggle")}:focus-visible { ${focusRing} }
+${p("message-view.attachments.toggle")}:focus-visible { ${FOCUS_RING} }
 ${p("message-view.attachments.toggle.icon")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }
 ${p("attachment-card")} {
   display: grid; grid-template-columns: calc(${T.control} + ${T.xs}) minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
@@ -522,7 +523,7 @@ ${fileColors}
 ${p("attachment-card.text")} { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: ${T.sm}; min-width: 0; }
 ${p("attachment-card.name")} { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; color: inherit; font-family: inherit; text-align: start; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; font-weight: ${T.semibold}; }
 ${p("attachment-card.name")}:hover { text-decoration: underline; }
-${p("attachment-card.name")}:focus-visible { ${focusRing} }
+${p("attachment-card.name")}:focus-visible { ${FOCUS_RING} }
 ${p("attachment-card.size")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
 ${p("attachment-card.status")} { grid-column: 2; display: flex; align-items: center; gap: ${T.xxs}; min-width: 0; overflow: hidden; white-space: nowrap; font-size: ${T.small}; color: ${T.muted}; }
 ${p("attachment-card.status")}[data-state~="empty"] { display: none; }
@@ -550,7 +551,7 @@ ${p("folder-tree.item")}[data-state~="selected"] { color: ${T.selectionFg}; back
 ${p("folder-tree.item")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("folder-tree.item.icon")} { width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
 ${p("folder-tree.item")}[data-state~="selected"] ${p("folder-tree.item.icon")} { color: ${T.accent}; }
-${p("folder-tree.item.name")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("folder-tree.item.name")} { ${ONE_LINE} }
 ${p("folder-tree.item.unread-count")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
 ${p("folder-tree.item")}[data-state~="selected"] ${p("folder-tree.item.unread-count")} { color: ${T.accent}; font-weight: ${T.semibold}; }
 ${p("folder-tree")}[data-mode="sections"] { display: flex; flex-direction: column; gap: ${T.md}; padding: ${T.md} ${T.sm}; }
@@ -561,7 +562,7 @@ ${p("folder-tree.compose")} {
   color: ${T.accentFg}; background-color: ${T.accent};
 }
 ${p("folder-tree.compose")}:hover { background-color: color-mix(in srgb, ${T.accent} 88%, ${T.fg}); }
-${p("folder-tree.compose")}:focus-visible { ${focusRing} }
+${p("folder-tree.compose")}:focus-visible { ${FOCUS_RING} }
 ${p("folder-tree.compose")}:disabled { opacity: ${T.disabled}; }
 ${p("folder-tree.compose.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
 ${p("folder-tree.header")} { display: flex; align-items: center; gap: ${T.xs}; margin: 0 ${T.xs}; }
@@ -572,7 +573,7 @@ ${p("folder-tree.check-mail")} {
   border: none; border-radius: ${T.rMd}; color: ${T.fg}; background-color: transparent;
 }
 ${p("folder-tree.check-mail")}:hover { background-color: ${T.raised}; }
-${p("folder-tree.check-mail")}:focus-visible { ${focusRing} }
+${p("folder-tree.check-mail")}:focus-visible { ${FOCUS_RING} }
 ${p("folder-tree.check-mail")}:disabled { opacity: ${T.disabled}; }
 ${p("folder-tree.check-mail.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("folder-tree.check-mail")}[data-state="busy"] ${p("folder-tree.check-mail.icon")} { animation: nail-spin 1s linear infinite; }
@@ -589,7 +590,7 @@ ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.section.header")}, 
 ${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.section.header")}:hover, ${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.account")}:hover { ${QUIET_HOVER} }
 ${p("folder-tree.section.chevron")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }
 ${p("folder-tree.section.dot")} { flex: 0 0 auto; width: ${T.sm}; height: ${T.sm}; border-radius: 50%; }
-${p("folder-tree.section.title")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("folder-tree.section.title")} { ${ONE_LINE} }
 ${p("folder-tree.section.unread-count")} { margin-inline-start: auto; font-size: ${T.small}; font-weight: ${T.semibold}; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; color: ${T.accent}; }
 ${ps("folder-tree.favorite", "folder-tree.smart-folder")} {
   ${FOLDER_ROW}
@@ -608,7 +609,7 @@ const LIST_HEADER = `${p("list-header")} { display: grid; gap: ${T.md}; padding:
 ${p("list-header")} ${p("search-bar")} { padding: 0; }
 ${p("list-header")} ${p("search-bar")} ${p("problem.details")}, ${p("list-header")} ${p("search-bar")} ${p("search-bar.hints")} { inset-inline: 0; top: 100%; }
 ${p("list-header.heading")} { display: flex; align-items: baseline; gap: ${T.sm}; min-width: 0; }
-${p("list-header.title")} { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
+${p("list-header.title")} { margin: 0; ${ONE_LINE} font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("list-header.counts")} { flex: 0 0 auto; font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; white-space: nowrap; }
 ${p("list-header.chips")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; }
 ${p("list-header.chips")} ${p("chip")} { min-height: calc(${T.control} - ${T.sm}); cursor: default; }
@@ -623,7 +624,7 @@ ${p("theme-card")} {
   border: 2px solid ${T.border}; border-radius: ${T.rMd}; color: ${T.fg}; background-color: ${T.bg};
 }
 ${p("theme-card")}[aria-checked="true"] { border-color: ${T.accent}; }
-${p("theme-card")}:focus-visible { ${focusRing} }
+${p("theme-card")}:focus-visible { ${FOCUS_RING} }
 ${p("theme-card")}:disabled { opacity: ${T.disabled}; }
 ${p("theme-card.preview")} { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; height: calc(4 * ${T.lg}); margin-bottom: ${T.xs}; }
 ${p("theme-card.name")} { padding: 0 ${T.md}; font-size: ${T.small}; font-weight: ${T.semibold}; }

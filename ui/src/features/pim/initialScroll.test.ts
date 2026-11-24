@@ -3,33 +3,11 @@
  * area's size until the user scrolls it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installFakeResizeObserver, resized } from "../../test/resizeObserver";
 import { keepInitialScroll } from "./initialScroll";
 
-/** ResizeObserver stand-in whose callbacks the test calls. */
-const observers: { callback: () => void; targets: Element[]; live: boolean }[] = [];
-
-class FakeResizeObserver {
-  private readonly entry: { callback: () => void; targets: Element[]; live: boolean };
-  constructor(callback: () => void) {
-    this.entry = { callback, targets: [], live: true };
-    observers.push(this.entry);
-  }
-  observe(target: Element) {
-    this.entry.targets.push(target);
-  }
-  disconnect() {
-    this.entry.live = false;
-  }
-}
-
-/** Calls every live observer of `el` (its size changed). */
-function resized(el: Element) {
-  for (const o of observers) if (o.live && o.targets.includes(el)) o.callback();
-}
-
 beforeEach(() => {
-  observers.length = 0;
-  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  installFakeResizeObserver();
 });
 afterEach(() => {
   vi.unstubAllGlobals();

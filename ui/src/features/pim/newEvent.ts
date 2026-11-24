@@ -122,6 +122,11 @@ export function writableEventCalendars(calendars: readonly Calendar[]): Calendar
   return calendars.filter((c) => !c.read_only && c.components.includes("event"));
 }
 
+/** The task lists a new task can go to (writable, holding tasks). */
+export function writableTaskLists(calendars: readonly Calendar[]): Calendar[] {
+  return calendars.filter((c) => !c.read_only && c.components.includes("task"));
+}
+
 /**
  * The calendar a new event goes to without asking: `preferred` when it is
  * writable, else the first local one, else the first writable one.

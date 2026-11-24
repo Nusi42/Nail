@@ -30,6 +30,7 @@ import {
 } from "./common";
 import { askPim } from "./Confirm";
 import { DELETE_TASK_DIALOG } from "./names";
+import { writableTaskLists } from "./newEvent";
 import { DialogForm } from "../../widgets/dialog";
 import { TASK_STATUSES } from "./constants";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
@@ -124,7 +125,7 @@ export function TaskEditor({ target, task, calendars, close }: EditorProps) {
     categories: useId(),
     subtask: useId(),
   };
-  const lists = calendars.filter((c) => c.components.includes("task") && !c.read_only);
+  const lists = writableTaskLists(calendars);
   // Initialized once per editor (the component is keyed by its target).
   const [initialFields] = useState<TaskFields>(() =>
     structuredClone(

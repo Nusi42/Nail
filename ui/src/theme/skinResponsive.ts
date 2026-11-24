@@ -23,7 +23,7 @@
  *   the card or window that holds them is narrow (`TWO_PANES_NARROW`).
  */
 import { p, ps } from "./selectors";
-import { VISUALLY_HIDDEN } from "./declarations";
+import { ONE_LINE, VISUALLY_HIDDEN } from "./declarations";
 import { T } from "./tokens";
 
 /**
@@ -213,7 +213,7 @@ const SECURITY = `${p("security-keys.list")} ${p("security-keys.key")} {
   display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem 7.5rem 7.5rem 11.5rem;
   align-items: center; column-gap: ${T.sm};
 }
-${p("security-keys.key.name")} { grid-column: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("security-keys.key.name")} { grid-column: 1; ${ONE_LINE} }
 ${p("security-keys.key.technology")} { grid-column: 2; }
 ${p("security-keys.key.own")} { grid-column: 3; }
 ${p("security-keys.key")} > ${p("security-trust")}, ${p("security-keys.key.state")} { grid-column: 4; }

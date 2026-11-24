@@ -282,11 +282,11 @@ Where shared things live (Q2, ADRs 0172–0177):
   `ui/src/api/contract.ts`, test ids in `ui/src/test/mockIds.ts`.
 - Skins use the one token map `ui/src/theme/tokens.ts` (`T`) and
   `VISUALLY_HIDDEN`; shared skin rules / lengths are in
-  `ui/src/theme/declarations.ts`; WCAG colour math in the UI is
+  `ui/src/theme/declarations.ts` (`ONE_LINE`, `FOCUS_RING`, …); WCAG colour math in the UI is
   `ui/src/theme/contrast.ts`.
 - One English text under two ids is a Fluent reference
   (`id = { common-… }`; generic labels in `locales/en/common.ftl`).
-- Vitest `must` / `mailEnv` live in `ui/src/test`; e2e `windowById` /
+- Vitest `must` / `mailEnv` / the fake `ResizeObserver` (`resizeObserver.ts`) live in `ui/src/test`; e2e `windowById` /
   `closeWindow` / `screenshotFile` in `e2e/support`.
 - UI state helpers shared by features: cached-data lookups in
   `ui/src/state/mailOps.ts` (`findSummary`, `cachedFolder`), query options in

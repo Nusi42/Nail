@@ -1656,6 +1656,19 @@ one occurrence from the quick look, drawing on touch screens). Flaky under full-
 and `mail_actions` `the_lab_move_conversation_on_the_imap_server` (timed out once). Next: the reviews, then the
 human gate on the 0.8.11 installer.
 
+*Status (review fixes):* done. Cascade from the exposed height (`sideBySideMinutes`: a later event cascades only
+when one title line of the earlier card stays visible, else side by side; titles wrap to two lines; on short cards
+the time gives way); the popover re-places itself when its content grows; month dots keep the calendar colour;
+quick add reads "tomorrow" against the core's clock and its chips show resolved values (day, times, repetition,
+place, calendar); search gives a series' next occurrence; one people summary; scheduling and Find a time follow the
+working hours; Accept is the filled primary answer; due tasks share `DueTaskItem` with a Plan button (keyboard,
+touch) at `PimState.planSlot`; Delete in the quick look keeps the focus; free time merges overlapping busy blocks;
+one length wording, one week-number text; `ListEventOverlaps` (the quick look uses the invitation card's conflict
+rule, which now skips declined occurrences); shared `ONE_LINE` / `FOCUS_RING` / `ICON_BUTTON`; the working-hours rule
+pinned by `ts-vectors/calendar.json`; `nail-event-text` start on the first named weekday, lengths across summer time,
+a time beside a day count stays in the title; a cancelled keyboard range clears. e2e `r7-p3-tasks.spec.ts`. Next:
+the human gate on the 0.8.11 installer.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

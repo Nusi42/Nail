@@ -40,7 +40,8 @@ import type {
 import { userAddresses } from "../../api/mockAccounts";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { answerPim, listInstances } from "../pim/mock";
-import { instantMs, localZone, pimTimeIn, sameTime, todayIn, utcString } from "../pim/time";
+import { conflictsIn } from "../pim/mockExpand";
+import { localZone, pimTimeIn, sameTime, todayIn, utcString } from "../pim/time";
 import { isMine, mergeBusy, statusOfResponse } from "./model";
 import { plausibleEmail } from "../../state/addresses";
 import { DAY_MS } from "../../state/clock";
@@ -204,25 +205,12 @@ export function conflictsOf(core: MockCore, invitation: Invitation): InvitationC
       ? spanOf({ ...fields, start: invitation.counter.start, end: invitation.counter.end }, tz)
       : spanOf(fields, tz);
   if (!(span.end > span.start)) return [];
-  return listInstances(core.data.features.pim, utcString(span.start), utcString(span.end), null, tz)
-    .filter(
-      (i) =>
-        i.event_id !== invitation.event_id &&
-        i.transparency === "busy" &&
-        i.status !== "cancelled" &&
-        instantMs(i.start_utc) < span.end &&
-        span.start < instantMs(i.end_utc),
-    )
-    .map((i) => ({
-      event_id: i.event_id,
-      calendar_id: i.calendar_id,
-      recurrence_id: i.recurrence_id,
-      title: i.title,
-      start_utc: i.start_utc,
-      end_utc: i.end_utc,
-      all_day: i.all_day,
-      tentative: i.status === "tentative",
-    }));
+  return conflictsIn(
+    listInstances(core.data.features.pim, utcString(span.start), utcString(span.end), null, tz),
+    invitation.event_id,
+    span.start,
+    span.end,
+  );
 }
 
 /** What the card may offer for an invitation in its current state. */
