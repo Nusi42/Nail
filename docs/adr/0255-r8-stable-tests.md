@@ -1,4 +1,4 @@
-# 0252 — R8 P4: flaky tests fixed at their causes
+# 0255 — R8: flaky tests fixed at their causes
 
 Status: accepted (2026-11-24)
 

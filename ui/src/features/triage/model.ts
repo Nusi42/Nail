@@ -7,6 +7,7 @@
 import {
   DEFAULT_JUNK_SETTINGS,
   DEFAULT_NOTIFICATION_SETTINGS,
+  JUNK_DEFAULT_HAM_CUTOFF,
   type JunkIssue,
   type JunkSettings,
   type NotificationIssue,
@@ -31,7 +32,13 @@ export function junkIssues(s: JunkSettings): JunkIssue[] {
   const out: JunkIssue[] = [];
   if (s.threshold < 50 || s.threshold > 99) out.push("threshold");
   if (s.min_training === 0 || s.min_training > MAX_MIN_TRAINING) out.push("min-training");
+  if (hamCutoffOf(s) >= s.threshold) out.push("ham-cutoff");
   return out;
+}
+
+/** `JunkSettings::ham_cutoff` (left out = the default). */
+export function hamCutoffOf(s: JunkSettings): number {
+  return s.ham_cutoff ?? JUNK_DEFAULT_HAM_CUTOFF;
 }
 
 /** `NotificationSettings::default()`. */

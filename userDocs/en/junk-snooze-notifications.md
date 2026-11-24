@@ -22,7 +22,7 @@ Nail's filter gives each arriving message a junk score from 0 to 100:
 | Score | What happens |
 | --- | --- |
 | At or above your threshold (default 90) | The message is marked as junk and, if **Move junk to the Junk folder** is on, moved there. |
-| 20 or less | The message is treated as normal mail. |
+| At or below your "not junk" limit (default 20) | The message is treated as normal mail. |
 | In between | Nail is **unsure**. The message stays where it is. You can see the score in the reader. |
 
 The filter starts working only after you have marked enough messages as junk

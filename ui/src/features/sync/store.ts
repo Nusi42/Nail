@@ -5,7 +5,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FolderId, MessageId } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export interface SyncState {
   /** The folder of the `sync-folder` dialog. */
@@ -19,7 +19,7 @@ export interface SyncState {
   finished: (fetched: readonly MessageId[], failed: readonly MessageId[]) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<SyncState>>();
+const stores = new UiStoreMap<StoreApi<SyncState>>();
 
 export function syncStoreFor(ui: UiStore): StoreApi<SyncState> {
   const existing = stores.get(ui);

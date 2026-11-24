@@ -13,7 +13,7 @@ import type {
   ErrorDetails,
   LocalizedMessage,
 } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import { newWindowInstance } from "../../state/windows";
 import { scopeOfViewerWindow, viewerWindowOf } from "./model";
 import { CONNECTION_LOG_KIND, ERROR_DETAILS_KIND } from "./names";
@@ -44,7 +44,7 @@ export interface ConnlogUiState {
   setReport: (window: string, report: ErrorReport) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<ConnlogUiState>>();
+const stores = new UiStoreMap<StoreApi<ConnlogUiState>>();
 
 function createConnlogStore(): StoreApi<ConnlogUiState> {
   return createStore<ConnlogUiState>()((set) => ({

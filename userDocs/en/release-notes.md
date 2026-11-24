@@ -54,6 +54,15 @@ the list of agreed follow-ups, and steadier automated tests.
 - **A grouped list of actions to add to a toolbar** — the toolbar
   customizer lists every action, grouped by where it applies; the search
   narrows the groups.
+- **Events from a sentence for agents** — an AI agent connected over MCP can
+  create an event from text such as "Lunch with Bob tomorrow 12:30", read in
+  your time zone; you confirm it like every other change an agent asks for.
+- **Reminders on tasks from agents and plug-ins** — tasks an agent or a
+  plug-in creates or changes can carry up to ten reminders.
+- **Shortcuts for pop-out windows** — `Ctrl+Shift+O` opens the window in
+  front in a window of its own, `Ctrl+Shift+M` puts it back.
+- **A "not junk" limit** — Settings → Junk mail has a limit below the junk
+  threshold: mail scored between the two is unsure instead of not junk.
 
 ### Fixed in 0.8.12
 
@@ -81,9 +90,24 @@ the list of agreed follow-ups, and steadier automated tests.
   that was running at that moment no longer brings them back.
 - Unsaved changes in a settings section are no longer lost when the section
   is shown right after switching to Settings.
+- Moving quickly through the Settings sections no longer shows sections you
+  already left again.
 - Customizing the layout: a change made right after another (for example
   Reset to default just after moving a pane) no longer reports that
   `layout.kdl` was changed outside Nail.
+- **Move to Other** / **Move to Focused** on a message in the reader opens
+  its question with the message (the window was empty).
+- Calendar subscriptions that moved for good are fetched from their new
+  address, and the refresh interval a subscription asks for is kept.
+- Reminders follow a change of the computer's time zone right away.
+- Lists over several accounts order a conversation by the replies from every
+  listed account.
+- The server rules' status is kept over a restart of Nail.
+- Searching the server for attachments or file names shows only messages
+  that really match.
+- Repeating events with extra dates that have their own end keep that end.
+- The junk filter treats look-alike characters alike, and a large number of
+  failing changes no longer fills the log with one line each.
 
 ## Nail 0.8.11 (`0.8.11`)
 

@@ -1800,7 +1800,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   reminders and of `create_event_from_text`. UI mock: `pim/mockCalendarView.ts` `freeTimeWindows`,
   `api/mockMailActions.ts` `listTargetMessageIds` (the rules mock's list runs). Texts: `status-retry-failed` /
   `status-dismiss-failed` (`app.ftl`), slot `pim-actions.ftl`.
-- Calendar and PIM UI (P1, ADR 0252): `pim/colors.ts` `displayColors` / `colorDistance` (OKLab,
+- Calendar and PIM UI (ADR 0252): `pim/colors.ts` `displayColors` / `colorDistance` (OKLab,
   `MIN_COLOR_DISTANCE`; `colorOf` shows the result), the seed colour `nail_testkit_net::SEED_PERSONAL_COLOR`;
   `pim/PimMenu.tsx` (`PimMenuPopup` shared by `PimMenu` and `usePimContextMenu`, the right-click menus;
   `EventItem.tsx` `useEventMenu`); `pim/QuickAdd.tsx` `EventFromTextDialog` (window `pim-event-from-text`, action
@@ -1808,7 +1808,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   answers, `offerReplyUndo` from `scheduling/queries.ts`), `pim/TextToast.tsx`; `pim/common.tsx` `SyncState` (the
   conflict choice of contacts and events); `pim/queries.ts` `useRecentMail` (own key `pimKeys.recentMail`: the mail
   lists treat every `search` entry as theirs); `TimeGrid.tsx` `TOUCH_HOLD_MS` / `TOUCH_SLOP` (touch drawing).
-- Mail and windows UI (ADR 0252): favorites name the window they open (`widgets/folderPaneState.ts`
+- Mail and windows UI (ADR 0253): favorites name the window they open (`widgets/folderPaneState.ts`
   `FAVORITE_TARGETS`, `favoriteWindowView`; `FAVORITE_SEARCH_EXCLUDES`); the folder tree marks a searched folder
   (`folder-tree.item[data-state~="searched"]`); the close guard asks once about several windows
   (`layout/closeGuard.ts` `SEVERAL_GUARD`, `UnsavedPrompt`'s `SeveralPrompt`); settings drafts live in a
@@ -1820,7 +1820,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   sign / encrypt report (`features/security/composerStore.ts` `setReportOf` / `activate`); list runs of rules
   (`features/rules/runTargets.ts` `wholeListOf`); the toolbar customizer's groups
   (`features/toolbar-editor/ToolbarCustomizer.tsx` `AVAILABLE_GROUPS`).
-- Core (ADR 0252): list runs `rules.rs` `run_rules_on_list` over `mail_actions.rs` `list_target_messages` (the
+- Core (ADR 0254): list runs `rules.rs` `run_rules_on_list` over `mail_actions.rs` `list_target_messages` (the
   shared `resolve_list` of mail actions); every rule run evaluates in parts of `RUN_PART_MESSAGES`. Task
   reminders: `crates/nail-mcp/src/writes/pim.rs` `task_alarms` (plug-ins: `nail-plugins` `writes.rs`
   `ReminderIn`); `create_event_from_text`: `writes/pim.rs` with `McpData::local_zone`, `dry_run` in
@@ -1830,7 +1830,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `sieve.uploaded.<account>`. `Recurrence.periods` (`nail-ical` read / write / expand / edit). Server hits:
   `nail_search::imap::may_match`. Unified lists: `thread/activity.rs` `SENT_JOIN_PAGE_SQL`. Schema v26
   (`junk_verdicts.unsure`).
-- P4 (ADR 0252): `nail-server` `ws.rs` sends answers through the event task, after the events queued before them
+- Stable tests (ADR 0255): `nail-server` `ws.rs` sends answers through the event task, after the events queued before them
   (`Forward`); a forced Sieve upload is `SieveCtl::force` / `take_forced` (`crates/nail-core/src/sieve.rs`), kept
   apart from the uploads in progress; `exchange/sync.rs` `apply_hierarchy` writes another mailbox's folders only
   while that mailbox is configured (checked in the same store call); `useLayoutEdit` refreshes the layout history
@@ -1839,3 +1839,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   waits for the search index's writer lock and the store's write-ahead log to go. Tests: `replay` tests capture logs through a process-wide recorder
   (`capture_on_this_thread`), `nail-core` tests wait on progress with `eventually_progressing`; e2e
   `r8-p4-rule-drag.spec.ts`, `r8-p4-dialogs.spec.ts`, Exchange helpers in `e2e/support/exchange.ts`.
+- Integration: state kept per UI store is a `UiStoreMap` (`ui/src/state/uiStore.ts`; keyed by the app store
+  behind a view, `rootUiStore`), and `scopedUiStore` registers a reader card's view (`registerUiStoreView`), so a
+  card's widgets share the app's feature stores, open questions and guards. Pop-out key bindings in
+  `defaults/layout.kdl` (`window` context); `MAX_TASK_REMINDERS` and `JUNK_DEFAULT_HAM_CUTOFF` in
+  `ts_constants.rs`; the plug-in SDK's `PluginTaskReminder` (`packages/plugin-api/src/api.ts`, checked by the test
+  host). `UiStateChanged` goes through `applyUiStateEvent` (`ui/src/state/uiState.ts`), which leaves a key alone
+  while this client's write of it is on its way; the newest write's answer sets it.

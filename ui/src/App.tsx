@@ -38,7 +38,7 @@ import {
 } from "./state/queries";
 import { applyEditHistory } from "./state/editHistory";
 import { createOpsTracker } from "./state/opsSummary";
-import { applyUiStateChange } from "./state/uiState";
+import { applyUiStateEvent } from "./state/uiState";
 import { applyPopOuts, applyWindowStateChange } from "./state/windowState";
 import { parsePopOutRoute } from "./state/windows";
 import { PopOutHost } from "./features/popout";
@@ -290,7 +290,7 @@ function useCoreEvents(): void {
           ui().setConfigError(null);
           break;
         case "UiStateChanged":
-          applyUiStateChange(queryClient, event.key, event.value);
+          applyUiStateEvent(queryClient, event.key, event.value);
           break;
         // M5c (ADR 0116): remembered window state and desktop pop-outs.
         case "WindowStateChanged":

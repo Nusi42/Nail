@@ -189,6 +189,9 @@ export const ACTION_KIND_VALUES = ["organize","trash","permanent-delete","draft"
 /** Per kind of write: destructive (always asks), outgoing (sends mail), whether "always allow" may be set, the policy until the user changes it. */
 export const ACTION_KIND_RULES = {"calendar":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"contact":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"draft":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"invite":{"can_always_allow":true,"default_mode":"ask","destructive":false,"outgoing":true},"organize":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"permanent-delete":{"can_always_allow":false,"default_mode":"ask","destructive":true,"outgoing":false},"pim-delete":{"can_always_allow":false,"default_mode":"ask","destructive":true,"outgoing":false},"rule":{"can_always_allow":true,"default_mode":"ask","destructive":false,"outgoing":false},"send":{"can_always_allow":true,"default_mode":"ask","destructive":false,"outgoing":true},"task":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"trash":{"can_always_allow":false,"default_mode":"ask","destructive":true,"outgoing":false}} as const satisfies Readonly<Record<ActionKind, { destructive: boolean; outgoing: boolean; can_always_allow: boolean; default_mode: ActionPolicyMode }>>;
 
+/** The most reminders one task written by an agent or a plug-in may carry. */
+export const MAX_TASK_REMINDERS = 10 as const;
+
 /** Largest `manifest.json` (bytes). */
 export const MAX_MANIFEST_BYTES = 65536 as const;
 
@@ -689,6 +692,9 @@ export const CONFIRMATION_STATE_MESSAGE_IDS = {"approved":"confirmation-state-ap
 
 /** The junk settings until the user changes them (`JunkSettings::default()`). */
 export const DEFAULT_JUNK_SETTINGS = {"enabled":false,"threshold":90,"min_training":10,"honor_server_flags":true,"move_to_junk":true} as const satisfies Readonly<JunkSettings>;
+
+/** The "not junk" cutoff of junk settings that leave it out (`JunkSettings::DEFAULT_HAM_CUTOFF`). */
+export const JUNK_DEFAULT_HAM_CUTOFF = 20 as const;
 
 /** The notification settings until the user changes them (`NotificationSettings::default()`). */
 export const DEFAULT_NOTIFICATION_SETTINGS = {"enabled":true,"show_preview":true,"sound":true,"folders":"inbox","overrides":[],"quiet_hours":null} as const satisfies Readonly<NotificationSettings>;

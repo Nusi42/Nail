@@ -52,7 +52,9 @@ export const LOOK_BASE_CSS = [
   `${p("pim.compact.when")} > ${p("pim.datetime")} { flex-direction: row; align-items: center; }`,
   `${p("pim.compact.chip")} { display: inline-flex; align-items: center; gap: ${T.xxs}; min-width: 0; max-width: 100%; box-sizing: border-box; }`,
   `${p("pim.compact.select")} { min-width: 0; max-width: 16em; }`,
-  `${p("pim.compact.place")} { display: flex; align-items: center; gap: ${T.xs}; min-width: 0; }`,
+  // The place icon sits inside the field, so the field shares the column's edges (ADR 0160).
+  `${p("pim.compact.place")} { position: relative; display: flex; align-items: center; min-width: 0; }`,
+  `${p("pim.compact.place.icon")} { position: absolute; inset-inline-start: ${T.sm}; pointer-events: none; }`,
   `${p("pim.compact.place.input")} { flex: 1 1 auto; min-width: 0; box-sizing: border-box; }`,
   `${p("pim.compact.more.body")} { display: flex; flex-direction: column; gap: ${T.sm}; padding-top: ${T.sm}; }`,
   `${p("pim.recurrence.details")} { display: flex; flex-direction: column; gap: ${T.xs}; min-width: 0; margin: 0; padding: 0; border: 0; }`,
@@ -115,7 +117,7 @@ ${ps("pim.compact.chip.icon", "pim.compact.place.icon", "pim.popover.place.icon"
 ${p("pim.compact.select")} { border: none; font: inherit; color: inherit; background-color: transparent; }
 ${p("pim.compact.select")}:focus-visible { outline: none; }
 ${p("pim.compact.place.input")} {
-  min-height: ${T.control}; padding: 0 ${T.sm}; border: ${T.controlBorder}; border-radius: ${T.rMd};
+  min-height: ${T.control}; padding: 0 ${T.sm} 0 calc(${T.sm} + ${T.icon} + ${T.xs}); border: ${T.controlBorder}; border-radius: ${T.rMd};
   font: inherit; color: ${T.fg}; background-color: ${T.bg};
 }
 ${p("pim.compact.place.input")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 1px; }

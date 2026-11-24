@@ -121,8 +121,8 @@ window of its own on your desktop — for example to write a message on a
 second monitor while you read mail on the first.
 
 - Click **Open in new window** in the title bar (the icon with an arrow
-  pointing out of a box), or use **Open window in new window** in the
-  command palette. It is offered for messages, Settings, filter rules, the
+  pointing out of a box), press `Ctrl+Shift+O`, or use **Open window in new
+  window** in the command palette. It is offered for messages, Settings, filter rules, the
   outbox and snoozed messages. Editors that work on what is selected in the
   main window (events, contacts, tasks, labels, categories), questions and
   the folder picker stay in Nail's main window.
@@ -136,8 +136,8 @@ second monitor while you read mail on the first.
 - Everything you do there reaches Nail at once: a message sent from a
   pop-out window is in the outbox, a setting changed there applies
   everywhere.
-- **Return to main window** at the top of the pop-out window puts it back
-  into Nail's main window. A message keeps what you typed.
+- **Return to main window** at the top of the pop-out window (or
+  `Ctrl+Shift+M`) puts it back into Nail's main window. A message keeps what you typed.
 - Nail remembers where each kind of window was on your desktop, on which
   monitor and whether it was maximized. When that place is no longer
   available (a monitor was unplugged), the window opens over Nail's main

@@ -52,6 +52,7 @@ import type {
   PluginPreviewRenderer,
   PluginStorageUsage,
   PluginTaskInput,
+  PluginTaskReminder,
   PluginWriteResult,
 } from "./api";
 import type {
@@ -86,6 +87,7 @@ import {
   ACCOUNT_PERMISSIONS,
   ACTION_KIND_RULES,
   INVITATION_RESPONSE_VALUES,
+  MAX_TASK_REMINDERS,
   PLUGIN_HOOK_KIND_VALUES,
   PLUGIN_PERMISSIONS,
 } from "./generated";
@@ -738,6 +740,34 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
     }
   };
 
+  /** The host's checks of task reminders (`hasDue`: the task has a due time). */
+  const checkReminders = (reminders: PluginTaskReminder[] | undefined, hasDue: boolean) => {
+    if (reminders === undefined) return;
+    if (!Array.isArray(reminders)) throw invalid("reminders must be a list");
+    if (reminders.length > MAX_TASK_REMINDERS) {
+      throw invalid(`at most ${String(MAX_TASK_REMINDERS)} reminders`);
+    }
+    for (const reminder of reminders) {
+      const keys = Object.keys(reminder);
+      if (keys.some((k) => k !== "minutesBefore" && k !== "at")) {
+        throw invalid("a reminder has only minutesBefore or at");
+      }
+      const { minutesBefore, at } = reminder;
+      if ((minutesBefore === undefined) === (at === undefined)) {
+        throw invalid("a reminder has exactly one of minutesBefore and at");
+      }
+      if (minutesBefore !== undefined) {
+        if (!Number.isInteger(minutesBefore) || minutesBefore < 0) {
+          throw invalid("minutesBefore is a whole number of minutes");
+        }
+        if (!hasDue) throw invalid("minutesBefore needs a due time");
+      }
+      if (at !== undefined && Number.isNaN(Date.parse(at))) {
+        throw invalid(`at is not an RFC 3339 time: ${at}`);
+      }
+    }
+  };
+
   const applyChanges = (m: PluginMessage, c: PluginMessageChanges) => {
     if (c.read !== undefined) m.flags.seen = c.read;
     if (c.flagged !== undefined) m.flags.flagged = c.flagged;
@@ -1119,6 +1149,7 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         if (typeof task.title !== "string" || !task.title.trim())
           throw invalid("a task needs a title");
         checkPriority(task.priority);
+        checkReminders(task.reminders, task.due !== undefined);
         if (task.list !== undefined && task.listId !== undefined) {
           throw invalid("pass either list or listId");
         }
@@ -1156,6 +1187,8 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         const task = tasks.get(taskId);
         if (!task) throw createPluginApiError("not_found", `task ${taskId}`);
         checkPriority(changes.priority);
+        const due = changes.due ?? task.due;
+        checkReminders(changes.reminders, due !== undefined && due !== "");
         return write(
           "nail.tasks.update",
           "task",
@@ -1169,6 +1202,8 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
             if (changes.notes !== undefined) task.notes = changes.notes;
             if (changes.priority !== undefined) task.priority = changes.priority;
             if (changes.completed !== undefined) task.completed = changes.completed;
+            if (changes.reminders?.length === 0) delete task.reminders;
+            else if (changes.reminders !== undefined) task.reminders = clone(changes.reminders);
             return [];
           },
         );

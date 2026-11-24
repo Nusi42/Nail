@@ -114,10 +114,11 @@ test("Exchange: a category is deleted after its question, automatic replies are 
     )
     .toContain("Away until the conference ends.");
 
-  // Classify: "Move to Focused / Other…" asks, offers "always", and moves
-  // it on the server.
-  await messageRows(page).filter({ hasText: "Engine review on Monday" }).click({ button: "right" });
-  await page.getByRole("menu").getByRole("menuitem", { name: "Move to Focused / Other…" }).click();
+  // Classify: the reader card's "Move to Other" asks (the same window as
+  // the menu's "Move to Focused / Other…"), offers "always", and moves it
+  // on the server.
+  await messageRows(page).filter({ hasText: "Engine review on Monday" }).click();
+  await page.locator('[data-part="exchange.focus-move"]').first().click();
   const classify = await dialog(page, "exchange-classify");
   await expect(classify).toContainText("Move this message to Other?");
   await classify.getByRole("checkbox", { name: /^Always move messages from / }).check();

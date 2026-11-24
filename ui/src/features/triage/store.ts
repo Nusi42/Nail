@@ -6,7 +6,7 @@ import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ActionTargets } from "../../actions/mailTargets";
 import type { MessageId } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export interface TriageState {
   /** Messages the snooze dialog snoozes (when it has no `targets`). */
@@ -20,7 +20,7 @@ export interface TriageState {
   setSnoozeTargets: (targets: ActionTargets) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<TriageState>>();
+const stores = new UiStoreMap<StoreApi<TriageState>>();
 
 export function triageStoreFor(ui: UiStore): StoreApi<TriageState> {
   const existing = stores.get(ui);

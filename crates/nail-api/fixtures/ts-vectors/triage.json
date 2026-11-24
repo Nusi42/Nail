@@ -87,6 +87,66 @@
     },
     {
       "args": [
+        {
+          "enabled": true,
+          "ham_cutoff": 59,
+          "honor_server_flags": true,
+          "min_training": 10,
+          "move_to_junk": true,
+          "threshold": 60
+        }
+      ],
+      "fn": "junkIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "ham_cutoff": 60,
+          "honor_server_flags": true,
+          "min_training": 10,
+          "move_to_junk": true,
+          "threshold": 60
+        }
+      ],
+      "fn": "junkIssues",
+      "out": [
+        "ham-cutoff"
+      ]
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "ham_cutoff": 0,
+          "honor_server_flags": true,
+          "min_training": 10,
+          "move_to_junk": true,
+          "threshold": 50
+        }
+      ],
+      "fn": "junkIssues",
+      "out": []
+    },
+    {
+      "args": [
+        {
+          "enabled": true,
+          "ham_cutoff": 99,
+          "honor_server_flags": true,
+          "min_training": 10,
+          "move_to_junk": true,
+          "threshold": 100
+        }
+      ],
+      "fn": "junkIssues",
+      "out": [
+        "threshold"
+      ]
+    },
+    {
+      "args": [
         "00:00"
       ],
       "fn": "parseHhmm",

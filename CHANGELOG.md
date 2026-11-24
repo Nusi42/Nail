@@ -20,7 +20,7 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   (`UpsertTaskArgs.reminders`, `TaskReminderArg`) and of the MCP tool
   `create_event_from_text` (`CreateEventFromTextArgs`).
 
-### Added — calendar and PIM (ADR 0251)
+### Added — calendar and PIM (ADR 0252)
 
 - The command palette's "New event from text" (`calendar.new-event-from-text`)
   with the quick-add preview.
@@ -32,6 +32,7 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   drawing events with a held finger on touch screens; place and call icons.
 - The free-time view asks the core for the working hours (`FindFreeTime`
   `hours`) and no longer cuts free time per day itself.
+
 ### Added — mail, composer, rules, settings and windows
 
 - Favorites that open windows (Snoozed, Outbox) are selected while their
@@ -60,13 +61,44 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 - Past entries of the calendar agenda keep a readable contrast (muted text
   instead of a faded entry).
 
-### Fixed — calendar colours and titles (ADR 0251)
+### Fixed — calendar colours and titles (ADR 0252)
 
 - Visible calendars with colours too close to tell apart are shown in
   distinct palette colours (display only; palette colours stay as picked);
   the demo seeds' calendars have distinct colours.
 - A taller event card's icons no longer cover the end of its title.
-### Fixed — stable tests and the races they found (ADR 0252)
+
+### Added — core (ADR 0254)
+
+- `RunRules` runs on a whole list (`list`): one `RuleRun` per rule, undone as
+  a whole; every rule run works through its messages in parts of 500.
+- Task reminders on the MCP (`upsert_task`) and plug-in task writes (at most
+  10, `[]` removes them); the plug-in SDK's `PluginTaskReminder` and
+  `MAX_TASK_REMINDERS`.
+- MCP tool `create_event_from_text` (`ParseEventText` in the agent's, the
+  calendar preferences' or the computer's zone; `dry_run`).
+- `Recurrence.periods` (`RDATE;VALUE=PERIOD` with ends); `JunkSettings.ham_cutoff`
+  (with a Settings field) and `JunkVerdict.unsure`; schema v26.
+
+### Fixed — core (ADR 0254)
+
+- Feeds follow permanent redirects and keep the refresh interval they ask
+  for; reminders are planned again when the time zone changes (on Windows at
+  once); the Sieve status survives a restart; inexact server hits for
+  `has:attachment` / `filename:` are checked; unified lists order a
+  conversation by replies from every listed account; one warning per replay
+  pass for mass failures; junk tokens are NFKC-normalised.
+
+### Added and fixed — integration
+
+- Default key bindings `Ctrl+Shift+O` / `Ctrl+Shift+M` for `popout.open` /
+  `popout.return`; the bundled `map-pin` icon.
+- State kept per UI store (`UiStoreMap`) is shared by a reader card's scoped
+  store, so the card's "Move to Other / Focused" opens a filled window.
+- A `UiStateChanged` event of an older write no longer shows an older
+  settings section again while a newer write of the key is on its way.
+
+### Fixed — stable tests and the races they found (ADR 0255)
 
 - A forced Sieve upload (`SyncSieve`) asked for while an upload runs is no
   longer lost when that upload ends.

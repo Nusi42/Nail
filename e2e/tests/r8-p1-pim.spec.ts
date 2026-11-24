@@ -95,14 +95,19 @@ test("events, contacts and tasks have right-click menus", async ({ page }) => {
   await expect(eventMenu.getByRole("menuitem", { name: "Open" })).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Event", exact: true })).toBeVisible();
+  const eventEditor = page.getByRole("dialog", { name: "Event", exact: true });
+  // The editor takes the focus when it opens; Escape closes it from there.
+  await expect(eventEditor.getByRole("textbox", { name: "Title", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
+  await expect(eventEditor).toBeHidden();
 
   const contacts = await showView(page, "Contacts");
   const grace = contacts.getByRole("option", { name: /Grace Hopper/ }).first();
   await grace.click({ button: "right" });
   const contactMenu = page.getByRole("menu", { name: /^Actions for Grace Hopper/ });
   await expect(contactMenu.getByRole("menuitem")).toHaveText(["Open", "Edit", "Delete…"]);
+  // The menu handles Escape once it holds the focus.
+  await expect(contactMenu.getByRole("menuitem", { name: "Open" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(contactMenu).toBeHidden();
   await expect(grace).toBeFocused();

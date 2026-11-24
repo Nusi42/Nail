@@ -11,7 +11,7 @@ import type {
   MessageId,
   ThreadId,
 } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 /** What a tag change did, for the toast. */
 export interface TagToast {
@@ -70,7 +70,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 
 export type MailActionsStore = StoreApi<MailActionsState>;
 
-const stores = new WeakMap<UiStore, MailActionsStore>();
+const stores = new UiStoreMap<MailActionsStore>();
 
 /** The mail-actions store of a UI store (created on first use). */
 export function mailActionsStoreFor(ui: UiStore): MailActionsStore {

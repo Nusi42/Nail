@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import type { Request, Response } from "../api/generated";
 import { createEnv, Providers, settleQueries, type Env } from "../test/harness";
 import {
+  applyUiStateEvent,
   UI_STATE_SETTINGS_SECTION,
   UI_STATE_VIEW,
   useSetUiState,
@@ -107,6 +108,29 @@ describe("useSetUiState", () => {
     expect(response.type === "UiState" && response.state[UI_STATE_SETTINGS_SECTION]).toBe(
       "appearance",
     );
+  });
+});
+
+describe("applyUiStateEvent", () => {
+  it("ignores an older write's event while a newer write of the key is on its way", async () => {
+    const { env, writes } = await writeTwice(
+      { key: UI_STATE_SETTINGS_SECTION, value: "general" },
+      { key: UI_STATE_SETTINGS_SECTION, value: "appearance" },
+    );
+    // The first write's event comes before either answer.
+    act(() => {
+      applyUiStateEvent(env.queryClient, UI_STATE_SETTINGS_SECTION, "general");
+    });
+    expect(cached(env)[UI_STATE_SETTINGS_SECTION]).toBe("appearance");
+    await writes.release();
+    await writes.release();
+    await settleQueries(env);
+    expect(cached(env)[UI_STATE_SETTINGS_SECTION]).toBe("appearance");
+    // Nothing on its way: events apply again (another window's change).
+    act(() => {
+      applyUiStateEvent(env.queryClient, UI_STATE_SETTINGS_SECTION, "keys");
+    });
+    expect(cached(env)[UI_STATE_SETTINGS_SECTION]).toBe("keys");
   });
 });
 

@@ -1752,7 +1752,27 @@ mock's answers, shared texts, the `pim-actions.ftl` slot, release slots. Past ag
 colour instead of 55 % opacity (they failed the contrast scan whenever the clock put a demo event in the past).
 Next: P1–P4 in parallel.
 
-*Status (P4):* done (ADR 0252). Causes fixed, each product fix with a regression test: WebSocket answers that
+*Status (P1):* done (ADR 0252). Distinct seed colours (`SEED_PERSONAL_COLOR`, the demo holidays ochre) and one
+display rule (`colors.ts` `displayColors`, OKLab distance); week cards put their icons on the time line so titles
+fit (Playwright at 1440×900 and 1280×800); "New event from text" in the palette; right-click menus for events,
+contacts and tasks; the quick look answers one occurrence; Undo for invitation answers; recent mail on the contact
+card; the event editor's conflict choice; touch drawing; place and call icons; the free-time view asks the core
+with `hours`.
+
+*Status (P2):* done (ADR 0253). Favorites as views, the searched folder in the tree, one prompt for several unsaved
+windows, each composer's own sign / encrypt report, the preview's height, rules on a whole list after select all,
+Retry / Dismiss errors, layout presets saved with the bar, several secondary buttons in `DialogFooter`, the grouped
+toolbar customizer, the rail's account menu, `useMenuButton`; checks confirmed (monospace areas, search hint key,
+menus and settings page, run selected rules). Left: the contact groups' "New group" guard, the rail's unread badge
+and "View" affordance.
+
+*Status (P3):* done (ADR 0254). `RunRules.list` (parts of 500, one undo per rule), task reminders on MCP and
+plug-in writes, `create_event_from_text`, free-time time-zone tests, moved feeds and their intervals, reminders on
+a time-zone change (Windows registry watcher), `RDATE;VALUE=PERIOD` ends, one warning per mass failure, the Sieve
+status kept, checked inexact server hits, unified list order, the junk classifier (NFKC, unsure verdicts,
+`ham_cutoff`, schema v26), rule text issues reported once.
+
+*Status (P4):* done (ADR 0255). Causes fixed, each product fix with a regression test: WebSocket answers that
 overtook their request's events (`nail-server` `ws.rs` sends answers after them), layout edits sent with the
 revision the last write replaced (`useLayoutEdit`), a UI state answer that brought an older settings section back
 (`useSetUiState`), a forced Sieve upload lost when an earlier upload ended (`SieveCtl::force`), a removed shared
@@ -1762,6 +1782,19 @@ short deadline, the CBC padding test, the listing tests (`eventually_progressing
 dialogs without e2e. Left: the WebKit specs under load (their work nears the 30 s budget), the Exchange categories
 test and the a11y connection-log step (not reproduced), the Exchange move race hook and the auto-schedule e2e (need
 mock hooks), the reader card's empty classify window (feature stores per UI store, found by the new e2e).
+
+*Status (integration):* done. The four packages rebased (ADRs renumbered 0252–0255); the reader card's classify
+window fixed with `UiStoreMap` (state per UI store shared by a card's scoped view); the pop-out key bindings
+(`Ctrl+Shift+O` / `Ctrl+Shift+M`), the bundled `map-pin` (the place icon now sits inside the field, ADR 0160), the
+plug-in SDK's task reminders (`PluginTaskReminder`, `MAX_TASK_REMINDERS`), the junk "not junk" limit in Settings;
+the whole-list rule e2e counts every message of the listed conversations; two races in the R8 right-click e2e
+fixed (Escape before the editor or menu held the focus); `UiStateChanged` events of older writes no longer bring
+older settings sections back while a newer write is on its way (`applyUiStateEvent`; seen in the settings sweeps
+under load). Visual baselines: the More menu, the toolbar customizer,
+the high-contrast calendar; README media re-recorded. Follow-ups in `docs/backlog.md` ("R8 follow-ups"): colours
+picked in Nail, free-time days, recent-mail refresh, the mock's RDATE periods, unsure junk verdicts in the reader,
+the full e2e beside cargo and the WebKit specs (still losing a few tests to the 30 s budget in some full runs; they
+pass alone), the notification-texts hang, the WebKit "Check for new mail" step.
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

@@ -6035,6 +6035,66 @@
     {
       "args": [
         "default-layout",
+        "popout.open",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "popout.open",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "popout.open",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "popout.return",
+        [],
+        "global"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "popout.return",
+        [],
+        "list"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
+        "popout.return",
+        [],
+        "reader"
+      ],
+      "fn": "shortcut",
+      "out": null
+    },
+    {
+      "args": [
+        "default-layout",
         "mail.compose",
         [],
         "global"

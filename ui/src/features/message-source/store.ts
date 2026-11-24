@@ -6,7 +6,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { MessageId } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import { newWindowInstance } from "../../state/windows";
 import { MESSAGE_SOURCE_KIND } from "./names";
 
@@ -16,7 +16,7 @@ export interface SourceUiState {
   setMessage: (window: string, message: MessageId) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<SourceUiState>>();
+const stores = new UiStoreMap<StoreApi<SourceUiState>>();
 
 /** The source store of a UI store (created on first use). */
 export function sourceStoreFor(ui: UiStore): StoreApi<SourceUiState> {

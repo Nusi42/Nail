@@ -1038,6 +1038,18 @@
       "alias_of": null,
       "args": []
     },
+    "popout.open": {
+      "label": "@popout.action.open",
+      "icon": "external-link",
+      "alias_of": null,
+      "args": []
+    },
+    "popout.return": {
+      "label": "@popout.action.return",
+      "icon": "app-window",
+      "alias_of": null,
+      "args": []
+    },
     "view.toggle": {
       "label": "@view.action.toggle",
       "icon": "layout-panel-left",
@@ -1940,6 +1952,18 @@
       "context": "window",
       "key": "ctrl+shift+p",
       "action": "palette.open",
+      "args": []
+    },
+    {
+      "context": "window",
+      "key": "ctrl+shift+o",
+      "action": "popout.open",
+      "args": []
+    },
+    {
+      "context": "window",
+      "key": "ctrl+shift+m",
+      "action": "popout.return",
       "args": []
     },
     {

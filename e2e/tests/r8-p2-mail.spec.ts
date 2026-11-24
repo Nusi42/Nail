@@ -160,6 +160,10 @@ test.describe("rules on a whole list", () => {
     const flaggedCount = async () =>
       (await serverMessages(multi, "INBOX")).filter((m) => m.flags.includes("\\Flagged")).length;
     const before = await flaggedCount();
+    // The list shows conversations: a run on every row reaches every
+    // message of every listed conversation.
+    const messages = (await serverMessages(multi, "INBOX")).length;
+    expect(messages).toBeGreaterThan(WORK_INBOX_ROWS);
     await messageRows(page).first().click();
     await messageList(page).focus();
     await page.keyboard.press("ControlOrMeta+a");
@@ -174,7 +178,7 @@ test.describe("rules on a whole list", () => {
       .click();
     const toast = rulesToast(page);
     await expect(toast).toContainText("The rule ran");
-    await expect.poll(flaggedCount, { timeout: 20_000 }).toBe(WORK_INBOX_ROWS);
+    await expect.poll(flaggedCount, { timeout: 20_000 }).toBe(messages);
     await toast.getByRole("button", { name: "Undo" }).click();
     await expect(toast).toContainText("Everything the run did was undone.");
     await expect.poll(flaggedCount, { timeout: 20_000 }).toBe(before);

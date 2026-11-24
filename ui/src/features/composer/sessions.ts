@@ -30,6 +30,7 @@
 import type { DraftId, SendCrypto } from "../../api/generated";
 import { promptWindowFor } from "../../layout/closeGuard";
 import type { ComposerState, UiState, UiStore } from "../../state/uiStore";
+import { UiStoreMap } from "../../state/uiStore";
 import {
   isWindowInstance,
   newWindowInstance,
@@ -138,7 +139,7 @@ interface Session {
   seen: UiState;
 }
 
-const sessions = new WeakMap<UiStore, Session>();
+const sessions = new UiStoreMap<Session>();
 
 /**
  * The composer sessions of a UI store, installing the sync (mirror,

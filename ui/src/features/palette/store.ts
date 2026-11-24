@@ -6,7 +6,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ActionAvailability } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export interface PaletteUiState {
   /** Contexts when the palette opened; `null` = read them now. */
@@ -17,7 +17,7 @@ export interface PaletteUiState {
   setLastRun: (id: string) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<PaletteUiState>>();
+const stores = new UiStoreMap<StoreApi<PaletteUiState>>();
 
 export function createPaletteStore(): StoreApi<PaletteUiState> {
   return createStore<PaletteUiState>()((set) => ({

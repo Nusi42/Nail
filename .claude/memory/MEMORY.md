@@ -16,3 +16,4 @@
 - [R5 status](r5-status.md) — select all (Ctrl+A, list targets with `as_of` marks), large actions in parts with one undo (ADRs 0235-0237); timings; slow-machine Exchange flakes; CONFIRMATIONS set
 - [R6 status](r6-status.md) — one dialog pattern everywhere integrated (ADRs 0239-0244): footer by role, ConfirmDialog, question window / pending slot, close guard, settings drafts (useSettingsForm), sweep checks × / Esc / footer per OS; fixture and common-text pitfalls
 - [R7 status](r7-status.md) — calendar that reads well integrated and review-fixed (ADRs 0246-0250): click = quick look, one rule for a new event's calendar / declined / week start, DueTaskItem + Plan, cascade by exposed height, fixture pitfalls
+- [R8 status](r8-status.md) — backlog features and stable tests integrated (ADRs 0251-0255): colour rule, PIM menus, list rule runs, task reminders, `UiStoreMap` for per-store state, stable-test causes; backlog-rebase and load pitfalls

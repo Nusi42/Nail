@@ -54,6 +54,36 @@ export function applyUiStateChange(
   });
 }
 
+/** Writes of each key sent and not answered yet, per query client. */
+const pendingWrites = new WeakMap<QueryClient, Map<string, number>>();
+
+function countPending(queryClient: QueryClient, key: string, by: 1 | -1): void {
+  let pending = pendingWrites.get(queryClient);
+  if (pending === undefined) {
+    pending = new Map();
+    pendingWrites.set(queryClient, pending);
+  }
+  const count = (pending.get(key) ?? 0) + by;
+  if (count > 0) pending.set(key, count);
+  else pending.delete(key);
+}
+
+/**
+ * Applies a `UiStateChanged` event, unless a write of its key is on its way:
+ * the event may then be an older write's, and the newest write's answer
+ * sets the key (R8: under load the events of quickly shown settings
+ * sections showed the older sections again, one after the other, for
+ * seconds).
+ */
+export function applyUiStateEvent(
+  queryClient: QueryClient,
+  key: string,
+  value: JsonValue | null,
+): void {
+  if (pendingWrites.get(queryClient)?.has(key) === true) return;
+  applyUiStateChange(queryClient, key, value);
+}
+
 /** The newest write of each key, per query client (see `useSetUiState`). */
 const latestWrites = new WeakMap<QueryClient, Map<string, number>>();
 
@@ -86,7 +116,11 @@ export function useSetUiState() {
       (await client.request({ type: "SetUiState", key, value }, "UiState")).state,
     onMutate: ({ key, value }) => {
       applyUiStateChange(queryClient, key, value);
+      countPending(queryClient, key, 1);
       return { write: numberWrite(queryClient, key) };
+    },
+    onSettled: (_state, _error, { key }) => {
+      countPending(queryClient, key, -1);
     },
     onSuccess: (state, { key }, context) => {
       if (latestWrites.get(queryClient)?.get(key) !== context.write) return;

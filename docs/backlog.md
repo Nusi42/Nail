@@ -33,6 +33,7 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
+| Unsure junk verdicts in the reader | `JunkVerdict.unsure` is stored but the reader does not show unsure verdicts apart from not junk. | plan.md R8 follow-ups (ADR 0254) | S |
 | Other headers as rule values | `MessageFacts` offers no values of other headers. | plan.md R2 deferrals (ADR 0225) | M |
 | Sieve while uploads fail | A rule edited while uploads fail runs in its old form on the server. | plan.md M2c follow-ups | M |
 
@@ -40,6 +41,10 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
+| Colours picked in Nail | Only palette colours count as picked: a colour typed into "Other colour" can still be shown in another colour when it is close to another calendar's (`CalendarSettings` could record that the user chose it). | plan.md R8 follow-ups (ADR 0252) | S |
+| Free-time days | The free-time view lists days by the locale's weekend, while the core cuts by the preferences' work days. | plan.md R8 follow-ups (ADR 0252) | S |
+| Recent mail refresh | Recent mail on an open contact card does not refresh when new mail arrives. | plan.md R8 follow-ups (ADR 0252) | S |
+| Mock RDATE periods | The UI mock does not shift `Recurrence.periods` when it moves a series. | plan.md R8 follow-ups (ADR 0254) | S |
 | Snooze alarms on the server | RFC 9074 snooze alarms are not written to the server (snooze is local; dismiss writes `ACKNOWLEDGED`). | plan.md M3a follow-ups | M |
 | Task invitations | Only `VEVENT` scheduling; `VTODO` invitations show `no-event`. | plan.md M3b follow-ups (ADR 0066) | L |
 | iTIP methods | `ADD` is applied but not built; `COUNTER` / `REFRESH` / `DECLINECOUNTER` always go by iMIP. | plan.md M3b follow-ups (ADR 0066) | M |
@@ -85,7 +90,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Settings drafts | The "New group" name of the contact groups window is not guarded (the window registers one close guard, the group editor's). | plan.md R6 follow-ups (ADR 0244) | S |
 | Window close hook | A `beforeClose` hook in the window layer instead of the composer's session-sync close guard; a time-out for a pop-out page that never answers the OS close request. (check) | plan.md M5c follow-ups (ADR 0122) | M |
 | Pop-out preparers | Pop-out preparers for the remaining stateful editors so they can opt in (the rules window has one). | plan.md M5c follow-ups (ADR 0119) | M |
-| Pop-out key bindings | No default key bindings for `popout.open` / `popout.return`. | plan.md M5c follow-ups | S |
 | Window manager | Resize handles outside the frame (they sit over the body's scrollbar); snapping to the top edge / quarters; a backwards window cycle; per-session geometry for remote browsers. | plan.md M5c follow-ups (ADR 0117) | M |
 | Shell and views | Restoring the remembered view needs a view host (the fallback opens nothing); hidden views stay mounted; the UI state (last view, settings section) is shared between desktop and remote sessions. | plan.md M5b follow-ups (ADR 0110) | M |
 | Rail | The unread badge relies on the "All accounts" virtual account; no visible "View" affordance on the rail (a rail button changes every visual baseline). | plan.md M5b, M5d follow-ups | S |
@@ -191,8 +195,11 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | OS-level desktop checks | The OS notification look, the tray's OS menu and `contextmenu` after Shift+F10 in WebView2 are not checked automatically. | plan.md M2c, M4b follow-ups | M |
 | Exchange move race | A deterministic mock hook for the Exchange move race: the mock Graph server needs a hook that runs between two requests (e.g. move a message after one folder's listing), which it does not have yet. | plan.md M5c follow-ups (ADR 0120) | S |
 | Flaky: connection-log step | e2e `a11y-windows` connection-log step times out under heavy load (passes alone; not reproduced in R8). | memory r6-status | S |
-| Flaky: WebKit specs under load | e2e `p3-card-height` (also `mail-links`, `remote-content`, `app-chrome`) on WebKit run out of their 30 s while `cargo test --workspace` runs: about 18 s alone, twice that under load, pages not painting for seconds; fewer WebKit workers did not help (ADR 0252). | plan.md R4 status | S |
-| Flaky: Exchange categories test | `nail-core` `tests/exchange.rs` `categories_automatic_replies_and_rooms` failed once on a machine about 5x slower; not reproduced under parallel load in R8 (the other Exchange flakes are fixed, ADR 0252). | memory r5-status | S |
+| Flaky: WebKit specs under load | e2e `p3-card-height` (also `mail-links`, `remote-content`, `app-chrome`) on WebKit run out of their 30 s while `cargo test --workspace` runs: about 18 s alone, twice that under load, pages not painting for seconds; fewer WebKit workers did not help (ADR 0255). | plan.md R4 status | S |
+| Flaky: full e2e beside cargo | The full Playwright suite run beside `cargo test --workspace` loses some long specs (`a11y-windows`, `p1-views`, `vault-recovery`) to the 30 s budget. | plan.md R8 follow-ups (ADR 0255) | M |
+| Flaky: notification texts test | `app/src-tauri` `tests::notification_texts_are_rendered` hung once for 20 minutes under full parallel load. | plan.md R8 follow-ups (ADR 0255) | S |
+| Flaky: Check for new mail (WebKit) | e2e `app-chrome` "Check for new mail" on WebKit missed the POP3 message within 5 s once in a full run. | plan.md R8 follow-ups (ADR 0255) | S |
+| Flaky: Exchange categories test | `nail-core` `tests/exchange.rs` `categories_automatic_replies_and_rooms` failed once on a machine about 5x slower; not reproduced under parallel load in R8 (the other Exchange flakes are fixed, ADR 0255). | memory r5-status | S |
 
 ## Performance
 

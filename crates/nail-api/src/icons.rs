@@ -113,6 +113,7 @@ pub const BUNDLED_ICONS: &[&str] = &[
     "mail-plus",
     "mail-warning",
     "mail-x",
+    "map-pin",
     "maximize-2",
     "minimize-2",
     "minus",

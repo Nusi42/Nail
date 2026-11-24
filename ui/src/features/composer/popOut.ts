@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import type { JsonValue } from "../../api/generated";
 import type { ComposeContext } from "../../state/compose";
 import type { UiStore } from "../../state/uiStore";
+import { UiStoreMap } from "../../state/uiStore";
 import { usePopOutContext, usePopOutTitle } from "../popout/hooks";
 import { registerPopOutPreparer } from "../popout/model";
 import { openRichDraft, saveRich } from "./flows";
@@ -51,7 +52,7 @@ export async function prepareComposerPopOut(
  * when one comes back ("Return to main window") its window opens here
  * again without a composer, and loads the draft from this list.
  */
-const popped = new WeakMap<UiStore, Map<string, string>>();
+const popped = new UiStoreMap<Map<string, string>>();
 function draftsOf(store: UiStore): Map<string, string> {
   let map = popped.get(store);
   if (map === undefined) {

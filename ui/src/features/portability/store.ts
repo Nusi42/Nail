@@ -7,7 +7,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { JobId, MessageId } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export interface PortabilityUiState {
   /** The job the report dialog shows. */
@@ -21,7 +21,7 @@ export interface PortabilityUiState {
   setDiagnosticsMessages: (ids: MessageId[]) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<PortabilityUiState>>();
+const stores = new UiStoreMap<StoreApi<PortabilityUiState>>();
 
 export function createPortabilityStore(): StoreApi<PortabilityUiState> {
   return createStore<PortabilityUiState>()((set) => ({

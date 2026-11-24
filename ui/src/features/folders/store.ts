@@ -3,7 +3,7 @@
  */
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export type FolderTask =
   | { kind: "create"; accountId: string; parentId: string | null }
@@ -16,7 +16,7 @@ export interface FoldersUiState {
   setTask: (task: FolderTask | null) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<FoldersUiState>>();
+const stores = new UiStoreMap<StoreApi<FoldersUiState>>();
 
 export function foldersStoreFor(ui: UiStore): StoreApi<FoldersUiState> {
   let store = stores.get(ui);

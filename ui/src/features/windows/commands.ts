@@ -5,6 +5,7 @@
  * (`runWindowCommand`). Keyed by store, so several apps (tests) never mix.
  */
 import type { UiStore } from "../../state/uiStore";
+import { UiStoreMap } from "../../state/uiStore";
 
 export type WindowCommand =
   /** Ctrl+F6: the next window (raised and focused), or back to the main window. */
@@ -18,7 +19,7 @@ export type WindowCommand =
 
 type Handler = (command: WindowCommand) => void;
 
-const handlers = new WeakMap<UiStore, Handler>();
+const handlers = new UiStoreMap<Handler>();
 
 /** Registers (or with `null` removes) the window layer of `store`. */
 export function setWindowCommandHandler(store: UiStore, handler: Handler | null): void {

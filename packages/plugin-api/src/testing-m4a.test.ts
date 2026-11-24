@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { encodeUtf8 } from "./bytes";
 import { veto } from "./extensions";
 import type { PluginManifest, PluginMessage } from "./generated";
+import { MAX_TASK_REMINDERS } from "./generated";
 import { createTestHost, testMessage, testOutgoingMessage } from "./testing";
 
 const msg = (id: string, accountId = "work", extra: Partial<PluginMessage> = {}): PluginMessage =>
@@ -129,6 +130,50 @@ describe("writes", () => {
       reasons: ["Checker: no attachment"],
     });
     expect(host.confirmations).toEqual([]);
+  });
+
+  it("checks and keeps task reminders like the host", async () => {
+    const host = createTestHost({ messages: [] });
+    const { tasks } = host.api;
+    const bad = { code: "invalid_request" };
+    // minutesBefore needs a due time; exactly one field per reminder.
+    await expect(
+      tasks.create({ title: "x", reminders: [{ minutesBefore: 5 }] }),
+    ).rejects.toMatchObject(bad);
+    await expect(
+      tasks.create({
+        title: "x",
+        due: "2026-10-03",
+        reminders: [{ minutesBefore: 5, at: "2026-10-02T08:00:00Z" }],
+      }),
+    ).rejects.toMatchObject(bad);
+    await expect(tasks.create({ title: "x", reminders: [{}] })).rejects.toMatchObject(bad);
+    await expect(tasks.create({ title: "x", reminders: [{ at: "soon" }] })).rejects.toMatchObject(
+      bad,
+    );
+    const tooMany = Array.from({ length: MAX_TASK_REMINDERS + 1 }, () => ({
+      at: "2026-10-02T08:00:00Z",
+    }));
+    await expect(tasks.create({ title: "x", reminders: tooMany })).rejects.toMatchObject(bad);
+
+    const made = await tasks.create({
+      title: "Report",
+      due: "2026-10-03",
+      reminders: [{ minutesBefore: 30 }, { at: "2026-10-02T08:00:00Z" }],
+    });
+    const taskId = made.status === "done" ? (made.created[0] ?? "") : "";
+    expect(host.tasks.get(taskId)?.reminders).toHaveLength(2);
+    // Removing the due time while minutesBefore reminders are set is refused.
+    await expect(
+      tasks.update(taskId, { due: "", reminders: [{ minutesBefore: 5 }] }),
+    ).rejects.toMatchObject(bad);
+    await tasks.update(taskId, { reminders: [{ at: "2026-10-03T07:00:00Z" }] });
+    expect(host.tasks.get(taskId)?.reminders).toEqual([{ at: "2026-10-03T07:00:00Z" }]);
+    // Left out = unchanged; [] removes them.
+    await tasks.update(taskId, { title: "Report v2" });
+    expect(host.tasks.get(taskId)?.reminders).toHaveLength(1);
+    await tasks.update(taskId, { reminders: [] });
+    expect(host.tasks.get(taskId)?.reminders).toBeUndefined();
   });
 
   it("checks task, event and contact input", async () => {

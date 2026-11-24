@@ -27,7 +27,7 @@
  * guard outside any window is keyed `MAIN_GUARD`.
  */
 import { useContext, useEffect, useLayoutEffect, useRef } from "react";
-import { useUiStoreApi, type UiStore } from "../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../state/uiStore";
 import {
   WindowInstanceContext,
   WINDOW_INSTANCE_SEPARATOR,
@@ -87,7 +87,7 @@ interface GuardState {
   installed: boolean;
 }
 
-const states = new WeakMap<UiStore, GuardState>();
+const states = new UiStoreMap<GuardState>();
 
 function stateOf(ui: UiStore): GuardState {
   let state = states.get(ui);

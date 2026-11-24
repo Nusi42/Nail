@@ -12,10 +12,10 @@ import type { MailActionResult, MessageSummary } from "../../api/generated";
 import { findSummary, type WriteContext } from "../../state/mailOps";
 import { useBusyAction } from "../../state/busyAction";
 import { useClient } from "../../state/queries";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import { runMailAction, type TagNoun } from "./run";
 
-const pending = new WeakMap<UiStore, ActionTargets>();
+const pending = new UiStoreMap<ActionTargets>();
 
 /** Remembers the targets of the label window that opens now (the current ones). */
 export function rememberTagTargets(store: UiStore): void {

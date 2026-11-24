@@ -11,12 +11,19 @@
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { MessageId } from "../api/generated";
-import { UiStoreContext, useUiStoreApi, type UiState, type UiStore } from "../state/uiStore";
+import {
+  registerUiStoreView,
+  UiStoreContext,
+  useUiStoreApi,
+  type UiState,
+  type UiStore,
+} from "../state/uiStore";
 
 /**
  * A view of `parent` in which `selectedMessageId` is `messageId`. The state
  * object stays the same between changes of the parent's (as
- * `useSyncExternalStore` requires).
+ * `useSyncExternalStore` requires). State kept per UI store (`UiStoreMap`)
+ * is `parent`'s for the view too.
  */
 export function scopedUiStore(parent: UiStore, messageId: MessageId): UiStore {
   let seen: UiState | null = null;
@@ -31,7 +38,7 @@ export function scopedUiStore(parent: UiStore, messageId: MessageId): UiStore {
     }
     return scoped;
   };
-  return {
+  const view: UiStore = {
     getState,
     getInitialState: () => scope(parent.getInitialState()),
     setState: parent.setState,
@@ -40,6 +47,8 @@ export function scopedUiStore(parent: UiStore, messageId: MessageId): UiStore {
         listener(getState(), scope(previous));
       }),
   };
+  registerUiStoreView(view, parent);
+  return view;
 }
 
 /** Whether a widget renders inside a card of the feed (and for which message). */

@@ -244,6 +244,49 @@ export function sendPercent(progress: SendProgressState): number {
 
 export type UiStore = StoreApi<UiState>;
 
+/** Views of a store (a reader card's, `scopedUiStore`) and the store they show. */
+const roots = new WeakMap<UiStore, UiStore>();
+
+/**
+ * Records `view` as a view of `store`: state kept per UI store
+ * ({@link UiStoreMap}) is `store`'s for it too, so a window a reader card
+ * opens reads what the card stored.
+ */
+export function registerUiStoreView(view: UiStore, store: UiStore): void {
+  roots.set(view, rootUiStore(store));
+}
+
+/** The app store behind `store` (itself unless it is a view). */
+export function rootUiStore(store: UiStore): UiStore {
+  return roots.get(store) ?? store;
+}
+
+/**
+ * State kept per app store (feature stores, open questions, guards): a
+ * `WeakMap` whose key is the app store behind the given one, so a view of
+ * the store (a reader card's) shares the app's entry.
+ */
+export class UiStoreMap<T> {
+  private readonly entries = new WeakMap<UiStore, T>();
+
+  get(store: UiStore): T | undefined {
+    return this.entries.get(rootUiStore(store));
+  }
+
+  has(store: UiStore): boolean {
+    return this.entries.has(rootUiStore(store));
+  }
+
+  set(store: UiStore, value: T): this {
+    this.entries.set(rootUiStore(store), value);
+    return this;
+  }
+
+  delete(store: UiStore): boolean {
+    return this.entries.delete(rootUiStore(store));
+  }
+}
+
 export function createUiStore(initial: Partial<UiState> = {}): UiStore {
   return createStore<UiState>()((set) => ({
     activeAccountId: null,

@@ -520,7 +520,7 @@ export const SCREENS: readonly Screen[] = [
       await page.getByRole("menu").getByRole("menuitem", { name: "Customize toolbar" }).click();
       const customizer = page.locator('[data-part="window"][data-window^="toolbar-customizer"]');
       await expect(customizer.getByRole("listbox", { name: "Available actions" })).toBeVisible();
-      await expect(customizer.getByRole("option", { name: /^Reply all/ })).toBeVisible();
+      await expect(customizer.getByRole("option", { name: /^Reply all/ }).first()).toBeVisible();
     },
   },
   {

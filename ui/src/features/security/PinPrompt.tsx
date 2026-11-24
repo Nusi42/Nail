@@ -23,7 +23,7 @@ import { useT } from "../../i18n/I18nProvider";
 import { useDateFormat } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useClient } from "../../state/queries";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import type { FeatureEventHandler } from "../types";
 import { pinIsPlausible } from "./smartcardModel";
 import { smartcardKeys } from "./Smartcards";
@@ -45,7 +45,7 @@ export interface PinUiState {
   dismiss: () => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<PinUiState>>();
+const stores = new UiStoreMap<StoreApi<PinUiState>>();
 
 export function createPinStore(): StoreApi<PinUiState> {
   return createStore<PinUiState>()((set) => ({

@@ -6,12 +6,12 @@
  * however the question ends — the verb, Cancel, × or Esc
  * (`usePendingQuestion`).
  *
- * The key is the store's `setState`: a card of the reader's feed has a
- * scoped view of the app store (`scopedUiStore`) that shares it, so the card
- * asks and the window (outside the card) answers.
+ * The key is the app store (`UiStoreMap`): a card of the reader's feed has
+ * a scoped view of the app store (`scopedUiStore`) that shares its entry, so
+ * the card asks and the window (outside the card) answers.
  */
 import { useEffect, useState } from "react";
-import type { UiStore } from "../../state/uiStore";
+import { UiStoreMap, type UiStore } from "../../state/uiStore";
 
 /** One kind of open question, per app store. */
 export interface PendingSlot<T> {
@@ -25,17 +25,17 @@ export interface PendingSlot<T> {
 
 /** A new slot for one kind of question. */
 export function pendingSlot<T>(): PendingSlot<T> {
-  const pending = new WeakMap<UiStore["setState"], T>();
+  const pending = new UiStoreMap<T>();
   return {
-    get: (store) => pending.get(store.setState) ?? null,
+    get: (store) => pending.get(store) ?? null,
     set: (store, what) => {
-      pending.set(store.setState, what);
+      pending.set(store, what);
     },
     clear: (store) => {
-      pending.delete(store.setState);
+      pending.delete(store);
     },
     forget: (store, what) => {
-      if (what !== null && pending.get(store.setState) === what) pending.delete(store.setState);
+      if (what !== null && pending.get(store) === what) pending.delete(store);
     },
   };
 }

@@ -8,6 +8,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { UiStore } from "../../state/uiStore";
+import { UiStoreMap } from "../../state/uiStore";
 import { useUiStoreApi } from "../../state/uiStore";
 
 /** The theme editor's window kind (dialog name; also the widget kind). */
@@ -43,7 +44,7 @@ export interface ThemeEditorState {
   setSubject: (themeId: string | null) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<ThemeEditorState>>();
+const stores = new UiStoreMap<StoreApi<ThemeEditorState>>();
 
 /** The editor state of a UI store. */
 export function themeEditorStoreFor(ui: UiStore): StoreApi<ThemeEditorState> {

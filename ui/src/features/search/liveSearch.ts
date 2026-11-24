@@ -30,7 +30,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { AccountId, FolderId, SearchError } from "../../api/generated";
 import { LIVE_SEARCH_PAUSE_MS, useDebouncedAction } from "../../state/debounce";
 import { checkQuery, useClient } from "../../state/queries";
-import { useUi, useUiStoreApi, type SearchState, type UiStore } from "../../state/uiStore";
+import {
+  useUi,
+  useUiStoreApi,
+  type SearchState,
+  type UiStore,
+  UiStoreMap,
+} from "../../state/uiStore";
 
 /** Where a search from the field runs. */
 export interface LiveSearchScope {
@@ -74,7 +80,7 @@ export interface RejectedQuery {
   error: SearchError;
 }
 
-const owners = new WeakMap<UiStore, StoreApi<{ owner: string | null }>>();
+const owners = new UiStoreMap<StoreApi<{ owner: string | null }>>();
 
 /** Which search field of a UI store commits the typed text (its id; created on first use). */
 export function searchOwnerFor(ui: UiStore): StoreApi<{ owner: string | null }> {

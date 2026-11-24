@@ -20,9 +20,10 @@ import type {
 } from "../../api/generated";
 import { findSummary, type WriteContext } from "../../state/mailOps";
 import type { UiStore } from "../../state/uiStore";
+import { UiStoreMap } from "../../state/uiStore";
 import { runMailAction, runOptionsOf, type RunOptions } from "./run";
 
-const pending = new WeakMap<UiStore, ActionTargets>();
+const pending = new UiStoreMap<ActionTargets>();
 
 /** Remembers the targets of the move window that opens now. */
 export function setPendingMove(store: UiStore, targets: ActionTargets): void {

@@ -292,8 +292,11 @@ Where shared things live (Q2, ADRs 0172–0177):
 - Waiting in the core's integration tests (`crates/nail-core/tests/common`): `eventually` / `until_some` fail after
   `TIMEOUT`; work that takes many server round trips (a listing of hundreds of messages) waits with
   `eventually_progressing`, which fails only when its progress (e.g. the mock server's request count) stood still
-  for `TIMEOUT` (ADR 0252). A layout edit reads the history after its write (`refreshEditHistory`,
+  for `TIMEOUT` (ADR 0255). A layout edit reads the history after its write (`refreshEditHistory`,
   `ui/src/state/editHistory.ts`) before the next one may start.
+- State a feature keeps per UI store (its zustand store, an open question, a guard) is a `UiStoreMap`
+  (`ui/src/state/uiStore.ts`), never a bare `WeakMap<UiStore, …>`: a reader card's scoped store is a view of the
+  app store and must share the app's entry (R8 notes in `docs/architecture.md`).
 - UI state helpers shared by features: cached-data lookups in
   `ui/src/state/mailOps.ts` (`findSummary`, `cachedFolder`), query options in
   `ui/src/state/queries.ts` (`foldersQueryOptions`), the query language's

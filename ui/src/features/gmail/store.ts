@@ -5,7 +5,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { AccountId, GmailLabel, GmailLabelId } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 /** What the label editor edits. */
 export interface LabelEditorTarget {
@@ -23,7 +23,7 @@ export interface GmailState {
   deleteLabel: (label: GmailLabel | null) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<GmailState>>();
+const stores = new UiStoreMap<StoreApi<GmailState>>();
 
 export function gmailStoreFor(ui: UiStore): StoreApi<GmailState> {
   const existing = stores.get(ui);

@@ -36,6 +36,9 @@ export const ACTION_KIND_VALUES = ["organize","trash","permanent-delete","draft"
 /** Per kind of write: destructive (always asks), outgoing (sends mail), whether "always allow" may be set, the policy until the user changes it. */
 export const ACTION_KIND_RULES = {"calendar":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"contact":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"draft":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"invite":{"can_always_allow":true,"default_mode":"ask","destructive":false,"outgoing":true},"organize":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"permanent-delete":{"can_always_allow":false,"default_mode":"ask","destructive":true,"outgoing":false},"pim-delete":{"can_always_allow":false,"default_mode":"ask","destructive":true,"outgoing":false},"rule":{"can_always_allow":true,"default_mode":"ask","destructive":false,"outgoing":false},"send":{"can_always_allow":true,"default_mode":"ask","destructive":false,"outgoing":true},"task":{"can_always_allow":true,"default_mode":"allow","destructive":false,"outgoing":false},"trash":{"can_always_allow":false,"default_mode":"ask","destructive":true,"outgoing":false}} as const satisfies Readonly<Record<ActionKind, { destructive: boolean; outgoing: boolean; can_always_allow: boolean; default_mode: ActionPolicyMode }>>;
 
+/** The most reminders one task written by an agent or a plug-in may carry. */
+export const MAX_TASK_REMINDERS = 10 as const;
+
 /** Largest `manifest.json` (bytes). */
 export const MAX_MANIFEST_BYTES = 65536 as const;
 

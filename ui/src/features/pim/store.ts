@@ -21,7 +21,7 @@ import type {
   TaskId,
   AddressBookId,
 } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import type { ViewKind } from "./time";
 import { pushBounded } from "../../state/bounded";
 import type { AnchorRect } from "../../widgets/Popover";
@@ -156,7 +156,7 @@ export interface PimState {
   setPlanSlot: (slot: { day: string; minute: number } | null) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<PimState>>();
+const stores = new UiStoreMap<StoreApi<PimState>>();
 
 export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
   const existing = stores.get(ui);

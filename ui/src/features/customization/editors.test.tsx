@@ -215,6 +215,15 @@ describe("key-binding-editor", () => {
     });
   });
 
+  it("lists the default pop-out shortcuts under Window", async () => {
+    const { user, section, table } = await keyEditor();
+    await user.selectOptions(within(section).getByLabelText("Show"), "window");
+    const open = must(within(table).getByText("Ctrl+Shift+O").closest("tr"));
+    expect(within(open).getByText("Open window in new window")).toBeVisible();
+    const back = must(within(table).getByText("Ctrl+Shift+M").closest("tr"));
+    expect(within(back).getByText("Return window to main window")).toBeVisible();
+  });
+
   it("does not let recorded keys trigger the app's shortcuts", async () => {
     const { env } = renderEditor("key-binding-editor");
     const capture = await screen.findByLabelText("Keys");

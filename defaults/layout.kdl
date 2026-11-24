@@ -281,6 +281,8 @@ layout "default" {
         action "settings.open"    label="@settings.action.open"    icon="settings" alias-of="view.show" "settings"
         action "window.open"      label="@window.action.open" icon="external-link"
         action "window.close"     label="@window.action.close"     icon="x"
+        action "popout.open"      label="@popout.action.open"      icon="external-link"
+        action "popout.return"    label="@popout.action.return"    icon="app-window"
         action "view.toggle"      label="@view.action.toggle" icon="layout-panel-left"
         action "sync.now"         label="@sync.action.now"         icon="refresh-cw"
         // ADR 0184: the text menu (fields, editors, selectable text).
@@ -587,6 +589,9 @@ layout "default" {
         // The command palette also opens (and closes) over dialogs.
         bind "ctrl+k" "palette.open"
         bind "ctrl+shift+p" "palette.open"
+        // Pop-out windows: open the shown item in its own window, return it.
+        bind "ctrl+shift+o" "popout.open"
+        bind "ctrl+shift+m" "popout.return"
     }
 
     keys {

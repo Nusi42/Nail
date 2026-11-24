@@ -18,7 +18,7 @@ import type {
   PluginSendVeto,
   SendVetoId,
 } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import { pushBounded } from "../../state/bounded";
 
 /** A notification on screen: a plug-in's own, or one about a stopped plug-in. */
@@ -89,7 +89,7 @@ export interface PluginsState {
 
 let editSeq = 0;
 
-const stores = new WeakMap<UiStore, StoreApi<PluginsState>>();
+const stores = new UiStoreMap<StoreApi<PluginsState>>();
 
 export function createPluginsStore(): StoreApi<PluginsState> {
   return createStore<PluginsState>()((set, get) => ({

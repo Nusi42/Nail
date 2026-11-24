@@ -7,7 +7,7 @@
  */
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 /** A setting to reveal in the shown section. */
 export interface RevealRequest {
@@ -41,7 +41,7 @@ export interface SettingsUiState {
   revealed: (seq: number) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<SettingsUiState>>();
+const stores = new UiStoreMap<StoreApi<SettingsUiState>>();
 
 export function createSettingsStore(): StoreApi<SettingsUiState> {
   return createStore<SettingsUiState>()((set) => ({

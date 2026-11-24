@@ -20,7 +20,7 @@ import { createContext, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ComposerMode, DraftAttachment, SignatureChoice } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import { parseWindowId } from "../../state/windows";
 
 /** The window kind of composers (`composer`, `composer:<key>`). */
@@ -115,10 +115,10 @@ export function emptyRich(): RichState {
 
 export type RichStore = StoreApi<RichState>;
 
-const stores = new WeakMap<UiStore, RichStore>();
-const instanceStores = new WeakMap<UiStore, Map<string, RichStore>>();
+const stores = new UiStoreMap<RichStore>();
+const instanceStores = new UiStoreMap<Map<string, RichStore>>();
 /** Inline image previews of closed composers (an undone send reopens them). */
-const previewCaches = new WeakMap<UiStore, Record<string, string>>();
+const previewCaches = new UiStoreMap<Record<string, string>>();
 
 /** Whether `window` is a composer instance id (`composer:<key>`). */
 export function isComposerInstance(window: string | null | undefined): window is string {

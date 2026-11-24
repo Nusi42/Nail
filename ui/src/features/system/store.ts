@@ -6,7 +6,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { DraftId } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export interface SystemUiState {
   /** Drafts from other programs → the program's file name (`null` = unknown). */
@@ -19,7 +19,7 @@ export interface SystemUiState {
   setFirstRunOffered: () => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<SystemUiState>>();
+const stores = new UiStoreMap<StoreApi<SystemUiState>>();
 
 export function createSystemStore(): StoreApi<SystemUiState> {
   return createStore<SystemUiState>()((set) => ({

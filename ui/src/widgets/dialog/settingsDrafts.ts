@@ -24,7 +24,7 @@ import {
 } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 /** What a settings widget tells the page about its unsaved changes. */
 export interface SettingsDraft {
@@ -59,7 +59,7 @@ export class DraftScope {
   readonly actions = new Map<string, () => SettingsDraft>();
 }
 
-const all = new WeakMap<UiStore, DraftScope>();
+const all = new UiStoreMap<DraftScope>();
 
 /** Where drafts live: a scope, or a UI store (its own scope, the settings page's). */
 export type DraftOwner = UiStore | DraftScope;

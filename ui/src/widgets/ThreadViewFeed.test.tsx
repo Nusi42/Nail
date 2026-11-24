@@ -18,7 +18,8 @@ import {
   stepStop,
 } from "./ThreadViewModel";
 import { cardShowsSubject, scopedUiStore } from "./ThreadViewScope";
-import { createUiStore } from "../state/uiStore";
+import { createUiStore, rootUiStore, UiStoreMap } from "../state/uiStore";
+import { exchangeStoreFor } from "../features/exchange/store";
 import { selectMockConversation } from "../test/env";
 import { INBOX } from "../test/mockIds";
 
@@ -143,6 +144,18 @@ describe("scoped UI state", () => {
     // The card's own message selected: the very same state object.
     parent.getState().selectMessage("card");
     expect(scoped.getState()).toBe(parent.getState());
+  });
+
+  it("shares the app's per-store state (a card's button opens the app's window)", () => {
+    const parent = createUiStore();
+    const scoped = scopedUiStore(parent, "card");
+    // Regression (R8): the reader card's "Move to Other" stored its target
+    // in a classify store of its own, and the window found nothing.
+    expect(exchangeStoreFor(scoped)).toBe(exchangeStoreFor(parent));
+    const map = new UiStoreMap<string>();
+    map.set(scoped, "from the card");
+    expect(map.get(parent)).toBe("from the card");
+    expect(rootUiStore(scopedUiStore(scoped, "nested"))).toBe(parent);
   });
 });
 

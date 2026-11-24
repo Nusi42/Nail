@@ -22,7 +22,7 @@ import { askSettingsQuestion } from "../settings/confirm";
 import { useFormNotice, useLeaveDrafts, useSettingsForm } from "../settings/draft";
 import { CheckField, NumberField } from "../../widgets/forms";
 import { AccountChoiceField } from "../../widgets/pickers";
-import { junkIssues, MAX_MIN_TRAINING } from "./model";
+import { hamCutoffOf, junkIssues, MAX_MIN_TRAINING } from "./model";
 
 /** The confirmation window of "Reset the filter…". */
 export const JUNK_RESET_DIALOG = "reset-junk-filter";
@@ -189,6 +189,17 @@ function SettingsEditor({ status: s }: { status: JunkStatus }) {
           value={draft.threshold}
           onChange={(threshold) => {
             update({ threshold: threshold ?? 0 });
+          }}
+        />
+        <NumberField
+          labelId="junk-settings-ham-cutoff"
+          hintId="junk-settings-ham-cutoff-hint"
+          name="ham-cutoff"
+          min={0}
+          max={Math.max(0, draft.threshold - 1)}
+          value={hamCutoffOf(draft)}
+          onChange={(ham_cutoff) => {
+            update({ ham_cutoff: ham_cutoff ?? 0 });
           }}
         />
         <NumberField

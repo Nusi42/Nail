@@ -6,7 +6,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { Confirmation, ConfirmationId } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 /** Most notices on screen at once (older ones make room). */
 export const MAX_NOTICES = 3;
@@ -23,7 +23,7 @@ export interface AgentsUiState {
   setFocus: (id: ConfirmationId | null) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<AgentsUiState>>();
+const stores = new UiStoreMap<StoreApi<AgentsUiState>>();
 
 export function createAgentsStore(): StoreApi<AgentsUiState> {
   return createStore<AgentsUiState>()((set) => ({

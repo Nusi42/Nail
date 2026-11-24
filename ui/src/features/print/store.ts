@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { PrintJobId, PrintTarget } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export type PrintMode = "print" | "pdf";
 
@@ -26,7 +26,7 @@ export interface PrintUiState {
   setSheet: (sheet: ReactNode | null) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<PrintUiState>>();
+const stores = new UiStoreMap<StoreApi<PrintUiState>>();
 
 export function createPrintStore(): StoreApi<PrintUiState> {
   return createStore<PrintUiState>()((set) => ({

@@ -276,6 +276,30 @@ describe("triage widgets", () => {
     });
   });
 
+  it("edits the not-junk limit below the threshold", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    renderSettings(env, "junk-settings");
+    await screen.findByText(/Learning/);
+    const cutoff = screen.getByLabelText(/"Not junk" limit/);
+    expect(cutoff).toHaveValue(20);
+    const threshold = screen.getByLabelText("Junk threshold (percent)");
+    await user.clear(threshold);
+    await user.type(threshold, "80");
+    await user.clear(cutoff);
+    await user.type(cutoff, "85");
+    expect(await screen.findByRole("alert")).toHaveTextContent("below the junk threshold");
+    const bar = saveBar();
+    expect(bar && within(bar).getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.clear(cutoff);
+    await user.type(cutoff, "30");
+    await saveSettingsDone(user);
+    expect(requestsOf(env, "UpdateJunkSettings")[0]?.settings).toMatchObject({
+      threshold: 80,
+      ham_cutoff: 30,
+    });
+  });
+
   it("edits notification settings: quiet hours, overrides, test", async () => {
     const user = userEvent.setup();
     const env = createEnv();

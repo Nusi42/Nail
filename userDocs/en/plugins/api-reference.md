@@ -655,6 +655,7 @@ A new task (`NailTasksApi.create`).
 | `completed?` | `boolean` | Created as done. |
 | `links?` | `string[]` | A link to the message the task is about (`nail://messages/<id>`, a message's `uri`; at most one message). Needs `mail.read` for it. |
 | `relatedMessageId?` | `MessageId` | The same as a `links` entry, as a message id. |
+| `reminders?` | `PluginTaskReminder[]` | Reminders (at most `MAX_TASK_REMINDERS`). |
 
 ### `PluginTaskChanges`
 
@@ -667,6 +668,7 @@ Changes of `NailTasksApi.update`; fields left out stay as they are.
 | `notes?` | `string` | New notes. |
 | `priority?` | `number` | New priority. |
 | `completed?` | `boolean` | Done or open. |
+| `reminders?` | `PluginTaskReminder[]` | New reminders (replace the task's); `[]` removes them. |
 
 ## Mail hooks
 

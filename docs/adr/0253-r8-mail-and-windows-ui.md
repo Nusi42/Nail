@@ -1,4 +1,4 @@
-# 0252 — R8 P2: mail, composer, rules, settings and windows UI
+# 0253 — R8: mail, composer, rules, settings and windows UI
 
 Status: accepted (2026-11-24)
 

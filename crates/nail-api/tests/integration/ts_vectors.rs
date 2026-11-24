@@ -1007,6 +1007,10 @@ fn triage_vectors() {
         json!({ "enabled": true, "threshold": threshold, "min_training": min_training,
                 "honor_server_flags": true, "move_to_junk": true })
     };
+    let with_ham = |mut settings: Value, ham_cutoff: u32| {
+        settings["ham_cutoff"] = json!(ham_cutoff);
+        settings
+    };
     for settings in [
         junk(90, 10),
         junk(49, 10),
@@ -1014,6 +1018,10 @@ fn triage_vectors() {
         junk(99, 10_000),
         junk(100, 0),
         junk(70, 10_001),
+        with_ham(junk(60, 10), 59),
+        with_ham(junk(60, 10), 60),
+        with_ham(junk(50, 10), 0),
+        with_ham(junk(100, 10), 99),
     ] {
         v.case(
             "junkIssues",

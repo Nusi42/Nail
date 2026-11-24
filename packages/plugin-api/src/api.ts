@@ -505,6 +505,19 @@ export interface PluginTaskInput {
   links?: string[];
   /** The same as a `links` entry, as a message id. */
   relatedMessageId?: MessageId;
+  /** Reminders (at most `MAX_TASK_REMINDERS`). */
+  reminders?: PluginTaskReminder[];
+}
+
+/**
+ * A task reminder: exactly one of `minutesBefore` (before the due time, or
+ * the start of a task without one; the task needs one of them) and `at`.
+ */
+export interface PluginTaskReminder {
+  /** Minutes before the due time (0 = at the due time). */
+  minutesBefore?: number;
+  /** An RFC 3339 UTC instant (`2026-05-04T08:00:00Z`). */
+  at?: string;
 }
 
 /** Changes of {@link NailTasksApi.update}; fields left out stay as they are. */
@@ -519,6 +532,8 @@ export interface PluginTaskChanges {
   priority?: number;
   /** Done or open. */
   completed?: boolean;
+  /** New reminders (replace the task's); `[]` removes them. */
+  reminders?: PluginTaskReminder[];
 }
 
 /** `nail.tasks`: task writes. Needs `tasks.write`. */

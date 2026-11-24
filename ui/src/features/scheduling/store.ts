@@ -6,7 +6,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { Attendee, EventId, PimTime } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 /** The meeting the cancel dialog is about. */
 export interface CancelTarget {
@@ -31,7 +31,7 @@ export interface SchedulingState {
   setFindTime: (seed: FindTimeSeed | null) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<SchedulingState>>();
+const stores = new UiStoreMap<StoreApi<SchedulingState>>();
 
 export function schedulingStoreFor(ui: UiStore): StoreApi<SchedulingState> {
   const existing = stores.get(ui);

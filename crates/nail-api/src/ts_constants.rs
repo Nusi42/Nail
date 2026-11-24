@@ -1380,6 +1380,11 @@ fn plugin_writes(c: Constants) -> Result<Constants, serde_json::Error> {
         &rules,
         "Readonly<Record<ActionKind, { destructive: boolean; outgoing: boolean; can_always_allow: boolean; default_mode: ActionPolicyMode }>>",
         &["ActionKind", "ActionPolicyMode"],
+    )?
+    .add(
+        "MAX_TASK_REMINDERS",
+        "The most reminders one task written by an agent or a plug-in may carry.",
+        &crate::mcp::tools::MAX_TASK_REMINDERS,
     )
 }
 
@@ -1394,6 +1399,11 @@ fn triage(c: Constants) -> Result<Constants, serde_json::Error> {
         &JunkSettings::default(),
         "Readonly<JunkSettings>",
         &["JunkSettings"],
+    )?
+    .add(
+        "JUNK_DEFAULT_HAM_CUTOFF",
+        "The \"not junk\" cutoff of junk settings that leave it out (`JunkSettings::DEFAULT_HAM_CUTOFF`).",
+        &JunkSettings::DEFAULT_HAM_CUTOFF,
     )?
     .typed(
         "DEFAULT_NOTIFICATION_SETTINGS",

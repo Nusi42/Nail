@@ -15,7 +15,7 @@ import type {
   InferenceClassification,
   MessageId,
 } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 
 export interface MailboxTarget {
   accountId: AccountId;
@@ -53,7 +53,7 @@ export interface ExchangeUiState {
   setFocused: (accountId: AccountId, on: boolean) => void;
 }
 
-const stores = new WeakMap<UiStore, StoreApi<ExchangeUiState>>();
+const stores = new UiStoreMap<StoreApi<ExchangeUiState>>();
 
 export function exchangeStoreFor(ui: UiStore): StoreApi<ExchangeUiState> {
   const existing = stores.get(ui);

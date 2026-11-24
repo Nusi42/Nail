@@ -33,7 +33,7 @@ import type {
 import { contextTarget, type ContextTarget } from "../features/menus";
 import { messageTarget, rowTarget, type ListScope } from "./rowTargets";
 import { searchQueryOf, type SearchScope } from "../state/queries";
-import { useUiStoreApi, type UiStore } from "../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../state/uiStore";
 import { sameJson } from "../text/json";
 
 export {
@@ -87,7 +87,7 @@ export interface ListSelectionState {
 /** Without a list (a pop-out, tests): every action acts on its message. */
 export const NO_LIST_SCOPE: ListScope = { conversations: false, folderId: null };
 
-const stores = new WeakMap<UiStore, StoreApi<ListSelectionState>>();
+const stores = new UiStoreMap<StoreApi<ListSelectionState>>();
 
 /** The list-selection store of a UI store (created on first use). */
 export function listSelectionFor(ui: UiStore): StoreApi<ListSelectionState> {

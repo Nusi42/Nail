@@ -8,7 +8,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ResolvedLayout, ResolvedMenu } from "../../api/generated";
-import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
 import { findContextTarget, textTarget, type ContextTarget, type SavedSelection } from "./targets";
 
@@ -33,7 +33,7 @@ export interface MenuState {
 
 export type MenuStore = StoreApi<MenuState>;
 
-const stores = new WeakMap<UiStore, MenuStore>();
+const stores = new UiStoreMap<MenuStore>();
 
 /** The menu store of a UI store (created on first use). */
 export function menuStoreFor(ui: UiStore): MenuStore {

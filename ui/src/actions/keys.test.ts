@@ -84,6 +84,16 @@ describe("KeyMatcher", () => {
     expect(m.feed("g", ["global"])).toMatchObject({ match: { action: "long" } });
   });
 
+  it("binds the pop-out actions in windows by default", () => {
+    const m = new KeyMatcher(defaultLayout().keys);
+    expect(m.feed("ctrl+shift+o", ["window", "global"])).toMatchObject({
+      match: { action: "popout.open" },
+    });
+    expect(m.feed("ctrl+shift+m", ["window", "global"])).toMatchObject({
+      match: { action: "popout.return" },
+    });
+  });
+
   it("covers the default key map", () => {
     const m = new KeyMatcher(defaultLayout().keys);
     expect(m.feed("arrowdown", ["list", "global"])).toMatchObject({
