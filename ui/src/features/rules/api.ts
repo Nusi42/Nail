@@ -132,6 +132,7 @@ export async function runRules(
         rule_ids: [...ruleIds],
         message_ids: [...target.messageIds],
         folder_id: target.folderId,
+        list: null,
       },
       "RulesRan",
     )

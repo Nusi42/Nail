@@ -1384,6 +1384,7 @@ async fn running_rules_asks_as_their_strongest_action() {
         rule_ids,
         message_ids,
         folder_id,
+        ..
     }) = env.data.written().pop()
     else {
         panic!("{:?}", env.data.written())

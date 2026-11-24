@@ -10,6 +10,7 @@
  */
 import type {
   CalendarPreferences,
+  FreeTimeHours,
   ParsedEventText,
   ParsedSpan,
   PimIssue,
@@ -26,7 +27,41 @@ import {
   todayIn,
   toZoned,
 } from "./time";
-import { workHoursValid } from "./prefs";
+import { weekdayOf, workHoursValid } from "./prefs";
+import type { CalendarDate, ZonedDateTime } from "@internationalized/date";
+
+/**
+ * The stretches of `[fromMs, toMs)` that `FindFreeTime` with `hours`
+ * searches (R8, ADR 0251; the core's `within_hours`): the whole range for
+ * `any`, else the hours of each chosen day in `tz` (local wall times, so
+ * summer-time days keep their hours; a skipped time moves past the gap).
+ */
+export function freeTimeWindows(
+  hours: FreeTimeHours,
+  prefs: CalendarPreferences,
+  fromMs: number,
+  toMs: number,
+  tz: string,
+): (readonly [number, number])[] {
+  if (hours.kind === "any") return [[fromMs, toMs]];
+  const { work_hours, work_days } = hours.kind === "working-hours" ? prefs : hours;
+  const out: (readonly [number, number])[] = [];
+  const at = (day: CalendarDate, minute: number): ZonedDateTime =>
+    minute >= 24 * 60
+      ? toZoned(day.add({ days: 1 }), tz)
+      : toZoned(day, tz).set({ hour: Math.floor(minute / 60), minute: minute % 60 });
+  let day = todayIn(tz, fromMs);
+  for (let guard = 0; guard < 400; guard++) {
+    if (toZoned(day, tz).toDate().getTime() >= toMs) break;
+    if (work_days.includes(weekdayOf(day))) {
+      const open = Math.max(fromMs, at(day, work_hours.start_minute).toDate().getTime());
+      const close = Math.min(toMs, at(day, work_hours.end_minute).toDate().getTime());
+      if (close > open) out.push([open, close]);
+    }
+    day = day.add({ days: 1 });
+  }
+  return out;
+}
 
 /** A fresh copy of the default preferences (the mock state owns it). */
 export function defaultPreferences(): CalendarPreferences {

@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::agents::ActionKind;
 use crate::mcp::McpScope;
+use crate::pim::calendar::AlarmRelated;
+use crate::pim::{Alarm, AlarmAction, AlarmTrigger, is_utc_instant};
 use crate::rules::RuleAction;
 
 /// Longest idempotency key (characters).
@@ -578,10 +580,88 @@ pub struct UpsertTaskArgs {
     /// Link the task to this message (`nail://messages/<id>`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub related_message_id: Option<String>,
+    /// Reminders (replace the existing ones; `[]` removes them; at most
+    /// [`MAX_TASK_REMINDERS`]). R8, ADR 0251.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reminders: Option<Vec<TaskReminderArg>>,
     /// Repeating the key repeats the first call's result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
 }
+
+/// Most reminders one `upsert_task` call (or a plug-in task write) sets.
+pub const MAX_TASK_REMINDERS: usize = 10;
+
+/// One reminder of a task written by an agent or a plug-in
+/// (`upsert_task`, R8, ADR 0251): exactly one of `minutes_before` (before
+/// the due time, or the start of a task without one) and `at`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct TaskReminderArg {
+    /// Minutes before the due time (0 = at the due time).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minutes_before: Option<u32>,
+    /// At a fixed instant (RFC 3339 UTC, `…Z`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<String>,
+}
+
+impl TaskReminderArg {
+    /// The display alarm this reminder stands for; an English reason when
+    /// it names neither or both forms, or `at` is not a UTC instant.
+    pub fn to_alarm(&self) -> Result<Alarm, String> {
+        let trigger = match (self.minutes_before, &self.at) {
+            (Some(minutes), None) => AlarmTrigger::Relative {
+                offset_secs: -i64::from(minutes) * 60,
+                related: AlarmRelated::End,
+            },
+            (None, Some(at)) if is_utc_instant(at) => AlarmTrigger::Absolute { at: at.clone() },
+            (None, Some(at)) => return Err(format!("{at:?} is not an RFC 3339 UTC instant")),
+            _ => return Err("a reminder takes exactly one of minutes_before and at".to_owned()),
+        };
+        Ok(Alarm {
+            uid: None,
+            action: AlarmAction::Display,
+            trigger,
+            description: None,
+            repeat: None,
+            acknowledged: None,
+        })
+    }
+}
+
+/// `create_event_from_text`: a new event from a sentence ("Lunch with Bob
+/// tomorrow 12:30 at Corner café"), read like the calendar's quick add
+/// (`ParseEventText`, R8, ADR 0251) and created like `create_event`
+/// (policy kind `calendar`, through the operation queue). A sentence
+/// without a time is refused; nothing is created then.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct CreateEventFromTextArgs {
+    /// The sentence (at most `MAX_EVENT_TEXT` characters).
+    pub text: String,
+    /// Calendar (from `nail://calendars`); default: the calendar quick add
+    /// picks (the preferred one, else the first writable).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calendar_id: Option<String>,
+    /// IANA zone the times are meant in (default: the calendar
+    /// preferences' view zone, else the system's).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tz: Option<String>,
+    /// Language of the sentence (BCP 47; default English).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locale: Option<String>,
+    /// Only read the sentence and answer what would be created.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dry_run: bool,
+    /// Repeating the key repeats the first call's result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+}
+
+/// The `create_event_from_text` tool's name (added to [`MCP_TOOLS`] with
+/// its handler; ADR 0251).
+pub const CREATE_EVENT_FROM_TEXT_TOOL: &str = "create_event_from_text";
 
 /// `create_rule`: add a filter rule from its text form.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -782,6 +862,60 @@ mod tests {
             }
         }
         assert_eq!(tool("nope"), None);
+    }
+
+    #[test]
+    fn task_reminders_become_display_alarms() {
+        let args: UpsertTaskArgs = serde_json::from_value(json!({
+            "title": "Pay",
+            "reminders": [{"minutes_before": 15}, {"at": "2026-12-01T08:00:00Z"}]
+        }))
+        .unwrap();
+        let alarms: Vec<Alarm> = args
+            .reminders
+            .unwrap()
+            .iter()
+            .map(|r| r.to_alarm().unwrap())
+            .collect();
+        assert_eq!(
+            alarms[0].trigger,
+            AlarmTrigger::Relative {
+                offset_secs: -900,
+                related: AlarmRelated::End
+            }
+        );
+        assert_eq!(
+            alarms[1].trigger,
+            AlarmTrigger::Absolute {
+                at: "2026-12-01T08:00:00Z".into()
+            }
+        );
+        assert!(TaskReminderArg::default().to_alarm().is_err());
+        let both = TaskReminderArg {
+            minutes_before: Some(5),
+            at: Some("2026-12-01T08:00:00Z".into()),
+        };
+        assert!(both.to_alarm().is_err());
+        let local = TaskReminderArg {
+            minutes_before: None,
+            at: Some("2026-12-01T08:00:00".into()),
+        };
+        assert!(local.to_alarm().is_err());
+        // Left out = unchanged.
+        let plain: UpsertTaskArgs = serde_json::from_value(json!({"title": "x"})).unwrap();
+        assert_eq!(plain.reminders, None);
+    }
+
+    #[test]
+    fn create_event_from_text_args() {
+        let args: CreateEventFromTextArgs =
+            serde_json::from_value(json!({"text": "Lunch with Bob tomorrow 12:30"})).unwrap();
+        assert_eq!(args.text, "Lunch with Bob tomorrow 12:30");
+        assert!(!args.dry_run && args.calendar_id.is_none() && args.tz.is_none());
+        assert_eq!(
+            serde_json::to_value(&args).unwrap(),
+            json!({"text": "Lunch with Bob tomorrow 12:30"})
+        );
     }
 
     #[test]

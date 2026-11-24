@@ -648,6 +648,8 @@ fn task(input: TaskIn, task_id: Option<String>) -> Result<UpsertTaskArgs, ApiErr
         completed: input.completed,
         priority: input.priority,
         related_message_id: related,
+        // Plug-in reminders arrive with the core package (ADR 0251).
+        reminders: None,
         idempotency_key: None,
     })
 }

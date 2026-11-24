@@ -116,6 +116,7 @@ fn every_pim_request() -> Vec<Request> {
             duration_minutes: 30,
             calendar_ids: None,
             tz: "UTC".into(),
+            hours: nail_api::pim::FreeTimeHours::Any,
         },
         Request::ListAddressBooks { source_id: None },
         Request::CreateAddressBook {

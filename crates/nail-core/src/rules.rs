@@ -505,10 +505,19 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     .await?,
             ),
         },
+        Request::RunRules { list: Some(_), .. } => {
+            // The contract of R8 (ADR 0251): the list form arrives with the
+            // core package; until then it is refused, not run on less.
+            return Err(ApiError::invalid_request(
+                "RunRules with a list target is not supported yet",
+            )
+            .into());
+        }
         Request::RunRules {
             rule_ids,
             message_ids,
             folder_id,
+            list: None,
         } => Response::RulesRan {
             runs: service
                 .run_rules_now(&rule_ids, &message_ids, folder_id.as_ref())

@@ -67,11 +67,13 @@ use crate::ids::{
 use crate::launch::LaunchRequest;
 use crate::links::LinkOutcome;
 use crate::localized::LocalizedMessage;
-use crate::mail_actions::{MailAction, MailActionResult, MailTargetResolution, MessageTarget};
+use crate::mail_actions::{
+    ListTarget, MailAction, MailActionResult, MailTargetResolution, MessageTarget,
+};
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpRateLimits, McpServerInfo, McpSettings};
 use crate::ops::{FlagChange, MoveTarget, OpStatus, OpsSummary};
 use crate::pim::calendar::FreeSlot;
-use crate::pim::calendar_view::{CalendarPreferences, ParsedEventText};
+use crate::pim::calendar_view::{CalendarPreferences, FreeTimeHours, ParsedEventText};
 use crate::pim::contact::DuplicateGroup;
 use crate::pim::import::{PimImportPreview, PimImportResult, PimImportSource};
 use crate::pim::source::{PimOpStatus, PimSourceTestResult};
@@ -663,16 +665,28 @@ pub enum Request {
     /// Every id is checked first: an unknown or broken rule runs nothing.
     /// Answered with [`Response::RulesRan`]; progress arrives as
     /// [`Event::RuleRunFinished`] (R1, ADR 0219).
+    ///
+    /// With `list` (R8, ADR 0251) the rules run on a whole message list
+    /// ("Run rules on selected" after select all): the messages the list's
+    /// rows stand for (a conversation row = its messages in the listed
+    /// folder, as for picked rows) minus the `except` rows, only those the
+    /// core held at `as_of` ([`crate::ListTarget`], the R5 shape of ADR
+    /// 0235). The core runs each rule in parts like a large mail action
+    /// (ADR 0236) and records one [`RuleRun`] per rule, undone as a whole.
+    /// `list` excludes `message_ids` and `folder_id` (`invalid_request`).
     RunRules {
         /// The rules (at least one; duplicates count once).
         rule_ids: Vec<RuleId>,
-        /// Run on these messages; empty = on `folder_id` or each rule's
-        /// scope.
+        /// Run on these messages; empty = on `list`, `folder_id` or each
+        /// rule's scope.
         #[serde(default)]
         message_ids: Vec<MessageId>,
         /// Run on this folder; `null` = each rule's scope.
         #[serde(default)]
         folder_id: Option<FolderId>,
+        /// Run on this whole message list; `null` = not a list run.
+        #[serde(default)]
+        list: Option<ListTarget>,
     },
     /// Recent rule runs, newest first. Answered with [`Response::RuleRuns`].
     ListRuleRuns {
@@ -1779,8 +1793,10 @@ pub enum Request {
         message_id: MessageId,
     },
     /// Free stretches of at least `duration_minutes` in `[from, to)`,
-    /// counting busy (opaque, not cancelled) occurrences of the calendars.
-    /// Answered with [`Response::FreeTime`].
+    /// counting busy (opaque, not cancelled) occurrences of the calendars,
+    /// within `hours` of each day (R8, ADR 0251). Answered with
+    /// [`Response::FreeTime`]; `invalid_request` with a `pim-issue-*` id
+    /// for custom hours with [`FreeTimeHours::issues`].
     FindFreeTime {
         /// Range start (RFC 3339).
         from: String,
@@ -1791,8 +1807,13 @@ pub enum Request {
         /// Calendars that count; `null` = every visible one.
         #[serde(default)]
         calendar_ids: Option<Vec<CalendarId>>,
-        /// IANA zone for all-day and floating events.
+        /// IANA zone for all-day and floating events, and the zone the
+        /// days of `hours` are counted in.
         tz: String,
+        /// Which hours of each day count; default [`FreeTimeHours::Any`]
+        /// (around the clock).
+        #[serde(default)]
+        hours: FreeTimeHours,
     },
 
     // --- Calendar preferences and quick create (R7, ADR 0246) ---

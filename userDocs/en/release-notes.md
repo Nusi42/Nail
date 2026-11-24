@@ -3,6 +3,22 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.12 (`0.8.12`)
+
+Smaller improvements across mail, the calendar, rules and windows, taken from
+the list of agreed follow-ups, and steadier automated tests.
+
+### New in 0.8.12
+
+- **Free time within your working hours** — finding free time (the free-time
+  view, scheduling and agents asking Nail) offers only slots inside the working
+  hours and work days set in Settings → Calendar & contacts.
+
+### Fixed in 0.8.12
+
+- Past events in the agenda stay readable: they are shown in a muted text
+  colour instead of fading the whole entry.
+
 ## Nail 0.8.11 (`0.8.11`)
 
 A calendar that reads well: every calendar in its own colour, events you can

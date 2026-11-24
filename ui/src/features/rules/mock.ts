@@ -27,6 +27,7 @@ import {
   type MockCore,
 } from "../../api/mockMail";
 import { MOCK_NOW } from "../../api/mockData";
+import { listTargetMessageIds } from "../../api/mockMailActions";
 import { answerMessageFacts } from "./fromMessage/mock";
 import { explain, resolveFolder } from "./mockEval";
 import { ruleFromMessage } from "./model";
@@ -344,24 +345,31 @@ function runOne(
 /**
  * `RunRules` (and `RunRule`, one rule): the rules in file order, each once
  * and as its own run, on the named messages, the folder, or every message
- * (the mock's stand-in for each rule's scope). Every id is checked first.
+ * (the mock's stand-in for each rule's scope), or the messages of a whole
+ * list (`listIds`, R8: recorded like named messages). Every id is checked
+ * first.
  */
 function runRules(
   core: MockCore,
   ruleIds: readonly string[],
   messageIds: readonly string[],
   folderId: string | null,
+  listIds: readonly string[] | null = null,
 ): RuleRun[] | Response {
   const s = state(core);
   if (ruleIds.length === 0)
     return errorResponse("invalid_request", "name at least one rule to run");
   const missing = ruleIds.find((id) => !s.rules.some((r) => r.id === id));
   if (missing !== undefined) return errorResponse("not_found", `rule ${missing} not found`);
-  const messages = pool(core, folderId, messageIds);
+  const messages =
+    listIds === null
+      ? pool(core, folderId, messageIds)
+      : core.data.messages.filter((m) => listIds.includes(m.id));
   if (!messages) return errorResponse("not_found", `folder ${String(folderId)} not found`);
+  const named = listIds ?? messageIds;
   const target: RuleRunTarget =
-    messageIds.length > 0
-      ? { kind: "messages", count: messageIds.length }
+    listIds !== null || named.length > 0
+      ? { kind: "messages", count: named.length }
       : folderId !== null
         ? { kind: "folder", folder_id: folderId }
         : { kind: "scope" };
@@ -451,7 +459,21 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
       return run ? { type: "RuleRan", run } : errorResponse("internal", "the rule run was lost");
     }
     case "RunRules": {
-      const runs = runRules(core, request.rule_ids, request.message_ids, request.folder_id);
+      let listIds: string[] | null = null;
+      if (request.list !== null) {
+        if (request.message_ids.length > 0 || request.folder_id !== null)
+          return errorResponse("invalid_request", "a list run names no messages or folder");
+        const ids = listTargetMessageIds(core, request.list);
+        if (!Array.isArray(ids)) return ids;
+        listIds = ids;
+      }
+      const runs = runRules(
+        core,
+        request.rule_ids,
+        request.message_ids,
+        request.folder_id,
+        listIds,
+      );
       return Array.isArray(runs) ? { type: "RulesRan", runs } : runs;
     }
     case "ListRuleRuns":

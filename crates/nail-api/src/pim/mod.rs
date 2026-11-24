@@ -52,8 +52,8 @@ pub use calendar::{
     FreeSlot, Organizer, PimAttachment, Recurrence, RecurrenceEnd, RecurrenceRule,
 };
 pub use calendar_view::{
-    CalendarColor, CalendarPreferences, PaletteColor, ParsedEventText, ParsedPart, ParsedSpan,
-    WorkHours,
+    CalendarColor, CalendarPreferences, FreeTimeHours, PaletteColor, ParsedEventText, ParsedPart,
+    ParsedSpan, WorkHours,
 };
 pub use contact::{
     AddressBook, AddressBookSettings, Contact, ContactFields, ContactGroup, ContactMatch,

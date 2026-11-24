@@ -94,9 +94,10 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
             duration_minutes,
             calendar_ids,
             tz,
+            hours,
         } => Response::FreeTime {
             slots: service
-                .free_time(&from, &to, duration_minutes, calendar_ids, &tz)
+                .free_time(&from, &to, duration_minutes, calendar_ids, &tz, &hours)
                 .await?,
         },
         Request::ListTasks {
@@ -464,9 +465,15 @@ impl Service {
         minutes: u32,
         calendars: Option<Vec<CalendarId>>,
         tz: &str,
+        hours: &nail_api::pim::FreeTimeHours,
     ) -> Result<Vec<FreeSlot>> {
         let (from, to) = range(from, to)?;
-        request_zone(tz)?;
+        let zone = request_zone(tz)?;
+        check(&hours.issues())?;
+        let within = match hours {
+            nail_api::pim::FreeTimeHours::Any => None,
+            other => other.resolve(&self.calendar_preferences().await?),
+        };
         let tz = tz.to_owned();
         let busy = self
             .inner
@@ -475,15 +482,21 @@ impl Service {
                 s.busy_intervals(from, to, calendars.as_deref(), &tz, &Expander::default())
             })
             .await?;
-        Ok(
-            nail_store::pim::free_slots(&busy, from, to, i64::from(minutes.max(1)) * 60)
-                .into_iter()
-                .map(|(s, e)| FreeSlot {
-                    start: nail_store::pim::time::utc_string(s),
-                    end: nail_store::pim::time::utc_string(e),
-                })
-                .collect(),
-        )
+        let min_secs = i64::from(minutes.max(1)) * 60;
+        let slots = nail_store::pim::free_slots(&busy, from, to, min_secs);
+        let slots = match within {
+            Some((work_hours, work_days)) => {
+                super::free_time::within_hours(&slots, zone, work_hours, &work_days, min_secs)
+            }
+            None => slots,
+        };
+        Ok(slots
+            .into_iter()
+            .map(|(s, e)| FreeSlot {
+                start: nail_store::pim::time::utc_string(s),
+                end: nail_store::pim::time::utc_string(e),
+            })
+            .collect())
     }
 
     pub(crate) async fn create_event(

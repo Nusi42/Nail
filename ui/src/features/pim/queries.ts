@@ -158,6 +158,7 @@ export function useFreeTime(range: { from: string; to: string }, minutes: number
             duration_minutes: minutes,
             calendar_ids: null,
             tz,
+            hours: { kind: "any" },
           },
           "FreeTime",
         )

@@ -1788,3 +1788,15 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `PimState.planSlot`), `newEvent.ts` `writableTaskLists`, `prefs.ts` `workHourRange` / `workHoursValid` (pinned by
   `ts-vectors/calendar.json`), `eventLook.ts` `lengthText` is the one length wording, `peopleSummary` the one
   people summary, `EventPopover.tsx` `focusAfterDelete`. e2e `r7-p3-tasks.spec.ts`.
+
+### R8
+
+- Contract (ADR 0251): `nail_api::pim::calendar_view::FreeTimeHours` is `FindFreeTime.hours`; the core cuts free
+  stretches to one day's hours on the chosen days (`crates/nail-core/src/pim/free_time.rs` `within_hours`, the
+  working day from the calendar preferences), and the MCP tool `find_free_time` builds `hours` from
+  `working_hours` / `day_start` / `day_end` (`crates/nail-mcp/src/pim.rs` `free_time_hours`). `RunRules.list` is
+  the R5 `ListTarget` (refused by the core until the core package); `UpsertTaskArgs.reminders` /
+  `TaskReminderArg::to_alarm` and `CreateEventFromTextArgs` (`nail_api::mcp::tools`) are the shapes of task
+  reminders and of `create_event_from_text`. UI mock: `pim/mockCalendarView.ts` `freeTimeWindows`,
+  `api/mockMailActions.ts` `listTargetMessageIds` (the rules mock's list runs). Texts: `status-retry-failed` /
+  `status-dismiss-failed` (`app.ftl`), slot `pim-actions.ftl`.

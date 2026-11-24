@@ -314,6 +314,8 @@ describe("several rules in the rules window", () => {
         rule_ids: ["rust-announcements", "tag-all"],
         message_ids: [],
         folder_id: INBOX,
+
+        list: null,
       },
     ]);
     const tagged = () =>

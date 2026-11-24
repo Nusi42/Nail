@@ -44,6 +44,7 @@ import type { ExportOptions } from "./ExportOptions";
 import type { ExportSource } from "./ExportSource";
 import type { FlagChange } from "./FlagChange";
 import type { FolderId } from "./FolderId";
+import type { FreeTimeHours } from "./FreeTimeHours";
 import type { GmailLabelId } from "./GmailLabelId";
 import type { GmailLabelSettings } from "./GmailLabelSettings";
 import type { HistoryScope } from "./HistoryScope";
@@ -61,6 +62,7 @@ import type { KeyFilter } from "./KeyFilter";
 import type { KeyId } from "./KeyId";
 import type { KeyLookupSource } from "./KeyLookupSource";
 import type { LayoutPatch } from "./LayoutPatch";
+import type { ListTarget } from "./ListTarget";
 import type { MailAction } from "./MailAction";
 import type { MailBatchId } from "./MailBatchId";
 import type { MailProtocol } from "./MailProtocol";
@@ -525,14 +527,18 @@ folder_id: FolderId | null, } | { "type": "RunRules",
  */
 rule_ids: Array<RuleId>, 
 /**
- * Run on these messages; empty = on `folder_id` or each rule's
- * scope.
+ * Run on these messages; empty = on `list`, `folder_id` or each
+ * rule's scope.
  */
 message_ids: Array<MessageId>, 
 /**
  * Run on this folder; `null` = each rule's scope.
  */
-folder_id: FolderId | null, } | { "type": "ListRuleRuns", 
+folder_id: FolderId | null, 
+/**
+ * Run on this whole message list; `null` = not a list run.
+ */
+list: ListTarget | null, } | { "type": "ListRuleRuns", 
 /**
  * Runs of this rule; `null` = of all rules.
  */
@@ -1393,9 +1399,15 @@ duration_minutes: number,
  */
 calendar_ids: Array<CalendarId> | null, 
 /**
- * IANA zone for all-day and floating events.
+ * IANA zone for all-day and floating events, and the zone the
+ * days of `hours` are counted in.
  */
-tz: string, } | { "type": "GetCalendarPreferences" } | { "type": "SetCalendarPreferences", 
+tz: string, 
+/**
+ * Which hours of each day count; default [`FreeTimeHours::Any`]
+ * (around the clock).
+ */
+hours: FreeTimeHours, } | { "type": "GetCalendarPreferences" } | { "type": "SetCalendarPreferences", 
 /**
  * The preferences.
  */

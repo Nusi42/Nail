@@ -8,6 +8,23 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Added — backlog features and stable tests, contract (ADR 0251)
+
+- `FindFreeTime` takes `hours` (`FreeTimeHours`: around the clock, the
+  calendar preferences' working hours and days, or given hours and days);
+  the core cuts the free stretches per day in the request's zone, and the
+  MCP tool `find_free_time` asks it instead of cutting on its own.
+- `RunRules` takes a list target (`list`, the shape of the bulk actions'
+  select all); the core accepts it with the core package.
+- The shapes of task reminders for agents and plug-ins
+  (`UpsertTaskArgs.reminders`, `TaskReminderArg`) and of the MCP tool
+  `create_event_from_text` (`CreateEventFromTextArgs`).
+
+### Fixed — calendar agenda contrast
+
+- Past entries of the calendar agenda keep a readable contrast (muted text
+  instead of a faded entry).
+
 ## [0.8.11] — 2026-11-24
 
 ### Added — a calendar that reads well, contract (ADR 0246)

@@ -1669,6 +1669,89 @@ pinned by `ts-vectors/calendar.json`; `nail-event-text` start on the first named
 a time beside a day count stays in the title; a cancelled keyboard range clears. e2e `r7-p3-tasks.spec.ts`. Next:
 the human gate on the 0.8.11 installer.
 
+### Wave R8 (backlog features and stable tests)
+
+A wave of feature fixes and improvements from `docs/backlog.md`, the two calendar defects left from R7 (the demo
+"Personal" calendar's colour close to the palette blue; the title of a short meeting cut in the week view although
+the card has room) and every known flaky test fixed at its cause. Release 0.8.12. Contract ADR 0251.
+
+#### Scope decisions for R8
+
+- **Free time:** `FindFreeTime` takes `hours` (`FreeTimeHours`: `any`, `working-hours` = the calendar preferences
+  of ADR 0250, `custom`); the core cuts the stretches per day in the request's zone; the UI shows them as they come
+  and the MCP tool no longer cuts on its own.
+- **Rules on a whole list:** `RunRules` takes the R5 list target (`list`, ADR 0235), run in parts with one run per
+  rule, undone as a whole; a list run excludes `message_ids` / `folder_id`.
+- **Programs:** `upsert_task` and the plug-in task writes take `reminders` (`TaskReminderArg`); MCP
+  `create_event_from_text` reads a sentence with `ParseEventText` and creates the event like `create_event`; the
+  command palette gets "New event from text".
+- **Calendar defects:** distinct seed colours plus one display rule that keeps visible calendars' colours apart
+  (perceptual distance, `colors.ts`); a short event's title fits whenever the card's width allows (Playwright at
+  1440×900 and 1280×800).
+- **Stable tests:** causes fixed, no longer time-outs, retries or skips; races in product code fixed there with a
+  regression test; each fixed test ten runs in a row under parallel load.
+- **Shared texts:** `status-retry-failed` / `status-dismiss-failed` (`app.ftl`). New locale slot `pim-actions.ftl`;
+  no new crate or feature folder.
+- **Release:** "Nail 0.8.12" in the release notes and `CHANGELOG.md` `[Unreleased]` (slots prepared by the
+  contract); packages add their items, the integrator merges them.
+
+#### Packages of R8
+
+Packages use the contract's pieces and do not change them (`FreeTimeHours`, the `RunRules` list field,
+`TaskReminderArg`, `CreateEventFromTextArgs`, the mock's `freeTimeWindows` / `listTargetMessageIds`, the shared
+texts); a needed change goes into the report for the integrator. Each package removes the backlog rows it finishes
+(rows marked "(check)" are confirmed first; when already done, only the row goes).
+
+- **Contract (done):** ADR 0251; `FreeTimeHours` and `FindFreeTime.hours` (implemented: `nail-core`
+  `pim/free_time.rs`, the MCP tool builds `hours`); `RunRules.list` (shape; the core refuses it until P3); the
+  `UpsertTaskArgs.reminders` / `TaskReminderArg` and `CreateEventFromTextArgs` shapes; generated TS; the UI mock's
+  free time by `hours` (`mockCalendarView.ts` `freeTimeWindows`) and list runs (`mockMailActions.ts`
+  `listTargetMessageIds`); shared texts; the `pim-actions.ftl` slot; release slots.
+- **P1 — calendar and PIM UI (parallel):** `ui/src/features/pim`, `ui/src/features/scheduling`, the contact card,
+  the calendar parts of `defaults/theme.kdl`, the seed colour values (and their tests) in
+  `crates/nail-testkit-net/src/dav.rs` and any demo seed that sets calendar colours, `pim-actions.ftl`, e2e
+  `r8-p1-*.spec.ts`. The two calendar defects; rows "Answering one occurrence from the quick look", "Drawing events
+  on touch screens", "Icons for place and call", "Right-click menus for PIM items" (check), "Conflict choice for
+  events", "Recent mail on the contact card", "Undo for invitation answers" (check), "Quick create elsewhere" (the
+  palette command `calendar.new-event-from-text`), "Free time" (the UI uses `hours`, `freeStretchesOfDay` goes).
+- **P2 — mail, composer, rules, settings and windows UI (parallel):** the other UI features (mail, composer,
+  rules, settings, shell, window layer, palette), their theme parts, catalogs and e2e `r8-p2-*.spec.ts`. Rows
+  "Favorites as views", "Searched folder in the tree", "Several unsaved composers", "Background composer report",
+  "Composer preview height", "Monospace text areas" (check), "Run selected rules from the menu" (check), "Run rules
+  on a whole list" (UI: `RunRules` with `list` after select all), "Retry / Dismiss errors" (the shared texts),
+  "Layout presets", "Dialog footer", "Settings drafts", "Pop-out key bindings", "Menus and settings page" (check),
+  "Search hint key" (check), "Toolbar customizer", "Rail".
+- **P3 — core (parallel):** the crates (except the slots of P1 and P4), `nail-api`, MCP tool docs, their Rust
+  tests. Behind the contract: free time tests (time zones, summer time), the `RunRules` list form (parts, one undo,
+  `as_of`), task reminders on the MCP and plug-in paths, the `create_event_from_text` tool; rows "Feed
+  subscriptions", "Reminders after a time-zone change", "`RDATE;VALUE=PERIOD`", "Mass failure logging", "Sieve
+  status after a restart", "Sieve details", "Inexact server search hits", "Unified list order", "Junk classifier",
+  "Rule text issues".
+- **P4 — tests and stability (parallel):** e2e specs and `e2e/support`, the flaky Rust tests' files
+  (`crates/nail-core/src/replay.rs` tests module, `crates/nail-core/tests/exchange.rs`, the `mail_actions` tests,
+  `nail-bench`, the `nail-smime` tests) and the races they expose (coordinated with P3 in the report), `scripts/`
+  test tooling. Every "Flaky: …" row, "Listing throughput budgets" (check), the R7 load flakes
+  (`replay::tests::a_deferred_pass_logs_once_at_info_without_the_text`, `mail_actions`
+  `the_lab_move_conversation_on_the_imap_server`), e2e `r4-status-bulk` "a lagging event stream still ends idle
+  with correct lists" (the list never showed the row within 60 s once under full-suite load), and the rows "Rule list drag", "Auto-schedule e2e", "Dialogs
+  without e2e", "Exchange move race" (check).
+- **Integration:** rebase, renumber package ADRs, resolve overlaps (`theme.kdl`, shared ftl, release notes, e2e
+  support, backlog edits), regenerate the API and snapshots once, the 0.8.12 release notes and `CHANGELOG.md`,
+  docs, memory `r8-status`, the full suite incl. `npm run e2e` at the default workers and `npm run visual`.
+
+Gates: every suite green, the flaky fixes holding at the default workers; Find a time, scheduling and the MCP tool
+offer only slots inside the working hours from Settings; "Run rules on selected" after select all runs on every
+row of the list and is undone in one step; an agent creates a task with a reminder and an event from "Lunch with
+Bob tomorrow 12:30"; the palette's "New event from text" creates that event; in the demo seeds every visible
+calendar has a colour distinct from the others; every demo event title in the week view at 1440×900 and 1280×800
+is fully visible when the card has room; each backlog row the packages claim is done and removed.
+
+*Status (contract):* done (ADR 0251). Core: `FindFreeTime.hours` implemented (the MCP tool uses it), the `RunRules`
+list field (refused by the core until P3), the task-reminder and text-event shapes; UI: the generated contract, the
+mock's answers, shared texts, the `pim-actions.ftl` slot, release slots. Past agenda entries use the muted text
+colour instead of 55 % opacity (they failed the contrast scan whenever the clock put a demo event in the past).
+Next: P1–P4 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

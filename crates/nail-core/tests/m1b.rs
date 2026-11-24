@@ -1158,6 +1158,7 @@ Pay.
         rule_ids,
         message_ids: vec![message.id.clone()],
         folder_id: None,
+        list: None,
     };
 
     // Refused before anything runs: no rules, or one unknown rule.
@@ -1364,6 +1365,7 @@ Read me.
                 rule_ids: vec![rule.id.clone()],
                 message_ids,
                 folder_id,
+                list: None,
             },
         )
         .await

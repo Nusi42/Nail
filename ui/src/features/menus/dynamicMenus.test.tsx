@@ -125,7 +125,7 @@ describe("a menu source as a submenu", () => {
     await user.click(within(rules).getByRole("menuitem", { name: "@home" }));
     await waitFor(() => {
       expect(requestsOf(env, "RunRules")).toEqual([
-        { type: "RunRules", rule_ids: ["at-home"], message_ids: [], folder_id: INBOX },
+        { type: "RunRules", rule_ids: ["at-home"], message_ids: [], folder_id: INBOX, list: null },
       ]);
     });
     expect(screen.queryByRole("menu")).toBeNull();

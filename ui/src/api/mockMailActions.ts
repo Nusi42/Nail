@@ -17,6 +17,7 @@ import type {
   MailActionResult,
   MailBatchId,
   MailList,
+  ListTarget,
   MessageId,
   MessageSummary,
   MessageTarget,
@@ -491,6 +492,17 @@ function undoMailAction(core: MockCore, batchId: MailBatchId): Response {
 }
 
 /** Answers a mail-action request. */
+/**
+ * The messages a whole message list stands for when rules run on it
+ * (`RunRules` with `list`, R8, ADR 0251): every row minus the exceptions,
+ * only what the core held at `as_of`, a conversation row as its messages in
+ * the listed folder (the "listed" reach, the one of `archive`).
+ */
+export function listTargetMessageIds(core: MockCore, list: ListTarget): MessageId[] | Response {
+  const resolved = resolve(core, [{ kind: "list", ...list }], { type: "archive" });
+  return "type" in resolved ? resolved : resolved.messages.map((m) => m.id);
+}
+
 export function answerMailAction(core: MockCore, request: MailActionRequest): Response {
   switch (request.type) {
     case "ApplyMailAction":

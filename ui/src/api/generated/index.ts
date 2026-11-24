@@ -234,6 +234,7 @@ export type * from "./FreeBusyIssue";
 export type * from "./FreeBusyResult";
 export type * from "./FreeBusySource";
 export type * from "./FreeSlot";
+export type * from "./FreeTimeHours";
 export type * from "./Frequency";
 export type * from "./GmailCategory";
 export type * from "./GmailFolder";

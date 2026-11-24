@@ -304,12 +304,11 @@ async fn invalid_events_are_refused() {
     );
 }
 
-#[tokio::test]
-async fn free_time_skips_busy_events() {
-    let (service, _d, _c) = TempService::quiet().into_parts();
-    let calendar = default_calendar(&service).await;
+/// A busy event on Monday 2026-10-05 10:00-11:00 UTC in the default calendar.
+async fn add_busy_hour(service: &Service) {
+    let calendar = default_calendar(service).await;
     ok(
-        &service,
+        service,
         Request::CreateEvent {
             calendar_id: calendar,
             fields: Box::new(EventFields::new(
@@ -321,6 +320,12 @@ async fn free_time_skips_busy_events() {
         },
     )
     .await;
+}
+
+#[tokio::test]
+async fn free_time_skips_busy_events() {
+    let (service, _d, _c) = TempService::quiet().into_parts();
+    add_busy_hour(&service).await;
     let Response::FreeTime { slots } = ok(
         &service,
         Request::FindFreeTime {
@@ -329,6 +334,7 @@ async fn free_time_skips_busy_events() {
             duration_minutes: 30,
             calendar_ids: None,
             tz: "UTC".into(),
+            hours: nail_api::pim::FreeTimeHours::Any,
         },
     )
     .await
@@ -345,6 +351,68 @@ async fn free_time_skips_busy_events() {
             ("2026-10-05T09:00:00Z", "2026-10-05T10:00:00Z"),
             ("2026-10-05T11:00:00Z", "2026-10-05T12:00:00Z")
         ]
+    );
+}
+
+#[tokio::test]
+async fn free_time_follows_the_working_hours_of_the_preferences() {
+    let (service, _d, _c) = TempService::quiet().into_parts();
+    add_busy_hour(&service).await;
+    let find = |hours: nail_api::pim::FreeTimeHours| Request::FindFreeTime {
+        // Saturday 2026-10-03 to Tuesday 2026-10-06.
+        from: "2026-10-03T00:00:00Z".into(),
+        to: "2026-10-06T00:00:00Z".into(),
+        duration_minutes: 30,
+        calendar_ids: None,
+        tz: "UTC".into(),
+        hours,
+    };
+    let spans = |response: Response| match response {
+        Response::FreeTime { slots } => slots
+            .into_iter()
+            .map(|s| (s.start, s.end))
+            .collect::<Vec<_>>(),
+        other => panic!("{other:?}"),
+    };
+    // The default preferences: 8:00-18:00, Monday to Friday.
+    let working = spans(ok(&service, find(nail_api::pim::FreeTimeHours::WorkingHours)).await);
+    assert_eq!(
+        working,
+        [
+            (
+                "2026-10-05T08:00:00Z".to_owned(),
+                "2026-10-05T10:00:00Z".to_owned()
+            ),
+            (
+                "2026-10-05T11:00:00Z".to_owned(),
+                "2026-10-05T18:00:00Z".to_owned()
+            )
+        ]
+    );
+    let custom = nail_api::pim::FreeTimeHours::Custom {
+        work_hours: nail_api::pim::WorkHours {
+            start_minute: 9 * 60,
+            end_minute: 10 * 60,
+        },
+        work_days: vec![nail_api::triage::Weekday::Sat],
+    };
+    assert_eq!(
+        spans(ok(&service, find(custom)).await),
+        [(
+            "2026-10-03T09:00:00Z".to_owned(),
+            "2026-10-03T10:00:00Z".to_owned()
+        )]
+    );
+    let broken = nail_api::pim::FreeTimeHours::Custom {
+        work_hours: nail_api::pim::WorkHours {
+            start_minute: 600,
+            end_minute: 540,
+        },
+        work_days: Vec::new(),
+    };
+    assert_eq!(
+        error(&service, find(broken)).await,
+        ErrorCode::InvalidRequest
     );
 }
 

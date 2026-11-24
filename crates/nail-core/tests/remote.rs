@@ -823,11 +823,13 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
             rule_ids: vec![nail_api::RuleId::from("any")],
             message_ids: vec![message.id.clone()],
             folder_id: None,
+            list: None,
         },
         Request::RunRules {
             rule_ids: vec![nail_api::RuleId::from("any")],
             message_ids: vec![],
             folder_id: Some(message.folder_id.clone()),
+            list: None,
         },
         // A dry run on named messages is checked like a run on them.
         Request::TestRule {

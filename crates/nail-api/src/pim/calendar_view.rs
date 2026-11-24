@@ -208,6 +208,80 @@ impl Default for CalendarPreferences {
     }
 }
 
+/// Which hours of each day [`crate::Request::FindFreeTime`] searches (R8,
+/// ADR 0251).
+///
+/// With any value other than [`FreeTimeHours::Any`] the core cuts every
+/// free stretch to one day's hours on one of the days, in the request's
+/// zone (summer-time days included), and drops pieces shorter than the
+/// request's length: the UI shows the slots as they come, without cutting
+/// them per day.
+///
+/// JSON: `{"kind": "any"}`, `{"kind": "working-hours"}` or
+/// `{"kind": "custom", "work_hours": {…}, "work_days": ["mon", …]}`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum FreeTimeHours {
+    /// Around the clock on every day: a stretch may span several days
+    /// (the default; older clients).
+    #[default]
+    Any,
+    /// The working hours on the work days of the calendar preferences
+    /// ([`CalendarPreferences::work_hours`] / [`CalendarPreferences::work_days`]):
+    /// the same working day the views shade.
+    WorkingHours,
+    /// The given hours on the given days (the MCP tool's `day_start` /
+    /// `day_end`, a widget's own working hours).
+    Custom {
+        /// The hours of each day.
+        work_hours: WorkHours,
+        /// The days; empty = none (no slots).
+        work_days: Vec<Weekday>,
+    },
+}
+
+impl FreeTimeHours {
+    /// Problems (empty = valid): custom hours out of order or past
+    /// midnight, a day listed twice.
+    pub fn issues(&self) -> Vec<PimIssue> {
+        let mut out = Vec::new();
+        if let Self::Custom {
+            work_hours,
+            work_days,
+        } = self
+        {
+            if !work_hours.is_valid() {
+                push_issue(&mut out, PimIssue::InvalidWorkHours);
+            }
+            if has_repeated_day(work_days) {
+                push_issue(&mut out, PimIssue::TooMany);
+            }
+        }
+        out
+    }
+
+    /// The hours and days to cut to, given the preferences; `None` for
+    /// [`FreeTimeHours::Any`] (no cutting).
+    pub fn resolve(&self, preferences: &CalendarPreferences) -> Option<(WorkHours, Vec<Weekday>)> {
+        match self {
+            Self::Any => None,
+            Self::WorkingHours => Some((preferences.work_hours, preferences.work_days.clone())),
+            Self::Custom {
+                work_hours,
+                work_days,
+            } => Some((*work_hours, work_days.clone())),
+        }
+    }
+}
+
+/// Whether a day is listed more than once.
+fn has_repeated_day(days: &[Weekday]) -> bool {
+    let mut sorted = days.to_vec();
+    sorted.sort();
+    sorted.dedup();
+    sorted.len() != days.len()
+}
+
 impl CalendarPreferences {
     /// Problems with the preferences (empty = valid): working hours out of
     /// order or past midnight, a work day listed twice, a zone that is not
@@ -217,10 +291,7 @@ impl CalendarPreferences {
         if !self.work_hours.is_valid() {
             push_issue(&mut out, PimIssue::InvalidWorkHours);
         }
-        let mut days = self.work_days.clone();
-        days.sort();
-        days.dedup();
-        if days.len() != self.work_days.len() {
+        if has_repeated_day(&self.work_days) {
             push_issue(&mut out, PimIssue::TooMany);
         }
         for zone in [&self.time_zone, &self.second_time_zone]
@@ -418,6 +489,65 @@ mod tests {
             ..CalendarPreferences::default()
         };
         assert_eq!(none.issues(), []);
+    }
+
+    #[test]
+    fn free_time_hours_wire_shape_and_issues() {
+        assert_eq!(
+            serde_json::to_value(FreeTimeHours::WorkingHours).unwrap(),
+            json!({"kind": "working-hours"})
+        );
+        let custom = FreeTimeHours::Custom {
+            work_hours: WorkHours {
+                start_minute: 540,
+                end_minute: 1020,
+            },
+            work_days: vec![Weekday::Mon, Weekday::Tue],
+        };
+        assert_eq!(
+            serde_json::to_value(&custom).unwrap(),
+            json!({
+                "kind": "custom",
+                "work_hours": {"start_minute": 540, "end_minute": 1020},
+                "work_days": ["mon", "tue"]
+            })
+        );
+        assert_eq!(custom.issues(), []);
+        let prefs = CalendarPreferences::default();
+        assert_eq!(FreeTimeHours::Any.resolve(&prefs), None);
+        assert_eq!(
+            FreeTimeHours::WorkingHours.resolve(&prefs),
+            Some((prefs.work_hours, prefs.work_days.clone()))
+        );
+        assert_eq!(
+            custom.resolve(&prefs).map(|(h, _)| h.start_minute),
+            Some(540)
+        );
+        let bad = FreeTimeHours::Custom {
+            work_hours: WorkHours {
+                start_minute: 600,
+                end_minute: 540,
+            },
+            work_days: vec![Weekday::Mon, Weekday::Mon],
+        };
+        assert_eq!(
+            bad.issues(),
+            [PimIssue::InvalidWorkHours, PimIssue::TooMany]
+        );
+        // A request without `hours` searches around the clock.
+        let request: crate::Request = serde_json::from_value(json!({
+            "type": "FindFreeTime",
+            "from": "2026-11-23T00:00:00Z", "to": "2026-11-30T00:00:00Z",
+            "duration_minutes": 30, "tz": "UTC"
+        }))
+        .unwrap();
+        assert!(matches!(
+            request,
+            crate::Request::FindFreeTime {
+                hours: FreeTimeHours::Any,
+                ..
+            }
+        ));
     }
 
     #[test]

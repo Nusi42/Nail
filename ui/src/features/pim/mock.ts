@@ -29,6 +29,7 @@ import type {
   EventFields,
   EventInstance,
   FreeSlot,
+  FreeTimeHours,
   PimImportPreview,
   PimIssue,
   PimSearchHit,
@@ -46,6 +47,7 @@ import { userAddresses } from "../../api/mockAccounts";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import {
   defaultPreferences,
+  freeTimeWindows,
   mockParseEventText,
   preferencesIssue,
   tasksDue,
@@ -72,7 +74,6 @@ import {
   pimTimeIn,
   shiftPimTime,
   todayIn,
-  toZoned,
   utcString,
 } from "./time";
 import { fromAbsolute } from "@internationalized/date";
@@ -570,30 +571,24 @@ export function freeTime(
   minutes: number,
   calendarIds: string[] | null,
   tz: string,
+  hours: FreeTimeHours,
 ): FreeSlot[] {
   const busy = listInstances(pim, from, to, calendarIds, tz)
     .filter((i) => i.transparency === "busy" && !i.all_day)
     .map((i) => [instantMs(i.start_utc), instantMs(i.end_utc)] as const)
     .sort((a, b) => a[0] - b[0]);
-  const fromMs = instantMs(from);
-  const toMs = instantMs(to);
+  const shortest = Math.max(1, minutes) * 60_000;
   const slots: FreeSlot[] = [];
-  let day = todayIn(tz, fromMs);
-  for (let guard = 0; guard < 400; guard++) {
-    const dayStart = toZoned(day, tz).toDate().getTime();
-    if (dayStart >= toMs) break;
-    const open = Math.max(fromMs, toZoned(day, tz).add({ hours: 8 }).toDate().getTime());
-    const close = Math.min(toMs, toZoned(day, tz).add({ hours: 18 }).toDate().getTime());
+  const windows = freeTimeWindows(hours, pim.preferences, instantMs(from), instantMs(to), tz);
+  for (const [open, close] of windows) {
     let cursor = open;
     for (const [start, end] of busy) {
       if (end <= cursor || start >= close) continue;
-      if (start - cursor >= minutes * 60_000)
+      if (start - cursor >= shortest)
         slots.push({ start: utcString(cursor), end: utcString(start) });
       cursor = Math.max(cursor, end);
     }
-    if (close - cursor >= minutes * 60_000)
-      slots.push({ start: utcString(cursor), end: utcString(close) });
-    day = day.add({ days: 1 });
+    if (close - cursor >= shortest) slots.push({ start: utcString(cursor), end: utcString(close) });
   }
   return slots;
 }
@@ -1156,6 +1151,7 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
           request.duration_minutes,
           request.calendar_ids,
           request.tz,
+          request.hours,
         ),
       };
 

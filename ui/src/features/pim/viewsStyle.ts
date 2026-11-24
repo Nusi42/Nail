@@ -231,7 +231,7 @@ ${p(`${part}.rows`)} { display: flex; flex-direction: column; gap: 1px; padding-
 ${p(`${part}.entry`)} { gap: ${T.sm}; padding: ${T.xs}; border: 0; border-radius: ${T.rSm}; color: ${T.fg}; background-color: transparent; cursor: pointer; }
 ${p(`${part}.entry`)}:hover { background-color: ${T.raised}; }
 ${p(`${part}.entry`)}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
-${p(`${part}.entry`)}[data-state~="past"] { opacity: 0.55; }
+${p(`${part}.entry`)}[data-state~="past"] { color: ${T.muted}; }
 ${p(`${part}.entry`)}[data-state~="declined"] ${p(`${part}.title`)} { color: ${T.muted}; text-decoration: line-through; }
 ${p(`${part}.entry`)}[data-state~="needs-action"] ${p(`${part}.dot`)} { border-style: dashed; background-color: transparent; }
 ${p(`${part}.time`)} { display: flex; flex-direction: column; font-size: ${T.small}; font-variant-numeric: tabular-nums; }

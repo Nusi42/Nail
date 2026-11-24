@@ -203,6 +203,10 @@ status-ops-pending = { $count ->
 status-op-failed = A change could not be saved: { $reason }
 # Queues a failed change again.
 status-retry = Retry
+# A bulk Retry of failed changes did not work (shown beside the failure, R8).
+status-retry-failed = Retrying did not work: { $reason }
+# A bulk Dismiss of failed changes did not work (shown beside the failure, R8).
+status-dismiss-failed = Dismissing did not work: { $reason }
 status-send-countdown = { $seconds ->
     [one] Sending in one second
    *[other] Sending in { $seconds } seconds

@@ -588,6 +588,7 @@ impl Service {
             | Request::RunRules {
                 message_ids,
                 folder_id,
+                list: None,
                 ..
             } => {
                 if message_ids.is_empty() && folder_id.is_none() {
@@ -598,6 +599,10 @@ impl Service {
                 }
                 self.check_messages(access, message_ids).await
             }
+
+            // R8: a list run reaches rows the session never listed one
+            // by one: only a full grant runs it (ADR 0251).
+            Request::RunRules { list: Some(_), .. } => check_full(access),
 
             // M2c: rule placements and scripts reveal every rule.
             Request::GetSieveStatus { .. } | Request::PreviewSieveScript { .. } => {

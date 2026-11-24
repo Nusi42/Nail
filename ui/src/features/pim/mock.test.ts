@@ -329,6 +329,7 @@ describe("pim mock", () => {
         duration_minutes: 30,
         calendar_ids: null,
         tz: BERLIN,
+        hours: { kind: "any" },
       },
       ListAddressBooks: { type: "ListAddressBooks", source_id: null },
       CreateAddressBook: {
@@ -966,6 +967,7 @@ describe("contacts, tasks, reminders, sources, import (mock)", () => {
         duration_minutes: 60,
         calendar_ids: null,
         tz: BERLIN,
+        hours: { kind: "working-hours" },
       },
       "FreeTime",
     );
@@ -973,6 +975,43 @@ describe("contacts, tasks, reminders, sources, import (mock)", () => {
       { start: "2026-10-05T06:00:00Z", end: "2026-10-05T08:00:00Z" },
       { start: "2026-10-05T10:00:00Z", end: "2026-10-05T16:00:00Z" },
     ]);
+    // Around the clock: one stretch before and one after the busy event.
+    const any = await ok(
+      t,
+      {
+        type: "FindFreeTime",
+        from: "2026-10-04T22:00:00Z",
+        to: "2026-10-05T22:00:00Z",
+        duration_minutes: 60,
+        calendar_ids: null,
+        tz: BERLIN,
+        hours: { kind: "any" },
+      },
+      "FreeTime",
+    );
+    expect(any.slots).toEqual([
+      { start: "2026-10-04T22:00:00Z", end: "2026-10-05T08:00:00Z" },
+      { start: "2026-10-05T10:00:00Z", end: "2026-10-05T22:00:00Z" },
+    ]);
+    // Custom hours on a day that is not chosen: nothing.
+    const sunday = await ok(
+      t,
+      {
+        type: "FindFreeTime",
+        from: "2026-10-04T22:00:00Z",
+        to: "2026-10-05T22:00:00Z",
+        duration_minutes: 60,
+        calendar_ids: null,
+        tz: BERLIN,
+        hours: {
+          kind: "custom",
+          work_hours: { start_minute: 9 * 60, end_minute: 10 * 60 },
+          work_days: ["sun"],
+        },
+      },
+      "FreeTime",
+    );
+    expect(sunday.slots).toEqual([]);
   });
 });
 

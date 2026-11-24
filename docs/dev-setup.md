@@ -314,7 +314,8 @@ Where shared things live (Q2, ADRs 0172–0177):
   `placePopover` for a hand-made popup). Calendar views read the calendar
   preferences, working time, ISO week numbers, the view zones and tasks due
   through `ui/src/features/pim/prefs.ts` (R7, ADR 0246); an event's colour
-  is `colorOf` (`features/pim/common.tsx`). Mock-core tests of the PIM
+  is `colorOf` (`features/pim/common.tsx`). Free time inside working hours comes cut from the core
+  (`FindFreeTime` with `hours`, R8, ADR 0251); the UI does not cut slots again. Mock-core tests of the PIM
   feature send requests with `mockOk` (`features/pim/testing.tsx`); Rust
   tests build an `EventInstance` with `nail_api::testing::busy_instance`,
   and the core's service tests expect an error code with

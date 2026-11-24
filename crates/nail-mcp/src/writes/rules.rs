@@ -320,6 +320,7 @@ pub(crate) async fn run_rules<D: McpData>(
                 rule_ids: rules.into_iter().map(|r| r.id).collect(),
                 message_ids,
                 folder_id,
+                list: None,
             }],
         },
     })

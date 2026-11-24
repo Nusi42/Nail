@@ -127,6 +127,8 @@ describe("Run on and Run in the footer", () => {
         rule_ids: ["tag-all"],
         message_ids: [must(a).id, must(b).id],
         folder_id: null,
+
+        list: null,
       },
     ]);
     await runsFinished(env);
@@ -179,7 +181,13 @@ describe("Run on and Run in the footer", () => {
     await within(footer).findByText(/^The rule ran:/);
     expect(must(requestsOf(env, "SaveRule")[0]).rule.name).toBe("Rust news");
     expect(requestsOf(env, "RunRules")).toEqual([
-      { type: "RunRules", rule_ids: ["rust-announcements"], message_ids: [], folder_id: INBOX },
+      {
+        type: "RunRules",
+        rule_ids: ["rust-announcements"],
+        message_ids: [],
+        folder_id: INBOX,
+        list: null,
+      },
     ]);
     expect(within(footer).getByRole("button", { name: "Run" })).toBeEnabled();
   });

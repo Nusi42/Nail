@@ -29,6 +29,7 @@ mod contacts;
 pub(crate) mod engine;
 mod events;
 mod feed_http;
+mod free_time;
 mod import;
 mod reminders;
 mod search;

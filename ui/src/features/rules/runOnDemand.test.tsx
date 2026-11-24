@@ -104,7 +104,7 @@ describe("the Run rule menus", () => {
 
     await run.run(ctx, ["tag-all"]);
     expect(requestsOf(env, "RunRules")).toEqual([
-      { type: "RunRules", rule_ids: ["tag-all"], message_ids: [], folder_id: INBOX },
+      { type: "RunRules", rule_ids: ["tag-all"], message_ids: [], folder_id: INBOX, list: null },
     ]);
     expect(rulesStore(env.client).getState().toast).toMatchObject({ kind: "ran" });
   });

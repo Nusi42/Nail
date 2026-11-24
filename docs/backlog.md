@@ -66,7 +66,7 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Delegation | Delegation basics only (one delegate); delegates sending with `SENT-BY` are warned about, not applied (no delegate list). | plan.md M3b follow-ups (ADR 0068) | M |
 | Undo for invitation answers | Undo send for iMIP answers is not wired into the UI toast (the result carries the outbox id). (check) | plan.md M3b follow-ups (ADR 0069) | S |
 | Schedule inbox | Schedule-inbox items are acknowledged, not applied (servers that only fill the inbox would need it). | plan.md M3b follow-ups (ADR 0068) | M |
-| Free time | Free-slot suggestions are computed in the UI; the `FindFreeTime` request ignores working hours (the UI cuts per day; only the MCP tool takes `working_hours`). | plan.md M3b, M5b follow-ups (ADR 0115), R7 (ADR 0250) | M |
+| Free time | The UI still cuts free slots per day itself; `FindFreeTime` takes the working hours since R8 (`hours`, ADR 0251). | plan.md M3b, M5b follow-ups (ADR 0115), R7 (ADR 0250), R8 (ADR 0251) | S |
 | Occurrence answers | Answering an occurrence from the invitation card needs the event in a calendar. | plan.md M3b follow-ups | S |
 | Exchange calendars | Exchange calendars cannot be created or renamed from Nail. | plan.md M3c follow-ups (ADR 0077) | M |
 | EWS series time zones | EWS series in zones without a Windows id. | plan.md M3c follow-ups (ADR 0074) | M |
