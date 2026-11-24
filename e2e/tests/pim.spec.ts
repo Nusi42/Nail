@@ -11,7 +11,7 @@ import {
   openMail,
   closeWindow,
 } from "../support/views";
-import { eventChip, icalTime, openCalendar, syncCalendars } from "../support/calendar";
+import { eventChip, icalTime, icsEvent, openCalendar, syncCalendars } from "../support/calendar";
 
 /**
  * Wave M3a (ADR 0063) against `nail serve --seed demo-multi`: calendars,
@@ -35,23 +35,15 @@ function unixAt(days: number, hour: number, minute = 0): number {
 }
 
 function serverEvent(uid: string, title: string, days: number, hour: number, alarm = ""): string {
-  return [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Another client//EN",
-    "BEGIN:VEVENT",
-    `UID:${uid}`,
-    "DTSTAMP:20260101T000000Z",
-    `DTSTART:${icalTime(days, hour)}`,
-    `DTEND:${icalTime(days, hour + 1)}`,
-    `SUMMARY:${title}`,
-    ...(alarm
+  return icsEvent(
+    uid,
+    title,
+    icalTime(days, hour),
+    icalTime(days, hour + 1),
+    alarm
       ? ["BEGIN:VALARM", "ACTION:DISPLAY", `TRIGGER:${alarm}`, `DESCRIPTION:${title}`, "END:VALARM"]
-      : []),
-    "END:VEVENT",
-    "END:VCALENDAR",
-    "",
-  ].join("\r\n");
+      : [],
+  );
 }
 
 interface DavObject {
@@ -77,7 +69,7 @@ test("a recurring event is changed for this and the following occurrences", asyn
 
   // Next week: change this and the following occurrences.
   await calendar.getByRole("button", { name: "Next", exact: true }).click();
-  await eventChip(calendar, "Book club").click();
+  await eventChip(calendar, "Book club").dblclick();
   await expect(editor).toBeVisible();
   await editor.getByRole("radio", { name: "This and following occurrences" }).check();
   await editor.getByLabel("Title", { exact: true }).fill("Book club (new room)");
@@ -127,7 +119,7 @@ test("an ICS subscription shows its events read-only", async ({ page }) => {
   const calendar = await openCalendar(page, { agenda: true });
   const holiday = eventChip(calendar, "Founders' Day");
   await expect(holiday).toBeVisible();
-  await holiday.click();
+  await holiday.dblclick();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
   await expect(editor.getByText("This item is read-only.")).toBeVisible();
   await expect(editor.getByRole("button", { name: "Save" })).toHaveCount(0);

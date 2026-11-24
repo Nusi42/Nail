@@ -3,3 +3,32 @@
 # title, working hours and week numbers, tasks in the all-day row).
 #
 # Message ids start with `pim-grid-`; shared verbs are common-*.
+
+## Event cards
+
+# An event card's accessible name: the card's label, then the user's answer to an invitation.
+pim-grid-event-label = { $label }{ $answer ->
+        [needs-action] , not answered yet
+        [declined] , declined
+       *[other] { "" }
+    }
+
+## Week numbers, tasks
+
+pim-grid-week-number = Wk { $week }
+pim-grid-tasks-due = Tasks due
+
+## Drawing a new event
+
+pim-grid-new-event-placeholder = Add a title
+pim-grid-new-event-when = { $day } · { $time }
+pim-grid-more-options = More options
+# The drawn range while dragging: its times and its length.
+pim-grid-draft-time = { $time } · { $length }
+pim-grid-length = { $hours ->
+        [0] { $minutes } min
+       *[other] { $minutes ->
+            [0] { $hours } h
+           *[other] { $hours } h { $minutes } min
+        }
+    }

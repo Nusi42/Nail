@@ -22,6 +22,26 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   the reader itself follows).
 - `EventInstance.my_status` carries the user's own participation status.
 
+### Added — a calendar that reads well, time grid
+
+- Overlapping events cascade (indented, on top, at least 60 % of the
+  column; events starting together side by side, free columns used); events
+  under 45 minutes are one-line cards.
+- Drawing a new event on empty slots (15-minute steps, live time label,
+  inline title: Enter saves, More options opens the editor); a click takes
+  the 15-minute slot under the pointer; Shift + arrows and Enter from the
+  keyboard. A click on an event opens the quick look, a double-click the
+  editor.
+- Today's date in a filled circle without a column shade; the now line
+  (2 px with a dot on today, faint across the week, time in the gutter)
+  under the events.
+- Card icons (repeats, people, reminders, read-only), hatched free time,
+  provisional unanswered invitations, declined ones struck through or
+  hidden (`show_declined`).
+- Working hours hatched, days off tinted, the grid opens at the working
+  day's start, ISO week number in the corner; tasks due in the all-day row
+  with a check box; a task dropped on the grid creates an event.
+
 ### Fixed — deferred writes are retried soon (ADR 0245)
 
 - A replay pass that defers writes retries the account's queue within

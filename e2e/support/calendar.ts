@@ -32,13 +32,41 @@ export async function syncCalendars(page: Page): Promise<void> {
 export const eventChip = (scope: Locator, title: string) =>
   scope.getByRole("button", { name: new RegExp(`^${title},`) }).first();
 
-/** Today + `days` at `hour`:00 UTC, as an iCalendar UTC time. */
-export function icalTime(days: number, hour: number): string {
+/** Today + `days` at `hour`:`minute` UTC, as an iCalendar UTC time. */
+export function icalTime(days: number, hour: number, minute = 0): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + days);
-  d.setUTCHours(hour, 0, 0, 0);
+  d.setUTCHours(hour, minute, 0, 0);
   return d
     .toISOString()
     .replace(/[-:]/g, "")
     .replace(/\.\d{3}/, "");
+}
+
+/**
+ * A one-event iCalendar object as another client writes it (`start` /
+ * `end` from {@link icalTime}; `extra` lines go inside the VEVENT).
+ */
+export function icsEvent(
+  uid: string,
+  title: string,
+  start: string,
+  end: string,
+  extra: readonly string[] = [],
+): string {
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Another client//EN",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    "DTSTAMP:20260101T000000Z",
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    `SUMMARY:${title}`,
+    ...extra,
+    "END:VEVENT",
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n");
 }

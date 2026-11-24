@@ -310,7 +310,7 @@ export async function meetingStep(
   await calendar
     .getByRole("button", { name: /^Project kickoff,/ })
     .first()
-    .click();
+    .dblclick();
   const meeting = tour
     .window("pim-event-editor")
     .getByRole("region", { name: "Meeting: Project kickoff" });

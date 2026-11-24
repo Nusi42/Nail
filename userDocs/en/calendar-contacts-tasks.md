@@ -41,8 +41,50 @@ colour.
 | Agenda | The events of the next days as a list |
 | Free time | When you are free during the working hours (8:00 to 18:00 and at least 30 minutes by default) of the next five working days, starting with the shown day; weekends are left out. Choose a free stretch to plan an event there |
 
-Events are shown in their calendar's colour. Overlapping events stand side by
-side. An event that repeats says so when you move to it with a screen reader.
+Events are shown in their calendar's colour. An event that repeats says so
+when you move to it with a screen reader.
+
+### What the time grid shows
+
+- **Overlapping events** cascade: each later event is indented a little and
+  drawn on top of the earlier ones with a thin outline, so every title stays
+  readable (each keeps at least 60 % of the day's width). Events that start
+  at the same time stand side by side, and an event with free room beside
+  it uses that room.
+- **Short events** (under 45 minutes) show on one line: the title, then the
+  start time.
+- **Small icons** on an event show that it repeats, has other people, has a
+  reminder, or is read-only; they make room for the title when the event is
+  narrow. Time you marked as **free** is hatched.
+- **Invitations you have not answered** look provisional: a dashed outline,
+  no fill and a question mark. **Declined** events are struck through, or
+  hidden when you switch off showing declined events in **Settings →
+  Calendar & contacts**.
+- **Today** has its date in a filled circle. The **now line** runs across
+  today with a dot at its start, faintly across the other days, and shows
+  the time in the hour column; it lies under the events, so it never crosses
+  their text.
+- **Working hours:** time outside your working hours (8:00 to 18:00, Monday
+  to Friday by default) is hatched and days off are tinted; the grid opens
+  scrolled to the start of your working day. With **week numbers** switched
+  on, the week's number (ISO 8601) shows in the top-left corner.
+- **Tasks due** on a shown day appear in the all-day row with a check box:
+  tick it to mark the task done.
+
+### Creating events on the grid
+
+- **Drag on empty time** to draw a new event: it snaps to 15-minute steps,
+  and a label shows its times and length while you drag. When you let go, a
+  small window asks for the title: **Enter** (or **Save**) adds the event to
+  your default calendar, **More options** opens the full editor with the
+  times and the title, **Esc** drops it.
+- **Click empty time** to start an hour-long event at the 15-minute step
+  under the pointer; **double-click** opens the editor there at once.
+- **With the keyboard:** in the hours of the grid, **Shift + ↑ / ↓** extend
+  the range by an hour, **Enter** asks for the title of an event over it.
+- **Drag a task** (from the all-day row or the **Due this week** list) onto a time to
+  block that time for it: an event with the task's title and a length of an
+  hour; the task stays.
 
 The **mini-month** (a small calendar for any window) and **today's agenda**
 follow the same day: choosing a day in the mini-month shows it in every
@@ -80,18 +122,20 @@ change) cannot be moved.
 
 | Where | Keys |
 | --- | --- |
-| Hours of the time grid | Arrow keys move between hours and days, **Home** / **End** to the first / last hour, **Enter** creates an event at that hour |
+| Hours of the time grid | Arrow keys move between hours and days, **Home** / **End** to the first / last hour, **Shift + ↑ / ↓** extend the range, **Enter** asks for the title of a new event there |
 | Month view | Arrow keys move between days, **Home** / **End** to the start / end of the week, **Enter** shows the day |
 | Mini-month, year view, date picker | As in the month view; **Page Up** / **Page Down** go to the previous / next month, with **Shift** a year |
-| An event | **Enter** opens it, **Delete** deletes it, **Alt** + arrows move it |
+| An event | **Enter** opens its quick look (double-click opens the editor), **Delete** deletes it, **Alt** + arrows move it |
 
 Your layout can also bind keys to the calendar actions (for example **t** for
 today); see [Layout options](#layout-options).
 
 ## The event editor
 
-Open an event by clicking it (or **Enter**), or create one with **New
-event**, by double-clicking an hour or a day, or with **Enter** on an hour.
+Open an event by double-clicking it (a single click or **Enter** shows its
+quick look first), or create one with **New event**, by double-clicking an
+hour or a day, or with **More options** after drawing it on the grid (see
+[Creating events on the grid](#creating-events-on-the-grid)).
 
 - **Title, calendar, location, description, web page.**
 - **When:** start and end, or **All day**. Dates and times are typed or

@@ -565,7 +565,7 @@ const GROUPS: Record<string, Group> = {
       const calendar = await showAgenda(page);
       const teamSync = calendar.getByRole("button", { name: /^Team sync,/ }).first();
       await expect(teamSync).toBeVisible();
-      await teamSync.click();
+      await teamSync.dblclick();
       const event = sweep.window("pim-event-editor");
       await sweep.visit("pim-event-editor");
       // ADR 0160: the event's text fields share both edges.

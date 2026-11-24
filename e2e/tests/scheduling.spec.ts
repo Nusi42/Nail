@@ -202,7 +202,7 @@ test("a counter-proposal is accepted by the organizer and the update goes out", 
   await expect(editor).toBeHidden();
 
   // Reopen the meeting: the organizer panel sends the invitations.
-  await eventChip(calendar, "Design review").click();
+  await eventChip(calendar, "Design review").dblclick();
   await expect(editor).toBeVisible();
   const meeting = editor.getByRole("region", { name: "Meeting: Design review" });
   await meeting.getByRole("button", { name: "Send invitations" }).click();

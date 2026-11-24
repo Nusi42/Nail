@@ -1,6 +1,15 @@
 import { CalendarDate, fromAbsolute } from "@internationalized/date";
 import type { EventInstance, PimTime } from "../../api/generated";
 import {
+  CASCADE_INDENT,
+  CASCADE_MIN_WIDTH,
+  SIDE_BY_SIDE_MINUTES,
+  SHORT_EVENT_MINUTES,
+  clickRange,
+  dragRange,
+  minuteAt,
+  snapDown,
+  visibleInstances,
   dayGridMove,
   likeAt,
   initialScrollTop,
@@ -179,21 +188,99 @@ describe("times", () => {
 describe("placing events", () => {
   const day = new CalendarDate(2026, 10, 1);
 
-  it("puts overlapping events side by side", () => {
-    const placed = placeDay(
-      [
-        instance("a", "2026-10-01T09:00:00Z", "2026-10-01T10:00:00Z"),
-        instance("b", "2026-10-01T09:30:00Z", "2026-10-01T10:30:00Z"),
-        instance("c", "2026-10-01T11:00:00Z", "2026-10-01T11:05:00Z"),
-      ],
-      day,
-      "UTC",
+  const at = (hm: string) => `2026-10-01T${hm}:00Z`;
+  const layout = (events: [string, string, string][]) =>
+    Object.fromEntries(
+      placeDay(
+        events.map(([id, start, end]) => instance(id, at(start), at(end))),
+        day,
+        "UTC",
+      ).map((p) => [p.instance.event_id, p]),
     );
-    const byId = Object.fromEntries(placed.map((p) => [p.instance.event_id, p]));
-    expect(byId.a).toMatchObject({ column: 0, columns: 2, startMinute: 540, endMinute: 600 });
-    expect(byId.b).toMatchObject({ column: 1, columns: 2 });
-    // Short events get the minimum height; separate clusters get one column.
-    expect(byId.c).toMatchObject({ columns: 1, startMinute: 660, endMinute: 675 });
+
+  it("cascades later overlapping events, indented and on top", () => {
+    // The review's Wednesday: 9:00, 9:30 and 9:45, each overlapping the one before.
+    const byId = layout([
+      ["sync", "09:00", "10:00"],
+      ["grace", "09:30", "10:15"],
+      ["critique", "09:45", "11:00"],
+      ["lunch", "12:00", "12:05"],
+    ]);
+    expect(byId.sync).toMatchObject({ layer: 0, left: 0, width: 1, startMinute: 540 });
+    expect(byId.grace).toMatchObject({ layer: 1, left: CASCADE_INDENT });
+    expect(byId.critique).toMatchObject({ layer: 2 });
+    expect(byId.critique?.left).toBeCloseTo(2 * CASCADE_INDENT);
+    // Every title keeps at least 60 % of the column.
+    for (const p of Object.values(byId)) {
+      expect(p.width).toBeGreaterThanOrEqual(CASCADE_MIN_WIDTH - 1e-9);
+      expect(p.left + p.width).toBeCloseTo(1);
+    }
+    // Short events get the minimum height; a separate cluster takes the whole column.
+    expect(byId.lunch).toMatchObject({ layer: 0, left: 0, width: 1, endMinute: 735 });
+  });
+
+  it("indents less when there are many levels, so the top card keeps 60 %", () => {
+    const byId = layout([
+      ["a", "08:00", "13:00"],
+      ["b", "08:30", "13:00"],
+      ["c", "09:00", "13:00"],
+      ["d", "09:30", "13:00"],
+      ["e", "10:00", "13:00"],
+    ]);
+    expect(byId.e?.layer).toBe(4);
+    expect(byId.e?.left).toBeCloseTo(1 - CASCADE_MIN_WIDTH);
+    expect(byId.e?.width).toBeCloseTo(CASCADE_MIN_WIDTH);
+    expect(byId.b?.left).toBeCloseTo((1 - CASCADE_MIN_WIDTH) / 4);
+  });
+
+  it("puts events that start together side by side and expands into free columns", () => {
+    const byId = layout([
+      ["dentist", "15:00", "16:00"],
+      ["kickoff", "15:00", "16:00"],
+      ["call", "15:10", "15:45"],
+      ["late", "16:00", "17:00"],
+    ]);
+    expect(SIDE_BY_SIDE_MINUTES).toBe(15);
+    expect(byId.dentist).toMatchObject({ layer: 0, left: 0 });
+    expect(byId.dentist?.width).toBeCloseTo(1 / 3);
+    expect(byId.kickoff?.left).toBeCloseTo(1 / 3);
+    expect(byId.call?.left).toBeCloseTo(2 / 3);
+    // "late" starts as the others end: its own cluster, the whole column.
+    expect(byId.late).toMatchObject({ left: 0, width: 1 });
+    // An event beside one that ends early takes the room it leaves.
+    const wide = layout([
+      ["long", "09:00", "11:00"],
+      ["brief", "09:10", "09:40"],
+      ["after", "09:50", "10:30"],
+    ]);
+    expect(wide.long?.width).toBeCloseTo(0.5);
+    expect(wide.brief).toMatchObject({ layer: 0 });
+    expect(wide.brief?.left).toBeCloseTo(0.5);
+    // "after" starts 50 minutes after "long": it cascades over it.
+    expect(wide.after).toMatchObject({ layer: 1, left: CASCADE_INDENT });
+  });
+
+  it("marks events under 45 minutes as short", () => {
+    const byId = layout([
+      ["quarter", "08:00", "08:15"],
+      ["half", "09:00", "09:30"],
+      ["almost", "10:00", "10:44"],
+      ["exact", "11:00", "11:45"],
+    ]);
+    expect(SHORT_EVENT_MINUTES).toBe(45);
+    expect(byId.quarter?.short).toBe(true);
+    expect(byId.half?.short).toBe(true);
+    expect(byId.almost?.short).toBe(true);
+    expect(byId.exact?.short).toBe(false);
+  });
+
+  it("hides declined invitations only when the preference says so", () => {
+    const list = [
+      instance("yes", at("09:00"), at("10:00"), { my_status: "accepted" }),
+      instance("no", at("09:00"), at("10:00"), { my_status: "declined" }),
+    ];
+    expect(visibleInstances(list, true)).toHaveLength(2);
+    expect(visibleInstances(list, false).map((i) => i.event_id)).toEqual(["yes"]);
   });
 
   it("clips events running over midnight and uses wall-clock minutes on DST days", () => {
@@ -330,5 +417,58 @@ describe("likeAt", () => {
     expect(
       likeAt({ type: "zoned", local: "2026-01-01T00:00:00", tz: "Europe/Berlin" }, wall),
     ).toEqual({ type: "zoned", local: "2026-10-08T07:30:00", tz: "Europe/Berlin" });
+  });
+});
+
+describe("drawing on the time grid", () => {
+  it("snaps a drag to 15-minute steps in either direction", () => {
+    // Pressed at 10:07, dragged to 11:23: 10:00 to 11:30 (snapped to the nearest step).
+    expect(dragRange(607, 683, 0, 1440)).toEqual({ start: 600, end: 690 });
+    // Upwards from 10:07 to 9:20: 9:15 to 10:15 (the step pressed stays in the range).
+    expect(dragRange(607, 560, 0, 1440)).toEqual({ start: 555, end: 615 });
+    // Barely moved: at least one step.
+    expect(dragRange(607, 609, 0, 1440)).toEqual({ start: 600, end: 615 });
+    // Kept inside the hours shown.
+    expect(dragRange(1430, 1500, 0, 1440)).toEqual({ start: 1425, end: 1440 });
+    expect(dragRange(70, -40, 60, 1440)).toEqual({ start: 60, end: 75 });
+  });
+
+  it("snaps a click to the 15-minute slot under the pointer", () => {
+    expect(snapDown(607)).toBe(600);
+    expect(snapDown(614.9)).toBe(600);
+    expect(snapDown(615)).toBe(615);
+    expect(clickRange(637, 60, 0, 1440)).toEqual({ start: 630, end: 690 });
+    // Near the end of the day the event is cut at the last hour shown.
+    expect(clickRange(1435, 60, 0, 1440)).toEqual({ start: 1425, end: 1440 });
+  });
+
+  it("maps pixels to minutes of the hours shown", () => {
+    expect(minuteAt(0, 480, 480, 960)).toBe(480);
+    expect(minuteAt(240, 480, 480, 960)).toBe(720);
+    expect(minuteAt(-10, 480, 480, 960)).toBe(480);
+    expect(minuteAt(999, 480, 480, 960)).toBe(960);
+    expect(minuteAt(10, 0, 480, 960)).toBe(480);
+  });
+});
+
+describe("week start preference", () => {
+  it("starts week and month views on the preferred weekday", () => {
+    const anchor = new CalendarDate(2026, 11, 25); // a Wednesday
+    expect(dateString(viewRange("week", anchor, "en-US").start)).toBe("2026-11-22");
+    expect(
+      dateString(
+        viewRange("week", anchor, "en-US", { ...DEFAULT_VIEW_OPTIONS, weekStart: "mon" }).start,
+      ),
+    ).toBe("2026-11-23");
+    expect(
+      dateString(
+        viewRange("week", anchor, "de", { ...DEFAULT_VIEW_OPTIONS, weekStart: "sat" }).start,
+      ),
+    ).toBe("2026-11-21");
+    expect(
+      dateString(
+        viewRange("month", anchor, "en-US", { ...DEFAULT_VIEW_OPTIONS, weekStart: "mon" }).start,
+      ),
+    ).toBe("2026-10-26");
   });
 });

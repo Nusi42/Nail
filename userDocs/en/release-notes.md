@@ -9,6 +9,28 @@ A calendar that reads well: every calendar in its own colour, events you can
 read even when they overlap, a quick look at an event with one click, and
 new events drawn straight onto the week.
 
+### New in 0.8.11
+
+- **Overlapping events you can read** — events that overlap cascade, each
+  later one indented and on top, so every title shows; short events show on
+  one line with their start time.
+- **Draw new events on the week** — drag on empty time to draw an event in
+  15-minute steps, type its title and press `Enter`; **More options** opens
+  the editor. A click starts an hour-long event at the 15-minute step under
+  the pointer; `Shift+↑` / `Shift+↓` and `Enter` do the same from the
+  keyboard.
+- **Today and now at a glance** — today's date in a filled circle, the now
+  line with a dot and the time beside the hours, under the events instead of
+  over their text.
+- **What an event card knows** — icons for repeats, people, reminders and
+  read-only events; free time hatched; unanswered invitations look
+  provisional and declined ones are struck through (or hidden).
+- **Working hours, weekends and week numbers** — time outside your working
+  hours is hatched, days off are tinted, the grid opens at the start of your
+  working day, and the week number shows when you switch it on.
+- **Tasks in the calendar** — tasks due on a shown day appear in the all-day
+  row with a check box; drag a task onto a time to block it.
+
 ### Corrected in 0.8.11
 
 - **Changes wait seconds, not minutes, after a slow answer** — when the

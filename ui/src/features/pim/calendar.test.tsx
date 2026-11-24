@@ -45,8 +45,10 @@ describe("calendar widget", () => {
     expect(planning.closest('[data-part="calendar.column"]')).toBe(
       lunch.closest('[data-part="calendar.column"]'),
     );
-    // Overlapping events share the column: half the width each.
-    expect(geometryText()).toMatch(/width: 50%/);
+    // R7 M2: the lunch starts half an hour into the planning, so it cascades
+    // over it: indented by a fifth of the column and drawn on top.
+    expect(geometryText()).toMatch(/left: 20%; width: 80%; z-index: 2;/);
+    expect(lunch.getAttribute("data-state")).toContain("stacked");
     expect(document.querySelectorAll('[data-part="calendar.day-head"]')).toHaveLength(7);
     const today = dateString(todayIn(localZone()));
     expect(
@@ -97,7 +99,7 @@ describe("calendar widget", () => {
     expect(await screen.findAllByRole("button", { name: /^Free on/ })).not.toHaveLength(0);
   });
 
-  it("creates events from the keyboard in the slot grid", async () => {
+  it("draws new events from the keyboard in the slot grid", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week", "scroll-to": 9 } }), env);
@@ -107,7 +109,10 @@ describe("calendar widget", () => {
     active?.focus();
     await user.keyboard("{ArrowDown}{ArrowDown}");
     expect(document.activeElement?.getAttribute("data-slot")).toMatch(/-11$/);
+    // R7 M5: Enter asks for the title of an hour there; "More options" opens the editor.
     await user.keyboard("{Enter}");
+    const draft = await screen.findByRole("dialog", { name: "New event" });
+    await user.click(within(draft).getByRole("button", { name: "More options" }));
     expect(env.store.getState().windows).toContain(EVENT_DIALOG);
     const editor = pimStoreFor(env.store).getState().eventEditor;
     expect(editor).toMatchObject({
@@ -215,7 +220,7 @@ describe("calendar widget", () => {
     });
   });
 
-  it("opens the editor on an event and moves events between days in the month view", async () => {
+  it("opens the quick look and the editor on an event and moves events between days in the month view", async () => {
     const user = userEvent.setup({ delay: null });
     const env = createEnv();
     // The seed has three events today only on a weekday (the stand-up runs
@@ -226,7 +231,12 @@ describe("calendar widget", () => {
     events.push({ ...lunch, id: "ev-lunch-2" }, { ...lunch, id: "ev-lunch-3" });
     renderNode(widget("calendar", { options: { view: "month", "max-events": 2 } }), env);
     const planning = await screen.findByRole("button", { name: /Sprint planning/ });
+    // R7 M4: a click opens the quick look, a double-click the editor.
     await user.click(planning);
+    expect(pimStoreFor(env.store).getState().quickLook?.instance.event_id).toBe("ev-planning");
+    expect(env.store.getState().windows).not.toContain(EVENT_DIALOG);
+    await user.dblClick(planning);
+    expect(pimStoreFor(env.store).getState().quickLook).toBeNull();
     expect(env.store.getState().windows).toContain(EVENT_DIALOG);
     expect(pimStoreFor(env.store).getState().eventEditor).toMatchObject({
       mode: "edit",

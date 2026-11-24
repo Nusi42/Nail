@@ -772,7 +772,9 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        features/pim/prefs.ts (calendar preferences hooks, working time, ISO weeks, view zones,
                        tasks due, the task drag payload, parseEventText), EventPopover.tsx (the quick look host,
                        PimState.quickLook), mockCalendarView.ts (the mock's R7 answers), gridStyle.ts /
-                       lookStyle.ts / viewsStyle.ts (per-package style slots),
+                       lookStyle.ts / viewsStyle.ts (per-package style slots), the time grid's R7 pieces
+                       (time.ts placeDay cascade + dragRange / clickRange / visibleInstances, NewEventDraft.tsx
+                       the inline title of a drawn event, newEvent.ts defaultEventCalendar / createEventIn),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),

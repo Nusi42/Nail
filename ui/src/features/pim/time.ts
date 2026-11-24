@@ -5,7 +5,9 @@
  * column. Pure functions; nothing here formats text for people (that goes
  * through `i18n/format.ts`, always in the UI locale).
  *
- * The week starts as the UI locale says (`startOfWeek(date, locale)`), so
+ * The week starts on the preference `week_start` when set (R7,
+ * `ViewOptions.weekStart`), else as the UI locale says
+ * (`startOfWeek(date, locale)`), so
  * a German UI starts weeks on Monday even in an English browser.
  */
 import { WEEKDAY_VALUES } from "../../api/generated";
@@ -273,6 +275,11 @@ export interface ViewOptions {
   workWeekStart: Weekday;
   /** Days of a work week. */
   workWeekDays: number;
+  /**
+   * First day of the week and month views (the preference `week_start`,
+   * R7); `null` or absent = the UI locale's.
+   */
+  weekStart?: Weekday | null;
 }
 
 export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
@@ -288,6 +295,11 @@ export interface ViewRange {
   count: number;
 }
 
+/** The first day of the week of `day`: on `first` when given, else as the locale says. */
+function weekStart(day: CalendarDate, locale: string, first: Weekday | null | undefined) {
+  return first ? startOfWeek(day, locale, DAY_OF_WEEK[first]) : startOfWeek(day, locale);
+}
+
 export function viewRange(
   view: ViewKind,
   anchor: CalendarDate,
@@ -301,7 +313,7 @@ export function viewRange(
     case "agenda":
       return { start: anchor, count: Math.max(1, options.days) };
     case "week":
-      return { start: startOfWeek(anchor, locale), count: 7 };
+      return { start: weekStart(anchor, locale, options.weekStart), count: 7 };
     case "work-week":
       return {
         start: startOfWeek(anchor, locale, DAY_OF_WEEK[options.workWeekStart]),
@@ -310,7 +322,7 @@ export function viewRange(
     case "free-time":
       return workingDaysFrom(anchor, locale, Math.max(1, options.days));
     case "month": {
-      const first = startOfWeek(startOfMonth(anchor), locale);
+      const first = weekStart(startOfMonth(anchor), locale, options.weekStart);
       const last = endOfMonth(anchor);
       const days = last.compare(first) + 1;
       return { start: first, count: Math.ceil(days / 7) * 7 };
@@ -493,7 +505,7 @@ export function isAllDayLike(instance: EventInstance): boolean {
   return instance.all_day || instantMs(instance.end_utc) - instantMs(instance.start_utc) >= DAY_MS;
 }
 
-/** An event placed in a day column (fractions of the day, columns for overlaps). */
+/** An event placed in a day column (minutes of the day, horizontal fractions of the column). */
 export interface PlacedInstance {
   instance: EventInstance;
   /** Minutes from the start of the day (clipped). */
@@ -502,9 +514,16 @@ export interface PlacedInstance {
   endMinute: number;
   /** Wall-clock minutes of the day (1440). */
   dayMinutes: number;
-  /** Overlap column and the number of columns of its cluster. */
-  column: number;
-  columns: number;
+  /** Start and width as fractions of the day column (0 – 1). */
+  left: number;
+  width: number;
+  /**
+   * Cascade level (R7 M2): 0 at the bottom; a later overlapping event is
+   * one level up, indented and drawn on top of the ones below.
+   */
+  layer: number;
+  /** Shown as a short one-line card (under `SHORT_EVENT_MINUTES` long). */
+  short: boolean;
   /** Starts before / ends after this day. */
   continuesBefore: boolean;
   continuesAfter: boolean;
@@ -513,9 +532,98 @@ export interface PlacedInstance {
 /** Minimum height of an event block, in minutes. */
 export const MIN_BLOCK_MINUTES = 15;
 
+/** R7 M3: events shorter than this (minutes) show on one line, title then start time. */
+export const SHORT_EVENT_MINUTES = 45;
+
+/** R7 M2: how far each cascade level is indented, as a fraction of the column. */
+export const CASCADE_INDENT = 0.2;
+
+/** R7 M2: the smallest width of a cascaded card, as a fraction of the column. */
+export const CASCADE_MIN_WIDTH = 0.6;
+
+/**
+ * R7 M2: overlapping events that start less than this many minutes apart
+ * (in the same 15-minute slot) stand side by side, since a cascade would
+ * hide the earlier one's title under the later one; events that start
+ * later cascade over them.
+ */
+export const SIDE_BY_SIDE_MINUTES = 15;
+
+interface Slot {
+  startMinute: number;
+  endMinute: number;
+}
+
+const overlap = (a: Slot, b: Slot) => a.startMinute < b.endMinute && b.startMinute < a.endMinute;
+
+/**
+ * Lays out one cluster of overlapping events (sorted by start, longer
+ * first): cascade levels, side-by-side columns within a level, and the
+ * expansion of each card into the free columns to its right.
+ */
+function layoutCluster(cluster: PlacedInstance[]): void {
+  // Levels: one above every overlapping event that started well before,
+  // the same as those that started together.
+  cluster.forEach((item, index) => {
+    let level = 0;
+    for (const earlier of cluster.slice(0, index)) {
+      if (!overlap(earlier, item)) continue;
+      const together = item.startMinute - earlier.startMinute < SIDE_BY_SIDE_MINUTES;
+      level = Math.max(level, together ? earlier.layer : earlier.layer + 1);
+    }
+    item.layer = level;
+  });
+  const maxLevel = Math.max(0, ...cluster.map((i) => i.layer));
+  const step = maxLevel === 0 ? 0 : Math.min(CASCADE_INDENT, (1 - CASCADE_MIN_WIDTH) / maxLevel);
+  for (let level = 0; level <= maxLevel; level++) {
+    const row = cluster.filter((i) => i.layer === level);
+    // Greedy columns among the level's events, per group of overlaps.
+    const column = new Map<PlacedInstance, number>();
+    let group: PlacedInstance[] = [];
+    let groupEnd = -1;
+    const columnEnds: number[] = [];
+    const flush = () => {
+      const columns = Math.max(1, columnEnds.length);
+      const indent = level * step;
+      const room = 1 - indent;
+      for (const item of group) {
+        const first = column.get(item) ?? 0;
+        let last = first;
+        while (
+          last + 1 < columns &&
+          !group.some((other) => column.get(other) === last + 1 && overlap(other, item))
+        ) {
+          last++;
+        }
+        item.left = indent + (first * room) / columns;
+        item.width = ((last - first + 1) * room) / columns;
+      }
+      group = [];
+      columnEnds.length = 0;
+    };
+    for (const item of row) {
+      if (item.startMinute >= groupEnd) flush();
+      let index = columnEnds.findIndex((end) => end <= item.startMinute);
+      if (index < 0) {
+        index = columnEnds.length;
+        columnEnds.push(item.endMinute);
+      } else {
+        columnEnds[index] = item.endMinute;
+      }
+      column.set(item, index);
+      group.push(item);
+      groupEnd = Math.max(groupEnd, item.endMinute);
+    }
+    flush();
+  }
+}
+
 /**
  * Places the timed instances of one day: clipped to the day, overlapping
- * events side by side (greedy columns per cluster of overlaps).
+ * events cascaded (R7 M2, ADR 0246): each later overlapping event one
+ * level up, indented by `CASCADE_INDENT` (less when there are many levels,
+ * so the top card keeps `CASCADE_MIN_WIDTH`), events that start together
+ * side by side, every card expanded into the free columns to its right.
  */
 export function placeDay(
   instances: readonly EventInstance[],
@@ -531,7 +639,7 @@ export function placeDay(
   const dayMinutes = 24 * 60;
   const items = instances
     .filter((i) => !isAllDayLike(i) && overlapsDay(i, day, tz))
-    .map((instance) => {
+    .map((instance): PlacedInstance => {
       const start = instantMs(instance.start_utc);
       const end = instantMs(instance.end_utc);
       const startMinute = start <= dayStart ? 0 : minuteOfDay(fromAbsolute(start, tz));
@@ -542,8 +650,10 @@ export function placeDay(
         startMinute,
         endMinute,
         dayMinutes,
-        column: 0,
-        columns: 1,
+        left: 0,
+        width: 1,
+        layer: 0,
+        short: endMinute - startMinute < SHORT_EVENT_MINUTES,
         continuesBefore: start < dayStart,
         continuesAfter: end > dayEnd,
       };
@@ -552,27 +662,15 @@ export function placeDay(
 
   let cluster: PlacedInstance[] = [];
   let clusterEnd = -1;
-  const columnEnds: number[] = [];
-  const flush = () => {
-    const columns = Math.max(1, columnEnds.length);
-    for (const item of cluster) item.columns = columns;
-    cluster = [];
-    columnEnds.length = 0;
-  };
   for (const item of items) {
-    if (item.startMinute >= clusterEnd) flush();
-    let column = columnEnds.findIndex((end) => end <= item.startMinute);
-    if (column < 0) {
-      column = columnEnds.length;
-      columnEnds.push(item.endMinute);
-    } else {
-      columnEnds[column] = item.endMinute;
+    if (item.startMinute >= clusterEnd && cluster.length > 0) {
+      layoutCluster(cluster);
+      cluster = [];
     }
-    item.column = column;
     cluster.push(item);
     clusterEnd = Math.max(clusterEnd, item.endMinute);
   }
-  flush();
+  if (cluster.length > 0) layoutCluster(cluster);
   return items;
 }
 
@@ -669,9 +767,81 @@ export function busyDays(instances: readonly EventInstance[], tz: string): Set<s
   return busy;
 }
 
+/** The step of the time grid's pointer and keyboard changes, minutes (R7 M5). */
+export const SNAP_MINUTES = 15;
+
 /** Snaps minutes to a step. */
-export function snap(minutes: number, step = 15): number {
+export function snap(minutes: number, step = SNAP_MINUTES): number {
   return Math.round(minutes / step) * step;
+}
+
+/** The start of the step `minutes` falls in (a click picks the slot under the pointer). */
+export function snapDown(minutes: number, step = SNAP_MINUTES): number {
+  return Math.floor(minutes / step) * step;
+}
+
+/** A stretch of one day, `[start, end)` minutes after midnight. */
+export interface MinuteRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * The range a pointer drag on empty slots draws (R7 M5): from the step
+ * where it started to the pointer snapped to `step`, at least one step
+ * long, in either direction, inside `[min, max]`.
+ */
+export function dragRange(
+  anchor: number,
+  pointer: number,
+  min: number,
+  max: number,
+  step = SNAP_MINUTES,
+): MinuteRange {
+  const clamp = (value: number) => Math.min(max, Math.max(min, value));
+  const from = snapDown(anchor, step);
+  if (pointer >= from) {
+    const start = clamp(from);
+    return {
+      start: Math.min(start, max - step),
+      end: clamp(Math.max(from + step, snap(pointer, step))),
+    };
+  }
+  const start = clamp(snapDown(pointer, step));
+  return { start, end: clamp(from + step) };
+}
+
+/**
+ * The range a click (press and release without moving) on empty slots
+ * makes: `minutes` long from the step under the pointer, inside `[min, max]`.
+ */
+export function clickRange(
+  pointer: number,
+  minutes: number,
+  min: number,
+  max: number,
+  step = SNAP_MINUTES,
+): MinuteRange {
+  const start = Math.min(Math.max(min, snapDown(pointer, step)), max - step);
+  return { start, end: Math.min(max, start + Math.max(step, minutes)) };
+}
+
+/** The minute of the day at `offset` pixels into a grid `height` pixels tall showing `[fromMinute, toMinute)`. */
+export function minuteAt(offset: number, height: number, fromMinute: number, toMinute: number) {
+  if (height <= 0) return fromMinute;
+  const fraction = Math.min(1, Math.max(0, offset / height));
+  return fromMinute + fraction * (toMinute - fromMinute);
+}
+
+/**
+ * The instances a view shows: declined invitations only when
+ * `showDeclined` (the preference `show_declined`, R7 S1).
+ */
+export function visibleInstances(
+  instances: readonly EventInstance[],
+  showDeclined: boolean,
+): readonly EventInstance[] {
+  return showDeclined ? instances : instances.filter((i) => i.my_status !== "declined");
 }
 
 /** The instant at `minute` minutes into `day` in `tz`. */

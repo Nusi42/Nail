@@ -385,7 +385,7 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
   // An invitation in the Exchange calendar is answered through Graph's
   // meeting API (no iMIP mail).
   await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
-  await eventChip(calendar, "Architecture review").click();
+  await eventChip(calendar, "Architecture review").dblclick();
   await expect(editor).toBeVisible();
   await editor.getByRole("button", { name: "Accept", exact: true }).click();
   const answers = async () =>
@@ -398,7 +398,7 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
   await page.keyboard.press("Escape");
   await expect(editor).toBeHidden();
   await syncCalendars(page);
-  await eventChip(calendar, "Architecture review").click();
+  await eventChip(calendar, "Architecture review").dblclick();
   await expect(editor.getByRole("button", { name: "Accept", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -472,7 +472,7 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
   await calendar
     .getByRole("button", { name: /^Board review,/ })
     .first()
-    .click({ timeout: 30_000 });
+    .dblclick({ timeout: 30_000 });
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
   await expect(editor).toBeVisible();
   await editor.getByRole("button", { name: "Accept", exact: true }).click();

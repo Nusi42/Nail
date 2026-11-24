@@ -190,7 +190,7 @@ for (const mode of MODES) {
       const teamSync = calendar.getByRole("button", { name: /^Team sync,/ }).first();
       await expect(teamSync).toBeVisible();
       await sweep.scan("calendar (agenda)");
-      await teamSync.click();
+      await teamSync.dblclick();
       await sweep.visit("pim-event-editor");
       await sweep.close("pim-event-editor");
       // M3b: a meeting the user organizes (the editor's meeting panel and
