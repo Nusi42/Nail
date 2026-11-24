@@ -1794,7 +1794,8 @@ under load). Visual baselines: the More menu, the toolbar customizer,
 the high-contrast calendar; README media re-recorded. Follow-ups in `docs/backlog.md` ("R8 follow-ups"): colours
 picked in Nail, free-time days, recent-mail refresh, the mock's RDATE periods, unsure junk verdicts in the reader,
 the full e2e beside cargo and the WebKit specs (still losing a few tests to the 30 s budget in some full runs; they
-pass alone), the notification-texts hang, the WebKit "Check for new mail" step.
+pass alone), the notification-texts hang, the WebKit "Check for new mail" step, and three date-dependent specs
+(`r7-p1-grid` cascade, `p1-views` calendar, `p1-windows` pim) that fail on some dates also without R8.
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

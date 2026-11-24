@@ -199,6 +199,7 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Flaky: full e2e beside cargo | The full Playwright suite run beside `cargo test --workspace` loses some long specs (`a11y-windows`, `p1-views`, `vault-recovery`) to the 30 s budget. | plan.md R8 follow-ups (ADR 0255) | M |
 | Flaky: notification texts test | `app/src-tauri` `tests::notification_texts_are_rendered` hung once for 20 minutes under full parallel load. | plan.md R8 follow-ups (ADR 0255) | S |
 | Flaky: Check for new mail (WebKit) | e2e `app-chrome` "Check for new mail" on WebKit missed the POP3 message within 5 s once in a full run. | plan.md R8 follow-ups (ADR 0255) | S |
+| Date-dependent e2e | Three specs fail on some dates or hours, also without the R8 changes: `r7-p1-grid` "overlapping events cascade" between local and UTC midnight (the events are made on the UTC day, the day view shows the local one); `p1-views` "the calendar's views" when a demo event lies under the New event button at 800×700; `p1-windows` "pim" when a short date ("Tue, Dec 1") leaves room beside the time-zone select (`undersized-control`). Pin the clock or the dates in these specs. | plan.md R8 follow-ups (ADR 0255) | S |
 | Flaky: Exchange categories test | `nail-core` `tests/exchange.rs` `categories_automatic_replies_and_rooms` failed once on a machine about 5x slower; not reproduced under parallel load in R8 (the other Exchange flakes are fixed, ADR 0255). | memory r5-status | S |
 
 ## Performance
