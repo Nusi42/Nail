@@ -20,3 +20,7 @@ notification-snooze-woke-title = { $count ->
 snooze-error-not-in-future = The snooze time has to be in the future.
 snooze-error-too-far = The snooze time is too far away (at most ten years).
 snooze-error-store = The snooze could not be saved.
+
+# Junk settings the core refuses (JunkIssue::message_id; the other issues'
+# texts are in triage.ftl). R8.
+junk-issue-ham-cutoff = Choose a "not junk" limit below the junk threshold.

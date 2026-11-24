@@ -302,6 +302,21 @@ pub struct Recurrence {
     pub dates: Vec<PimTime>,
     /// `EXDATE`s: removed occurrences (by their original start).
     pub exceptions: Vec<PimTime>,
+    /// The ends of `RDATE;VALUE=PERIOD` occurrences (R8): the extra
+    /// occurrence starting at a period's `start` (one of [`Self::dates`])
+    /// lasts until its `end` instead of the series' length. Left out =
+    /// none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub periods: Vec<RecurrencePeriod>,
+}
+
+/// One `RDATE;VALUE=PERIOD` value: an extra occurrence with its own end.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct RecurrencePeriod {
+    /// The occurrence's start, also listed in [`Recurrence::dates`].
+    pub start: PimTime,
+    /// Its end (same kind as the start, not before it).
+    pub end: PimTime,
 }
 
 impl Recurrence {
@@ -339,7 +354,19 @@ impl Recurrence {
                 push_issue(&mut out, PimIssue::MixedAllDay);
             }
         }
-        if self.rules.len() + self.dates.len() + self.exceptions.len() > MAX_LIST_ENTRIES {
+        for period in &self.periods {
+            let fits = self.dates.contains(&period.start)
+                && period.end.is_date() == period.start.is_date()
+                && period.end.issue().is_none()
+                && !(period.end.tz() == period.start.tz()
+                    && period.end.sort_key() < period.start.sort_key());
+            if !fits {
+                push_issue(&mut out, PimIssue::InvalidRecurrence);
+            }
+        }
+        if self.rules.len() + self.dates.len() + self.exceptions.len() + self.periods.len()
+            > MAX_LIST_ENTRIES
+        {
             push_issue(&mut out, PimIssue::TooMany);
         }
         out
@@ -1125,6 +1152,40 @@ mod tests {
             [PimIssue::InvalidRecurrence]
         );
         assert!(Recurrence::default().is_empty());
+    }
+
+    /// R8: an `RDATE;VALUE=PERIOD` end belongs to one of the dates, has
+    /// the start's kind and does not end before it.
+    #[test]
+    fn recurrence_periods_keep_their_ends() {
+        let start = PimTime::utc("2026-10-01T09:00:00");
+        let extra = PimTime::utc("2026-10-05T14:00:00");
+        let mut rec = Recurrence {
+            dates: vec![extra.clone()],
+            periods: vec![RecurrencePeriod {
+                start: extra.clone(),
+                end: PimTime::utc("2026-10-05T17:30:00"),
+            }],
+            ..Recurrence::default()
+        };
+        assert_eq!(rec.issues(&start), Vec::<PimIssue>::new());
+        let value = serde_json::to_value(&rec).unwrap();
+        assert_eq!(value["periods"][0]["end"]["local"], "2026-10-05T17:30:00");
+        assert_eq!(serde_json::from_value::<Recurrence>(value).unwrap(), rec);
+        assert!(
+            serde_json::to_value(Recurrence::rule(RecurrenceRule::new(Frequency::Daily)))
+                .unwrap()
+                .get("periods")
+                .is_none(),
+            "left out when empty"
+        );
+        rec.periods[0].end = PimTime::utc("2026-10-05T13:00:00");
+        assert_eq!(rec.issues(&start), [PimIssue::InvalidRecurrence]);
+        rec.periods[0] = RecurrencePeriod {
+            start: PimTime::utc("2026-10-06T14:00:00"),
+            end: PimTime::utc("2026-10-06T15:00:00"),
+        };
+        assert_eq!(rec.issues(&start), [PimIssue::InvalidRecurrence]);
     }
 
     #[test]

@@ -551,6 +551,7 @@ export type * from "./RecoveryKeyIssue";
 export type * from "./RecoveryKeyStatus";
 export type * from "./Recurrence";
 export type * from "./RecurrenceEnd";
+export type * from "./RecurrencePeriod";
 export type * from "./RecurrenceRule";
 export type * from "./Redaction";
 export type * from "./Reminder";

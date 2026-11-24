@@ -76,6 +76,12 @@ pub trait CoreAccess: Send + Sync + 'static {
         None
     }
 
+    /// The computer's time zone as the core sees it (IANA name; R8: the
+    /// default zone of `create_event_from_text`). The default is UTC.
+    fn local_zone(&self) -> String {
+        nail_api::pim::UTC_ZONE.to_owned()
+    }
+
     /// Renders a user-facing text in the core's locale (default English).
     fn render(&self, message: &nail_api::LocalizedMessage) -> String {
         nail_config::l10n::english(message)
@@ -275,6 +281,10 @@ impl<C: CoreAccess> McpData for CoreData<C> {
 
     fn rate_limiter(&self) -> Option<Arc<crate::limits::RateLimiter>> {
         self.0.rate_limiter()
+    }
+
+    fn local_zone(&self) -> String {
+        self.0.local_zone()
     }
 
     fn render(&self, message: &nail_api::LocalizedMessage) -> String {

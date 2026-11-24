@@ -28,6 +28,9 @@ pub const TAG: &str = "sieve-reason-tag";
 pub const FOLDER: &str = "sieve-reason-folder";
 /// A regular expression that uses features POSIX regular expressions lack.
 pub const REGEX: &str = "sieve-reason-regex";
+/// A case-insensitive regular expression with non-ASCII text (servers
+/// fold only ASCII letters in regular expressions).
+pub const REGEX_CASE: &str = "sieve-reason-regex-case";
 /// An invalid condition (bad regular expression or date).
 pub const INVALID: &str = "sieve-reason-invalid";
 /// A header name Sieve cannot test (empty, spaces, colon).
@@ -109,6 +112,7 @@ pub const ALL: &[&str] = &[
     TAG,
     FOLDER,
     REGEX,
+    REGEX_CASE,
     INVALID,
     HEADER_NAME,
     KEYWORD,

@@ -16,7 +16,8 @@
 //!
 //! [`ServerSearch::exact`] says whether the key means exactly the query;
 //! the core filters inexact hits with what it knows locally (flags, dates,
-//! headers). A term the server cannot express at all widens its branch: it
+//! headers). For `has:attachment` and `filename:` it fetches the hits'
+//! bodies and drops the hits [`may_match`] rules out (R8). A term the server cannot express at all widens its branch: it
 //! is dropped from an `AND`, and makes an `OR` (or a `NOT` around it) match
 //! everything, so a server search never misses a message the query finds.
 
@@ -48,6 +49,98 @@ pub fn needs_server(query: &Query) -> bool {
             }
         )
     })
+}
+
+/// Whether the query has `has:attachment` or `filename:` terms: the ones
+/// the server can only approximate and a hit's body decides
+/// ([`may_match`]).
+pub fn checks_attachments(query: &Query) -> bool {
+    query
+        .terms()
+        .iter()
+        .any(|term| attachment_term(term).is_some())
+}
+
+/// What is known of a server hit's attachments once its body is stored.
+#[derive(Debug, Clone, Copy)]
+pub struct AttachmentFacts<'a> {
+    /// The message has at least one attachment (the summary's flag the
+    /// local `has:attachment` reads).
+    pub has_attachments: bool,
+    /// The attachments' file names.
+    pub names: &'a [String],
+}
+
+/// A term the attachment facts decide.
+enum AttachmentTerm<'q> {
+    /// `has:attachment`.
+    Any,
+    /// `filename:text`.
+    Named(&'q str),
+}
+
+/// The attachment term `term` is, if it is one.
+fn attachment_term(term: &Term) -> Option<AttachmentTerm<'_>> {
+    match &term.kind {
+        TermKind::HasAttachment => Some(AttachmentTerm::Any),
+        TermKind::Text {
+            field: TextField::Filename,
+            value,
+            ..
+        } => Some(AttachmentTerm::Named(value)),
+        _ => None,
+    }
+}
+
+/// Whether a server hit can match `query`, given its attachments: the
+/// `has:attachment` and `filename:` terms are decided by `facts` (a file
+/// name matches when it contains the text, any case); every other term is
+/// the server's (unknown here), so it never rules a hit out. Three-valued:
+/// a hit goes only when the query is false whatever the unknown terms are.
+pub fn may_match(query: &Query, facts: &AttachmentFacts<'_>) -> bool {
+    eval(query, facts) != Some(false)
+}
+
+/// `Some(answer)` when the facts decide the part, `None` when unknown.
+fn eval(query: &Query, facts: &AttachmentFacts<'_>) -> Option<bool> {
+    match query {
+        Query::All => Some(true),
+        Query::Term(term) => match attachment_term(term)? {
+            AttachmentTerm::Any => Some(facts.has_attachments),
+            AttachmentTerm::Named(text) => {
+                let text = text.to_lowercase();
+                Some(
+                    facts
+                        .names
+                        .iter()
+                        .any(|name| name.to_lowercase().contains(&text)),
+                )
+            }
+        },
+        Query::Not(inner) => eval(inner, facts).map(|b| !b),
+        Query::And(parts) => {
+            let mut answer = Some(true);
+            for part in parts {
+                match eval(part, facts) {
+                    Some(false) => return Some(false),
+                    None => answer = None,
+                    Some(true) => {}
+                }
+            }
+            answer
+        }
+        Query::Or(parts) => {
+            let mut answer = Some(false);
+            for part in parts {
+                match eval(part, facts) {
+                    Some(true) => return Some(true),
+                    None => answer = None,
+                    Some(false) => {}
+                }
+            }
+            answer
+        }
+    }
 }
 
 /// The IMAP search for `query`, with relative dates resolved at `now`
@@ -183,6 +276,41 @@ mod tests {
 
     fn command(text: &str) -> String {
         search(text).key.to_command().unwrap()
+    }
+
+    /// R8: attachment terms decide inexact hits; other terms never rule
+    /// one out.
+    #[test]
+    fn attachment_facts_filter_inexact_hits() {
+        let names = vec!["Quarterly Report.pdf".to_owned()];
+        let with = AttachmentFacts {
+            has_attachments: true,
+            names: &names,
+        };
+        let without = AttachmentFacts {
+            has_attachments: false,
+            names: &[],
+        };
+        let q = |text: &str| parse_query(text).unwrap();
+        let cases = [
+            ("has:attachment", true, false),
+            ("filename:report", true, false),
+            ("filename:REPORT.PDF", true, false),
+            ("filename:invoice", false, false),
+            ("from:ada has:attachment", true, false),
+            ("-has:attachment", false, true),
+            ("has:attachment OR from:ada", true, true),
+            ("filename:invoice OR filename:report", true, false),
+            ("-filename:invoice body:x", true, true),
+            ("from:ada", true, true),
+        ];
+        for (text, hit_with, hit_without) in cases {
+            assert_eq!(may_match(&q(text), &with), hit_with, "{text} with");
+            assert_eq!(may_match(&q(text), &without), hit_without, "{text} without");
+        }
+        assert!(checks_attachments(&q("from:ada (has:attachment OR x)")));
+        assert!(checks_attachments(&q("filename:a")));
+        assert!(!checks_attachments(&q("from:ada body:x")));
     }
 
     #[test]

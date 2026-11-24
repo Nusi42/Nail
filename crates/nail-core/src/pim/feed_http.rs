@@ -12,7 +12,9 @@
 //!    pinned to the checked addresses and the peer is checked again;
 //! 3. redirects are followed by hand (at most [`MAX_REDIRECTS`]), each hop
 //!    checked; the feed's login (`Authorization`) goes only to the origin
-//!    (scheme, host, port) of the configured URL;
+//!    (scheme, host, port) of the configured URL; where only permanent
+//!    redirects (`301`, `308`) led, the answer names the new URL, which the
+//!    subscription fetches from then on (R8);
 //! 4. the body is limited to `max_bytes`: a larger `Content-Length` is
 //!    refused before reading, and the stream is cut at the limit;
 //! 5. no cookies, no `Referer`, no system proxy; the whole fetch is bounded
@@ -37,8 +39,11 @@ pub(crate) const FEED_TIMEOUT: Duration = Duration::from_mins(1);
 
 /// One feed fetch.
 pub(crate) struct FeedRequest {
-    /// The configured URL (already mapped from `webcal:`).
+    /// Where to fetch: the configured URL (already mapped from `webcal:`),
+    /// or where it permanently moved to.
     pub url: Url,
+    /// The configured URL: the feed's login goes only to its origin.
+    pub login_origin: Url,
     /// `If-None-Match`.
     pub etag: Option<String>,
     /// `If-Modified-Since`.
@@ -57,7 +62,10 @@ pub(crate) struct FeedRequest {
 #[derive(Debug)]
 pub(crate) enum FeedResponse {
     /// `304`: unchanged.
-    NotModified,
+    NotModified {
+        /// Where the feed permanently moved, see [`Self::Fetched`].
+        moved_to: Option<Url>,
+    },
     /// The feed.
     Fetched {
         /// Its bytes.
@@ -66,7 +74,19 @@ pub(crate) enum FeedResponse {
         etag: Option<String>,
         /// Its `Last-Modified`.
         last_modified: Option<String>,
+        /// Where the feed permanently moved: the last URL, when one or more
+        /// redirects led there and every one was permanent (`301`, `308`).
+        moved_to: Option<Url>,
     },
+}
+
+/// Whether a redirect status is permanent (the subscription keeps the new
+/// URL).
+fn is_permanent(status: reqwest::StatusCode) -> bool {
+    matches!(
+        status,
+        reqwest::StatusCode::MOVED_PERMANENTLY | reqwest::StatusCode::PERMANENT_REDIRECT
+    )
 }
 
 /// The URL rules of one hop.
@@ -112,9 +132,11 @@ async fn fetch_inner(
     let mut url = request.url.clone();
     url.set_fragment(None);
     let mut redirects = 0_usize;
+    // Every redirect so far was permanent.
+    let mut permanent = true;
     loop {
         check_hop(&url, request.allow_loopback)?;
-        let login = same_origin(&url, &request.url)
+        let login = same_origin(&url, &request.login_origin)
             .then_some(request.basic.as_ref())
             .flatten();
         let exchange = request
@@ -133,10 +155,12 @@ async fn fetch_inner(
                 return Err(network("the feed redirects too often"));
             }
             redirects += 1;
+            permanent &= is_permanent(status);
             url = redirect_target(&url, location, "the feed sent an invalid redirect")?;
             continue;
         }
-        return read(response, request.max_bytes).await;
+        let moved_to = (redirects > 0 && permanent).then_some(url);
+        return read(response, request.max_bytes, moved_to).await;
     }
 }
 
@@ -202,10 +226,14 @@ async fn hop(
     Ok(response)
 }
 
-async fn read(mut response: reqwest::Response, max: usize) -> Result<FeedResponse, ApiError> {
+async fn read(
+    mut response: reqwest::Response,
+    max: usize,
+    moved_to: Option<Url>,
+) -> Result<FeedResponse, ApiError> {
     let status = response.status();
     if status == reqwest::StatusCode::NOT_MODIFIED {
-        return Ok(FeedResponse::NotModified);
+        return Ok(FeedResponse::NotModified { moved_to });
     }
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         return Err(ApiError::new(
@@ -242,6 +270,7 @@ async fn read(mut response: reqwest::Response, max: usize) -> Result<FeedRespons
         bytes,
         etag,
         last_modified,
+        moved_to,
     })
 }
 
@@ -258,6 +287,7 @@ mod tests {
     fn request(url: &str, allow_loopback: bool) -> FeedRequest {
         FeedRequest {
             url: Url::parse(url).unwrap(),
+            login_origin: Url::parse(url).unwrap(),
             etag: None,
             last_modified: None,
             basic: None,
@@ -361,25 +391,47 @@ mod tests {
             r.basic = Some(("ada".into(), Some("secret".into())));
             r
         };
-        // Same origin: followed, the login goes along.
+        // Same origin: followed, the login goes along; a temporary
+        // redirect does not move the subscription.
         assert!(matches!(
             fetch(&with_login("/here"), resolver.as_ref(), &tls())
                 .await
                 .unwrap(),
-            FeedResponse::Fetched { .. }
+            FeedResponse::Fetched { moved_to: None, .. }
         ));
         let to_feed = first.requests();
         assert!(to_feed.iter().all(|r| r.header("authorization").is_some()));
-        // Another origin: followed without the login.
-        assert!(matches!(
+        // Another origin: followed without the login; a permanent redirect
+        // names the new URL (R8).
+        let moved = format!("http://{}/feed.ics", second.addr());
+        let FeedResponse::Fetched { moved_to, .. } =
             fetch(&with_login("/moved"), resolver.as_ref(), &tls())
                 .await
-                .unwrap(),
-            FeedResponse::Fetched { .. }
-        ));
+                .unwrap()
+        else {
+            panic!("fetched")
+        };
+        assert_eq!(moved_to.map(String::from), Some(moved.clone()));
         let elsewhere = second.requests();
         assert_eq!(elsewhere.len(), 1);
         assert_eq!(elsewhere[0].header("authorization"), None);
+        // Fetched from the new URL later, the login still goes only to the
+        // configured origin.
+        let mut again = with_login("/moved");
+        again.url = Url::parse(&moved).unwrap();
+        assert!(matches!(
+            fetch(&again, resolver.as_ref(), &tls()).await.unwrap(),
+            FeedResponse::Fetched { moved_to: None, .. }
+        ));
+        assert_eq!(second.requests()[1].header("authorization"), None);
+        // A permanent redirect after a temporary one is not kept.
+        first.route("/temporary", Reply::redirect(307, "/moved"));
+        assert!(matches!(
+            fetch(&with_login("/temporary"), resolver.as_ref(), &tls())
+                .await
+                .unwrap(),
+            FeedResponse::Fetched { moved_to: None, .. }
+        ));
         // A redirect into the intranet is refused; loops end.
         let err = fetch(&with_login("/evil"), resolver.as_ref(), &tls())
             .await
@@ -415,7 +467,7 @@ mod tests {
             fetch(&conditional, resolver.as_ref(), &tls())
                 .await
                 .unwrap(),
-            FeedResponse::NotModified
+            FeedResponse::NotModified { moved_to: None }
         ));
         let last = upstream.requests();
         assert_eq!(last.last().unwrap().header("if-none-match"), Some("\"v1\""));

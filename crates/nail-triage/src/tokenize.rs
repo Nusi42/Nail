@@ -17,11 +17,16 @@
 //! * `url:host:<host>`, `url:domain:<registrable part>`, `url:path:<word>`,
 //!   `url:ip` and `url:insecure` for links found in the text.
 //!
+//! Headers and text are NFKC-normalized first (R8), so compatibility
+//! forms spammers use to dodge filters (fullwidth `ＦＲＥＥ`, ligatures,
+//! superscripts) give the same tokens as the plain text.
+//!
 //! The store hashes every token before writing it ([ADR 0043]); nothing
 //! here keeps text of the mail around.
 
 use std::collections::HashSet;
 
+use unicode_normalization::UnicodeNormalization;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Headers the tokenizer looks at (lowercase), and whether they carry
@@ -110,6 +115,7 @@ impl Tokenizer {
             let Some(&(name, addresses)) = TOKEN_HEADERS.iter().find(|(n, _)| *n == name) else {
                 continue;
             };
+            let value = &nfkc(value);
             if addresses {
                 for addr in extract_addresses(value) {
                     if let Some((_, domain)) = addr.rsplit_once('@') {
@@ -125,7 +131,7 @@ impl Tokenizer {
                 return c.out;
             }
         }
-        let text = truncate_at_char(source.text, self.max_text_bytes);
+        let text = &nfkc(truncate_at_char(source.text, self.max_text_bytes));
         for chunk in text.split_whitespace() {
             for token in url_tokens(chunk) {
                 c.push(token);
@@ -185,6 +191,11 @@ fn is_spaceless_script(ch: char) -> bool {
         | 0xAC00..=0xD7AF    // Hangul syllables
         | 0xF900..=0xFAFF    // CJK compatibility ideographs
         | 0x20000..=0x3FFFF) // CJK extensions
+}
+
+/// The NFKC form of a text.
+fn nfkc(text: &str) -> String {
+    text.nfkc().collect()
 }
 
 fn truncate_at_char(text: &str, max: usize) -> &str {
@@ -303,6 +314,21 @@ mod tests {
                 "subject:now",
                 "list-id:news.list.example",
             ]
+        );
+    }
+
+    /// R8: compatibility forms read as their plain text.
+    #[test]
+    fn look_alike_forms_are_one_token() {
+        let plain = tokens_of(&[("Subject", "FREE office")], "FREE office 2026");
+        let fancy = tokens_of(
+            &[("Subject", "\u{ff26}\u{ff32}\u{ff25}\u{ff25} o\u{fb03}ce")],
+            "\u{ff26}\u{ff32}\u{ff25}\u{ff25} o\u{fb03}ce \u{ff12}\u{ff10}\u{ff12}\u{ff16}",
+        );
+        assert_eq!(fancy, plain);
+        assert_eq!(
+            plain,
+            ["subject:free", "subject:office", "free", "office", "2026"]
         );
     }
 

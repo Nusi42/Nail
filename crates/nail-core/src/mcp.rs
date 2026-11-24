@@ -109,6 +109,10 @@ async fn admin(
 pub struct McpCore(pub Service);
 
 impl CoreAccess for McpCore {
+    fn local_zone(&self) -> String {
+        crate::pim::local_zone_name()
+    }
+
     async fn search_local(&self, query: nail_api::SearchQuery) -> Response {
         match self
             .0

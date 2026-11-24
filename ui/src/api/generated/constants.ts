@@ -694,10 +694,10 @@ export const DEFAULT_JUNK_SETTINGS = {"enabled":false,"threshold":90,"min_traini
 export const DEFAULT_NOTIFICATION_SETTINGS = {"enabled":true,"show_preview":true,"sound":true,"folders":"inbox","overrides":[],"quiet_hours":null} as const satisfies Readonly<NotificationSettings>;
 
 /** Every `JunkIssue`, in the contract's order. */
-export const JUNK_ISSUE_VALUES = ["threshold","min-training"] as const satisfies readonly JunkIssue[];
+export const JUNK_ISSUE_VALUES = ["threshold","min-training","ham-cutoff"] as const satisfies readonly JunkIssue[];
 
 /** The Fluent id of each `JunkIssue`'s label. */
-export const JUNK_ISSUE_MESSAGE_IDS = {"min-training":"junk-issue-min-training","threshold":"junk-issue-threshold"} as const satisfies Readonly<Record<JunkIssue, string>>;
+export const JUNK_ISSUE_MESSAGE_IDS = {"ham-cutoff":"junk-issue-ham-cutoff","min-training":"junk-issue-min-training","threshold":"junk-issue-threshold"} as const satisfies Readonly<Record<JunkIssue, string>>;
 
 /** Every `NotificationIssue`, in the contract's order. */
 export const NOTIFICATION_ISSUE_VALUES = ["quiet-hours-time","empty-quiet-hours","duplicate-override"] as const satisfies readonly NotificationIssue[];

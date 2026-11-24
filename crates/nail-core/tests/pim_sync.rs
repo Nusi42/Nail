@@ -699,6 +699,61 @@ async fn changed_subscriptions_take_effect() {
     service.shutdown().await;
 }
 
+const MOVING_FEED: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Town//EN\r\n\
+REFRESH-INTERVAL;VALUE=DURATION:P1D\r\n\
+BEGIN:VEVENT\r\nUID:h1@town\r\nDTSTAMP:20261001T000000Z\r\nDTSTART;VALUE=DATE:20261003\r\n\
+DTEND;VALUE=DATE:20261004\r\nSUMMARY:Unity Day\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+/// R8: a feed that moved permanently is fetched from its new URL from then
+/// on (a temporary redirect would not move it), and the refresh interval
+/// it asks for is kept in the store (an unchanged feed and the first pass
+/// after a restart follow it).
+#[tokio::test(flavor = "multi_thread")]
+async fn moved_feeds_are_followed_and_their_interval_kept() {
+    use nail_proxy::testing::{Reply, Upstream};
+    let upstream = Upstream::start().await.unwrap();
+    let base = format!("http://{}", upstream.addr());
+    upstream.route("/old.ics", Reply::redirect(301, &format!("{base}/new.ics")));
+    upstream.route(
+        "/new.ics",
+        Reply::ok("text/calendar", MOVING_FEED).header("ETag", "\"v1\""),
+    );
+    let kdl = format!("calendar-subscription \"town\" url=\"{base}/old.ics\"\n");
+    let f = start(&kdl, &[]);
+    let service = &f.service;
+    let calendar = town_calendar(service).await;
+    until_some("the feed's events", || async {
+        let list = instances(service, &calendar.id).await;
+        (!list.is_empty()).then_some(list)
+    })
+    .await;
+    let sync = service
+        .store()
+        .collection_sync(calendar.id.as_str())
+        .unwrap();
+    assert_eq!(sync.href, Some(format!("{base}/new.ics")));
+    let asked: Option<Option<u32>> = service.store().setting("pim.feed-refresh.town").unwrap();
+    assert_eq!(asked, Some(Some(24 * 60)));
+
+    // The next fetch goes to the new URL directly (conditionally).
+    let first = upstream.requests().len();
+    ok(service, Request::SyncPimSources { source_id: None }).await;
+    let requests = until_some("a second fetch", || async {
+        let requests = upstream.requests();
+        (requests.len() > first).then_some(requests)
+    })
+    .await;
+    let last = requests.last().unwrap();
+    assert_eq!(last.path, "/new.ics");
+    assert_eq!(last.header("if-none-match"), Some("\"v1\""));
+    assert_eq!(
+        requests.iter().filter(|r| r.path == "/old.ics").count(),
+        1,
+        "the old URL was asked once"
+    );
+    service.shutdown().await;
+}
+
 /// A subscription to a service on this computer is refused outside tests
 /// and seeded demos (a `webcal://localhost` link must not make Nail poll
 /// local services).

@@ -98,7 +98,7 @@ pub fn decompile(script: &str) -> Result<Decompiled, String> {
             "require" => {}
             "set"
                 if strings(&command.arguments).first().map(String::as_str) == Some(DOLLAR_VAR) => {}
-            "include" => out.included = strings(&command.arguments).first().cloned(),
+            "include" => out.included = strings(&command.arguments).first().map(|s| lit(s)),
             _ if command.comments.iter().any(|c| c == "nail:vacation") => {
                 out.vacation = Some(vacation(command, &lit)?);
             }

@@ -17,6 +17,9 @@ chrono.workspace = true
 chrono-tz.workspace = true
 # Word boundaries for the tokenizer (UAX #29).
 unicode-segmentation.workspace = true
+# NFKC before tokenizing, so look-alike forms (fullwidth letters,
+# ligatures) are one token (R8). MIT OR Apache-2.0, already in the lock.
+unicode-normalization.workspace = true
 # Training keys bound to the message content (review fix, ADR 0049).
 sha2.workspace = true
 hex.workspace = true

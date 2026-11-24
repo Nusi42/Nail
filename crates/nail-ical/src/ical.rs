@@ -26,8 +26,8 @@ use nail_api::pim::source::PimItemSync;
 use nail_api::pim::task::TaskStatus;
 use nail_api::pim::{
     Alarm, AlarmAction, AlarmTrigger, Attendee, CalendarEvent, ConferenceLink, EventFields,
-    EventOverride, Organizer, PimAttachment, PimLink, PimTime, Recurrence, RecurrenceRule, Task,
-    TaskFields,
+    EventOverride, Organizer, PimAttachment, PimLink, PimTime, Recurrence, RecurrencePeriod,
+    RecurrenceRule, Task, TaskFields,
 };
 use sha2::{Digest, Sha256};
 
@@ -290,6 +290,30 @@ impl<'a> Ctx<'a> {
             .filter_map(|v| {
                 let start = v.split('/').next().unwrap_or(v);
                 self.time_value(property, start)
+            })
+            .collect()
+    }
+
+    /// The periods of an `RDATE` (`start/end` or `start/duration`, R8):
+    /// each value's start with its end. Values without an end (dates,
+    /// date-times) and unreadable ends are left out (their start still
+    /// counts, [`Self::times`]).
+    pub(crate) fn periods(&self, property: &Property) -> Vec<RecurrencePeriod> {
+        property
+            .value
+            .split(',')
+            .filter_map(|v| {
+                let (start, end) = v.trim().split_once('/')?;
+                let start = self.time_value(property, start)?;
+                let end = match time::parse_duration_parts(end.trim_start_matches('+')) {
+                    Some((days, seconds)) => {
+                        let wall =
+                            time::wall(&start)? + Duration::days(days) + Duration::seconds(seconds);
+                        time::like(wall, &start)
+                    }
+                    None => self.time_value(property, end)?,
+                };
+                Some(RecurrencePeriod { start, end })
             })
             .collect()
     }
@@ -748,10 +772,15 @@ pub(crate) fn read_recurrence(c: &Component, start: &PimTime, ctx: &Ctx<'_>) -> 
         .properties_named("EXDATE")
         .flat_map(|p| ctx.times(p))
         .collect();
+    let periods: Vec<RecurrencePeriod> = c
+        .properties_named("RDATE")
+        .flat_map(|p| ctx.periods(p))
+        .collect();
     let recurrence = Recurrence {
         rules,
         dates,
         exceptions,
+        periods,
     };
     (!recurrence.is_empty() || !recurrence.exceptions.is_empty()).then_some(recurrence)
 }

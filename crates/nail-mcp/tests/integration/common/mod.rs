@@ -823,6 +823,29 @@ pub(crate) fn pim_answer(request: Request) -> DataResult<Response> {
                 contact: Box::new(contact("c1", "ab-work", fields)),
             }
         }
+        // R8: the view zone of `create_event_from_text`.
+        Request::GetCalendarPreferences => Response::CalendarPreferences {
+            preferences: nail_api::pim::CalendarPreferences {
+                time_zone: Some("Europe/Berlin".into()),
+                ..nail_api::pim::CalendarPreferences::default()
+            },
+        },
+        // R8: quick add's reader, for one sentence (in the asked zone).
+        Request::ParseEventText { text, tz, .. } => {
+            let mut parsed = nail_api::pim::ParsedEventText::title_only(&text);
+            if text == "Lunch with Bob tomorrow 12:30 at Corner café" {
+                parsed.title = "Lunch with Bob".into();
+                parsed.start = Some(nail_api::pim::PimTime::zoned(
+                    "2026-10-02T12:30:00",
+                    tz.clone(),
+                ));
+                parsed.end = Some(nail_api::pim::PimTime::zoned("2026-10-02T13:30:00", tz));
+                parsed.location = Some("Corner café".into());
+            }
+            Response::EventTextParsed {
+                parsed: Box::new(parsed),
+            }
+        }
         Request::GetTask { task_id } if task_id.as_str() == "t1" => Response::PimTask {
             task: Box::new(task(
                 "t1",

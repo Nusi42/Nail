@@ -521,7 +521,7 @@ fn not_expressible_rules_say_why() {
                 reasons::FOLDER,
                 reasons::REGEX,
                 reasons::INVALID,
-                reasons::REGEX,
+                reasons::REGEX_CASE,
                 reasons::HEADER_NAME,
                 reasons::INVALID,
                 reasons::KEYWORD,
@@ -780,6 +780,43 @@ fn previous_active_script_is_included_and_recorded() {
     assert_eq!(
         nail_sieve::recorded_previous(&compiled.script).as_deref(),
         Some("roundcube")
+    );
+}
+
+/// R8: under `variables` the included script's name is written with the
+/// `${` escape, so a name with `${` reaches the server unchanged.
+#[test]
+fn an_included_name_keeps_a_literal_dollar_brace() {
+    let folders = folders();
+    let mut opts = options(&folders, COMMON_EXTENSIONS);
+    opts.previous_active = Some("old ${x}".into());
+    let rules = vec![rule(
+        "news",
+        Condition::Subject {
+            matches: m(TextOp::Contains, "news"),
+        },
+        vec![RuleAction::Move {
+            folder: path("Reading"),
+        }],
+    )];
+    let compiled = compile(&rules, &VacationSettings::default(), &opts);
+    assert!(compiled.required.iter().any(|r| r == "variables"));
+    assert!(
+        compiled
+            .script
+            .contains("include :personal \"old ${nail_dollar}{x}\";"),
+        "{}",
+        compiled.script
+    );
+    let back = decompile(&compiled.script).unwrap();
+    assert_eq!(back.included.as_deref(), Some("old ${x}"));
+    assert_eq!(back.previous_active.as_deref(), Some("old ${x}"));
+    // Without `variables` the name is written as it is.
+    let compiled = compile(&[], &VacationSettings::default(), &opts);
+    assert!(compiled.script.contains("include :personal \"old ${x}\";"));
+    assert_eq!(
+        decompile(&compiled.script).unwrap().included.as_deref(),
+        Some("old ${x}")
     );
 }
 

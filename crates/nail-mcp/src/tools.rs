@@ -13,9 +13,9 @@
 use std::sync::Arc;
 
 use nail_api::mcp::tools::{
-    CreateDraftArgs, CreateEventArgs, CreateRuleArgs, DeleteMessagesArgs, EditOpenDraftArgs,
-    RespondToInviteArgs, RunRulesArgs, SendMessageArgs, TestRuleArgs, UpdateDraftArgs,
-    UpdateEventArgs, UpdateMessagesArgs, UpsertContactArgs, UpsertTaskArgs,
+    CreateDraftArgs, CreateEventArgs, CreateEventFromTextArgs, CreateRuleArgs, DeleteMessagesArgs,
+    EditOpenDraftArgs, RespondToInviteArgs, RunRulesArgs, SendMessageArgs, TestRuleArgs,
+    UpdateDraftArgs, UpdateEventArgs, UpdateMessagesArgs, UpsertContactArgs, UpsertTaskArgs,
 };
 use nail_api::mcp::{McpCallKind, McpClient, McpOutcome, McpScope};
 use nail_api::search::RESTRICTED_SCAN;
@@ -89,7 +89,7 @@ pub struct NoArgs {}
 
 /// Names of the tools, in [`nail_api::mcp::tools::MCP_TOOLS`] order (M3a
 /// adds the read-only PIM tools, M4a `test_rule` and the writes).
-pub const TOOL_NAMES: [&str; 23] = [
+pub const TOOL_NAMES: [&str; 24] = [
     "search_messages",
     "get_message",
     "get_thread",
@@ -106,6 +106,7 @@ pub const TOOL_NAMES: [&str; 23] = [
     "update_draft",
     "send_message",
     "create_event",
+    "create_event_from_text",
     "update_event",
     "respond_to_invite",
     "upsert_contact",
@@ -206,6 +207,15 @@ fn write_definitions() -> Vec<Tool> {
             true,
         ),
         write(
+            "create_event_from_text",
+            "Create a calendar event from a sentence such as \"Lunch with Bob tomorrow 12:30 at \
+             Corner café\", read like Nail's quick add (calendar grant; no invitations). A \
+             sentence without a date or time is refused. dry_run answers what would be created.",
+            schema_for_type::<CreateEventFromTextArgs>(),
+            false,
+            false,
+        ),
+        write(
             "update_event",
             "Change an event, one occurrence or an occurrence and the following ones (calendar \
              grant). send_updates mails the attendees (send grant, confirmed by the user).",
@@ -246,7 +256,10 @@ fn write_definitions() -> Vec<Tool> {
         ),
         write(
             "run_rules",
-            "Run saved filter rules now (by id or name from nail://rules, in the file's order) on              message_ids, a folder_id, or each rule's own folders. Each rule is one run the user              can undo in Nail. Asks first as the rules' strongest action: deleting, forwarding or              replying needs those grants too (rules and organize grants for all accounts).",
+            "Run saved filter rules now (by id or name from nail://rules, in the file's order) on \
+             message_ids, a folder_id, or each rule's own folders. Each rule is one run the user \
+             can undo in Nail. Asks first as the rules' strongest action: deleting, forwarding or \
+             replying needs those grants too (rules and organize grants for all accounts).",
             schema_for_type::<RunRulesArgs>(),
             true,
             true,

@@ -14,6 +14,7 @@ sieve-reason-flag = Condition { $position } checks a flag; messages have no flag
 sieve-reason-tag = Condition { $position } checks a tag; messages have no tags before they are delivered.
 sieve-reason-folder = Condition { $position } checks a folder other than the Inbox; the server only sees incoming mail.
 sieve-reason-regex = Condition { $position } uses a regular expression the server's rules cannot express.
+sieve-reason-regex-case = Condition { $position } ignores upper and lower case in a regular expression with letters beyond A to Z; the server can ignore case only for A to Z. Turn on "Match upper and lower case" to run it on the server.
 sieve-reason-invalid = Condition { $position } is not valid.
 sieve-reason-header-name = Condition { $position } names a header the server cannot test.
 sieve-reason-keyword = Action { $action } adds or removes a tag that cannot be stored on the server (spaces or special characters).

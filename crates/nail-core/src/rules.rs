@@ -47,6 +47,12 @@ const INBOX_BATCH: u32 = 200;
 /// Longest run history page.
 const MAX_RUNS: u32 = 500;
 
+/// How many messages a rule run loads and evaluates at a time (R8): a run
+/// on a whole list of tens of thousands of messages goes in parts, so it
+/// never holds every message's text at once; it stays one run (one
+/// undo).
+const RUN_PART_MESSAGES: usize = 500;
+
 /// What [`RulesManager::reload`] found.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum RulesReload {
@@ -387,8 +393,13 @@ fn parse_addresses(value: &str) -> Vec<Address> {
 
 /// The rule checks of a parsed rule, at the rule's position.
 fn validation_issues(rule: &Rule) -> Vec<ConfigIssue> {
+    at_rule(rule, nail_rules::validate(rule))
+}
+
+/// Rule issues as config issues at the rule's position.
+fn at_rule(rule: &Rule, issues: Vec<nail_rules::RuleIssue>) -> Vec<ConfigIssue> {
     let (line, column) = rule.source.as_ref().map_or((1, 1), |s| (s.line, s.column));
-    nail_rules::validate(rule)
+    issues
         .into_iter()
         .map(|issue| ConfigIssue {
             line,
@@ -455,14 +466,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             let (rule, errors) = nail_config::rules::parse_rule_draft(&text);
             let mut errors: Vec<ConfigIssue> = errors.iter().map(ConfigError::to_issue).collect();
             if let Some(rule) = &rule {
-                // The draft read already reported an empty name, at its
-                // position; the rule check would report it again.
-                errors.extend(validation_issues(rule).into_iter().filter(|issue| {
-                    issue
-                        .localized
-                        .as_ref()
-                        .is_none_or(|l| l.id != nail_rules::NAME_EMPTY_ISSUE)
-                }));
+                // The draft read already reported the blank name and
+                // values, each once at its position (R8).
+                errors.extend(at_rule(rule, nail_rules::validate_draft(rule)));
             }
             Response::RuleParsed {
                 rule: rule.map(Box::new),
@@ -505,13 +511,21 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     .await?,
             ),
         },
-        Request::RunRules { list: Some(_), .. } => {
-            // The contract of R8 (ADR 0251): the list form arrives with the
-            // core package; until then it is refused, not run on less.
-            return Err(ApiError::invalid_request(
-                "RunRules with a list target is not supported yet",
-            )
-            .into());
+        Request::RunRules {
+            rule_ids,
+            message_ids,
+            folder_id,
+            list: Some(list),
+        } => {
+            if !message_ids.is_empty() || folder_id.is_some() {
+                return Err(ApiError::invalid_request(
+                    "a run on a list takes no message_ids or folder_id",
+                )
+                .into());
+            }
+            Response::RulesRan {
+                runs: service.run_rules_on_list(&rule_ids, &list).await?,
+            }
         }
         Request::RunRules {
             rule_ids,
@@ -793,8 +807,34 @@ impl Service {
         Ok(runs)
     }
 
+    /// `RunRules` on a whole list (R8, ADR 0251): the messages the list
+    /// stands for ([`Service::list_target_messages`]), every rule in file
+    /// order as one run each with a `messages` target, in parts.
+    async fn run_rules_on_list(
+        &self,
+        rule_ids: &[RuleId],
+        list: &nail_api::ListTarget,
+    ) -> Result<Vec<RuleRun>> {
+        let set = self.inner.rules.set();
+        let compiled = rules_to_run(&set, rule_ids)?;
+        let ids = self.list_target_messages(list, None).await?;
+        let target = RuleRunTarget::Messages {
+            count: u32::try_from(ids.len()).unwrap_or(u32::MAX),
+        };
+        let mut runs = Vec::with_capacity(compiled.len());
+        for rule in compiled {
+            runs.push(
+                self.run_one_rule(rule, RuleRunCause::Manual, &target, ids.clone())
+                    .await?,
+            );
+        }
+        Ok(runs)
+    }
+
     /// Runs one rule on messages and records the run (also when nothing
-    /// matched, so a manual or scheduled run shows up in the history).
+    /// matched, so a manual or scheduled run shows up in the history). The
+    /// messages are loaded and evaluated [`RUN_PART_MESSAGES`] at a time,
+    /// all in the one run.
     async fn run_one_rule(
         &self,
         compiled: &CompiledRule,
@@ -802,15 +842,6 @@ impl Service {
         target: &RuleRunTarget,
         ids: Vec<MessageId>,
     ) -> Result<RuleRun> {
-        let (views, mailbox) = self.load_views(ids).await?;
-        let outcomes = {
-            let env = Env {
-                now: unix_now(),
-                utc_offset_secs: utc_offset_secs(),
-                mailbox: &mailbox,
-            };
-            nail_rules::run_rule(compiled, cause, views.iter().map(|(d, _)| as_view(d)), &env)
-        };
         let rule = compiled.rule();
         let (id, name, target) = (rule.id.clone(), rule.name.clone(), target.clone());
         let started = self
@@ -826,7 +857,35 @@ impl Service {
                 failure: None,
             },
         )]);
-        self.execute_outcomes(cause, &outcomes, &mut runs).await;
+        for part in ids.chunks(RUN_PART_MESSAGES) {
+            match self.load_views(part.to_vec()).await {
+                Ok((views, mailbox)) => {
+                    let outcomes = {
+                        let env = Env {
+                            now: unix_now(),
+                            utc_offset_secs: utc_offset_secs(),
+                            mailbox: &mailbox,
+                        };
+                        nail_rules::run_rule(
+                            compiled,
+                            cause,
+                            views.iter().map(|(d, _)| as_view(d)),
+                            &env,
+                        )
+                    };
+                    self.execute_outcomes(cause, &outcomes, &mut runs).await;
+                }
+                Err(err) => {
+                    // The run ends as failed; what it did so far stays
+                    // recorded (and undoable).
+                    tracing::warn!(%err, rule = %rule.id, "cannot load messages for a rule run");
+                    if let Some(run) = runs.get_mut(&rule.id) {
+                        run.failure.get_or_insert_with(|| err.to_string());
+                    }
+                    break;
+                }
+            }
+        }
         let finished = self.finish_runs(runs).await;
         finished
             .into_iter()

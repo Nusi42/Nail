@@ -114,6 +114,12 @@ pub const MCP_TOOLS: &[McpToolSpec] = &[
         Some("with attendees and `send_invitations` it is `invite` and needs `send`"),
     ),
     write(
+        CREATE_EVENT_FROM_TEXT_TOOL,
+        &[McpScope::Calendar],
+        ActionKind::Calendar,
+        None,
+    ),
+    write(
         "update_event",
         &[McpScope::Calendar],
         ActionKind::Calendar,
@@ -138,7 +144,9 @@ pub const MCP_TOOLS: &[McpToolSpec] = &[
         &[McpScope::Rules, McpScope::Organize],
         ActionKind::Organize,
         Some(
-            "the strongest action of the rules decides (`run_rules_kind`): forward / redirect /              reply is `send` and needs `send`, a permanent delete is `permanent-delete` and needs              `permanent-delete`, a delete is `trash`",
+            "the strongest action of the rules decides (`run_rules_kind`): forward / redirect / \
+             reply is `send` and needs `send`, a permanent delete is `permanent-delete` and needs \
+             `permanent-delete`, a delete is `trash`",
         ),
     ),
     write(
@@ -659,8 +667,7 @@ pub struct CreateEventFromTextArgs {
     pub idempotency_key: Option<String>,
 }
 
-/// The `create_event_from_text` tool's name (added to [`MCP_TOOLS`] with
-/// its handler; ADR 0251).
+/// The `create_event_from_text` tool's name (in [`MCP_TOOLS`]; ADR 0251).
 pub const CREATE_EVENT_FROM_TEXT_TOOL: &str = "create_event_from_text";
 
 /// `create_rule`: add a filter rule from its text form.
@@ -848,7 +855,7 @@ mod tests {
             tool("delete_messages").unwrap().kind,
             Some(ActionKind::Trash)
         );
-        assert_eq!(write_tool_names().len(), 13);
+        assert_eq!(write_tool_names().len(), 14);
         for t in MCP_TOOLS {
             assert!(!t.scopes.is_empty(), "{}", t.name);
             if let Some(kind) = t.kind {

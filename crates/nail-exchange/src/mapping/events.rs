@@ -367,6 +367,7 @@ pub fn event_from_exchange(e: &ExchangeEvent, own: &[String]) -> MappedEvent {
             rules: vec![rrule_of(r, start)],
             dates: Vec::new(),
             exceptions,
+            periods: Vec::new(),
         }
     });
     let overrides = e

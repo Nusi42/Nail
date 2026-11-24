@@ -53,7 +53,7 @@ pub mod testing;
 pub use condition::{CompiledCondition, ConditionError, ConditionHit, ConditionPath};
 pub use engine::{
     AppliedRule, CompiledRule, Explanation, IssueLocation, MessageOutcome, NAME_EMPTY_ISSUE,
-    RuleIssue, RuleSet, TestMatch, TestReport, run_rule, test_rule, validate,
+    RuleIssue, RuleSet, TestMatch, TestReport, run_rule, test_rule, validate, validate_draft,
 };
 pub use suggest::{parse_list_id, rule_from_message};
 

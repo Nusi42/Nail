@@ -10,8 +10,8 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use nail_api::agents::{ActionKind, ActionTargetKind};
 use nail_api::mcp::McpScope;
 use nail_api::mcp::tools::{
-    CreateEventArgs, McpEditScope, McpInviteResponse, RespondToInviteArgs, UpdateEventArgs,
-    UpsertContactArgs, UpsertTaskArgs,
+    CreateEventArgs, CreateEventFromTextArgs, MAX_TASK_REMINDERS, McpEditScope, McpInviteResponse,
+    RespondToInviteArgs, TaskReminderArg, UpdateEventArgs, UpsertContactArgs, UpsertTaskArgs,
 };
 use nail_api::pim::contact::{AddressBookRole, ContactOrg};
 use nail_api::pim::{
@@ -252,6 +252,22 @@ impl<D: McpData> Ctx<'_, D> {
         }
     }
 
+    /// The zone a sentence's times are meant in when the agent names none:
+    /// the calendar preferences' view zone, else the computer's.
+    async fn view_zone(&self) -> Result<String, Failure> {
+        match self
+            .shared
+            .data
+            .query(Request::GetCalendarPreferences)
+            .await?
+        {
+            Response::CalendarPreferences { preferences } => Ok(preferences
+                .time_zone
+                .unwrap_or_else(|| self.shared.data.local_zone())),
+            other => Err(unexpected(&other)),
+        }
+    }
+
     async fn calendar_by_id(&self, id: &CalendarId) -> Result<Calendar, Failure> {
         self.calendars()
             .await?
@@ -353,7 +369,6 @@ pub(crate) async fn create_event<D: McpData>(
         .iter()
         .map(|t| attendee(t, invite))
         .collect::<Result<_, _>>()?;
-    issue(&fields.issues())?;
     let recurrence = match &a.recurrence {
         Some(text) => Some(Recurrence::rule(
             nail_ical::recur::parse_rrule(text, &fields.start)
@@ -361,6 +376,21 @@ pub(crate) async fn create_event<D: McpData>(
         )),
         None => None,
     };
+    new_event_plan(ctx, kind, calendar, fields, recurrence, invite)
+}
+
+/// The plan of a new event (`create_event`, `create_event_from_text`):
+/// its fields and recurrence checked, the confirmation's lines, the audit,
+/// created through the operation queue (and mailed with `invite`).
+fn new_event_plan<D: McpData>(
+    ctx: &Ctx<'_, D>,
+    kind: ActionKind,
+    calendar: Calendar,
+    fields: EventFields,
+    recurrence: Option<Recurrence>,
+    invite: bool,
+) -> Result<Plan, Failure> {
+    issue(&fields.issues())?;
     if let Some(r) = &recurrence {
         issue(&r.issues(&fields.start))?;
     }
@@ -388,11 +418,11 @@ pub(crate) async fn create_event<D: McpData>(
             attendees_text(&fields.attendees),
         ));
     }
-    if let Some(text) = &a.recurrence {
+    if let Some(rule) = recurrence.as_ref().and_then(|r| r.rules.first()) {
         changes.push(change(
             "mcp-tool-field-recurrence",
             None,
-            Some(text.clone()),
+            Some(nail_ical::recur::format_rrule(rule)),
         ));
     }
     Ok(Plan {
@@ -420,6 +450,51 @@ pub(crate) async fn create_event<D: McpData>(
             invite,
         },
     })
+}
+
+/// `create_event_from_text` (R8, ADR 0251): the sentence is read like the
+/// calendar's quick add (`ParseEventText`, in `tz`, else the calendar
+/// preferences' zone, else the computer's) and the event is created like
+/// `create_event` (policy kind `calendar`, through the operation queue).
+/// A sentence without a time is refused; nothing is created then.
+pub(crate) async fn create_event_from_text<D: McpData>(
+    ctx: &Ctx<'_, D>,
+    a: CreateEventFromTextArgs,
+) -> Result<Plan, Failure> {
+    ctx.access.require(McpScope::Calendar)?;
+    let kind = kind_and_scopes(ctx, false)?;
+    if a.text.trim().is_empty() {
+        return Err(invalid("the text is empty"));
+    }
+    let calendar = ctx.calendar(a.calendar_id.as_deref(), false).await?;
+    let tz = match a.tz.clone() {
+        Some(tz) => tz,
+        None => ctx.view_zone().await?,
+    };
+    let response = ctx
+        .shared
+        .data
+        .query(Request::ParseEventText {
+            text: a.text.clone(),
+            tz,
+            now: None,
+            locale: a.locale.clone(),
+        })
+        .await?;
+    let Response::EventTextParsed { parsed } = response else {
+        return Err(unexpected(&response));
+    };
+    let (Some(start), Some(end)) = (parsed.start, parsed.end) else {
+        return Err(invalid("the text names no date or time"));
+    };
+    let title = if parsed.title.trim().is_empty() {
+        a.text.trim().to_owned()
+    } else {
+        parsed.title
+    };
+    let mut fields = EventFields::new(title, start, end);
+    fields.location = parsed.location;
+    new_event_plan(ctx, kind, calendar, fields, parsed.recurrence, false)
 }
 
 /// `update_event`.
@@ -834,6 +909,28 @@ fn due(text: &str) -> Result<PimTime, Failure> {
     parse_time(text, None)
 }
 
+/// The display alarms of a task's reminders (`upsert_task`, plug-in task
+/// writes; R8, ADR 0251): at most [`MAX_TASK_REMINDERS`], each exactly
+/// one form; a reminder before the due time needs a due (or start) time.
+fn task_alarms(
+    reminders: &[TaskReminderArg],
+    fields: &TaskFields,
+) -> Result<Vec<nail_api::pim::Alarm>, Failure> {
+    if reminders.len() > MAX_TASK_REMINDERS {
+        return Err(invalid(format!("at most {MAX_TASK_REMINDERS} reminders")));
+    }
+    let anchored = fields.due.is_some() || fields.start.is_some();
+    reminders
+        .iter()
+        .map(|r| {
+            if r.minutes_before.is_some() && !anchored {
+                return Err(invalid("a reminder before the due time needs a due date"));
+            }
+            r.to_alarm().map_err(invalid)
+        })
+        .collect()
+}
+
 /// `upsert_task`.
 pub(crate) async fn upsert_task<D: McpData>(
     ctx: &Ctx<'_, D>,
@@ -893,6 +990,9 @@ pub(crate) async fn upsert_task<D: McpData>(
         }
         related = Some(summary);
     }
+    if let Some(reminders) = &a.reminders {
+        fields.alarms = task_alarms(reminders, &fields)?;
+    }
     let was_done = before
         .as_ref()
         .is_some_and(|f| f.status == TaskStatus::Completed);
@@ -947,6 +1047,19 @@ pub(crate) async fn upsert_task<D: McpData>(
             "priority",
             old.and_then(|f| text(f.priority)),
             text(fields.priority),
+        ));
+    }
+    if old.map_or(!fields.alarms.is_empty(), |f| f.alarms != fields.alarms) {
+        let count = |list: &[nail_api::pim::Alarm]| super::plan::count(list.len());
+        changes.push(change(
+            "mcp-tool-field-reminders",
+            old.and_then(|f| count(&f.alarms)),
+            count(&fields.alarms),
+        ));
+        lines.push(audit(
+            "reminders",
+            old.and_then(|f| count(&f.alarms)),
+            count(&fields.alarms),
         ));
     }
     if let Some(done) = complete {

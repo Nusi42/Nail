@@ -364,6 +364,11 @@ async fn every_write_checks_the_grant() {
         ),
         ("upsert_contact", json!({"full_name": "Ada"}), "pim"),
         ("upsert_task", json!({"title": "x"}), "pim"),
+        (
+            "create_event_from_text",
+            json!({"text": "Lunch with Bob tomorrow 12:30 at Corner café"}),
+            "calendar",
+        ),
         ("create_rule", json!({"text": "rule \"x\" {}"}), "rules"),
         ("run_rules", json!({"rules": ["receipts"]}), "rules"),
         (
@@ -1279,6 +1284,137 @@ async fn calendar_contact_and_task_writes() {
     )
     .await;
     assert_eq!(value(&r)["error"], "invalid_request");
+}
+
+/// R8 (ADR 0251): tasks from agents carry reminders; `upsert_task`
+/// replaces them, checks each and the count.
+#[tokio::test]
+async fn tasks_from_agents_carry_reminders() {
+    let (env, _, token) = claude(&[McpScope::Pim]).await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let r = call(
+        &client,
+        "upsert_task",
+        json!({"title": "Call Ada", "due": "2026-10-09T09:00:00Z",
+               "reminders": [{"minutes_before": 15}, {"at": "2026-10-08T08:00:00Z"}]}),
+    )
+    .await;
+    assert_eq!(value(&r)["status"], "done", "{r:?}");
+    let Request::CreateTask { fields, .. } = env.data.written().pop().unwrap() else {
+        panic!()
+    };
+    let expected: Vec<nail_api::pim::Alarm> = [
+        nail_api::mcp::tools::TaskReminderArg {
+            minutes_before: Some(15),
+            at: None,
+        },
+        nail_api::mcp::tools::TaskReminderArg {
+            minutes_before: None,
+            at: Some("2026-10-08T08:00:00Z".into()),
+        },
+    ]
+    .iter()
+    .map(|r| r.to_alarm().unwrap())
+    .collect();
+    assert_eq!(fields.alarms, expected);
+    // An existing task gets its reminders replaced.
+    let r = call(
+        &client,
+        "upsert_task",
+        json!({"task_id": "t1", "reminders": [{"at": "2026-10-08T08:00:00Z"}]}),
+    )
+    .await;
+    assert_eq!(value(&r)["status"], "done", "{r:?}");
+    let Request::UpdateTask { fields, .. } = env.data.written().pop().unwrap() else {
+        panic!()
+    };
+    assert_eq!(fields.alarms.len(), 1);
+    let writes = env.data.written().len();
+    let eleven: Vec<Value> = (0..11).map(|m| json!({"minutes_before": m})).collect();
+    for args in [
+        json!({"title": "x", "due": "2026-10-09", "reminders": eleven}),
+        json!({"title": "x", "reminders": [{"minutes_before": 5}]}),
+        json!({"title": "x", "due": "2026-10-09", "reminders": [{}]}),
+        json!({"title": "x", "reminders": [{"at": "2026-10-08T08:00:00"}]}),
+        json!({"task_id": "t1", "reminders": []}),
+    ] {
+        let r = call(&client, "upsert_task", args.clone()).await;
+        assert_eq!(value(&r)["error"], "invalid_request", "{args}: {r:?}");
+    }
+    assert_eq!(env.data.written().len(), writes, "nothing written");
+}
+
+/// R8 (ADR 0251): `create_event_from_text` reads the sentence like quick
+/// add (in the preferences' zone unless the agent names one), creates the
+/// event like `create_event`, refuses a sentence without a time and only
+/// answers on `dry_run`.
+#[tokio::test]
+async fn events_are_created_from_a_sentence() {
+    let (env, _, token) = claude(&[McpScope::Calendar]).await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let sentence = "Lunch with Bob tomorrow 12:30 at Corner café";
+    let r = call(
+        &client,
+        "create_event_from_text",
+        json!({"text": sentence, "dry_run": true}),
+    )
+    .await;
+    let preview = value(&r);
+    assert_eq!(preview["dry_run"], true, "{r:?}");
+    assert_eq!(preview["title"], "Lunch with Bob");
+    assert_eq!(preview["calendar_id"], "cal-work");
+    assert_eq!(preview["start"]["tz"], "Europe/Berlin");
+    assert_eq!(
+        env.data.written(),
+        Vec::<Request>::new(),
+        "a dry run creates nothing"
+    );
+
+    let r = call(&client, "create_event_from_text", json!({"text": sentence})).await;
+    assert_eq!(value(&r)["created"], json!(["e-new"]), "{r:?}");
+    let Request::CreateEvent {
+        calendar_id,
+        fields,
+        recurrence,
+    } = env.data.written().pop().unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(calendar_id.as_str(), "cal-work");
+    assert_eq!(fields.title, "Lunch with Bob");
+    assert_eq!(fields.location.as_deref(), Some("Corner café"));
+    assert_eq!(
+        fields.start,
+        nail_api::pim::PimTime::zoned("2026-10-02T12:30:00", "Europe/Berlin")
+    );
+    assert_eq!(recurrence, None);
+
+    // The agent's zone wins.
+    let r = call(
+        &client,
+        "create_event_from_text",
+        json!({"text": sentence, "tz": "America/New_York"}),
+    )
+    .await;
+    assert_eq!(value(&r)["status"], "done", "{r:?}");
+    let Request::CreateEvent { fields, .. } = env.data.written().pop().unwrap() else {
+        panic!()
+    };
+    assert_eq!(fields.start.tz(), Some("America/New_York"));
+
+    let writes = env.data.written().len();
+    for (args, error) in [
+        (json!({"text": "Lunch with Bob"}), "invalid_request"),
+        (json!({"text": "  "}), "invalid_request"),
+        (
+            json!({"text": sentence, "calendar_id": "cal-ro"}),
+            "forbidden",
+        ),
+    ] {
+        let r = call(&client, "create_event_from_text", args.clone()).await;
+        assert_eq!(value(&r)["error"], error, "{args}: {r:?}");
+    }
+    assert_eq!(env.data.written().len(), writes, "nothing created");
 }
 
 #[tokio::test]

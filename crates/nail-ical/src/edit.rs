@@ -18,7 +18,7 @@ use nail_api::pim::calendar::EditScope;
 use nail_api::pim::source::PimItemSync;
 use nail_api::pim::{
     CalendarEvent, EventFields, EventOverride, PimIssue, PimTime, Recurrence, RecurrenceEnd,
-    TaskFields,
+    RecurrencePeriod, TaskFields,
 };
 
 use crate::recur::{Occurrences, RuleIter, UntilBound};
@@ -151,10 +151,13 @@ pub fn delete_occurrence(
         if !recurrence.exceptions.contains(&exception) {
             recurrence.exceptions.push(exception);
         }
-        // An extra date for that occurrence goes too.
+        // An extra date for that occurrence goes too (with its end).
         recurrence
             .dates
             .retain(|d| time::to_frame(d, &start) != Some(target));
+        recurrence
+            .periods
+            .retain(|p| time::to_frame(&p.start, &start) != Some(target));
     }
     Ok(())
 }
@@ -230,6 +233,9 @@ pub fn end_before(
             .dates
             .retain(|d| time::to_frame(d, &start).is_some_and(|f| f < target));
         recurrence
+            .periods
+            .retain(|p| time::to_frame(&p.start, &start).is_some_and(|f| f < target));
+        recurrence
             .exceptions
             .retain(|d| time::to_frame(d, &start).is_some_and(|f| f < target));
     }
@@ -284,6 +290,12 @@ pub fn split_series(
             .filter(|d| later(d))
             .cloned()
             .collect(),
+        periods: old
+            .periods
+            .iter()
+            .filter(|p| later(&p.start))
+            .cloned()
+            .collect(),
     };
     Ok(CalendarEvent {
         id: new_event_id,
@@ -325,6 +337,18 @@ pub fn move_series(
     if let Some(recurrence) = event.recurrence.as_mut() {
         recurrence.dates = recurrence.dates.iter().filter_map(moved).collect();
         recurrence.exceptions = recurrence.exceptions.iter().filter_map(moved).collect();
+        // A period keeps its length: both ends move (the end in its own
+        // frame).
+        recurrence.periods = recurrence
+            .periods
+            .iter()
+            .filter_map(|p| {
+                let end = time::to_frame(&p.end, &p.start)? - time::wall(&p.start)?;
+                let start = moved(&p.start)?;
+                let end = time::like(time::wall(&start)? + end, &start);
+                Some(RecurrencePeriod { start, end })
+            })
+            .collect();
     }
     for o in &mut event.overrides {
         if let Some(rid) = moved(&o.recurrence_id) {

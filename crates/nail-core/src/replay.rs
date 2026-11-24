@@ -116,6 +116,9 @@ struct EventReplayer<'a> {
     /// What deferred the pass: the error class (for its one log line) and
     /// the server's requested wait (for the quick retry).
     deferred_by: std::sync::Mutex<Option<Deferral>>,
+    /// The error class of the pass's first permanent failure (for its one
+    /// summary line, R8).
+    failed_by: std::sync::Mutex<Option<ErrorCode>>,
 }
 
 /// The first retryable failure of a pass.
@@ -149,7 +152,10 @@ impl EventReplayer<'_> {
                 ReplayOutcome::Retry(op_error(err))
             }
             Err(err) => {
-                tracing::warn!(op = %op.id, %err, "write failed");
+                // One summary line per pass (`log_failed_pass`), not one
+                // warning per operation: a mass failure stays readable.
+                tracing::debug!(op = %op.id, %err, "write failed");
+                crate::service::lock(&self.failed_by).get_or_insert(err.code);
                 ReplayOutcome::Fail(op_error(err))
             }
         }
@@ -201,6 +207,7 @@ pub(crate) async fn replay_account(
         executor,
         policy: replay_policy(),
         deferred_by: std::sync::Mutex::new(None),
+        failed_by: std::sync::Mutex::new(None),
     };
     let report = service
         .store()
@@ -221,6 +228,15 @@ pub(crate) async fn replay_account(
         retry_soon(service, account, deferral.and_then(|d| d.retry_after_secs));
     }
     if !report.failed.is_empty() {
+        // A write that gave up after its retries failed with the pass's
+        // deferral class.
+        let code = crate::service::lock(&replayer.failed_by)
+            .or_else(|| crate::service::lock(&replayer.deferred_by).map(|d| d.code));
+        log_failed_pass(
+            account,
+            report.failed.len(),
+            code.unwrap_or(ErrorCode::Internal),
+        );
         // Failed writes: clients show the store's state again.
         service.broadcast(Event::MailChanged {
             folder_ids: Vec::new(),
@@ -270,6 +286,14 @@ pub(crate) fn log_deferred_pass(
         .and_then(|s| s.accounts.iter().find(|a| &a.account_id == account))
         .map_or(0, nail_api::OpsAccountSummary::waiting);
     tracing::info!(%account, waiting, error = %code, "writes deferred; retrying later");
+}
+
+/// One warning per pass with permanent failures (R8): the account, how
+/// many writes failed in it and the first failure's error class; never the
+/// errors' text (it may name messages or addresses). Each operation's own
+/// error stays with it in the queue (ADR 0230).
+pub(crate) fn log_failed_pass(account: &AccountId, failed: usize, code: ErrorCode) {
+    tracing::warn!(%account, failed, error = %code, "writes failed");
 }
 
 /// Replays a registered (manual) IMAP account's queue on a fresh
@@ -1452,6 +1476,13 @@ mod tests {
         crate::service::lock(&lines).clone()
     }
 
+    /// No line at INFO or above names `text` (an error's text may name
+    /// messages or addresses).
+    fn assert_quiet_about(lines: &[Line], text: &str) {
+        let info: Vec<&Line> = lines.iter().filter(|(l, _)| *l <= Level::INFO).collect();
+        assert!(info.iter().all(|(_, t)| !t.contains(text)), "{info:?}");
+    }
+
     fn deferred_lines(lines: &[Line]) -> Vec<&Line> {
         lines
             .iter()
@@ -1479,11 +1510,7 @@ mod tests {
         assert!(text.contains("account=demo"), "{text}");
         assert!(text.contains("waiting=3"), "{text}");
         assert!(text.contains("error=network"), "{text}");
-        let info: Vec<&Line> = lines.iter().filter(|(l, _)| *l <= Level::INFO).collect();
-        assert!(
-            info.iter().all(|(_, text)| !text.contains("example")),
-            "{info:?}"
-        );
+        assert_quiet_about(&lines, "example");
 
         // The first write's last attempt gives up (a warning); the next
         // one defers the pass again (one INFO line).
@@ -1578,5 +1605,27 @@ mod tests {
             _ => None,
         });
         assert!(last.is_some_and(|s| s.failed == 4), "{sent:?}");
+    }
+
+    /// R8: a pass in which many writes fail for good logs one warning with
+    /// the account, the count and the error class, never one per operation
+    /// and never the error's text.
+    #[tokio::test]
+    async fn a_mass_failure_logs_one_summary_line() {
+        let t = seeded(Duration::from_hours(1));
+        queue_flags(&t, 6);
+        let refused = Failing(EngineError::permanent(
+            ErrorCode::Rejected,
+            "the server at imap.example.com refused the flags of sam@example.net",
+        ));
+        let lines = logged_pass(&t, &refused).await;
+        let warnings: Vec<&Line> = lines.iter().filter(|(l, _)| *l == Level::WARN).collect();
+        assert_eq!(warnings.len(), 1, "{lines:?}");
+        let text = &warnings[0].1;
+        assert!(text.contains("account=demo"), "{text}");
+        assert!(text.contains("failed=6"), "{text}");
+        assert!(text.contains("error=rejected"), "{text}");
+        assert_quiet_about(&lines, "example");
+        assert_eq!(t.service.ops_summary().await.unwrap().failed, 6);
     }
 }

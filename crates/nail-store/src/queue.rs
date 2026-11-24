@@ -1431,12 +1431,13 @@ impl Store {
                         (OpState::Done, None)
                     }
                     ReplayOutcome::Fail(err) => {
-                        tracing::warn!(%id, error = %err, "operation failed permanently");
+                        // The caller logs one line per pass (R8).
+                        tracing::debug!(%id, error = %err, "operation failed permanently");
                         report.failed.push(id);
                         (OpState::Failed, Some(err))
                     }
                     ReplayOutcome::Retry(err) if op.attempts >= policy.max_attempts => {
-                        tracing::warn!(%id, error = %err, attempts = op.attempts, "operation gave up after retries");
+                        tracing::debug!(%id, error = %err, attempts = op.attempts, "operation gave up after retries");
                         report.failed.push(id);
                         (OpState::Failed, Some(err))
                     }

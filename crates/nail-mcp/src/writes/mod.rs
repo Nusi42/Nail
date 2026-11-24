@@ -43,7 +43,10 @@ use nail_api::agents::{
     ActionActor, ActionAttribution, ActionKind, Confirmation, ConfirmationDecision,
     ConfirmationSource, ConfirmationState, NewConfirmation,
 };
-use nail_api::mcp::tools::{IDEMPOTENCY_TTL_SECS, McpToolSpec, McpWriteResult, is_idempotency_key};
+use nail_api::mcp::tools::{
+    CREATE_EVENT_FROM_TEXT_TOOL, IDEMPOTENCY_TTL_SECS, McpToolSpec, McpWriteResult,
+    is_idempotency_key,
+};
 use nail_api::mcp::{McpCallKind, McpClient, McpOutcome};
 use nail_api::{ApiError, ConfirmationId, ErrorCode, LocalizedMessage, McpClientId};
 use rmcp::ErrorData;
@@ -60,7 +63,7 @@ use crate::broker::Submitted;
 use crate::data::McpData;
 use crate::server::{Failure, Shared, now};
 
-use self::plan::{AuditChange, Plan};
+use self::plan::{Action, AuditChange, Plan};
 
 /// How writes wait for the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -664,6 +667,19 @@ pub(crate) async fn call<D: McpData>(
             return Err(err);
         }
     };
+    // R8: `dry_run` answers what would be created; nothing runs.
+    if let Some(preview) = dry_run_preview(tool, request, &plan) {
+        shared
+            .audit(
+                Some(client),
+                McpCallKind::Tool,
+                tool,
+                McpOutcome::Allowed,
+                Some(crate::messages::DETAIL_DRY_RUN.to_owned()),
+            )
+            .await;
+        return Ok(CallToolResult::structured(preview).into());
+    }
     if plan.sends > 0
         && let Err(limited) = shared
             .limiter
@@ -828,6 +844,38 @@ async fn continue_round<D: McpData>(
     Ok(tool_result(&outcome).into())
 }
 
+/// What a `dry_run` call (`create_event_from_text`, R8) would create:
+/// `None` when the call is not a dry run.
+fn dry_run_preview(tool: &str, request: &CallToolRequestParams, plan: &Plan) -> Option<Value> {
+    let dry = request
+        .arguments
+        .as_ref()
+        .and_then(|a| a.get("dry_run"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if tool != CREATE_EVENT_FROM_TEXT_TOOL || !dry {
+        return None;
+    }
+    let Action::CreateEvent {
+        calendar_id,
+        fields,
+        recurrence,
+        ..
+    } = &plan.action
+    else {
+        return None;
+    };
+    Some(json!({
+        "dry_run": true,
+        "calendar_id": calendar_id,
+        "title": fields.title,
+        "start": fields.start,
+        "end": fields.end,
+        "location": fields.location,
+        "recurrence": recurrence,
+    }))
+}
+
 /// Builds the plan of `tool`; `Err` for malformed arguments (a protocol
 /// error), `Ok(Err)` for a refusal or an invalid request.
 async fn plan_for<D: McpData>(
@@ -850,6 +898,9 @@ async fn plan_for<D: McpData>(
         "send_message" => mail::send_message(&ctx, crate::tools::args(request)?).await,
         "edit_open_draft" => mail::edit_open_draft(&ctx, crate::tools::args(request)?).await,
         "create_event" => pim::create_event(&ctx, crate::tools::args(request)?).await,
+        CREATE_EVENT_FROM_TEXT_TOOL => {
+            pim::create_event_from_text(&ctx, crate::tools::args(request)?).await
+        }
         "update_event" => pim::update_event(&ctx, crate::tools::args(request)?).await,
         "respond_to_invite" => pim::respond_to_invite(&ctx, crate::tools::args(request)?).await,
         "upsert_contact" => pim::upsert_contact(&ctx, crate::tools::args(request)?).await,
@@ -945,7 +996,7 @@ mod tests {
             accounts: vec!["work".into()],
             audit: vec![audit("flagged", Some("false".into()), Some("true".into()))],
             sends: 0,
-            action: plan::Action::Requests { requests: vec![] },
+            action: Action::Requests { requests: vec![] },
         }
     }
 

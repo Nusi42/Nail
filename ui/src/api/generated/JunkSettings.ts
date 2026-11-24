@@ -28,4 +28,11 @@ honor_server_flags: boolean,
  * Move messages classified as junk to the Junk folder (otherwise they
  * only get the `$Junk` keyword).
  */
-move_to_junk: boolean, };
+move_to_junk: boolean, 
+/**
+ * Probability (percent, 0 to [`Self::threshold`] − 1) at or below
+ * which a scored message is not junk; between this and the threshold
+ * it is unsure ([`JunkVerdict::unsure`]). Left out =
+ * [`Self::DEFAULT_HAM_CUTOFF`] (R8).
+ */
+ham_cutoff?: number, };

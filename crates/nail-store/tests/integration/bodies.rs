@@ -66,7 +66,7 @@ fn headers_only_merges_mark_rows_and_keep_downloaded_bodies() {
     assert_eq!(store.headers_only_count(&"inbox".into()).unwrap(), 2);
 
     // m1 is opened: its body is fetched on demand.
-    let old = store.attach_body(&"m1".into(), &full, 55).unwrap();
+    let old = store.attach_body(&"m1".into(), &full, 55, true).unwrap();
     assert_eq!(old, Some(headers.clone()), "the header blob can go");
     assert_eq!(state(&store, "m1"), BodyState::OnDemand);
     assert!(
@@ -77,8 +77,19 @@ fn headers_only_merges_mark_rows_and_keep_downloaded_bodies() {
             .headers_only
     );
     assert_eq!(store.message_meta(&"m1".into()).unwrap().size, Some(55));
+    assert!(
+        store
+            .get_message(&"m1".into())
+            .unwrap()
+            .summary
+            .has_attachments,
+        "the full message decides"
+    );
     // Attaching the same blob again changes nothing to collect.
-    assert_eq!(store.attach_body(&"m1".into(), &full, 55).unwrap(), None);
+    assert_eq!(
+        store.attach_body(&"m1".into(), &full, 55, true).unwrap(),
+        None
+    );
 
     // A resync of the headers-only folder keeps the downloaded body and
     // its size.
@@ -152,7 +163,7 @@ fn fetch_targets_name_folder_path_and_uid() {
         )
         .unwrap();
     store
-        .attach_body(&"m2".into(), &BlobHash::of(FULL), 55)
+        .attach_body(&"m2".into(), &BlobHash::of(FULL), 55, false)
         .unwrap();
     let targets = store
         .body_fetch_targets(&["m2".into(), "m1".into(), "missing".into()])
@@ -213,7 +224,11 @@ fn aged_bodies_can_be_detached_again() {
         store.bodies_before(&"inbox".into(), cutoff, 10).unwrap()
     );
     assert!(store.detach_body(&"missing".into(), &headers).is_err());
-    assert!(store.attach_body(&"missing".into(), &headers, 1).is_err());
+    assert!(
+        store
+            .attach_body(&"missing".into(), &headers, 1, false)
+            .is_err()
+    );
 }
 
 #[test]

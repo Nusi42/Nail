@@ -70,6 +70,8 @@ mod plugins;
 mod pop3_engine;
 mod portability;
 mod print;
+#[cfg(windows)]
+mod registry_watch;
 mod remote;
 mod remote_access;
 mod replay;

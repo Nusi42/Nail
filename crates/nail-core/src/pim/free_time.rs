@@ -152,6 +152,95 @@ mod tests {
         );
     }
 
+    /// R8: one table over zones east and west of UTC, a half-hour zone,
+    /// both hemispheres' summer-time changes (a gap and a repeated hour)
+    /// and a 30-minute change: each case's free stretch cut to 09:00-17:00
+    /// local time on the chosen days.
+    #[test]
+    fn working_hours_in_many_zones() {
+        use chrono_tz::{America, Asia, Australia, Europe};
+        struct Case {
+            what: &'static str,
+            zone: Tz,
+            days: &'static [Weekday],
+            free: (&'static str, &'static str),
+            want: &'static [(&'static str, &'static str)],
+        }
+        let cases = [
+            Case {
+                what: "New York, a winter Monday",
+                zone: America::New_York,
+                days: &[Weekday::Mon],
+                free: ("2026-12-07T00:00:00Z", "2026-12-08T12:00:00Z"),
+                want: &[("2026-12-07T14:00:00Z", "2026-12-07T22:00:00Z")],
+            },
+            Case {
+                what: "Tokyo, a day that starts on the UTC day before",
+                zone: Asia::Tokyo,
+                days: &Weekday::ALL,
+                free: ("2026-10-04T15:00:00Z", "2026-10-05T15:00:00Z"),
+                want: &[("2026-10-05T00:00:00Z", "2026-10-05T08:00:00Z")],
+            },
+            Case {
+                what: "Kolkata, half an hour off UTC",
+                zone: Asia::Kolkata,
+                days: &Weekday::ALL,
+                free: ("2026-10-05T00:00:00Z", "2026-10-05T23:59:00Z"),
+                want: &[("2026-10-05T03:30:00Z", "2026-10-05T11:30:00Z")],
+            },
+            Case {
+                what: "New York, the Sunday clocks go forward (a gap at 02:00)",
+                zone: America::New_York,
+                days: &[Weekday::Sun, Weekday::Mon],
+                free: ("2026-03-08T00:00:00Z", "2026-03-10T00:00:00Z"),
+                want: &[
+                    ("2026-03-08T13:00:00Z", "2026-03-08T21:00:00Z"),
+                    ("2026-03-09T13:00:00Z", "2026-03-09T21:00:00Z"),
+                ],
+            },
+            Case {
+                what: "Berlin, the Sunday clocks go back (an hour twice)",
+                zone: Europe::Berlin,
+                days: &[Weekday::Sat, Weekday::Sun],
+                free: ("2026-10-24T00:00:00Z", "2026-10-26T00:00:00Z"),
+                want: &[
+                    ("2026-10-24T07:00:00Z", "2026-10-24T15:00:00Z"),
+                    ("2026-10-25T08:00:00Z", "2026-10-25T16:00:00Z"),
+                ],
+            },
+            Case {
+                what: "Sydney, southern summer time starts in October",
+                zone: Australia::Sydney,
+                days: &[Weekday::Fri, Weekday::Mon],
+                free: ("2026-10-01T00:00:00Z", "2026-10-06T00:00:00Z"),
+                want: &[
+                    ("2026-10-01T23:00:00Z", "2026-10-02T07:00:00Z"),
+                    ("2026-10-04T22:00:00Z", "2026-10-05T06:00:00Z"),
+                ],
+            },
+            Case {
+                what: "Lord Howe, a summer-time change of 30 minutes",
+                zone: Australia::Lord_Howe,
+                days: &[Weekday::Sat, Weekday::Mon],
+                free: ("2026-10-02T12:00:00Z", "2026-10-05T12:00:00Z"),
+                want: &[
+                    ("2026-10-02T22:30:00Z", "2026-10-03T06:30:00Z"),
+                    ("2026-10-04T22:00:00Z", "2026-10-05T06:00:00Z"),
+                ],
+            },
+        ];
+        for case in cases {
+            let slots = [(at(case.free.0), at(case.free.1))];
+            let cut = within_hours(&slots, case.zone, NINE_TO_FIVE, case.days, 30 * 60);
+            let want: Vec<(String, String)> = case
+                .want
+                .iter()
+                .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+                .collect();
+            assert_eq!(texts(&cut), want, "{}", case.what);
+        }
+    }
+
     #[test]
     fn midnight_end_and_summer_time_days() {
         let whole = WorkHours {

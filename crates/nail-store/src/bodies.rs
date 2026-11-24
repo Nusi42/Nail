@@ -161,12 +161,14 @@ impl Store {
     /// `size` bytes. A `headers-only` message becomes `on-demand`; a
     /// message that had its body keeps its state. Returns the blob it had
     /// before (the header block), for [`Store::remove_unreferenced_blobs`];
-    /// `None` when there was none or it is unchanged.
+    /// `None` when there was none or it is unchanged. `has_attachments` is
+    /// what the full message says (R8): a header block can only guess it.
     pub fn attach_body(
         &self,
         id: &MessageId,
         blob: &BlobHash,
         size: u64,
+        has_attachments: bool,
     ) -> Result<Option<BlobHash>> {
         let size = i64::try_from(size)
             .map_err(|_| Error::InvalidData(format!("size {size} too large")))?;
@@ -177,8 +179,15 @@ impl Store {
                 other => other,
             };
             tx.execute(
-                "UPDATE messages SET blob_hash = ?2, size = ?3, body_state = ?4 WHERE id = ?1",
-                params![id.as_str(), blob.as_str(), size, state.as_str()],
+                "UPDATE messages SET blob_hash = ?2, size = ?3, body_state = ?4,
+                     has_attachments = ?5 WHERE id = ?1",
+                params![
+                    id.as_str(),
+                    blob.as_str(),
+                    size,
+                    state.as_str(),
+                    has_attachments
+                ],
             )?;
             old.map(|h| BlobHash::parse(&h))
                 .transpose()

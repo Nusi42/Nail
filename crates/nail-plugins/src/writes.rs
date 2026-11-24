@@ -18,8 +18,8 @@ use nail_api::agents::ActionKind;
 use nail_api::mcp::tools::{
     CreateDraftArgs, CreateEventArgs, DeleteMessagesArgs, DraftAttachmentArg, MAX_AGENT_ATTACHMENT,
     MAX_BATCH, McpConversationArg, McpEditScope, McpInviteResponse, McpTextFormat, McpWriteResult,
-    RespondToInviteArgs, SendMessageArgs, UpdateDraftArgs, UpdateEventArgs, UpdateMessagesArgs,
-    UpsertContactArgs, UpsertTaskArgs,
+    RespondToInviteArgs, SendMessageArgs, TaskReminderArg, UpdateDraftArgs, UpdateEventArgs,
+    UpdateMessagesArgs, UpsertContactArgs, UpsertTaskArgs,
 };
 use nail_api::plugins::PluginPermission;
 use nail_api::{ApiError, MessageId};
@@ -606,6 +606,29 @@ struct TaskIn {
     /// message link.
     #[serde(default)]
     links: Vec<String>,
+    /// Reminders (replace the task's; `[]` removes them; R8).
+    #[serde(default)]
+    reminders: Option<Vec<ReminderIn>>,
+}
+
+/// A task reminder as plug-ins write it (`{minutesBefore}` or `{at}`), the
+/// camel-case form of [`TaskReminderArg`].
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReminderIn {
+    #[serde(default)]
+    minutes_before: Option<u32>,
+    #[serde(default)]
+    at: Option<String>,
+}
+
+impl From<ReminderIn> for TaskReminderArg {
+    fn from(r: ReminderIn) -> Self {
+        Self {
+            minutes_before: r.minutes_before,
+            at: r.at,
+        }
+    }
 }
 
 /// The message id of a `nail://messages/<id>` URI.
@@ -648,8 +671,9 @@ fn task(input: TaskIn, task_id: Option<String>) -> Result<UpsertTaskArgs, ApiErr
         completed: input.completed,
         priority: input.priority,
         related_message_id: related,
-        // Plug-in reminders arrive with the core package (ADR 0251).
-        reminders: None,
+        reminders: input
+            .reminders
+            .map(|list| list.into_iter().map(TaskReminderArg::from).collect()),
         idempotency_key: None,
     })
 }
@@ -1155,6 +1179,39 @@ mod tests {
         };
         assert_eq!(args.list_id.as_deref(), Some("inbox-list"));
         assert_eq!(args.related_message_id.as_deref(), Some("m1"));
+        assert_eq!(args.reminders, None, "left out = unchanged");
+        // R8: reminders in the plug-in's camel case.
+        let with_reminders = p(
+            "tasks.update",
+            &json!({"taskId": "t1", "options": {"reminders": [
+                {"minutesBefore": 30}, {"at": "2026-12-01T08:00:00Z"}
+            ]}}),
+        )
+        .unwrap();
+        let PluginWrite::UpsertTask(args) = &with_reminders else {
+            panic!()
+        };
+        assert_eq!(
+            args.reminders,
+            Some(vec![
+                TaskReminderArg {
+                    minutes_before: Some(30),
+                    at: None,
+                },
+                TaskReminderArg {
+                    minutes_before: None,
+                    at: Some("2026-12-01T08:00:00Z".into()),
+                },
+            ])
+        );
+        assert!(
+            p(
+                "tasks.update",
+                &json!({"taskId": "t1", "options": {"reminders": [{"minutes": 5}]}}),
+            )
+            .is_err(),
+            "unknown reminder fields are refused"
+        );
         assert_eq!(t.kind(), ActionKind::Task);
         assert_eq!(t.permissions(), [PluginPermission::TasksWrite]);
         assert_eq!(t.read_messages(), [MessageId::from("m1")]);

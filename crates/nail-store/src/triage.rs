@@ -7,6 +7,12 @@
 
 use std::collections::HashMap;
 
+/// Schema v26 (R8, ADR 0251): whether the classifier was unsure about a
+/// message (its score between the account's not-junk cutoff and its
+/// threshold). Earlier verdicts read as sure.
+pub(crate) const V26: &str = "ALTER TABLE junk_verdicts
+    ADD COLUMN unsure INTEGER NOT NULL DEFAULT 0 CHECK (unsure IN (0, 1));";
+
 use nail_api::sieve::VacationSettings;
 use nail_api::sync::BodyState;
 use nail_api::triage::{
@@ -746,17 +752,18 @@ impl Store {
         }
         self.with_conn(|conn| {
             let changed = conn.execute(
-                "INSERT INTO junk_verdicts (message_id, junk, score, source, decided_at)
-                 SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM messages WHERE id = ?1)
+                "INSERT INTO junk_verdicts (message_id, junk, score, source, decided_at, unsure)
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM messages WHERE id = ?1)
                  ON CONFLICT (message_id) DO UPDATE SET junk = excluded.junk,
                      score = excluded.score, source = excluded.source,
-                     decided_at = excluded.decided_at",
+                     decided_at = excluded.decided_at, unsure = excluded.unsure",
                 params![
                     message.as_str(),
                     verdict.junk,
                     verdict.score,
                     source_str(verdict.source),
-                    now
+                    now,
+                    verdict.unsure,
                 ],
             )?;
             if changed == 0 {
@@ -771,13 +778,14 @@ impl Store {
         self.with_conn(|conn| {
             Ok(conn
                 .query_row(
-                    "SELECT junk, score, source FROM junk_verdicts WHERE message_id = ?1",
+                    "SELECT junk, score, source, unsure FROM junk_verdicts WHERE message_id = ?1",
                     [message.as_str()],
                     |r| {
                         Ok(JunkVerdict {
                             junk: r.get(0)?,
                             score: r.get(1)?,
                             source: parse_source(&r.get::<_, String>(2)?),
+                            unsure: r.get(3)?,
                         })
                     },
                 )

@@ -125,6 +125,25 @@ fn conversation_of(row: &MessageTarget) -> Option<&ThreadId> {
     }
 }
 
+/// Which messages a row reaches.
+#[derive(Debug, Clone, Copy)]
+struct Reach {
+    /// The messages of a conversation row.
+    reach: nail_api::mail_actions::ConversationReach,
+    /// Leave out messages already in Trash (Trash never deletes for good).
+    trash: bool,
+}
+
+impl Reach {
+    /// The reach of a mail action.
+    fn of(action: &MailAction) -> Self {
+        Self {
+            reach: action.reach(),
+            trash: matches!(action, MailAction::Trash),
+        }
+    }
+}
+
 fn issue(issue: MailActionIssue, detail: &str) -> ApiError {
     ApiError::invalid_localized(detail.to_owned(), issue.message_id())
 }
@@ -189,8 +208,9 @@ impl Service {
             .filter(|t| !matches!(t, MessageTarget::List(_)))
             .cloned()
             .collect();
+        let reach = Reach::of(action);
         for (row, picked) in rows.iter().zip(
-            self.resolve_rows(&rows, action, filter, &own, Gone::Fail)
+            self.resolve_rows(&rows, reach, filter, &own, Gone::Fail)
                 .await?,
         ) {
             push(&mut out, picked, conversation_of(row));
@@ -199,27 +219,8 @@ impl Service {
             let MessageTarget::List(list) = target else {
                 continue;
             };
-            let mark = match &list.as_of {
-                Some(text) => Some(parse_mark(text)?),
-                None => fresh,
-            };
-            let except: HashSet<MessageId> = self
-                .resolve_rows(&list.except, action, filter, &own, Gone::Skip)
-                .await?
-                .into_iter()
-                .flat_map(|picked| picked.into_iter().map(|m| m.id))
-                .collect();
-            let rows = self.mail_list_rows(&list.list, filter).await?;
-            let resolved = self
-                .resolve_rows(&rows, action, filter, &own, Gone::Skip)
-                .await?;
-            for (row, mut picked) in rows.iter().zip(resolved) {
-                picked.retain(|m| {
-                    !except.contains(&m.id)
-                        && mark.is_none_or(|mark| m.listed_seq <= mark)
-                        && within(filter, &m.folder_id, &m.account_id)
-                });
-                push(&mut out, picked, conversation_of(row));
+            for (row, picked) in self.resolve_list(list, reach, filter, &own, fresh).await? {
+                push(&mut out, picked, conversation_of(&row));
             }
         }
         // Grouped by account and folder (stable), so the queue hands each
@@ -243,6 +244,85 @@ impl Service {
         Ok(out)
     }
 
+    /// The rows of a list target with the messages each stands for (in
+    /// `reach`), minus the messages its exceptions resolve to, and — with
+    /// an `as_of` mark, or `fresh` for a list without one — minus the
+    /// messages stored after the mark.
+    async fn resolve_list(
+        &self,
+        list: &nail_api::ListTarget,
+        reach: Reach,
+        filter: Option<&FolderFilter>,
+        own: &OwnAddresses,
+        fresh: Option<i64>,
+    ) -> Result<Vec<(MessageTarget, Vec<TargetMessage>)>> {
+        let mark = match &list.as_of {
+            Some(text) => Some(parse_mark(text)?),
+            None => fresh,
+        };
+        let except: HashSet<MessageId> = self
+            .resolve_rows(&list.except, reach, filter, own, Gone::Skip)
+            .await?
+            .into_iter()
+            .flat_map(|picked| picked.into_iter().map(|m| m.id))
+            .collect();
+        let rows = self.mail_list_rows(&list.list, filter).await?;
+        let resolved = self
+            .resolve_rows(&rows, reach, filter, own, Gone::Skip)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .zip(resolved)
+            .map(|(row, mut picked)| {
+                picked.retain(|m| {
+                    !except.contains(&m.id)
+                        && mark.is_none_or(|mark| m.listed_seq <= mark)
+                        && within(filter, &m.folder_id, &m.account_id)
+                });
+                (row, picked)
+            })
+            .collect())
+    }
+
+    /// The messages a whole list stands for when rules run on it (R8, ADR
+    /// 0251): each row as a picked row in the "listed" reach (a
+    /// conversation = its messages in the listed folder), minus the
+    /// exceptions, only those stored at the list's `as_of` mark (or now);
+    /// each message once, grouped by account and folder.
+    pub(crate) async fn list_target_messages(
+        &self,
+        list: &nail_api::ListTarget,
+        filter: Option<&FolderFilter>,
+    ) -> Result<Vec<MessageId>> {
+        if has_nested_list(&list.except) {
+            return Err(issue(
+                MailActionIssue::NestedList,
+                "a list among a list's exceptions",
+            )
+            .into());
+        }
+        let own = self.own_addresses_by_account().await?;
+        let now = self
+            .inner
+            .store
+            .call(nail_store::Store::message_mark)
+            .await?;
+        let reach = Reach {
+            reach: nail_api::mail_actions::ConversationReach::Listed,
+            trash: false,
+        };
+        let mut seen = HashSet::new();
+        let mut messages: Vec<TargetMessage> = self
+            .resolve_list(list, reach, filter, &own, Some(now))
+            .await?
+            .into_iter()
+            .flat_map(|(_, picked)| picked)
+            .filter(|m| seen.insert(m.id.clone()))
+            .collect();
+        messages.sort_by(|a, b| (&a.account_id, &a.folder_id).cmp(&(&b.account_id, &b.folder_id)));
+        Ok(messages.into_iter().map(|m| m.id).collect())
+    }
+
     /// The messages each row target (a message or a conversation) reaches,
     /// in order. A
     /// message row no longer stored fails with `not_found`, or reaches
@@ -256,7 +336,7 @@ impl Service {
     async fn resolve_rows(
         &self,
         rows: &[MessageTarget],
-        action: &MailAction,
+        reach: Reach,
         filter: Option<&FolderFilter>,
         own: &OwnAddresses,
         gone: Gone,
@@ -279,8 +359,7 @@ impl Service {
             }
         }
         let scopes = Arc::new(scopes);
-        let reach = action.reach();
-        let trash = matches!(action, MailAction::Trash);
+        let Reach { reach, trash } = reach;
         let mut out = Vec::with_capacity(rows.len());
         for chunk in rows.chunks(ROWS_PER_STORE_CALL) {
             let (chunk, scopes, own, keep) =

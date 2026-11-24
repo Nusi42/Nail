@@ -95,9 +95,10 @@ impl Service {
             .store()
             .call(move |s| {
                 let hash = blobs.put(&raw)?;
-                let old = s.attach_body(&id, &hash, raw.len() as u64)?;
+                let parsed = nail_mime::parse_message(&raw);
+                let old = s.attach_body(&id, &hash, raw.len() as u64, parsed.has_attachments())?;
                 s.remove_unreferenced_blobs(&blobs, &old.into_iter().collect::<Vec<_>>())?;
-                let doc = IndexDocument::from_raw(id.clone(), account_id, &raw);
+                let doc = IndexDocument::from_parsed(id.clone(), account_id, &parsed);
                 if let Err(err) = index.add(&[doc]) {
                     tracing::warn!(%err, "cannot index a fetched body");
                 }

@@ -1565,6 +1565,7 @@ mod tests {
                 PimTime::zoned("2026-10-12T09:00:00", "Europe/Berlin"), // duplicate
             ],
             exceptions: vec![PimTime::utc("2026-10-19T07:00:00")], // 09:00 Berlin (CEST)
+            periods: Vec::new(),
         };
         let all: Vec<String> = Occurrences::new(&start, Some(&recurrence))
             .unwrap()

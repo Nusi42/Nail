@@ -31,6 +31,8 @@ const MORE_REFUSED_SUFFIX: &str = " more refused connections not logged";
 pub const WRITE_DETAIL_PREFIX: &str = "write ";
 /// Audit detail of a write answered from its idempotency key.
 pub const DETAIL_REPLAYED: &str = "idempotent replay of an earlier result";
+/// Audit detail of a write tried with `dry_run` (R8): nothing ran.
+pub const DETAIL_DRY_RUN: &str = "dry run: nothing changed";
 
 /// The audit detail summing up `count` refused connections.
 pub fn refused_summary(count: u32) -> String {
@@ -74,6 +76,9 @@ pub fn audit_detail(detail: &str) -> Option<LocalizedMessage> {
     }
     if detail == DETAIL_REPLAYED {
         return Some(LocalizedMessage::new("mcp-tool-audit-replayed"));
+    }
+    if detail == DETAIL_DRY_RUN {
+        return Some(LocalizedMessage::new("mcp-tool-audit-dry-run"));
     }
     if let Some(json) = detail.strip_prefix(WRITE_DETAIL_PREFIX) {
         return write_detail(json);
@@ -205,6 +210,10 @@ mod tests {
         assert_eq!(
             audit_detail(DETAIL_REPLAYED).map(|m| m.id).as_deref(),
             Some("mcp-tool-audit-replayed")
+        );
+        assert_eq!(
+            audit_detail(DETAIL_DRY_RUN).map(|m| m.id).as_deref(),
+            Some("mcp-tool-audit-dry-run")
         );
         let limited =
             audit_detail("rate limit `writes_per_minute` (20) reached; retry after 3 s").unwrap();

@@ -48,8 +48,12 @@ use tokio::sync::Notify;
 use crate::error::Result;
 use crate::service::{Service, lock};
 
-/// What the last successful upload of an account put on the server.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What the last successful upload of an account put on the server. Kept
+/// in memory for the upload decisions of this run and in the store (an app
+/// setting, [`uploaded_key`]) for the status after a restart (R8): an
+/// account whose inputs did not change shows `in-sync` at once instead of
+/// `pending` until the start-up upload.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct Uploaded {
     /// Digest of the inputs it was compiled from ([`Inputs::digest`]).
     digest: String,
@@ -60,6 +64,12 @@ struct Uploaded {
     /// The day the script must be recompiled (vacation dates applied by
     /// Nail), `YYYY-MM-DD`.
     recompile_on: Option<String>,
+}
+
+/// The app setting that keeps an account's last [`Uploaded`] (`null` once
+/// it no longer describes the server).
+fn uploaded_key(account: &AccountId) -> String {
+    format!("sieve.uploaded.{account}")
 }
 
 /// In-memory Sieve state of the core.
@@ -106,7 +116,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 .into());
             }
             // Forced: also when the inputs did not change.
-            lock(&service.inner.sieve.uploaded).remove(&account_id);
+            service.forget_sieve_upload(&account_id).await;
             lock(&service.inner.sieve.retry_at).remove(&account_id);
             lock(&service.inner.sieve.uploading).insert(account_id.clone());
             service.queue_sieve(Some(&account_id));
@@ -457,7 +467,7 @@ impl Service {
         let id = account.id.clone();
         let record = self.store().call(move |s| s.sieve_record(&id)).await?;
         let mut status = account_status(account, record);
-        let uploaded = lock(&self.inner.sieve.uploaded).get(&account.id).cloned();
+        let uploaded = self.last_sieve_upload(&account.id).await;
         let current = match (&inputs, &uploaded) {
             (Some(inputs), Some(uploaded)) => uploaded.digest == inputs.digest(),
             _ => false,
@@ -501,7 +511,7 @@ impl Service {
                     .await
                     .ok()
             };
-            lock(&self.inner.sieve.uploaded).remove(&id);
+            self.forget_sieve_upload(&id).await;
             if let Some(record) = recorded
                 && record.script_hash.is_some()
                 && account.enabled
@@ -594,15 +604,16 @@ impl Service {
                 {
                     tracing::warn!(%err, "cannot record the Sieve upload");
                 }
-                lock(&self.inner.sieve.uploaded).insert(
-                    id.clone(),
+                self.remember_sieve_upload(
+                    &id,
                     Uploaded {
                         digest,
                         rules: report.compiled.rules.clone(),
                         vacation_active: report.compiled.vacation.in_script(),
                         recompile_on: report.compiled.vacation.recompile_on.clone(),
                     },
-                );
+                )
+                .await;
             }
             Err(err) => {
                 tracing::warn!(account = %id, %err, "Sieve upload failed");
@@ -612,7 +623,7 @@ impl Service {
                 } else {
                     lock(&self.inner.sieve.unavailable).remove(&id);
                 }
-                lock(&self.inner.sieve.uploaded).remove(&id);
+                self.forget_sieve_upload(&id).await;
                 let retry =
                     now + i64::try_from(self.inner.timing.reconnect_max.as_secs()).unwrap_or(300);
                 lock(&self.inner.sieve.retry_at).insert(id.clone(), retry);
@@ -762,7 +773,47 @@ impl Service {
         {
             tracing::warn!(account = %account.id, "removing the Sieve script timed out");
         }
-        lock(&self.inner.sieve.uploaded).remove(&account.id);
+        self.forget_sieve_upload(&account.id).await;
+    }
+
+    /// The last upload of an account: this run's, else the one kept in the
+    /// store (the status right after a restart).
+    async fn last_sieve_upload(&self, id: &AccountId) -> Option<Uploaded> {
+        if let Some(uploaded) = lock(&self.inner.sieve.uploaded).get(id).cloned() {
+            return Some(uploaded);
+        }
+        let key = uploaded_key(id);
+        self.store()
+            .call(move |s| s.setting::<Option<Uploaded>>(&key))
+            .await
+            .inspect_err(|err| tracing::debug!(%err, "cannot read the last Sieve upload"))
+            .ok()
+            .flatten()
+            .flatten()
+    }
+
+    /// Records a successful upload (memory and store).
+    async fn remember_sieve_upload(&self, id: &AccountId, uploaded: Uploaded) {
+        lock(&self.inner.sieve.uploaded).insert(id.clone(), uploaded.clone());
+        self.keep_sieve_upload(id, Some(uploaded)).await;
+    }
+
+    /// Forgets the last upload (memory and store): it no longer describes
+    /// the server.
+    async fn forget_sieve_upload(&self, id: &AccountId) {
+        lock(&self.inner.sieve.uploaded).remove(id);
+        self.keep_sieve_upload(id, None).await;
+    }
+
+    async fn keep_sieve_upload(&self, id: &AccountId, uploaded: Option<Uploaded>) {
+        let key = uploaded_key(id);
+        if let Err(err) = self
+            .store()
+            .call(move |s| s.set_setting(&key, &uploaded))
+            .await
+        {
+            tracing::warn!(%err, "cannot keep the Sieve upload");
+        }
     }
 }
 

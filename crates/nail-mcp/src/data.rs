@@ -225,6 +225,13 @@ pub trait McpData: Send + Sync + 'static {
         None
     }
 
+    /// The computer's time zone (IANA name): the default zone of
+    /// `create_event_from_text` when the calendar preferences name none
+    /// (R8). The default is UTC.
+    fn local_zone(&self) -> String {
+        nail_api::pim::UTC_ZONE.to_owned()
+    }
+
     /// Renders a user-facing text (confirmation values, elicitation
     /// questions, prompt templates) in the core's locale. The default is
     /// English.

@@ -573,13 +573,22 @@ impl Service {
     }
 }
 
-/// The reminder task: plans at start and hourly, fires what is due,
-/// sleeps until the next reminder (at most `snooze_poll`, so clock
-/// changes are noticed).
+/// The reminder task: plans at start, hourly and after a change of the
+/// computer's time zone (R8: noticed on each wake, on Windows also woken
+/// by the change itself), fires what is due, sleeps until the next
+/// reminder (at most `snooze_poll`, so clock changes are noticed).
 pub(super) async fn run(service: Service) {
     service.replan_all_reminders().await;
     let mut planned_at = service.pim_now();
     let cap = service.inner.timing.snooze_poll;
+    let mut zone = super::zone_watch::ZoneTracker::new(local_zone_name());
+    let inner = Arc::downgrade(&service.inner);
+    // Stops with this task (dropped when it ends or is aborted).
+    let _watch = super::zone_watch::ZoneWatch::start(move || {
+        if let Some(inner) = inner.upgrade() {
+            inner.pim.reminder_wake.notify_one();
+        }
+    });
     loop {
         match service.fire_reminders().await {
             Ok(0) => {}
@@ -587,7 +596,11 @@ pub(super) async fn run(service: Service) {
             Err(err) => tracing::warn!(%err, "cannot fire reminders"),
         }
         let now = service.pim_now();
-        if (now - planned_at).abs() >= REPLAN_SECS {
+        let moved = zone.changed(local_zone_name());
+        if moved {
+            tracing::info!("the time zone changed; planning the reminders again");
+        }
+        if moved || (now - planned_at).abs() >= REPLAN_SECS {
             service.replan_all_reminders().await;
             planned_at = now;
         }

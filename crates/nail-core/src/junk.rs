@@ -151,6 +151,7 @@ impl Service {
                         junk,
                         score: None,
                         source: JunkSource::User,
+                        unsure: false,
                     },
                     now,
                 )?;

@@ -52,6 +52,15 @@ pub struct JunkSettings {
     /// Move messages classified as junk to the Junk folder (otherwise they
     /// only get the `$Junk` keyword).
     pub move_to_junk: bool,
+    /// Probability (percent, 0 to [`Self::threshold`] − 1) at or below
+    /// which a scored message is not junk; between this and the threshold
+    /// it is unsure ([`JunkVerdict::unsure`]). Left out =
+    /// [`Self::DEFAULT_HAM_CUTOFF`] (R8).
+    #[serde(
+        default = "JunkSettings::default_ham_cutoff",
+        skip_serializing_if = "JunkSettings::is_default_ham_cutoff"
+    )]
+    pub ham_cutoff: u8,
 }
 
 impl Default for JunkSettings {
@@ -62,6 +71,7 @@ impl Default for JunkSettings {
             min_training: Self::DEFAULT_MIN_TRAINING,
             honor_server_flags: true,
             move_to_junk: true,
+            ham_cutoff: Self::DEFAULT_HAM_CUTOFF,
         }
     }
 }
@@ -71,6 +81,23 @@ impl JunkSettings {
     pub const DEFAULT_THRESHOLD: u8 = 90;
     /// Default of [`Self::min_training`].
     pub const DEFAULT_MIN_TRAINING: u32 = 10;
+    /// Default of [`Self::ham_cutoff`] (SpamBayes' not-junk cutoff).
+    pub const DEFAULT_HAM_CUTOFF: u8 = 20;
+
+    /// [`Self::DEFAULT_HAM_CUTOFF`] (serde's default of a left-out
+    /// `ham_cutoff`).
+    fn default_ham_cutoff() -> u8 {
+        Self::DEFAULT_HAM_CUTOFF
+    }
+
+    /// Whether `cutoff` is [`Self::DEFAULT_HAM_CUTOFF`] (left out of JSON).
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde's skip_serializing_if passes a reference"
+    )]
+    fn is_default_ham_cutoff(cutoff: &u8) -> bool {
+        *cutoff == Self::DEFAULT_HAM_CUTOFF
+    }
 
     /// Problems with the settings (empty = valid).
     pub fn issues(&self) -> Vec<JunkIssue> {
@@ -80,6 +107,9 @@ impl JunkSettings {
         }
         if self.min_training == 0 || self.min_training > 10_000 {
             out.push(JunkIssue::MinTraining);
+        }
+        if self.ham_cutoff >= self.threshold {
+            out.push(JunkIssue::HamCutoff);
         }
         out
     }
@@ -93,17 +123,20 @@ pub enum JunkIssue {
     Threshold,
     /// `min_training` outside 1–10000.
     MinTraining,
+    /// `ham_cutoff` not below the threshold.
+    HamCutoff,
 }
 
 impl JunkIssue {
     /// All issues.
-    pub const ALL: [JunkIssue; 2] = [Self::Threshold, Self::MinTraining];
+    pub const ALL: [JunkIssue; 3] = [Self::Threshold, Self::MinTraining, Self::HamCutoff];
 
     /// Fluent message id, e.g. `junk-issue-threshold`.
     pub fn message_id(self) -> &'static str {
         match self {
             Self::Threshold => "junk-issue-threshold",
             Self::MinTraining => "junk-issue-min-training",
+            Self::HamCutoff => "junk-issue-ham-cutoff",
         }
     }
 }
@@ -150,6 +183,11 @@ pub struct JunkVerdict {
     pub score: Option<u8>,
     /// Who decided.
     pub source: JunkSource,
+    /// The classifier was unsure: the score lies between the account's
+    /// [`JunkSettings::ham_cutoff`] and its threshold (`junk` is then
+    /// `false`: the message stays where it is). Left out = `false` (R8).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unsure: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -434,6 +472,27 @@ mod tests {
             ..JunkSettings::default()
         };
         assert_eq!(bad.issues(), [JunkIssue::Threshold, JunkIssue::MinTraining]);
+        // R8: the not-junk cutoff lies below the threshold; the default is
+        // left out of JSON.
+        assert_eq!(s.ham_cutoff, JunkSettings::DEFAULT_HAM_CUTOFF);
+        assert!(
+            serde_json::to_value(&s)
+                .unwrap()
+                .get("ham_cutoff")
+                .is_none()
+        );
+        let cutoff = JunkSettings {
+            threshold: 80,
+            ham_cutoff: 80,
+            ..JunkSettings::default()
+        };
+        assert_eq!(cutoff.issues(), [JunkIssue::HamCutoff]);
+        let custom = JunkSettings {
+            ham_cutoff: 35,
+            ..JunkSettings::default()
+        };
+        assert_eq!(custom.issues(), Vec::<JunkIssue>::new());
+        assert_eq!(serde_json::to_value(&custom).unwrap()["ham_cutoff"], 35);
         assert_eq!(
             JunkIssue::MinTraining.message_id(),
             "junk-issue-min-training"
@@ -442,10 +501,21 @@ mod tests {
             junk: true,
             score: Some(97),
             source: JunkSource::Classifier,
+            unsure: false,
         };
         assert_eq!(
             serde_json::to_value(&verdict).unwrap(),
             json!({"junk": true, "score": 97, "source": "classifier"})
+        );
+        let unsure = JunkVerdict {
+            junk: false,
+            score: Some(55),
+            source: JunkSource::Classifier,
+            unsure: true,
+        };
+        assert_eq!(
+            serde_json::to_value(&unsure).unwrap(),
+            json!({"junk": false, "score": 55, "source": "classifier", "unsure": true})
         );
     }
 

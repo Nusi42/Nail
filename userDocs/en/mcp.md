@@ -58,7 +58,7 @@ The writing permissions:
 | Delete mail permanently | Delete messages for good — always asks first, every time | `delete_messages` with `permanent` |
 | Write drafts | Create and change drafts, and (with *What is on screen*) edit the draft you have open | `create_draft`, `update_draft`, `edit_open_draft` |
 | Send mail | Send drafts, invitations and answers to invitations (asks first unless you allow it) | `send_message`; mail to attendees |
-| Change calendars | Create and change events and answer invitations | `create_event`, `update_event`, `respond_to_invite` |
+| Change calendars | Create and change events (also from a sentence) and answer invitations | `create_event`, `create_event_from_text`, `update_event`, `respond_to_invite` |
 | Change contacts and tasks | Create and change contacts and tasks | `upsert_contact`, `upsert_task` |
 | Filter rules | Create filter rules (asks first unless you allow it), test them on existing mail, and run your saved rules on messages or a folder | `create_rule`, `test_rule`, `run_rules` |
 
@@ -217,6 +217,7 @@ open another message.
 | `edit_open_draft` | Write drafts + What is on screen | No, unless you make it ask |
 | `send_message` | Send mail | Yes, unless you allow it |
 | `create_event`, `update_event` | Change calendars (+ Send mail to mail the attendees) | No — yes when attendees are mailed, unless you allow it |
+| `create_event_from_text` | Change calendars | No, unless you make it ask |
 | `respond_to_invite` | Change calendars (+ Send mail to tell the organizer) | Yes when the organizer is told, unless you allow it |
 | `upsert_contact`, `upsert_task` | Change contacts and tasks | No, unless you make it ask |
 | `create_rule` | Filter rules | Yes, unless you allow it |
@@ -239,6 +240,20 @@ open another message.
   must name the messages or a folder. Each rule's run shows up in the rule's
   history in the Rules window, where you can undo it; mail a rule forwarded
   or answered stays sent.
+- **Events from a sentence.** `create_event_from_text` reads a sentence
+  such as "Lunch with Bob tomorrow 12:30 at Corner café" the way the
+  calendar's quick-add field does, in the time zone the agent names (else
+  the one in Settings → Calendar & contacts, else the computer's), and
+  creates the event like `create_event` in the calendar the agent names or
+  the first one it may write to. A sentence without a date or time is
+  refused and creates nothing. With `dry_run` the agent only gets back what
+  would be created.
+- **Task reminders.** `upsert_task` takes `reminders`: each one either
+  `minutes_before` the due time or `at` a fixed time (UTC, such as
+  `2026-12-01T08:00:00Z`), at most 10. They replace the task's reminders;
+  `[]` removes them, leaving them out keeps them. A reminder before the due
+  time needs a task with a due date. Plug-ins set them the same way
+  (`reminders: [{ minutesBefore: 15 }]`).
 - **Drafts are never sent by writing them.** Sending is always a separate
   `send_message`. `update_draft` and `send_message` find a draft by the id
   `create_draft` returned or by the message id the agent sees when it reads

@@ -373,11 +373,11 @@ prop_compose! {
             rule.by_hour.clear();
             Recurrence {
                 rules: vec![rule],
-                dates: vec![],
                 exceptions: exception_days
                     .iter()
                     .map(|d| pim(start + chrono::Duration::days(*d), zone, all_day))
                     .collect(),
+                ..Recurrence::default()
             }
         });
         CalendarEvent {

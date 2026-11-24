@@ -440,8 +440,8 @@ fn next_wait(
 
 async fn run_engine(service: Service, config: PimSourceConfig, wake: Arc<Notify>) {
     let mut failures = 0u32;
-    // The refresh interval the feed asked for (kept across unchanged
-    // fetches).
+    // The refresh interval the feed asked for (kept in the store across
+    // unchanged fetches and restarts, R8).
     let mut feed_asks: Option<u32> = None;
     loop {
         service
@@ -450,9 +450,9 @@ async fn run_engine(service: Service, config: PimSourceConfig, wake: Arc<Notify>
         match sync_once(&service, &config).await {
             Ok(changes) => {
                 failures = 0;
-                if changes.refresh_minutes.is_some() {
-                    feed_asks = changes.refresh_minutes;
-                }
+                // A subscription's pass always says what its feed asks
+                // for (also when unchanged, R8); other sources say nothing.
+                feed_asks = changes.refresh_minutes;
                 let now = service.pim_now();
                 service
                     .set_source_state(&config.id, PimSourceState::Idle, None, Some(now))
@@ -513,15 +513,25 @@ pub(crate) fn feed_calendar_id(source: &PimSourceId) -> CalendarId {
     CalendarId::new(format!("{source}-feed"))
 }
 
-/// Fetches a feed; `None` when it did not change (`304`). SSRF-safe,
-/// redirects followed by hand, the body capped while it streams
+/// A feed fetch: the body (`None` when it did not change, `304`) and the
+/// URL the subscription fetches from now (where it permanently moved, R8).
+struct FeedFetch {
+    /// The feed's bytes, `ETag` and `Last-Modified`.
+    body: Option<(Vec<u8>, Option<String>, Option<String>)>,
+    /// The URL to keep in the calendar's sync state.
+    url: String,
+}
+
+/// Fetches a feed from where it was last found (`known.href`: the
+/// configured URL, or where it permanently moved). SSRF-safe, redirects
+/// followed by hand, the body capped while it streams
 /// ([`super::feed_http`]).
 async fn fetch_feed(
     service: &Service,
     config: &PimSourceConfig,
     known: Option<&CollectionSync>,
     secret: Option<&SecretValue>,
-) -> Result<Option<(Vec<u8>, Option<String>, Option<String>, String)>> {
+) -> Result<FeedFetch> {
     let PimSourceSettings::Ics { url, auth, .. } = &config.settings else {
         return Err(ApiError::internal("not a subscription").into());
     };
@@ -533,7 +543,11 @@ async fn fetch_feed(
         )
     };
     let fetch = nail_ical::feed::fetch_url(url).ok_or_else(invalid_url)?;
-    let parsed = Url::parse(&fetch).map_err(|_| invalid_url())?;
+    let configured = Url::parse(&fetch).map_err(|_| invalid_url())?;
+    let parsed = known
+        .and_then(|k| k.href.as_deref())
+        .and_then(|h| Url::parse(h).ok())
+        .unwrap_or_else(|| configured.clone());
     let basic = match auth {
         Some(AuthConfig::Password { username, .. }) => {
             let password = match secret {
@@ -550,8 +564,10 @@ async fn fetch_feed(
         }
         _ => None,
     };
+    let fetched_from = parsed.to_string();
     let request = super::feed_http::FeedRequest {
         url: parsed,
+        login_origin: configured,
         etag: known.and_then(|k| k.etag.clone()),
         last_modified: known.and_then(|k| k.last_modified.clone()),
         basic,
@@ -565,14 +581,24 @@ async fn fetch_feed(
     };
     let tls = nail_auth::tls_config()
         .map_err(|e| ApiError::internal(format!("no TLS configuration: {e}")))?;
-    match super::feed_http::fetch(&request, &nail_proxy::SystemResolver, &tls).await? {
-        super::feed_http::FeedResponse::NotModified => Ok(None),
-        super::feed_http::FeedResponse::Fetched {
-            bytes,
-            etag,
-            last_modified,
-        } => Ok(Some((bytes, etag, last_modified, fetch))),
+    let (body, moved_to) =
+        match super::feed_http::fetch(&request, &nail_proxy::SystemResolver, &tls).await? {
+            super::feed_http::FeedResponse::NotModified { moved_to } => (None, moved_to),
+            super::feed_http::FeedResponse::Fetched {
+                bytes,
+                etag,
+                last_modified,
+                moved_to,
+            } => (Some((bytes, etag, last_modified)), moved_to),
+        };
+    if let Some(moved) = &moved_to {
+        tracing::info!(source = %config.id, "the feed moved permanently; following it");
+        tracing::debug!(source = %config.id, to = %moved, "the feed's new URL");
     }
+    Ok(FeedFetch {
+        body,
+        url: moved_to.map_or(fetched_from, String::from),
+    })
 }
 
 /// What a subscription's calendar was last set up with from
@@ -589,6 +615,14 @@ struct AppliedFeed {
 
 fn applied_feed_key(source: &PimSourceId) -> String {
     format!("pim.feed-applied.{source}")
+}
+
+/// The app setting that keeps the refresh interval a subscription's feed
+/// asked for (`REFRESH-INTERVAL` / `X-PUBLISHED-TTL`, minutes; `null` =
+/// none): an unchanged feed (`304`) and the first pass after a restart
+/// follow it (R8).
+fn feed_refresh_key(source: &PimSourceId) -> String {
+    format!("pim.feed-refresh.{source}")
 }
 
 async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncChanges> {
@@ -644,27 +678,50 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
                 sync.etag = None;
                 sync.last_modified = None;
             }
+            // Another configured URL: where the old one moved no longer
+            // counts (R8).
+            if before.is_none_or(|b| b.url != want.url) {
+                sync.href = None;
+            }
             if before.is_some_and(|b| b.alarms != want.alarms) {
                 s.forget_server_versions(key.as_str())?;
             }
             Ok((Some(sync), changed))
         })
         .await?;
-    let Some((bytes, etag, modified, fetch)) =
-        fetch_feed(service, config, known.as_ref(), None).await?
-    else {
+    let fetched = fetch_feed(service, config, known.as_ref(), None).await?;
+    let fetch = fetched.url;
+    let Some((bytes, etag, modified)) = fetched.body else {
         let setting = applied_feed_key(&config.id);
         let applied = wanted.clone();
-        service
+        let key = calendar_id.0.clone();
+        let refresh_key = feed_refresh_key(&config.id);
+        // An unchanged feed that moved: fetched from its new URL from now.
+        let moved = known
+            .filter(|k| k.href.as_deref() != Some(fetch.as_str()))
+            .map(|k| CollectionSync {
+                href: Some(fetch.clone()),
+                ..k
+            });
+        let refresh = service
             .inner
             .store
-            .call(move |s| s.set_setting(&setting, &applied))
+            .call(move |s| {
+                if let Some(sync) = &moved {
+                    s.set_collection_sync(&key, sync)?;
+                }
+                s.set_setting(&setting, &applied)?;
+                s.setting::<Option<u32>>(&refresh_key)
+            })
             .await?;
         if settings_changed {
             service.replan_all_reminders().await;
         }
         return Ok(SyncChanges {
             collections: settings_changed,
+            // What the feed asked for when it last changed (kept across
+            // restarts, R8).
+            refresh_minutes: refresh.flatten(),
             ..SyncChanges::default()
         });
     };
@@ -742,6 +799,8 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
     let now = service.pim_now();
     let collection = calendar_id.0.clone();
     let setting = applied_feed_key(&config.id);
+    let refresh_key = feed_refresh_key(&config.id);
+    let asked = feed_meta.refresh_minutes;
     let (applied, removed) = service
         .inner
         .store
@@ -767,6 +826,7 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
                 },
             )?;
             s.set_setting(&setting, &wanted)?;
+            s.set_setting(&refresh_key, &asked)?;
             Ok((applied, removed))
         })
         .await?;
@@ -1157,8 +1217,10 @@ pub(crate) async fn test_source(
 ) -> Result<PimSourceTestResult> {
     match config.kind() {
         PimSourceKind::Ics => {
-            let (bytes, _, _, fetch) = fetch_feed(service, config, None, secret.as_ref())
-                .await?
+            let fetched = fetch_feed(service, config, None, secret.as_ref()).await?;
+            let fetch = fetched.url;
+            let (bytes, _, _) = fetched
+                .body
                 .ok_or_else(|| ApiError::internal("unexpected 304"))?;
             let feed =
                 tokio::task::spawn_blocking(move || nail_ical::feed::parse_feed_bytes(&bytes))

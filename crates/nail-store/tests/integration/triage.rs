@@ -443,13 +443,24 @@ fn junk_settings_and_verdicts() {
         junk: true,
         score: Some(97),
         source: JunkSource::Classifier,
+        unsure: false,
     };
     store.set_junk_verdict(&m1, &verdict, T0).unwrap();
     assert_eq!(store.junk_verdict(&m1).unwrap(), Some(verdict));
+    // R8: an unsure verdict stays unsure.
+    let unsure = JunkVerdict {
+        junk: false,
+        score: Some(55),
+        source: JunkSource::Classifier,
+        unsure: true,
+    };
+    store.set_junk_verdict(&m1, &unsure, T0).unwrap();
+    assert_eq!(store.junk_verdict(&m1).unwrap(), Some(unsure));
     let user = JunkVerdict {
         junk: false,
         score: None,
         source: JunkSource::User,
+        unsure: false,
     };
     store.set_junk_verdict(&m1, &user, T0 + 1).unwrap();
     assert_eq!(store.junk_verdict(&m1).unwrap(), Some(user.clone()));

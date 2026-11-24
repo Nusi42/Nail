@@ -19,7 +19,8 @@ use nail_api::pim::calendar::{AlarmRelated, EventStatus, Transparency, Visibilit
 use nail_api::pim::task::TaskStatus;
 use nail_api::pim::{
     Alarm, AlarmAction, AlarmTrigger, Attendee, CalendarEvent, ConferenceLink, EventFields,
-    Organizer, PimAttachment, PimLink, PimTime, Recurrence, RecurrenceEnd, Task, TaskFields,
+    Organizer, PimAttachment, PimLink, PimTime, Recurrence, RecurrenceEnd, RecurrencePeriod, Task,
+    TaskFields,
 };
 
 use crate::content::{self, Component, Property, escape_text};
@@ -158,6 +159,24 @@ impl Zones<'_> {
                     .with_param("TZID", self.tzid(tz))
             }
         })
+    }
+}
+
+impl Zones<'_> {
+    /// An `RDATE;VALUE=PERIOD` of one period (R8): the start as
+    /// [`Self::time_prop`] writes it, `/`, and the end in the start's kind
+    /// and zone. A date period (not a PERIOD value in RFC 5545) is written
+    /// as its date.
+    fn period_prop(&self, period: &RecurrencePeriod) -> Option<Property> {
+        let start = self.time_prop("RDATE", &period.start)?;
+        if period.start.is_date() {
+            return Some(start);
+        }
+        let end = time::like(time::to_frame(&period.end, &period.start)?, &period.start);
+        let end = self.time_prop("RDATE", &end)?;
+        let mut period_prop = start.with_param("VALUE", "PERIOD");
+        period_prop.value = format!("{}/{}", period_prop.value, end.value);
+        Some(period_prop)
     }
 }
 
@@ -529,18 +548,38 @@ fn patch_recurrence(
             .collect();
         replace(c, &["RRULE"], new);
     }
-    for (name, values) in [("RDATE", &desired.dates), ("EXDATE", &desired.exceptions)] {
-        let current: Vec<PimTime> = c
-            .properties_named(name)
-            .flat_map(|p| ctx.times(p))
+    let current: Vec<PimTime> = c
+        .properties_named("EXDATE")
+        .flat_map(|p| ctx.times(p))
+        .collect();
+    if current != desired.exceptions {
+        let new = desired
+            .exceptions
+            .iter()
+            .filter_map(|v| zones.time_prop("EXDATE", v))
             .collect();
-        if current != *values {
-            let new = values
-                .iter()
-                .filter_map(|v| zones.time_prop(name, v))
-                .collect();
-            replace(c, &[name], new);
-        }
+        replace(c, &["EXDATE"], new);
+    }
+    let current: Vec<PimTime> = c
+        .properties_named("RDATE")
+        .flat_map(|p| ctx.times(p))
+        .collect();
+    let current_periods: Vec<RecurrencePeriod> = c
+        .properties_named("RDATE")
+        .flat_map(|p| ctx.periods(p))
+        .collect();
+    if current != desired.dates || current_periods != desired.periods {
+        let new = desired
+            .dates
+            .iter()
+            .filter_map(
+                |date| match desired.periods.iter().find(|p| p.start == *date) {
+                    Some(period) => zones.period_prop(period),
+                    None => zones.time_prop("RDATE", date),
+                },
+            )
+            .collect();
+        replace(c, &["RDATE"], new);
     }
 }
 
@@ -1339,8 +1378,8 @@ END:VCALENDAR\r\n"
             fields,
             recurrence: Some(Recurrence {
                 rules: vec![rule],
-                dates: vec![],
                 exceptions: vec![PimTime::zoned("2026-11-09T09:00:00", "America/New_York")],
+                ..Recurrence::default()
             }),
             overrides: vec![EventOverride {
                 recurrence_id: PimTime::zoned("2026-11-16T09:00:00", "America/New_York"),
@@ -1466,6 +1505,84 @@ BEGIN:VEVENT\r\nUID:s\r\nDTSTAMP:20261001T000000Z\r\nRECURRENCE-ID:20261007T0900
         assert!(!text.contains("gone"));
         assert!(text.contains("RECURRENCE-ID:20261008T090000Z\r\n"));
         assert_eq!(event_of(&text).overrides, event.overrides);
+    }
+
+    /// R8: `RDATE;VALUE=PERIOD` occurrences keep their own ends: read
+    /// (an explicit end and a duration), expanded, kept unchanged on
+    /// write, written as periods when changed, and moved with the series.
+    #[test]
+    fn rdate_periods_keep_their_ends() {
+        let original = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Example//EN\r\nBEGIN:VEVENT\r\nUID:p1\r\nDTSTAMP:20261001T000000Z\r\nSUMMARY:Workshop\r\nDTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nRDATE;VALUE=PERIOD:20261007T130000Z/20261007T170000Z,20261009T080000Z/PT2H30M\r\nRDATE:20261012T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let event = event_of(original);
+        let recurrence = event.recurrence.clone().unwrap();
+        assert_eq!(recurrence.dates.len(), 3);
+        assert_eq!(
+            recurrence.periods,
+            [
+                RecurrencePeriod {
+                    start: PimTime::utc("2026-10-07T13:00:00"),
+                    end: PimTime::utc("2026-10-07T17:00:00"),
+                },
+                RecurrencePeriod {
+                    start: PimTime::utc("2026-10-09T08:00:00"),
+                    end: PimTime::utc("2026-10-09T10:30:00"),
+                },
+            ]
+        );
+        assert_eq!(
+            recurrence.issues(&event.fields.start),
+            Vec::<nail_api::pim::PimIssue>::new()
+        );
+        let options = crate::expand::ExpandOptions::range(
+            time::parse_instant("2026-10-01T00:00:00Z").unwrap(),
+            time::parse_instant("2026-10-31T00:00:00Z").unwrap(),
+            chrono_tz::Tz::UTC,
+        );
+        let spans: Vec<(String, String)> = crate::expand::instances(&event, &options)
+            .into_iter()
+            .map(|i| (i.start_utc, i.end_utc))
+            .collect();
+        assert_eq!(
+            spans,
+            [
+                ("2026-10-05T09:00:00Z".into(), "2026-10-05T10:00:00Z".into()),
+                ("2026-10-07T13:00:00Z".into(), "2026-10-07T17:00:00Z".into()),
+                ("2026-10-09T08:00:00Z".into(), "2026-10-09T10:30:00Z".into()),
+                ("2026-10-12T09:00:00Z".into(), "2026-10-12T10:00:00Z".into()),
+            ]
+        );
+        // A long period that starts before a range still overlaps it.
+        let late = crate::expand::ExpandOptions::range(
+            time::parse_instant("2026-10-07T16:00:00Z").unwrap(),
+            time::parse_instant("2026-10-07T18:00:00Z").unwrap(),
+            chrono_tz::Tz::UTC,
+        );
+        assert_eq!(crate::expand::instances(&event, &late).len(), 1);
+        // Unchanged: written back byte for byte.
+        let options = WriteOptions::at(now());
+        assert_eq!(write_event(&event, Some(original), &options), original);
+        // A changed end is written as a period; the series moves with its
+        // periods.
+        let mut moved = event.clone();
+        crate::edit::move_series(
+            &mut moved,
+            PimTime::utc("2026-10-05T10:00:00"),
+            PimTime::utc("2026-10-05T11:00:00"),
+        )
+        .unwrap();
+        let text = write_event(&moved, Some(original), &options);
+        assert!(
+            text.contains("RDATE;VALUE=PERIOD:20261007T140000Z/20261007T180000Z\r\n"),
+            "{text}"
+        );
+        assert!(text.contains("RDATE:20261012T100000Z\r\n"), "{text}");
+        assert_eq!(event_of(&text).recurrence, moved.recurrence);
+        // Deleting a period's occurrence drops its end too.
+        let mut fewer = event;
+        crate::edit::delete_occurrence(&mut fewer, &PimTime::utc("2026-10-07T13:00:00")).unwrap();
+        let fewer = fewer.recurrence.unwrap();
+        assert_eq!(fewer.periods.len(), 1);
+        assert_eq!(fewer.dates.len(), 2);
     }
 
     #[test]

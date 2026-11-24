@@ -17,4 +17,10 @@ score: number | null,
 /**
  * Who decided.
  */
-source: JunkSource, };
+source: JunkSource, 
+/**
+ * The classifier was unsure: the score lies between the account's
+ * [`JunkSettings::ham_cutoff`] and its threshold (`junk` is then
+ * `false`: the message stays where it is). Left out = `false` (R8).
+ */
+unsure?: boolean, };

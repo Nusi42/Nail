@@ -364,6 +364,11 @@ impl Service {
                 })
                 .await
                 .unwrap_or_default();
+            let summaries = if !key.exact && nail_search::imap::checks_attachments(query) {
+                self.attachment_checked(query, summaries).await
+            } else {
+                summaries
+            };
             added += summaries.len();
             info.hits += u32::try_from(summaries.len()).unwrap_or(u32::MAX);
             hits.extend(summaries.into_iter().map(|message| nail_api::SearchHit {
@@ -373,6 +378,65 @@ impl Service {
             }));
         }
         Some(info)
+    }
+}
+
+impl Service {
+    /// Server hits of an inexact key with `has:attachment` / `filename:`
+    /// terms (R8): their bodies are fetched (and kept, as when a message is
+    /// opened), and the hits whose attachments rule the query out go. A hit
+    /// whose body cannot be fetched stays (the server may be right).
+    async fn attachment_checked(
+        &self,
+        query: &nail_search::Query,
+        hits: Vec<nail_api::MessageSummary>,
+    ) -> Vec<nail_api::MessageSummary> {
+        if hits.is_empty() {
+            return hits;
+        }
+        let ids: Vec<MessageId> = hits.iter().map(|m| m.id.clone()).collect();
+        if let Err(err) = self.fetch_bodies(ids).await {
+            tracing::info!(%err, "server search: cannot fetch the hits' bodies");
+            return hits;
+        }
+        let blobs = self.inner.blobs.clone();
+        let query = query.clone();
+        self.inner
+            .store
+            .call(move |s| {
+                let mut out = Vec::with_capacity(hits.len());
+                for hit in hits {
+                    let Ok(stored) = s.get_message(&hit.id) else {
+                        // Gone meanwhile.
+                        continue;
+                    };
+                    let raw = stored
+                        .blob_hash
+                        .as_ref()
+                        .filter(|_| !stored.summary.headers_only)
+                        .and_then(|h| blobs.get(h).ok());
+                    let Some(raw) = raw else {
+                        out.push(stored.summary);
+                        continue;
+                    };
+                    let names = nail_search::IndexDocument::from_raw(
+                        stored.summary.id.clone(),
+                        stored.summary.account_id.clone(),
+                        &raw,
+                    )
+                    .attachment_names;
+                    let facts = nail_search::imap::AttachmentFacts {
+                        has_attachments: stored.summary.has_attachments,
+                        names: &names,
+                    };
+                    if nail_search::imap::may_match(&query, &facts) {
+                        out.push(stored.summary);
+                    }
+                }
+                Ok(out)
+            })
+            .await
+            .unwrap_or_default()
     }
 }
 

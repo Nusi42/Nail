@@ -3,4 +3,4 @@
 /**
  * A problem with [`JunkSettings`].
  */
-export type JunkIssue = "threshold" | "min-training";
+export type JunkIssue = "threshold" | "min-training" | "ham-cutoff";

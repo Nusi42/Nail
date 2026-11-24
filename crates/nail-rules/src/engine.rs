@@ -73,12 +73,31 @@ pub const NAME_EMPTY_ISSUE: &str = "rule-issue-name-empty";
 /// Every problem of a rule: invalid regular expressions, queries and
 /// dates, empty names, tags and recipient lists, zero intervals.
 pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
-    check(rule).0
+    check(rule, Blanks::Report).0
+}
+
+/// [`validate`] for an editor's draft: the blank name and blank values
+/// (tag, recipient, reply template, folder path) are left out, because the
+/// draft read (`nail_config::rules::parse_rule_draft`) already reported
+/// each of them once, at its position (R8, ADR 0251).
+pub fn validate_draft(rule: &Rule) -> Vec<RuleIssue> {
+    check(rule, Blanks::Reported).0
+}
+
+/// Whether [`check`] reports blank names and values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Blanks {
+    /// Reported (a saved rule).
+    Report,
+    /// Already reported by the draft read.
+    Reported,
 }
 
 /// [`validate`] plus the compiled condition tree (`None` when it has
 /// issues).
-fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
+fn check(rule: &Rule, blanks: Blanks) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
+    // A blank text that the check reports (not one a draft read reported).
+    let blank = |text: &str| blanks == Blanks::Report && text.trim().is_empty();
     let mut issues = Vec::new();
     let mut push = |location: IssueLocation, message: &str, id: &str| {
         let localized = match &location {
@@ -99,7 +118,7 @@ fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
             localized,
         });
     };
-    if rule.name.trim().is_empty() {
+    if blank(&rule.name) {
         push(
             IssueLocation::Rule,
             "the rule needs a name",
@@ -129,7 +148,7 @@ fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
             index: u32::try_from(i).unwrap_or(u32::MAX),
         };
         match action {
-            RuleAction::Tag { tag } | RuleAction::Untag { tag } if tag.trim().is_empty() => {
+            RuleAction::Tag { tag } | RuleAction::Untag { tag } if blank(tag) => {
                 push(location, "the tag is empty", "rule-issue-tag-empty");
             }
             RuleAction::Forward { to, .. } | RuleAction::Redirect { to } if to.is_empty() => {
@@ -140,7 +159,9 @@ fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
                 );
             }
             RuleAction::Forward { to, .. } | RuleAction::Redirect { to }
-                if to.iter().any(|a| !a.contains('@')) =>
+                if to.iter().any(|a| {
+                    !a.contains('@') && (blanks == Blanks::Report || !a.trim().is_empty())
+                }) =>
             {
                 push(
                     location,
@@ -148,7 +169,7 @@ fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
                     "rule-issue-recipient-invalid",
                 );
             }
-            RuleAction::Reply { template, .. } if template.trim().is_empty() => {
+            RuleAction::Reply { template, .. } if blank(template) => {
                 push(
                     location,
                     "the reply template is empty",
@@ -157,7 +178,7 @@ fn check(rule: &Rule) -> (Vec<RuleIssue>, Option<CompiledCondition>) {
             }
             RuleAction::Move { folder } | RuleAction::Copy { folder } => {
                 if let nail_api::rules::FolderRef::Path { path, .. } = folder
-                    && path.trim().is_empty()
+                    && blank(path)
                 {
                     push(location, "the folder is empty", "rule-issue-folder-empty");
                 }
@@ -201,7 +222,7 @@ pub struct Explanation {
 impl CompiledRule {
     /// Compiles a rule; fails with every problem [`validate`] finds.
     pub fn new(rule: Rule) -> Result<Self, Vec<RuleIssue>> {
-        match check(&rule) {
+        match check(&rule, Blanks::Report) {
             (issues, Some(condition)) if issues.is_empty() => Ok(Self { rule, condition }),
             (issues, _) => Err(issues),
         }

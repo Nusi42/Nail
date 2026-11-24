@@ -18,7 +18,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Tag line facts in the list | `MessageSummary` has no attachment count, invitation or warning fields for the row's tag line (needs a store migration). | plan.md M5a, M5b follow-ups | M |
 | Printing HTML mail | Print to PDF handles plain text only; HTML mail needs a measurable same-origin render. | plan.md M4c follow-ups (ADR 0099) | M |
 | Tag states for a whole list | The label window shows no tag states when the whole list is selected. | plan.md R5 follow-ups (ADR 0237) | M |
-| Unified list order | A conversation answered from another account is ordered by the receiving account's activity. | plan.md P3 deferrals | S |
 | Snooze across installations | Snoozes are per installation: two installations on one account whose hidden folders share a name return each other's snoozed mail to the Inbox. | plan.md M2c follow-ups | M |
 | Link actions in the reader | No `LinkActionMenu` in the reader: links live in the sandboxed frame (documented). | plan.md M4a follow-ups (ADR 0084) | M |
 | Plain text in High contrast | The plain-text reader double-wraps 72-character lines at 1280 px. (check) | plan.md M5b follow-ups | S |
@@ -35,21 +34,13 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
 | Other headers as rule values | `MessageFacts` offers no values of other headers. | plan.md R2 deferrals (ADR 0225) | M |
-| Rule text issues | A draft `RuleFromText` reports an empty tag / recipient / folder twice. | plan.md R2 review fixes (deferred, low) | S |
-| Sieve status after a restart | The Sieve status digest is in memory: an account shows `pending` after a restart until the start-up upload. | plan.md M2c follow-ups | S |
 | Sieve while uploads fail | A rule edited while uploads fail runs in its old form on the server. | plan.md M2c follow-ups | M |
-| Sieve details | `include :personal` names are written without the `${` escape; no dedicated reason for non-ASCII case-insensitive regexes. | plan.md M2c follow-ups (ADR 0044) | S |
-| Junk classifier | Unsure verdicts are stored as `junk: false` with a score; `ham_cutoff` is not a user setting; tokens are not NFKC-normalized. | plan.md M2c follow-ups (ADR 0045) | M |
-| Inexact server search hits | The server search fallback does not filter inexact hits (`has:attachment`, `filename:`) locally. | plan.md M2c follow-ups (ADR 0048) | S |
 
 ## Calendar, contacts and tasks
 
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
-| Feed subscriptions | A subscription keeps the configured URL instead of the one the feed redirected to; the refresh interval is remembered per run only. | plan.md M3a follow-ups (ADR 0063) | S |
 | Snooze alarms on the server | RFC 9074 snooze alarms are not written to the server (snooze is local; dismiss writes `ACKNOWLEDGED`). | plan.md M3a follow-ups | M |
-| Reminders after a time-zone change | Reminders are replanned hourly, not on an OS time-zone change. | plan.md M3a follow-ups | S |
-| `RDATE;VALUE=PERIOD` | Period values of `RDATE` have no ends. | plan.md M3a follow-ups (ADR 0059) | S |
 | Task invitations | Only `VEVENT` scheduling; `VTODO` invitations show `no-event`. | plan.md M3b follow-ups (ADR 0066) | L |
 | iTIP methods | `ADD` is applied but not built; `COUNTER` / `REFRESH` / `DECLINECOUNTER` always go by iMIP. | plan.md M3b follow-ups (ADR 0066) | M |
 | Delegation | Delegation basics only (one delegate); delegates sending with `SENT-BY` are warned about, not applied (no delegate list). | plan.md M3b follow-ups (ADR 0068) | M |
@@ -60,7 +51,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Series outside the window | No periodic re-read of series outside the calendar window. | plan.md M3c follow-ups | S |
 | Graph meeting creates | `MeetingSend::None` on Graph creates. | plan.md M3c follow-ups (ADR 0073) | S |
 | To Do and Exchange contacts | To Do linked resources are not written back, subtasks only one level deep, no nested contact folders. | plan.md M3c follow-ups (ADR 0073) | M |
-| Reminders on tasks from programs | Tasks written by plug-ins / agents have no reminders (`UpsertTaskArgs` has none). | plan.md M4a follow-ups (ADR 0080) | S |
 | Sealed PIM index | A sealed on-disk PIM index, if the in-memory one becomes too slow to build. | plan.md M3a follow-ups | L |
 
 ## Accounts and engines (IMAP, Gmail, Graph, EWS)
@@ -83,7 +73,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
 | Other write failures in the summary | Failures of folder, Gmail label and Exchange writes are not in `OpsSummary.failed`; bulk Retry / Dismiss act on message writes only. | plan.md R4 follow-ups (ADR 0231) | M |
-| Mass failure logging | A mass permanent failure still logs one WARN per operation. | plan.md R4 follow-ups | S |
 | Replay and sync loop | Replay and sync stay sequenced in one loop (the replay connection only keeps the main connection's mailbox). | plan.md M2c follow-ups (ADR 0048) | M |
 
 ## Windows, dialogs, settings and layout

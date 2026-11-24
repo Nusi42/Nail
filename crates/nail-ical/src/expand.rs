@@ -285,9 +285,27 @@ pub fn instances(event: &CalendarEvent, options: &ExpandOptions<'_>) -> Vec<Even
             out.push(i);
         }
     }
-    let longest = match span {
-        Span::Wall(d) | Span::Exact(d) => d.max(Duration::zero()),
-    };
+    // `RDATE;VALUE=PERIOD` occurrences end where their period ends (R8).
+    let periods: Vec<(NaiveDateTime, &PimTime, Span)> = recurrence
+        .periods
+        .iter()
+        .filter_map(|p| {
+            Some((
+                frame(&p.start)?,
+                &p.end,
+                Span::between(&p.start, &p.end, viewer),
+            ))
+        })
+        .collect();
+    let longest = periods
+        .iter()
+        .map(|(_, _, s)| *s)
+        .chain([span])
+        .map(|s| match s {
+            Span::Wall(d) | Span::Exact(d) => d.max(Duration::zero()),
+        })
+        .max()
+        .unwrap_or_else(Duration::zero);
     let earliest_start = options.from - longest - Duration::days(2);
     // Jump ahead to the range: occurrences before `earliest_start` matter
     // only when a THISANDFUTURE override moves them later.
@@ -326,7 +344,10 @@ pub fn instances(event: &CalendarEvent, options: &ExpandOptions<'_>) -> Vec<Even
             if at < earliest_start {
                 continue;
             }
-            let iend = span.end(&occurrence_start, &master.end, viewer);
+            let iend = match periods.iter().find(|(start, _, _)| *start == occurrence) {
+                Some((_, end, period)) => period.end(&occurrence_start, end, viewer),
+                None => span.end(&occurrence_start, &master.end, viewer),
+            };
             (master, occurrence_start.clone(), iend, false)
         };
         if fields.status == EventStatus::Cancelled {

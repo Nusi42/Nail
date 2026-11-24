@@ -23,6 +23,8 @@
 //! * [`reminders`] — the reminder scheduler (`nail-triage`) on the store,
 //!   its task, snooze / dismiss, notifications.
 //! * [`search`] — the PIM search index (in memory, rebuilt from the store).
+//! * [`zone_watch`] — noticing a change of the computer's time zone (the
+//!   reminders are planned again).
 
 mod calendar_view;
 mod contacts;
@@ -34,6 +36,7 @@ mod import;
 mod reminders;
 mod search;
 mod sources;
+mod zone_watch;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

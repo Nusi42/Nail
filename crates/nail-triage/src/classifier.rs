@@ -7,8 +7,9 @@
 //!   0.5 are combined with Fisher's chi-square method into one
 //!   probability. See [`score`].
 //! * **Verdicts**: at or above [`JunkSettings::threshold`] a message is
-//!   junk, at or below [`ClassifierParams::ham_cutoff`] it is not junk, in
-//!   between it is **unsure** (left where it is, never moved). Nothing is
+//!   junk, at or below [`JunkSettings::ham_cutoff`] it is not junk, in
+//!   between it is **unsure** (left where it is, never moved, stored as
+//!   unsure with its score: [`JunkVerdict::unsure`]). Nothing is
 //!   classified before [`JunkSettings::min_training`] messages of each
 //!   class were trained.
 //! * **Training** by "Mark as junk / not junk" (and by the server's
@@ -119,9 +120,6 @@ pub struct ClassifierParams {
     pub min_deviation: f64,
     /// At most this many tokens (the most telling ones) are combined.
     pub max_clues: usize,
-    /// Scores (percent) at or below this are "not junk"; between this and
-    /// the account's threshold a message is "unsure".
-    pub ham_cutoff: u8,
 }
 
 impl Default for ClassifierParams {
@@ -131,7 +129,6 @@ impl Default for ClassifierParams {
             assumed: 0.5,
             min_deviation: 0.1,
             max_clues: 150,
-            ham_cutoff: 20,
         }
     }
 }
@@ -179,8 +176,8 @@ pub enum Classification {
 
 impl Classification {
     /// The verdict to store and show (`None` when not scored). Unsure
-    /// messages count as not junk (they stay where they are) but keep
-    /// their score.
+    /// messages count as not junk (they stay where they are), keep their
+    /// score and are marked unsure.
     pub fn verdict(&self) -> Option<JunkVerdict> {
         match self {
             Self::NotReady { .. } => None,
@@ -188,6 +185,7 @@ impl Classification {
                 junk: *class == JunkClass::Junk,
                 score: Some(score.percent),
                 source: JunkSource::Classifier,
+                unsure: *class == JunkClass::Unsure,
             }),
         }
     }
@@ -280,12 +278,12 @@ pub fn score(
     }
 }
 
-/// The class of a score under an account's threshold.
-pub fn class_of(p: &ClassifierParams, settings: &JunkSettings, percent: u8) -> JunkClass {
+/// The class of a score under an account's threshold and not-junk cutoff.
+pub fn class_of(settings: &JunkSettings, percent: u8) -> JunkClass {
     let threshold = settings.threshold.clamp(1, 100);
     if percent >= threshold {
         JunkClass::Junk
-    } else if percent <= p.ham_cutoff.min(threshold - 1) {
+    } else if percent <= settings.ham_cutoff.min(threshold - 1) {
         JunkClass::Ham
     } else {
         JunkClass::Unsure
@@ -309,7 +307,7 @@ pub fn classify<S: JunkStore>(
     let scored = score(params, tokens, &counts, trained);
     Ok(Classification::Scored {
         score: scored,
-        class: class_of(params, settings, scored.percent),
+        class: class_of(settings, scored.percent),
     })
 }
 
@@ -446,6 +444,7 @@ pub fn plan_arrival(
                 junk,
                 score: None,
                 source: JunkSource::Server,
+                unsure: false,
             }),
             train_as: Some(junk),
             ops,
@@ -817,7 +816,8 @@ mod tests {
             Some(JunkVerdict {
                 junk: false,
                 score: Some(50),
-                source: JunkSource::Classifier
+                source: JunkSource::Classifier,
+                unsure: true,
             })
         );
         // Other accounts know nothing.
@@ -845,22 +845,29 @@ mod tests {
 
     #[test]
     fn classes_follow_threshold_and_cutoff() {
-        let p = ClassifierParams::default();
         let s = JunkSettings {
             threshold: 80,
             ..JunkSettings::default()
         };
-        assert_eq!(class_of(&p, &s, 80), JunkClass::Junk);
-        assert_eq!(class_of(&p, &s, 79), JunkClass::Unsure);
-        assert_eq!(class_of(&p, &s, 21), JunkClass::Unsure);
-        assert_eq!(class_of(&p, &s, 20), JunkClass::Ham);
-        // A cutoff above the threshold never overlaps it.
-        let wide = ClassifierParams {
-            ham_cutoff: 95,
-            ..p
+        assert_eq!(class_of(&s, 80), JunkClass::Junk);
+        assert_eq!(class_of(&s, 79), JunkClass::Unsure);
+        assert_eq!(class_of(&s, 21), JunkClass::Unsure);
+        assert_eq!(class_of(&s, 20), JunkClass::Ham);
+        // The account's own cutoff (R8).
+        let strict = JunkSettings {
+            ham_cutoff: 5,
+            ..s.clone()
         };
-        assert_eq!(class_of(&wide, &s, 79), JunkClass::Ham);
-        assert_eq!(class_of(&wide, &s, 80), JunkClass::Junk);
+        assert_eq!(class_of(&strict, 6), JunkClass::Unsure);
+        assert_eq!(class_of(&strict, 5), JunkClass::Ham);
+        // A cutoff above the threshold (an invalid setting) never overlaps
+        // it.
+        let wide = JunkSettings {
+            ham_cutoff: 95,
+            ..s
+        };
+        assert_eq!(class_of(&wide, 79), JunkClass::Ham);
+        assert_eq!(class_of(&wide, 80), JunkClass::Junk);
     }
 
     #[test]
@@ -1101,10 +1108,9 @@ mod tests {
             let keywords: Vec<String> = keywords.iter().map(|k| (*k).to_owned()).collect();
             let facts = MessageFacts { message_id: Some(&id), folder_role: role, keywords: &keywords };
             let s = JunkSettings { enabled, honor_server_flags: honor, move_to_junk, ..JunkSettings::default() };
-            let p = ClassifierParams::default();
             let c = Classification::Scored {
                 score: Score { probability: f64::from(percent) / 100.0, percent, clues: 1 },
-                class: class_of(&p, &s, percent),
+                class: class_of(&s, percent),
             };
             for ops in [plan_arrival(&s, &facts, &acct(), Some(&c)).ops, plan_mark(&s, &facts, &acct(), junk)] {
                 prop_assert!(ops.iter().all(|o| !o.targets_trash()));

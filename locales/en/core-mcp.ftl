@@ -45,6 +45,7 @@ mcp-tool-field-job-title = Job title
 mcp-tool-field-notes = { common-notes }
 mcp-tool-field-priority = Priority
 mcp-tool-field-related-message = Linked message
+mcp-tool-field-reminders = { pim-alarms-legend }
 mcp-tool-field-enabled = Switched on
 
 ## The MCP client's own confirmation form (elicitation)
@@ -72,6 +73,7 @@ mcp-tool-audit-expired = Not confirmed in time; nothing changed.
 mcp-tool-audit-vetoed = Stopped by a plug-in's check before sending; nothing was sent.
 mcp-tool-audit-failed = Approved, but it failed.
 mcp-tool-audit-replayed = Repeated call: the earlier result was returned, nothing changed again.
+mcp-tool-audit-dry-run = Tried out only: nothing was created or changed.
 # $limit = which limit (requests_per_minute, writes_per_minute, sends_per_hour).
 mcp-tool-audit-rate-limited = Refused: the client called too often ({ $limit }).
 

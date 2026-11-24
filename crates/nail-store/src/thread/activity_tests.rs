@@ -9,8 +9,8 @@ use nail_api::{
 use rusqlite::{Connection, params};
 
 use super::{
-    COUNT_MANY_SQL, COUNT_SQL, GROUPING_PAGE_SQL, PAGE_SQL, REBUILD_SELECT, SINGLES_PAGE_SQL,
-    covers, grouping_page, page,
+    COUNT_MANY_SQL, COUNT_SQL, ConversationFolders, GROUPING_PAGE_SQL, PAGE_SQL, REBUILD_SELECT,
+    SENT_JOIN_PAGE_SQL, SINGLES_PAGE_SQL, ScopeFolder, covers, grouping_page, page,
 };
 use crate::schema::{migrate, migrate_to_version};
 use crate::{MessageMeta, Operation, Store, StoredMessage, SyncedMessage};
@@ -397,6 +397,28 @@ fn scopes(store: &Store) -> Vec<Vec<FolderId>> {
     let mut out: Vec<Vec<FolderId>> = ids.iter().map(|id| vec![id.clone()]).collect();
     out.push(ids.iter().take(3).cloned().collect());
     out.push(ids.clone());
+    // R8: unified lists over both accounts (Inboxes, and everything but
+    // the Sent folders, which then join from both accounts).
+    let mut both: Vec<FolderId> = Vec::new();
+    for account in ["a1", "a2"] {
+        both.extend(
+            store
+                .list_folders(&account.into())
+                .unwrap()
+                .into_iter()
+                .filter(|f| f.role != FolderRole::Sent)
+                .map(|f| f.id),
+        );
+    }
+    if both.iter().any(|f| f.as_str().starts_with("a2")) {
+        out.push(
+            both.iter()
+                .filter(|f| f.as_str().ends_with("inbox"))
+                .cloned()
+                .collect(),
+        );
+        out.push(both);
+    }
     out
 }
 
@@ -675,10 +697,12 @@ fn a_narrowed_sent_falls_back_to_the_grouping_query() {
     );
 }
 
-/// The documented deviation: a unified list over two accounts orders a
-/// thread by the Sent folders of the account it is listed in.
+/// A row's own key joins only its account's Sent folders: one account's
+/// Inbox is ordered by that account's activity. R8: a unified list orders
+/// a thread by its newest activity across the listed accounts, a reply from
+/// another account's Sent folder included, as the grouping query does.
 #[test]
-fn a_reply_from_another_account_does_not_reorder_a_unified_list() {
+fn a_reply_from_another_account_reorders_only_a_unified_list() {
     let mut conn = v16();
     migrate(&mut conn).unwrap();
     conn.execute_batch(
@@ -688,6 +712,7 @@ fn a_reply_from_another_account_does_not_reorder_a_unified_list() {
             ('in2', 'a2', 'Inbox', 'INBOX', 'inbox'),
             ('sent2', 'a2', 'Sent', 'Sent', 'sent');
         INSERT INTO messages (id, account_id, folder_id, date, date_sort, thread_id) VALUES
+            ('b0', 'a2', 'in2', '', 280, 't3'),
             ('b1', 'a2', 'sent2', '', 900, 't2');
         ",
     )
@@ -695,6 +720,31 @@ fn a_reply_from_another_account_does_not_reorder_a_unified_list() {
     assert_consistent(&conn, "a reply from a2");
     // In a1's Inbox, t2 keeps its own key (250), below t1 (300).
     assert_eq!(page_keys(&conn, "in"), ["t1", "t2"]);
+    let scope = |id: &str, account: &str| ScopeFolder {
+        id: id.into(),
+        account_id: account.into(),
+    };
+    let unified = ConversationFolders {
+        threaded: vec![scope("in", "a1"), scope("in2", "a2")],
+        singles: Vec::new(),
+        sent: vec![scope("sent", "a1"), scope("sent2", "a2")],
+    };
+    let tx = conn.transaction().unwrap();
+    // t2 (250 in a1's Inbox) was answered from a2 at 900: first. Then t1
+    // (a1's reply at 300), then t3 (280).
+    for limit in [1_u32, 2, 3, 50] {
+        let table = page(&tx, &unified, 0, limit).unwrap();
+        let grouped = grouping_page(&tx, &unified, 0, limit).unwrap();
+        assert_eq!(table, grouped, "limit {limit}");
+    }
+    assert_eq!(
+        page(&tx, &unified, 0, 50).unwrap(),
+        (3, vec!["t2".to_owned(), "t1".to_owned(), "t3".to_owned()])
+    );
+    assert_eq!(
+        page(&tx, &unified, 1, 1).unwrap(),
+        (3, vec!["t1".to_owned()])
+    );
 }
 
 #[test]
@@ -703,6 +753,17 @@ fn hot_queries_are_index_ranges() {
     store
         .with_conn(|conn| {
             let p = plan(conn, PAGE_SQL, &[&"in", &50_i64, &0_i64]);
+            assert!(p.contains("thread_activity_order"), "{p}");
+            assert!(!p.contains("TEMP B-TREE"), "{p}");
+            assert_no_scan(&p);
+
+            // R8: a joining Sent folder's rows by key, each checked by the
+            // primary key of the listed folders.
+            let p = plan(
+                conn,
+                SENT_JOIN_PAGE_SQL,
+                &[&"sent", &"[\"in\",\"in2\"]", &50_i64],
+            );
             assert!(p.contains("thread_activity_order"), "{p}");
             assert!(!p.contains("TEMP B-TREE"), "{p}");
             assert_no_scan(&p);

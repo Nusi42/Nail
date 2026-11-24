@@ -1234,6 +1234,142 @@ Pay.
     f.service.shutdown().await;
 }
 
+/// R8 (ADR 0251): "Run rules on selected" after select all runs on every
+/// row of the list — minus the deselected rows and what arrived after
+/// the list was counted — as one run per rule with a `messages` target,
+/// undone as a whole.
+#[tokio::test]
+async fn rules_run_on_a_whole_list_and_undo_as_one() {
+    use nail_api::mail_actions::{MailList, MessageTarget};
+    let f = setup().await;
+    synced(&f).await;
+    let inbox = folder(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+        .await
+        .unwrap();
+    let mut rule = common::subject_rule(
+        "Tag the list",
+        vec![RuleTrigger::Manual],
+        "",
+        vec![RuleAction::Tag {
+            tag: "listed".into(),
+        }],
+    );
+    rule.conditions = Condition::always();
+    let rule = save_rule(&f.service, rule).await;
+    let list = |except: Vec<MessageTarget>, as_of: Option<String>| nail_api::ListTarget {
+        list: MailList::Messages {
+            folder_id: inbox.id.clone(),
+        },
+        except,
+        as_of,
+    };
+    let run = |list: nail_api::ListTarget| Request::RunRules {
+        rule_ids: vec![rule.id.clone()],
+        message_ids: Vec::new(),
+        folder_id: None,
+        list: Some(list),
+    };
+
+    // The confirmation counts the list and marks it.
+    let Response::MailTargets { resolution } = request(
+        &f.service,
+        Request::ResolveMailTargets {
+            targets: vec![MessageTarget::List(list(Vec::new(), None))],
+            action: nail_api::MailAction::Archive,
+        },
+    )
+    .await
+    else {
+        panic!("MailTargets expected")
+    };
+    assert_eq!(resolution.messages, 15);
+    let as_of = resolution.as_of.clone().expect("a list is marked");
+
+    // A list run takes no other target.
+    let mut mixed = run(list(Vec::new(), None));
+    if let Request::RunRules { folder_id, .. } = &mut mixed {
+        *folder_id = Some(inbox.id.clone());
+    }
+    let response = request(&f.service, mixed).await;
+    assert!(
+        matches!(
+            &response,
+            Response::Error {
+                code: ErrorCode::InvalidRequest,
+                ..
+            }
+        ),
+        "{response:?}"
+    );
+
+    // Mail that arrives after the count is not touched; neither is the
+    // deselected row.
+    f.control(
+        "imap-deliver",
+        &json!({"raw": "From: Late <late@example.org>\r\nSubject: Late arrival\r\nMessage-ID: <late@example.org>\r\n\r\nHi.\r\n"}),
+    );
+    eventually("the late mail arrived", || async {
+        subjects(&f.service, MULTI_WORK_ID, FolderRole::Inbox)
+            .await
+            .iter()
+            .any(|s| s == "Late arrival")
+    })
+    .await;
+    let skipped = messages(&f.service, &inbox.id)
+        .await
+        .into_iter()
+        .find(|m| m.subject != "Late arrival")
+        .unwrap();
+    let Response::RulesRan { runs } = request(
+        &f.service,
+        run(list(
+            vec![MessageTarget::Message {
+                message_id: skipped.id.clone(),
+            }],
+            Some(as_of),
+        )),
+    )
+    .await
+    else {
+        panic!("RulesRan expected")
+    };
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].matched, 14);
+    assert_eq!(
+        runs[0].target,
+        nail_api::rules::RuleRunTarget::Messages { count: 14 }
+    );
+    let tagged = || async {
+        messages(&f.service, &inbox.id)
+            .await
+            .into_iter()
+            .filter(|m| m.tags.iter().any(|t| t == "listed"))
+            .map(|m| m.subject)
+            .collect::<Vec<_>>()
+    };
+    eventually("the list is tagged", || async {
+        tagged().await.len() == 14
+    })
+    .await;
+    let now = tagged().await;
+    assert!(!now.iter().any(|s| s == "Late arrival"), "{now:?}");
+    assert!(!now.contains(&skipped.subject), "{now:?}");
+
+    // One undo takes it all back.
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::UndoRuleRun {
+                run_id: runs[0].id.clone()
+            }
+        )
+        .await,
+        Response::Queued { .. }
+    ));
+    eventually("every tag is gone", || async { tagged().await.is_empty() }).await;
+    f.service.shutdown().await;
+}
+
 /// R2 (ADR 0222): a message's values for rule conditions, picker values,
 /// drafts that survive the text view, and a run history that records its
 /// target and goes with its rule.
@@ -1399,6 +1535,34 @@ Read me.
     };
     assert_eq!(draft.expect("the draft comes back").name, "");
     assert_eq!(errors.len(), 2, "{errors:?}");
+
+    // Blank values of a draft's actions are reported once each, by the
+    // draft read at their position (R8): no second issue from the rule
+    // check.
+    let Response::RuleParsed {
+        rule: draft,
+        errors,
+    } = request(
+        &f.service,
+        Request::RuleFromText {
+            text: "rule \"Gaps\" {\n    then {\n        tag \"\"\n        forward \"\"\n        \
+                   move \"\"\n        reply \"\"\n    }\n}\n"
+                .into(),
+            draft: true,
+        },
+    )
+    .await
+    else {
+        panic!("RuleParsed expected")
+    };
+    assert_eq!(draft.expect("the draft comes back").actions.len(), 4);
+    let ids: Vec<&str> = errors
+        .iter()
+        .filter_map(|e| e.localized.as_ref().map(|l| l.id.as_str()))
+        .collect();
+    assert_eq!(ids, ["config-empty"; 4], "{errors:?}");
+    let lines: std::collections::BTreeSet<u32> = errors.iter().map(|e| e.line).collect();
+    assert_eq!(lines.len(), 4, "each gap at its own line: {errors:?}");
 
     // Deleting the rule deletes its runs.
     let runs_of = || async {

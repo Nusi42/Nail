@@ -233,12 +233,9 @@ pub(crate) fn watch_system_appearance(
 #[cfg(windows)]
 mod windows {
     //! The Windows source of the OS light / dark and high-contrast state.
-    // Win32 calls (registry notifications, events, SystemParametersInfoW);
-    // every block states why it is sound.
-    #![expect(
-        unsafe_code,
-        reason = "Win32 calls (registry notifications, events, SystemParametersInfoW)"
-    )]
+    // A Win32 call (SystemParametersInfoW); the block states why it is
+    // sound. Registry notifications: `crate::registry_watch`.
+    #![expect(unsafe_code, reason = "a Win32 call (SystemParametersInfoW)")]
 
     use std::sync::{Arc, Mutex, PoisonError};
     use std::thread::JoinHandle;
@@ -246,11 +243,6 @@ mod windows {
     use nail_api::appearance::{
         ColorScheme, SystemAppearance, SystemAppearanceListener, SystemAppearanceSource,
     };
-    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
-    use windows_sys::Win32::System::Registry::{
-        REG_NOTIFY_CHANGE_LAST_SET, RegNotifyChangeKeyValue,
-    };
-    use windows_sys::Win32::System::Threading::{CreateEventW, SetEvent, WaitForMultipleObjects};
     use windows_sys::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
     use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETHIGHCONTRAST, SystemParametersInfoW};
 
@@ -265,34 +257,7 @@ mod windows {
     /// notification, or a key that did not exist when the watch started).
     const POLL_MS: u32 = 5_000;
 
-    /// An auto-reset Win32 event, closed on drop.
-    struct Event(HANDLE);
-
-    // SAFETY: an event handle may be used and closed from any thread.
-    unsafe impl Send for Event {}
-    // SAFETY: SetEvent / waiting are thread-safe on a shared handle.
-    unsafe impl Sync for Event {}
-
-    impl Event {
-        fn new() -> Option<Self> {
-            // SAFETY: no security attributes, auto-reset, initially unset,
-            // unnamed; a null result is checked.
-            let handle = unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) };
-            (!handle.is_null()).then_some(Self(handle))
-        }
-
-        fn set(&self) {
-            // SAFETY: the handle is a live event owned by `self`.
-            unsafe { SetEvent(self.0) };
-        }
-    }
-
-    impl Drop for Event {
-        fn drop(&mut self) {
-            // SAFETY: the handle is owned by `self` and closed once.
-            unsafe { CloseHandle(self.0) };
-        }
-    }
+    use crate::registry_watch::{Event, arm, wait_any};
 
     #[derive(Default)]
     struct Listeners {
@@ -378,18 +343,6 @@ mod windows {
         (ok != 0).then_some(hc.dwFlags & HCF_HIGHCONTRASTON != 0)
     }
 
-    /// Asks for one notification on `event` when a value under `key`
-    /// changes; `false` when that is not possible.
-    fn arm(key: &windows_registry::Key, event: &Event) -> bool {
-        // SAFETY: the key and the event are live for the call; the
-        // notification is asynchronous and tied to this (the watcher)
-        // thread, which outlives every wait on the event.
-        let status = unsafe {
-            RegNotifyChangeKeyValue(key.as_raw(), 0, REG_NOTIFY_CHANGE_LAST_SET, event.0, 1)
-        };
-        status == 0
-    }
-
     fn run(shared: &Shared) {
         let personalize = windows_registry::CURRENT_USER.open(PERSONALIZE_KEY).ok();
         let contrast = windows_registry::CURRENT_USER.open(HIGH_CONTRAST_KEY).ok();
@@ -401,15 +354,13 @@ mod windows {
         let mut last = read_current();
         loop {
             if let Some(key) = &personalize {
-                arm(key, &personalize_changed);
+                arm(key, &personalize_changed, false);
             }
             if let Some(key) = &contrast {
-                arm(key, &contrast_changed);
+                arm(key, &contrast_changed, false);
             }
-            let handles = [shared.stop.0, personalize_changed.0, contrast_changed.0];
-            // SAFETY: three live event handles; the array outlives the call.
-            let woke = unsafe { WaitForMultipleObjects(3, handles.as_ptr(), 0, POLL_MS) };
-            if woke == WAIT_OBJECT_0 {
+            let events = [&shared.stop, &personalize_changed, &contrast_changed];
+            if wait_any(&events, POLL_MS) == Some(0) {
                 return;
             }
             let now = read_current();

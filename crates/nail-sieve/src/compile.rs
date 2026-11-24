@@ -303,7 +303,8 @@ pub fn compile(
     }
     if let Some(name) = &included {
         out.push_str("include :personal ");
-        out.push_str(&quote(name));
+        // A script name with `${` stays literal under `variables`.
+        out.push_str(&esc.quoted(name));
         out.push_str(";\n");
     }
     for (rule, _) in &server {
@@ -553,8 +554,9 @@ impl<'o, 'a> RuleCompiler<'o, 'a> {
         } else if non_ascii {
             if m.op == TextOp::Regex {
                 // Servers only apply ASCII case folding to regular
-                // expressions.
-                self.not_expressible(reasons::at_condition(reasons::REGEX, path));
+                // expressions: a reason of its own (R8), so the user
+                // knows that "match case" makes it a server rule.
+                self.not_expressible(reasons::at_condition(reasons::REGEX_CASE, path));
                 return None;
             }
             self.need("comparator-i;unicode-casemap");

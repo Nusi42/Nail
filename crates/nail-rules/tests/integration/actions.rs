@@ -6,7 +6,7 @@ use nail_api::rules::{Rule, RuleAction, RuleRunCause};
 use nail_api::{FolderId, MessageId};
 use nail_rules::{
     CompiledRule, Effect, MessageState, MessageView, PlannedAction, RuleSet, SkipReason,
-    plan_actions, rule_from_message, run_rule, test_rule, validate,
+    plan_actions, rule_from_message, run_rule, test_rule, validate, validate_draft,
 };
 use nail_store::{FlagChange, Operation};
 use pretty_assertions::assert_eq;
@@ -678,6 +678,34 @@ fn validation_lists_every_problem() {
         .map(|issue| nail_config::l10n::english(&issue.localized))
         .collect();
     assert_eq!(localized, issues);
+    // A draft's blank name and values were reported by the draft read
+    // already (R8): only the other problems remain, an empty recipient
+    // list and a non-address among them.
+    if let RuleAction::Redirect { to } = &mut rule.actions[2] {
+        to.push("  ".into());
+    }
+    let draft: Vec<String> = validate_draft(&rule)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        draft,
+        [
+            "trigger 1: the schedule interval must be at least one minute",
+            "trigger 2: the age must be at least one day",
+            "action 2: there are no recipients",
+            "action 3: a recipient is not an email address",
+        ]
+    );
+    rule.actions[2] = RuleAction::Redirect {
+        to: vec![" ".into()],
+    };
+    assert!(
+        !validate_draft(&rule)
+            .iter()
+            .any(|i| i.to_string().starts_with("action 3")),
+        "a blank recipient alone is a reported gap"
+    );
     let set = RuleSet::new([rule, named("ok", "", "", "stop")]);
     assert_eq!(set.rules().len(), 1);
     assert_eq!(set.broken().len(), 1);

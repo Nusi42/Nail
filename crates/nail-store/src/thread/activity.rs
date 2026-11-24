@@ -47,12 +47,13 @@
 //! grant without Sent) falls back to `GROUPING_PAGE_SQL`, so the order
 //! reveals nothing about hidden replies (`covers`).
 //!
-//! **Deviation from the grouping query:** the grouping query joined the
-//! Sent folders of *every* listed account to every listed thread; the table
-//! joins the folder's own account's Sent folders only (ADR 0164's
-//! definition). The two differ only in a unified list over several accounts
-//! for a thread that one account received and another account answered,
-//! and then only in the order key (the row's content is unchanged).
+//! **Lists over several accounts (R8):** a row's `last_date` joins the
+//! folder's own account's Sent folders only (ADR 0164's definition). A
+//! unified list also orders a thread by the user's replies from the other
+//! listed accounts (newest activity across accounts, as the grouping query
+//! does): [`SENT_JOIN_PAGE_SQL`] reads each joining Sent folder's newest
+//! rows of listed threads, merged like the members' pages. Taking the first
+//! `offset + limit` of them is enough for the same reason as for the members.
 
 use std::collections::{HashMap, HashSet};
 
@@ -65,6 +66,17 @@ use crate::error::Result;
 /// folder, `?2` limit, `?3` offset). Reads `thread_activity_order` only.
 pub const PAGE_SQL: &str = "SELECT thread_id, last_date FROM thread_activity
      WHERE folder_id = ?1 ORDER BY last_date DESC, thread_id DESC LIMIT ?2 OFFSET ?3";
+
+/// The newest rows of one joining Sent folder (`?1`) whose thread is
+/// listed in one of the threaded folders (`?2`, JSON array), by the Sent
+/// row's key (its newest reply), at most `?3`: the replies that move a
+/// thread up in a list over several accounts.
+pub const SENT_JOIN_PAGE_SQL: &str = "SELECT s.thread_id, s.last_date FROM thread_activity s
+     WHERE s.folder_id = ?1
+       AND EXISTS (SELECT 1 FROM thread_activity t
+                    WHERE t.thread_id = s.thread_id
+                      AND t.folder_id IN (SELECT value FROM json_each(?2)))
+     ORDER BY s.last_date DESC, s.thread_id DESC LIMIT ?3";
 
 /// The number of conversations listed in one folder (`?1`).
 pub const COUNT_SQL: &str = "SELECT COUNT(*) FROM thread_activity WHERE folder_id = ?1";
@@ -355,11 +367,24 @@ pub(crate) fn page(
             } else {
                 stmt.query(params![folder, wanted])?
             };
-            let rows = rows.mapped(|r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
-            for row in rows {
-                let (key, date) = row?;
-                add(key, date);
-            }
+            add_keys(rows, &mut add)?;
+        }
+    }
+    // A list over several accounts: replies from another listed account's
+    // Sent folder count too (R8).
+    let accounts: HashSet<&str> = folders
+        .threaded
+        .iter()
+        .map(|f| f.account_id.as_str())
+        .collect();
+    if accounts.len() > 1 && !folders.sent.is_empty() {
+        let listed = super::json_ids(&threaded)?;
+        let mut stmt = tx.prepare_cached(SENT_JOIN_PAGE_SQL)?;
+        for sent in &folders.sent {
+            add_keys(
+                stmt.query(params![sent.id.as_str(), listed, wanted])?,
+                &mut add,
+            )?;
         }
     }
     let mut merged: Vec<(String, i64)> = newest.into_iter().collect();
@@ -373,6 +398,16 @@ pub(crate) fn page(
         .map(|(key, _)| key)
         .collect();
     Ok((total, keys))
+}
+
+/// Hands each `(key, order key)` row of a page query to `add`.
+fn add_keys(rows: rusqlite::Rows<'_>, add: &mut impl FnMut(String, i64)) -> Result<()> {
+    let rows = rows.mapped(|r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)));
+    for row in rows {
+        let (key, date) = row?;
+        add(key, date);
+    }
+    Ok(())
 }
 
 /// One page of conversation keys with the total from `messages`

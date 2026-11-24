@@ -1820,3 +1820,13 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   sign / encrypt report (`features/security/composerStore.ts` `setReportOf` / `activate`); list runs of rules
   (`features/rules/runTargets.ts` `wholeListOf`); the toolbar customizer's groups
   (`features/toolbar-editor/ToolbarCustomizer.tsx` `AVAILABLE_GROUPS`).
+- Core (ADR 0252): list runs `rules.rs` `run_rules_on_list` over `mail_actions.rs` `list_target_messages` (the
+  shared `resolve_list` of mail actions); every rule run evaluates in parts of `RUN_PART_MESSAGES`. Task
+  reminders: `crates/nail-mcp/src/writes/pim.rs` `task_alarms` (plug-ins: `nail-plugins` `writes.rs`
+  `ReminderIn`); `create_event_from_text`: `writes/pim.rs` with `McpData::local_zone`, `dry_run` in
+  `writes/mod.rs` `dry_run_preview`. Time-zone changes: `pim/zone_watch.rs` (Windows registry watcher; the
+  helpers in `crates/nail-core/src/registry_watch.rs`, shared with `appearance.rs`). Feed moves and intervals:
+  `pim/feed_http.rs` `moved_to`, settings `pim.feed-refresh.<source>`; Sieve status: setting
+  `sieve.uploaded.<account>`. `Recurrence.periods` (`nail-ical` read / write / expand / edit). Server hits:
+  `nail_search::imap::may_match`. Unified lists: `thread/activity.rs` `SENT_JOIN_PAGE_SQL`. Schema v26
+  (`junk_verdicts.unsure`).

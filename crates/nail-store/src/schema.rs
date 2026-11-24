@@ -407,6 +407,8 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
         backfill: Some(crate::pim::collections::backfill_calendar_colors),
         foreign_keys_off: false,
     },
+    // Schema v26 (R8, ADR 0251): unsure junk verdicts.
+    Migration::sql(crate::triage::V26),
 ];
 
 /// The schema version this build creates and understands.

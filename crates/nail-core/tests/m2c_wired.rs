@@ -250,6 +250,40 @@ async fn rules_and_vacation_run_on_the_sieve_server() {
     f.service.shutdown().await;
 }
 
+/// R8: the status digest of the last upload is kept in the store, so
+/// after a restart the account shows `in-sync` with the server's rules at
+/// once (before any upload of the new run).
+#[tokio::test]
+async fn the_sieve_status_survives_a_restart() {
+    let f = setup().await;
+    synced(&f).await;
+    set_sieve(&f.service, true).await;
+    let rule = invoices_on_the_server(&f).await;
+    f.service.shutdown().await;
+
+    let mut options = f.options();
+    options.start_engines = false;
+    let service = Service::open(options).unwrap();
+    let status = sieve_status(&service).await;
+    assert_eq!(status.state, SieveState::InSync);
+    assert!(
+        status
+            .rules
+            .iter()
+            .any(|r| r.rule_id == rule.id && r.placement == RulePlacement::Server),
+        "{status:?}"
+    );
+    service.shutdown().await;
+
+    // A rule changed while Nail was not running: pending again.
+    let mut options = f.options();
+    options.start_engines = false;
+    let service = Service::open(options).unwrap();
+    save_rule(&service, subject_rule("Receipts", "receipt")).await;
+    assert_eq!(sieve_status(&service).await.state, SieveState::Pending);
+    service.shutdown().await;
+}
+
 async fn set_vacation(service: &Service, body: Option<&str>) {
     let settings = VacationSettings {
         enabled: body.is_some(),
@@ -933,6 +967,69 @@ async fn server_search_hits_do_not_shift_the_pages() {
     assert_eq!(second.len(), 1);
     assert!(!second[0].from_server);
     assert!(!local.contains(&second[0].message.id));
+    f.service.shutdown().await;
+}
+
+/// R8: the server can only approximate `has:attachment` (a
+/// `multipart/mixed` header) and `filename:` (a body substring); the core
+/// fetches such hits' bodies and keeps only those whose attachments match.
+#[tokio::test]
+async fn inexact_server_hits_are_checked_against_their_attachments() {
+    let f = setup().await;
+    synced(&f).await;
+    let mixed = |n: u32, parts: &str| {
+        format!(
+            "From: List <list@example.net>\r\nSubject: Wombat {n}\r\n\
+             Date: Wed, 30 Sep 2026 09:00:00 +0000\r\nMessage-ID: <wombat{n}@example.net>\r\n\
+             MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n\
+             --b\r\nContent-Type: text/plain\r\n\r\nThe wombat-report follows.\r\n{parts}--b--\r\n"
+        )
+    };
+    let attached = "--b\r\nContent-Type: application/pdf\r\n\
+                    Content-Disposition: attachment; filename=\"wombat-report.pdf\"\r\n\r\nPDF\r\n";
+    for raw in [mixed(1, attached), mixed(2, "")] {
+        f.demo
+            .control(
+                "imap-deliver",
+                &json!({ "mailbox": MULTI_HEADERS_ONLY_FOLDER, "raw": raw }),
+            )
+            .unwrap();
+    }
+    let search = |text: &'static str| {
+        let service = f.service.clone();
+        async move {
+            match service
+                .handle(Request::Search {
+                    query: SearchQuery::new(text, 50),
+                })
+                .await
+            {
+                Response::SearchResults { hits, .. } => {
+                    let mut subjects: Vec<String> =
+                        hits.into_iter().map(|h| h.message.subject).collect();
+                    subjects.sort();
+                    subjects
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+    };
+    eventually("both letters synced without their bodies", || async {
+        f.service
+            .handle(Request::SyncNow {
+                account_id: Some(MULTI_WORK_ID.into()),
+            })
+            .await;
+        search("wombat").await.len() == 2
+    })
+    .await;
+    assert_eq!(search("filename:wombat-report").await, ["Wombat 1"]);
+    assert_eq!(search("has:attachment wombat").await, ["Wombat 1"]);
+    assert_eq!(
+        search("wombat -has:attachment").await,
+        ["Wombat 2"],
+        "the fetched bodies decide locally now"
+    );
     f.service.shutdown().await;
 }
 

@@ -49,7 +49,8 @@ use crate::ids::{
 pub use calendar::{
     Alarm, AlarmAction, AlarmTrigger, Attendee, Calendar, CalendarComponent, CalendarEvent,
     CalendarSettings, ConferenceLink, EditScope, EventFields, EventInstance, EventOverride,
-    FreeSlot, Organizer, PimAttachment, Recurrence, RecurrenceEnd, RecurrenceRule,
+    FreeSlot, Organizer, PimAttachment, Recurrence, RecurrenceEnd, RecurrencePeriod,
+    RecurrenceRule,
 };
 pub use calendar_view::{
     CalendarColor, CalendarPreferences, FreeTimeHours, PaletteColor, ParsedEventText, ParsedPart,
