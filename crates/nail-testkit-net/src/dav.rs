@@ -722,6 +722,17 @@ impl MockDavServer {
         }
     }
 
+    /// Sets (or clears) a collection's Apple `calendar-color` (another
+    /// client's PROPPATCH).
+    pub fn set_color(&self, path: &str, color: Option<&str>) {
+        let mut data = lock(&self.inner.data);
+        let seq = data.next();
+        if let Some(coll) = data.collections.get_mut(path) {
+            coll.color = color.map(str::to_owned);
+            coll.changed = seq;
+        }
+    }
+
     /// Makes a collection read-only (or writable).
     pub fn set_read_only(&self, path: &str, read_only: bool) {
         if let Some(coll) = lock(&self.inner.data).collections.get_mut(path) {

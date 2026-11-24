@@ -608,9 +608,13 @@ pub struct ExchangePimFolder {
     /// The user may only read it.
     #[serde(default)]
     pub read_only: bool,
-    /// The calendar's colour, if the server has one.
+    /// The calendar's colour as a preset, if the server has one.
     #[serde(default)]
     pub color: Option<CategoryColor>,
+    /// The calendar's exact colour (`#rrggbb`, Graph `hexColor`), if the
+    /// user ever chose one; wins over [`Self::color`] (R7, ADR 0246).
+    #[serde(default)]
+    pub hex_color: Option<String>,
 }
 
 /// One calendar / contact / task item.

@@ -377,11 +377,19 @@ impl Service {
         let (from, to) = range(from, to)?;
         request_zone(tz)?;
         let tz = tz.to_owned();
+        let me = self.me(None);
         let mut instances = self
             .inner
             .store
             .call(move |s| {
-                s.list_event_instances(from, to, calendars.as_deref(), &tz, &Expander::default())
+                s.list_event_instances_for(
+                    from,
+                    to,
+                    calendars.as_deref(),
+                    &tz,
+                    &Expander::default(),
+                    &|email| me.contains(email),
+                )
             })
             .await?;
         instances.retain(|i| i.status != nail_api::pim::calendar::EventStatus::Cancelled);

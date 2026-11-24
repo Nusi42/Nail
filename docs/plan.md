@@ -1639,6 +1639,10 @@ implemented, the reader and `my_status` stubbed, the `nail-event-text` stub crat
 the mock's answers, `Popover`, `prefs.ts`, the quick look slot, style and locale slots, release slots. Next:
 P1–P4 in parallel.
 
+*Status (P4 core):* done (ADR 0247-p4). The English reader in `nail-event-text`, `my_status` when instances are
+read, default colours in `Store::save_calendar` plus the schema v25 backfill, Graph `hexColor`, MCP
+`find_free_time` `working_hours` and `list_tasks` `due_after` / `tz`.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

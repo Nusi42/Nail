@@ -352,14 +352,10 @@ pub fn instance_kind(
 
 /// Busy periods of the user's own calendars from expanded instances
 /// (`ExpandEvents` / the store's instance cache, already resolved to UTC):
-/// filtered by [`instance_kind`], clipped to the range and merged.
-/// `my_status` answers the user's `PARTSTAT` for meetings (`None` when the
-/// user is the organizer or the event has no attendees).
-pub fn own_busy_periods(
-    instances: &[EventInstance],
-    query: &OwnFreeBusy,
-    my_status: impl Fn(&EventInstance) -> Option<ParticipationStatus>,
-) -> Vec<BusyPeriod> {
+/// filtered by [`instance_kind`] with the instance's `my_status` (the
+/// user's `PARTSTAT`, `None` when the user is the organizer or the event
+/// has no attendees), clipped to the range and merged.
+pub fn own_busy_periods(instances: &[EventInstance], query: &OwnFreeBusy) -> Vec<BusyPeriod> {
     let periods: Vec<BusyPeriod> = instances
         .iter()
         .filter(|i| query.exclude_event.as_ref() != Some(&i.event_id))
@@ -370,7 +366,7 @@ pub fn own_busy_periods(
                 .is_none_or(|c| c.contains(&i.calendar_id))
         })
         .filter_map(|i| {
-            let kind = instance_kind(i, my_status(i))?;
+            let kind = instance_kind(i, i.my_status)?;
             Some(BusyPeriod {
                 start: i.start_utc.clone(),
                 end: i.end_utc.clone(),
@@ -632,15 +628,39 @@ mod tests {
         let mut other_calendar =
             instance("holiday", "2026-10-01T00:00:00Z", "2026-10-02T00:00:00Z");
         other_calendar.calendar_id = CalendarId::new("holidays");
+        let answered = |id: &str, start: &str, end: &str, status| EventInstance {
+            my_status: Some(status),
+            ..instance(id, start, end)
+        };
         let instances = vec![
-            instance("a", "2026-10-01T09:00:00Z", "2026-10-01T10:00:00Z"),
+            answered(
+                "a",
+                "2026-10-01T09:00:00Z",
+                "2026-10-01T10:00:00Z",
+                ParticipationStatus::Accepted,
+            ),
             instance("b", "2026-10-01T09:30:00.500Z", "2026-10-01T10:30:00Z"),
             tentative,
             free,
             cancelled,
-            instance("declined", "2026-10-01T15:00:00Z", "2026-10-01T16:00:00Z"),
-            instance("unanswered", "2026-10-01T17:00:00Z", "2026-10-01T18:00:00Z"),
-            instance("delegated", "2026-10-01T19:00:00Z", "2026-10-01T20:00:00Z"),
+            answered(
+                "declined",
+                "2026-10-01T15:00:00Z",
+                "2026-10-01T16:00:00Z",
+                ParticipationStatus::Declined,
+            ),
+            answered(
+                "unanswered",
+                "2026-10-01T17:00:00Z",
+                "2026-10-01T18:00:00Z",
+                ParticipationStatus::NeedsAction,
+            ),
+            answered(
+                "delegated",
+                "2026-10-01T19:00:00Z",
+                "2026-10-01T20:00:00Z",
+                ParticipationStatus::Delegated,
+            ),
             instance("editing", "2026-10-01T13:00:00Z", "2026-10-01T14:00:00Z"),
             instance("early", "2026-09-30T23:00:00Z", "2026-10-01T01:00:00Z"),
             instance("outside", "2026-10-03T09:00:00Z", "2026-10-03T10:00:00Z"),
@@ -652,15 +672,8 @@ mod tests {
             exclude_event: Some(EventId::new("editing")),
             calendars: Some(vec![CalendarId::new("cal")]),
         };
-        let status = |i: &EventInstance| match i.event_id.as_str() {
-            "declined" => Some(ParticipationStatus::Declined),
-            "unanswered" => Some(ParticipationStatus::NeedsAction),
-            "delegated" => Some(ParticipationStatus::Delegated),
-            "a" => Some(ParticipationStatus::Accepted),
-            _ => None,
-        };
         assert_eq!(
-            own_busy_periods(&instances, &query, status),
+            own_busy_periods(&instances, &query),
             vec![
                 p(
                     "2026-10-01T00:00:00Z",
@@ -689,12 +702,12 @@ mod tests {
             calendars: None,
             ..query
         };
-        let periods = own_busy_periods(&instances, &all, |_| None);
+        let periods = own_busy_periods(&instances, &all);
         assert!(
             periods
                 .iter()
                 .any(|p| p.start == "2026-10-01T00:00:00Z" && p.end == "2026-10-02T00:00:00Z")
         );
-        assert_eq!(own_busy_periods(&[], &all, |_| None).len(), 0);
+        assert_eq!(own_busy_periods(&[], &all).len(), 0);
     }
 }

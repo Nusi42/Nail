@@ -230,10 +230,7 @@ async fn save_collection(
                     let mut settings = before.as_ref().map_or_else(
                         || {
                             let mut settings = CalendarSettings::named(&folder.name);
-                            settings.color = folder
-                                .color
-                                .and_then(nail_api::exchange::CategoryColor::rgb)
-                                .map(str::to_owned);
+                            settings.color = server_color(&folder);
                             settings
                         },
                         |c| c.settings.clone(),
@@ -613,6 +610,22 @@ async fn save_listing(
         })
         .await?;
     Ok(())
+}
+
+/// The colour a server gives a calendar: Graph's exact `hexColor`, else
+/// the preset's colour; `None` lets the store pick the default
+/// (`next_calendar_color`, R7).
+fn server_color(folder: &ExchangePimFolder) -> Option<String> {
+    folder
+        .hex_color
+        .clone()
+        .filter(|c| nail_api::pim::is_color(c))
+        .or_else(|| {
+            folder
+                .color
+                .and_then(nail_api::exchange::CategoryColor::rgb)
+                .map(str::to_owned)
+        })
 }
 
 /// The user's own participation status in a meeting (kebab-case), if the
@@ -1339,6 +1352,7 @@ mod tests {
             todo: false,
             read_only: false,
             color: None,
+            hex_color: None,
         }
     }
 

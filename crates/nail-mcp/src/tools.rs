@@ -299,7 +299,9 @@ fn read_definitions() -> Vec<Tool> {
         ),
         read_only(
             "find_free_time",
-            "Free stretches of at least duration_minutes between busy events, optionally within              working hours (day_start / day_end) in a time zone (read grant).",
+            "Free stretches of at least duration_minutes between busy events, optionally within \
+             set hours (day_start / day_end) or the user's working hours and days \
+             (working_hours) in a time zone (read grant).",
             schema_for_type::<crate::pim::FreeTimeArgs>(),
         ),
         read_only(
@@ -309,7 +311,8 @@ fn read_definitions() -> Vec<Tool> {
         ),
         read_only(
             "list_tasks",
-            "Tasks of the task lists, open ones by default, optionally only those due before a              time (read grant).",
+            "Tasks of the task lists, open ones by default, optionally only those due before a \
+             time or due in a range (due_after, due_before, tz) (read grant).",
             schema_for_type::<crate::pim::ListTasksArgs>(),
         ),
         read_only(

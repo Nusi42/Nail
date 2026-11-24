@@ -7,7 +7,7 @@
 
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
-use common::{ok, until_some};
+use common::{assert_distinct_palette_colors, ok, until_some};
 use nail_core::testing::{TempService, error_of, plain_options};
 
 use std::sync::Arc;
@@ -303,6 +303,68 @@ carddav \"cards\" url=\"{url}\" {{\n    auth \"password\" username=\"ada\"\n}}\n
         ),
         "{dav_source:?}"
     );
+    service.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn discovered_calendars_keep_server_colours_and_get_distinct_defaults() {
+    let dav = MockDavServer::start(MockDavConfig::default())
+        .await
+        .unwrap();
+    let holidays = dav
+        .collection_paths()
+        .into_iter()
+        .find(|p| {
+            dav.collection(p)
+                .is_some_and(|c| c.display_name == "Holidays")
+        })
+        .expect("the seeded holidays calendar");
+    dav.set_color(&holidays, Some("#FF5722FF"));
+    let work = dav.calendar_path("work");
+    dav.add_calendar(&work, "Work", &["VEVENT"]);
+    let kdl = format!(
+        "caldav \"dav\" url=\"{}/\" {{
+    auth \"password\" username=\"ada\"
+}}
+",
+        dav.base_url()
+    );
+    let f = start(&kdl, &[("keychain:nail/pim/dav/password", "secret")]);
+    let service = &f.service;
+    let found = until_some("the DAV calendars", || async {
+        let list = calendars(service, "dav").await;
+        (list.len() >= 4).then_some(list)
+    })
+    .await;
+    let color = |name: &str| {
+        found
+            .iter()
+            .find(|c| c.settings.name == name)
+            .and_then(|c| c.settings.color.clone())
+            .unwrap_or_else(|| panic!("{name} has no colour"))
+    };
+    // Server colours are kept as they came.
+    assert_eq!(color("Holidays"), "#FF5722FF");
+    assert_eq!(color("Personal"), "#3366ccff");
+    // Every other calendar (the local ones too) has its own palette colour.
+    let Response::Calendars { calendars: all } =
+        ok(service, Request::ListCalendars { source_id: None }).await
+    else {
+        panic!()
+    };
+    let defaults: Vec<String> = all
+        .iter()
+        .filter(|c| !["Holidays", "Personal"].contains(&c.settings.name.as_str()))
+        .map(|c| {
+            c.settings
+                .color
+                .clone()
+                .unwrap_or_else(|| panic!("{c:?} has no colour"))
+        })
+        .collect();
+    assert_distinct_palette_colors(&defaults);
+    // The default stays local: nothing was written to the server.
+    assert_eq!(dav.collection(&work).unwrap().color, None);
     service.shutdown().await;
 }
 

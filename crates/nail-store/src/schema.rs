@@ -400,6 +400,13 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     // Schema v24 (ADR 0236): when each message entered its folder, for the
     // `as_of` mark of a whole list.
     Migration::sql(crate::thread::targets::V24),
+    // Schema v25 (ADR 0246): distinct default colours for calendars that
+    // never had one.
+    Migration {
+        sql: crate::pim::collections::V25,
+        backfill: Some(crate::pim::collections::backfill_calendar_colors),
+        foreign_keys_off: false,
+    },
 ];
 
 /// The schema version this build creates and understands.
@@ -708,6 +715,43 @@ mod tests {
         assert!(migrate_with(&mut conn, &broken).is_err());
         assert_eq!(current_version(&conn).unwrap(), 0);
         assert!(!tables(&conn).contains(&"ok".to_owned()));
+    }
+
+    #[test]
+    fn v25_gives_uncoloured_calendars_distinct_colours_once() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        assert_eq!(migrate_to_version(&mut conn, 24).unwrap(), 24);
+        conn.execute_batch(
+            r##"
+            INSERT INTO pim_collections (id, source_id, kind, settings, components) VALUES
+              ('home', 'local', 'calendar', '{"name":"Home","order":0}', '["event"]'),
+              ('work', 'local', 'calendar', '{"name":"Work","order":1,"extra":7}', '["event"]'),
+              ('mine', 'local', 'calendar', '{"name":"Mine","color":"#2563eb","order":2}', '["event"]'),
+              ('todo', 'local', 'calendar', '{"name":"Todo","color":null,"order":3}', '["task"]'),
+              ('book', 'local', 'address-book', '{"name":"Book"}', '[]');
+            "##,
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        let settings = |id: &str| -> serde_json::Value {
+            let text: String = conn
+                .query_row(
+                    "SELECT settings FROM pim_collections WHERE id = ?1",
+                    [id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            serde_json::from_str(&text).unwrap()
+        };
+        // Blue is the user's own choice on "mine"; the others follow the
+        // palette in list order.
+        assert_eq!(settings("home")["color"], "#0891b2");
+        assert_eq!(settings("work")["color"], "#16a34a");
+        assert_eq!(settings("work")["extra"], 7, "unknown fields stay");
+        assert_eq!(settings("mine")["color"], "#2563eb");
+        assert_eq!(settings("todo")["color"], "#ca8a04");
+        assert!(settings("book").get("color").is_none());
     }
 
     #[test]

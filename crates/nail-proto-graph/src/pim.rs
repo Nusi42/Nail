@@ -760,6 +760,7 @@ impl GraphEngine {
                         todo: false,
                         read_only: c.can_edit == Some(false),
                         color: calendar_color(c.color.as_deref()),
+                        hex_color: c.hex_color.filter(|h| !h.is_empty()),
                     });
                 }
             }
@@ -793,6 +794,7 @@ impl GraphEngine {
                 todo: false,
                 read_only: false,
                 color: None,
+                hex_color: None,
             });
             for f in folders {
                 out.push(ExchangePimFolder {
@@ -804,6 +806,7 @@ impl GraphEngine {
                     todo: false,
                     read_only: false,
                     color: None,
+                    hex_color: None,
                 });
             }
         }
@@ -824,6 +827,7 @@ impl GraphEngine {
                     role,
                     todo: true,
                     color: None,
+                    hex_color: None,
                 });
             }
         }

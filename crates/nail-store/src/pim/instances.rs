@@ -490,6 +490,8 @@ impl Store {
     /// with dates and floating times placed in `viewer_tz` (an IANA name),
     /// by start (all-day first), from the instance cache (expanding what it
     /// lacks with `expander`). `calendars` `None` = every visible calendar.
+    /// `my_status` stays `None` (no user addresses): see
+    /// [`Self::list_event_instances_for`].
     pub fn list_event_instances(
         &self,
         from: i64,
@@ -497,6 +499,24 @@ impl Store {
         calendars: Option<&[CalendarId]>,
         viewer_tz: &str,
         expander: &dyn InstanceExpander,
+    ) -> Result<Vec<EventInstance>> {
+        self.list_event_instances_for(from, to, calendars, viewer_tz, expander, &|_| false)
+    }
+
+    /// [`Self::list_event_instances`] with `my_status` filled from the
+    /// occurrence's fields (an override's own attendees) for the user,
+    /// whose addresses `is_mine` recognises
+    /// ([`nail_api::pim::EventFields::my_status`], R7). Computed when read,
+    /// so the cache needs no column and answers stay current when the
+    /// user's identities change.
+    pub fn list_event_instances_for(
+        &self,
+        from: i64,
+        to: i64,
+        calendars: Option<&[CalendarId]>,
+        viewer_tz: &str,
+        expander: &dyn InstanceExpander,
+        is_mine: &dyn Fn(&str) -> bool,
     ) -> Result<Vec<EventInstance>> {
         let rows = self.cached_rows(from, to, calendars, viewer_tz, expander)?;
         let ids: Vec<&str> = {
@@ -553,7 +573,7 @@ impl Store {
                     has_attendees: !fields.attendees.is_empty(),
                     has_alarms: !fields.alarms.is_empty(),
                     read_only: event.read_only,
-                    my_status: None,
+                    my_status: fields.my_status(is_mine),
                 },
             ));
         }
@@ -725,6 +745,49 @@ mod tests {
         );
         e.recurrence = Some(testing::daily(RecurrenceEnd::Count { count }));
         e
+    }
+
+    #[test]
+    fn my_status_comes_from_each_occurrences_attendees() {
+        use nail_api::pim::calendar::{Attendee, ParticipationStatus};
+        let store = testing::store();
+        let mut series = daily_berlin(3);
+        let mut me = Attendee::new("Me@Example.com");
+        me.status = ParticipationStatus::NeedsAction;
+        series.fields.attendees = vec![Attendee::new("ann@example.org"), me.clone()];
+        let mut answered = series.fields.clone();
+        answered.start = PimTime::zoned("2026-03-28T09:00:00", "Europe/Berlin");
+        answered.end = PimTime::zoned("2026-03-28T09:15:00", "Europe/Berlin");
+        me.status = ParticipationStatus::Declined;
+        answered.attendees = vec![me];
+        series.overrides = vec![EventOverride {
+            recurrence_id: answered.start.clone(),
+            fields: answered,
+            this_and_future: false,
+        }];
+        save(&store, &series);
+        let range = (at("2026-03-27T00:00:00Z"), at("2026-03-31T00:00:00Z"));
+        let expander = TestExpander::default();
+        let mine = |email: &str| email.eq_ignore_ascii_case("me@example.com");
+        let statuses = |list: Vec<EventInstance>| -> Vec<Option<ParticipationStatus>> {
+            list.into_iter().map(|i| i.my_status).collect()
+        };
+        let instances = store
+            .list_event_instances_for(range.0, range.1, None, "UTC", &expander, &mine)
+            .unwrap();
+        assert_eq!(
+            statuses(instances),
+            [
+                Some(ParticipationStatus::NeedsAction),
+                Some(ParticipationStatus::Declined),
+                Some(ParticipationStatus::NeedsAction)
+            ]
+        );
+        // Without the user's addresses nothing is the user's.
+        let plain = store
+            .list_event_instances(range.0, range.1, None, "UTC", &expander)
+            .unwrap();
+        assert_eq!(statuses(plain), [None, None, None]);
     }
 
     #[test]

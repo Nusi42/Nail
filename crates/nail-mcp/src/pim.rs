@@ -8,14 +8,15 @@
 //! servers) with a grant for all accounts. A calendar or contact outside
 //! the grant is reported as not found.
 
-use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveTime, TimeZone, Utc};
 use nail_api::mcp::McpScope;
 use nail_api::pim::mcp::{
     MCP_DEFAULT_EVENT_DAYS, MCP_MAX_EVENT_DAYS, McpCalendarsResource, McpContactResource,
     McpContactSearchResult, McpContactsResource, McpEventsResource, McpFreeTimeResult,
     McpTasksResource,
 };
-use nail_api::pim::{AddressBook, Calendar, CalendarEvent, FreeSlot, PimItemRef};
+use nail_api::pim::{AddressBook, Calendar, CalendarEvent, FreeSlot, PimItemRef, WorkHours};
+use nail_api::triage::Weekday;
 use nail_api::{AccountId, ApiError, CalendarId, ContactId, Request, Response};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
@@ -65,6 +66,10 @@ pub struct FreeTimeArgs {
     /// Latest time of day for slots, `HH:MM` (e.g. `17:00`).
     #[serde(default)]
     pub day_end: Option<String>,
+    /// Only the user's working hours and work days (the calendar
+    /// preferences); `day_start` / `day_end` still win when given.
+    #[serde(default)]
+    pub working_hours: bool,
 }
 
 /// `search_contacts` arguments.
@@ -91,6 +96,13 @@ pub struct ListTasksArgs {
     /// Only tasks due before this instant (RFC 3339).
     #[serde(default)]
     pub due_before: Option<String>,
+    /// Only tasks due at or after this instant (RFC 3339), by due; the
+    /// range ends at `due_before` (default: 30 days later).
+    #[serde(default)]
+    pub due_after: Option<String>,
+    /// IANA zone that due dates are placed in for `due_after` (default UTC).
+    #[serde(default)]
+    pub tz: Option<String>,
 }
 
 fn unexpected(response: &Response) -> Failure {
@@ -186,6 +198,33 @@ fn working_hours(
         }
     }
     out
+}
+
+/// The working day as times of day; the end is `None` at midnight.
+fn work_times(hours: WorkHours) -> (NaiveTime, Option<NaiveTime>) {
+    let at =
+        |minute: u16| NaiveTime::from_hms_opt(u32::from(minute / 60), u32::from(minute % 60), 0);
+    (
+        at(hours.start_minute).unwrap_or(NaiveTime::MIN),
+        at(hours.end_minute),
+    )
+}
+
+/// The slots (each within one day, as [`working_hours`] cuts them) that
+/// start on one of `days` in `tz`.
+fn on_work_days(slots: Vec<FreeSlot>, tz: chrono_tz::Tz, days: &[Weekday]) -> Vec<FreeSlot> {
+    slots
+        .into_iter()
+        .filter(|slot| {
+            instant(&slot.start).is_ok_and(|s| {
+                let index = s.with_timezone(&tz).weekday().num_days_from_monday();
+                usize::try_from(index)
+                    .ok()
+                    .and_then(|i| Weekday::ALL.get(i))
+                    .is_some_and(|day| days.contains(day))
+            })
+        })
+        .collect()
 }
 
 fn hhmm(text: Option<&str>) -> Result<Option<NaiveTime>, Failure> {
@@ -422,6 +461,28 @@ impl<D: McpData> Shared<D> {
             .filter(|c| ids.contains(&c.id))
             .collect();
         let due_before = args.due_before.as_deref().map(instant).transpose()?;
+        if let Some(after) = &args.due_after {
+            // Tasks due in a range: the core places due dates in `tz`.
+            let (from, to) = event_range(Some(after), args.due_before.as_deref())?;
+            let tasks = if ids.is_empty() {
+                Vec::new()
+            } else {
+                match self
+                    .pim(Request::ListTasksDue {
+                        from,
+                        to,
+                        tz: args.tz.unwrap_or_else(|| "UTC".to_owned()),
+                        calendar_ids: Some(ids),
+                        include_completed: args.include_completed,
+                    })
+                    .await?
+                {
+                    Response::Tasks { tasks } => tasks,
+                    other => return Err(unexpected(&other)),
+                }
+            };
+            return Ok(json!(McpTasksResource { lists, tasks }));
+        }
         let mut tasks = if ids.is_empty() {
             Vec::new()
         } else {
@@ -469,10 +530,22 @@ impl<D: McpData> Shared<D> {
                 )))
             })?
         };
-        let (day_start, day_end) = (
+        let (mut day_start, mut day_end) = (
             hhmm(args.day_start.as_deref())?,
             hhmm(args.day_end.as_deref())?,
         );
+        let work_days = if args.working_hours {
+            let preferences = match self.pim(Request::GetCalendarPreferences).await? {
+                Response::CalendarPreferences { preferences } => preferences,
+                other => return Err(unexpected(&other)),
+            };
+            let (open, close) = work_times(preferences.work_hours);
+            day_start = day_start.or(Some(open));
+            day_end = day_end.or(close);
+            Some(preferences.work_days)
+        } else {
+            None
+        };
         let minutes = args.duration_minutes.max(1);
         let slots = match self
             .pim(Request::FindFreeTime {
@@ -494,6 +567,10 @@ impl<D: McpData> Shared<D> {
             day_end,
             Duration::minutes(i64::from(minutes)),
         );
+        let slots = match work_days {
+            Some(days) => on_work_days(slots, tz, &days),
+            None => slots,
+        };
         Ok(json!(McpFreeTimeResult { slots }))
     }
 
@@ -539,6 +616,34 @@ mod tests {
         assert_eq!(to, "2026-10-31T00:00:00Z");
         assert!(event_range(Some("2026-01-01T00:00:00Z"), Some("2027-06-01T00:00:00Z")).is_err());
         assert!(event_range(Some("soon"), None).is_err());
+    }
+
+    #[test]
+    fn preferences_give_the_working_day_and_days() {
+        let (open, close) = work_times(WorkHours {
+            start_minute: 8 * 60 + 30,
+            end_minute: 24 * 60,
+        });
+        assert_eq!(open, NaiveTime::from_hms_opt(8, 30, 0).unwrap());
+        assert_eq!(close, None);
+        assert_eq!(
+            work_times(WorkHours::default()).1,
+            NaiveTime::from_hms_opt(18, 0, 0)
+        );
+        // 2026-10-03 is a Saturday, 2026-10-05 a Monday.
+        let slots = vec![
+            FreeSlot {
+                start: "2026-10-03T09:00:00Z".into(),
+                end: "2026-10-03T10:00:00Z".into(),
+            },
+            FreeSlot {
+                start: "2026-10-05T09:00:00Z".into(),
+                end: "2026-10-05T10:00:00Z".into(),
+            },
+        ];
+        let kept = on_work_days(slots, chrono_tz::Europe::Berlin, &[Weekday::Mon]);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].start, "2026-10-05T09:00:00Z");
     }
 
     #[test]

@@ -32,4 +32,9 @@ day_start: string | null,
 /**
  * Latest time of day, `HH:MM`, `null` = 24:00.
  */
-day_end: string | null, };
+day_end: string | null, 
+/**
+ * Only the user's working hours and work days
+ * ([`super::CalendarPreferences`]); `day_start` / `day_end` win.
+ */
+working_hours: boolean, };

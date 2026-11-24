@@ -347,8 +347,9 @@ crates/nail-ical       iCalendar / vCard (own lossless content-line layer + patc
                        nested .gitattributes -text: edit byte-preserving) (ADR 0059)
 crates/nail-event-text Quick create from text (R7, ADR 0246): parse(text, Context { now, tz, locale }) reads a
                        sentence as nail_api::pim::ParsedEventText (title, start / end, place, repetition,
-                       UTF-16 spans); keywords in a per-language table (English first); the core's
-                       ParseEventText calls it
+                       UTF-16 spans); keywords.rs (per-language tables, English first), scan.rs (words and
+                       the grammar: dates, times / ranges, lengths, all day, repetitions), lib.rs (place,
+                       title, start / end rules); src/tests.rs table-driven; the core's ParseEventText calls it
 crates/nail-dav        CalDAV / CardDAV client (M3a WP72): DavClient (Basic over TLS / OAuth2 bearer with one
                        refresh, https-or-loopback URL policy, own redirect handling), discovery (configured
                        URL, _caldavs/_carddavs SRV via DnsLookup, /.well-known/, principal + home sets, Google
@@ -1754,3 +1755,10 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   free/busy lanes (`FreeBusyTimeline.tsx` `Lanes`) have the movable meeting frame (`FRAME_STEP_MINUTES`). Styles:
   `lookStyle.ts` (`pim.look.hidden` is the visually hidden label). Tests: `pim/lookTesting.ts` `chooseFromMenu`;
   e2e `support/invitations.ts` (iMIP mails), `support/eventEditor.ts` (`startNewEvent`), `r7-p2-look.spec.ts`.
+- Core package (ADR 0247-p4): `nail-event-text` reads English text (`keywords.rs`, `scan.rs`). `my_status` comes from
+  `EventFields::my_status` when instances are read (`Store::list_event_instances_for` with the user's addresses,
+  `Service::me`); `nail_dav::own_busy_periods` reads it from the instance. Default colours: `Store::save_calendar`
+  gives a new calendar without a colour `next_calendar_color` over the stored colours; schema v25's backfill
+  (`pim::collections::backfill_calendar_colors`) colours existing calendars once; Graph's `hexColor` arrives as
+  `ExchangePimFolder::hex_color` (`exchange/pim.rs` `server_color`). MCP: `find_free_time` `working_hours` (the
+  preferences' working hours and days), `list_tasks` `due_after` / `tz` (`ListTasksDue`).

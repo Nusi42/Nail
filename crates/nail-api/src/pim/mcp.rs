@@ -79,6 +79,10 @@ pub struct McpFindFreeTimeArgs {
     /// Latest time of day, `HH:MM`, `null` = 24:00.
     #[serde(default)]
     pub day_end: Option<String>,
+    /// Only the user's working hours and work days
+    /// ([`super::CalendarPreferences`]); `day_start` / `day_end` win.
+    #[serde(default)]
+    pub working_hours: bool,
 }
 
 /// Arguments of the `search_contacts` tool.
@@ -101,6 +105,12 @@ pub struct McpListTasksArgs {
     pub include_completed: bool,
     /// Only tasks due before this instant (RFC 3339).
     pub due_before: Option<String>,
+    /// Only tasks due at or after this instant (RFC 3339), by due
+    /// ([`crate::Request::ListTasksDue`]); the range ends at `due_before`,
+    /// `null` = [`MCP_DEFAULT_EVENT_DAYS`] later.
+    pub due_after: Option<String>,
+    /// Zone due dates are placed in for `due_after` (IANA), `null` = UTC.
+    pub tz: Option<String>,
 }
 
 /// `nail://calendars`.

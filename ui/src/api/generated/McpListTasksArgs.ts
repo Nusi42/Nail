@@ -16,4 +16,14 @@ include_completed: boolean,
 /**
  * Only tasks due before this instant (RFC 3339).
  */
-due_before: string | null, };
+due_before: string | null, 
+/**
+ * Only tasks due at or after this instant (RFC 3339), by due
+ * ([`crate::Request::ListTasksDue`]); the range ends at `due_before`,
+ * `null` = [`MCP_DEFAULT_EVENT_DAYS`] later.
+ */
+due_after: string | null, 
+/**
+ * Zone due dates are placed in for `due_after` (IANA), `null` = UTC.
+ */
+tz: string | null, };

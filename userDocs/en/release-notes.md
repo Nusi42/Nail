@@ -77,6 +77,19 @@ new events drawn straight onto the week.
   contacts; time zones from the chip in the calendar toolbar.
 - **Due this week** — the tasks due this week next to the calendar, to tick
   off, add or drag onto the week. Empty views now say what to do next.
+- **Every calendar in its own colour** — a new or newly found calendar
+  without a colour gets one that no other calendar has yet, and calendars
+  that all showed the same blue get distinct colours once. Colours set on
+  the server (CalDAV, Microsoft 365) are kept.
+- **Type an event as a sentence** — "Lunch with Bob tomorrow 12:30 at
+  Corner café", "Yoga every Monday 7pm", "Offsite Dec 4 all day" or "Sync
+  3-4pm" become an event with the right day, time, length, repetition and
+  place (English).
+- **Unanswered invitations stand out** — the calendar knows your own answer
+  to each meeting, including answers given from another of your addresses.
+- **Agents see your working hours** — `find_free_time` can keep to your
+  working hours and days, and `list_tasks` can list tasks due in a range
+  ([MCP](mcp.md)).
 
 ### Corrected in 0.8.11
 

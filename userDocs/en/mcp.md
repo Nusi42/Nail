@@ -191,9 +191,9 @@ Agents see Nail's data as MCP **resources** and **tools**.
 | `list_folders` | An account's folders |
 | `get_ui_context` | What is on screen |
 | `list_events` | Events in a range (default: the next 30 days), occurrences of repeating events listed one by one |
-| `find_free_time` | Free stretches of at least a given length, optionally within working hours (`day_start` / `day_end`) |
+| `find_free_time` | Free stretches of at least a given length, optionally within set hours (`day_start` / `day_end`) or your working hours and days from Settings → Calendar & contacts (`working_hours`) |
 | `search_contacts` | Contacts by name, address, phone number or organization |
-| `list_tasks` | Tasks, open ones by default, optionally only those due before a time |
+| `list_tasks` | Tasks, open ones by default, optionally only those due before a time or due in a range (`due_after`, `due_before`, `tz`) |
 
 Calendars, contacts and tasks need *Read mail* like messages; changing
 them needs *Change calendars* or *Change contacts and tasks*

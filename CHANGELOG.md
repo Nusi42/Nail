@@ -81,6 +81,19 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 - Event cards use a 20 % tint of the calendar colour; the new-calendar
   dialog no longer picks a colour itself.
 
+### Added — a calendar that reads well, core (ADR 0247-p4)
+
+- `nail-event-text` reads English sentences: today / tomorrow / weekdays /
+  "next Friday" / "Dec 4" / numeric dates, times and ranges with am / pm,
+  lengths, "all day", "every …" repetitions and "at …" places, with UTF-16
+  spans.
+- `EventInstance.my_status` is filled from the user's identities and
+  account addresses; own free/busy reads it.
+- New and discovered calendars without a colour get `next_calendar_color`;
+  schema v25 colours existing ones once; Graph `hexColor` is kept.
+- MCP `find_free_time` takes `working_hours`; `list_tasks` takes
+  `due_after` / `tz`.
+
 ### Fixed — deferred writes are retried soon (ADR 0245)
 
 - A replay pass that defers writes retries the account's queue within

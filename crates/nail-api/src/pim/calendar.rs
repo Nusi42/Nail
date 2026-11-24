@@ -711,6 +711,20 @@ pub struct EventFields {
 }
 
 impl EventFields {
+    /// The user's own participation (`EventInstance::my_status`, R7, ADR
+    /// 0246): the `PARTSTAT` of the first attendee whose address
+    /// `is_mine` (the user's identities and account addresses); `None`
+    /// when the user organizes the event or is not an attendee.
+    pub fn my_status(&self, is_mine: impl Fn(&str) -> bool) -> Option<ParticipationStatus> {
+        if self.organizer.as_ref().is_some_and(|o| is_mine(&o.email)) {
+            return None;
+        }
+        self.attendees
+            .iter()
+            .find(|a| is_mine(&a.email))
+            .map(|a| a.status)
+    }
+
     /// Fields with a title, start and end and defaults for the rest.
     pub fn new(title: impl Into<String>, start: PimTime, end: PimTime) -> Self {
         Self {
@@ -968,6 +982,34 @@ mod tests {
         assert_eq!(value["status"], "confirmed");
         assert_eq!(value["transparency"], "busy");
         assert_eq!(value["visibility"], "public");
+    }
+
+    #[test]
+    fn my_status_is_the_users_attendee_answer() {
+        let mine = |email: &str| email.eq_ignore_ascii_case("me@example.com");
+        let mut f = meeting();
+        assert_eq!(f.my_status(mine), None);
+        f.attendees.push(Attendee::new("ann@example.org"));
+        assert_eq!(f.my_status(mine), None);
+        for status in [
+            ParticipationStatus::NeedsAction,
+            ParticipationStatus::Accepted,
+            ParticipationStatus::Tentative,
+            ParticipationStatus::Declined,
+            ParticipationStatus::Delegated,
+        ] {
+            let mut me = Attendee::new("ME@example.com");
+            me.status = status;
+            let mut g = f.clone();
+            g.attendees.push(me);
+            assert_eq!(g.my_status(mine), Some(status));
+            // The organizer is no attendee of their own meeting.
+            g.organizer = Some(Organizer {
+                email: "me@example.com".into(),
+                name: None,
+            });
+            assert_eq!(g.my_status(mine), None);
+        }
     }
 
     #[test]

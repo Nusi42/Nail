@@ -36,6 +36,21 @@ pub(crate) const BULK_ACTION_MESSAGES: usize = 25_000;
 /// How long a test waits for the core (sync passes, replays, events).
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Every colour is a palette colour and no two are the same (default
+/// calendar colours, R7).
+pub(crate) fn assert_distinct_palette_colors(colors: &[String]) {
+    let mut distinct = colors.to_vec();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(distinct.len(), colors.len(), "{colors:?}");
+    assert!(
+        colors
+            .iter()
+            .all(|c| nail_api::pim::calendar_view::CalendarColor::of_value(c).is_some()),
+        "{colors:?}"
+    );
+}
+
 /// How often a waiting test polls the core.
 const POLL: Duration = Duration::from_millis(50);
 

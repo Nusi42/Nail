@@ -2134,37 +2134,20 @@ impl Service {
             .collect();
         let tz = crate::pim::local_zone_name();
         let wanted = calendars.clone();
-        let (instances, events) = self
+        let me = me.clone();
+        let instances = self
             .store()
             .call(move |s| {
-                let instances =
-                    s.list_event_instances(start, end, Some(&wanted), &tz, &Expander::default())?;
-                let events = s.events(Some(&wanted))?;
-                Ok((instances, events))
+                s.list_event_instances_for(
+                    start,
+                    end,
+                    Some(&wanted),
+                    &tz,
+                    &Expander::default(),
+                    &|email| me.contains(email),
+                )
             })
             .await?;
-        let by_id: HashMap<&EventId, &CalendarEvent> = events.iter().map(|e| (&e.id, e)).collect();
-        let my_status = |i: &nail_api::pim::EventInstance| -> Option<ParticipationStatus> {
-            let event = by_id.get(&i.event_id)?;
-            let fields = match &i.recurrence_id {
-                Some(rid) => {
-                    nail_itip::apply::override_for(event, rid).map_or(&event.fields, |o| &o.fields)
-                }
-                None => &event.fields,
-            };
-            if fields
-                .organizer
-                .as_ref()
-                .is_some_and(|o| me.contains(&o.email))
-            {
-                return None;
-            }
-            fields
-                .attendees
-                .iter()
-                .find(|a| me.contains(&a.email))
-                .map(|a| a.status)
-        };
         Ok(nail_dav::own_busy_periods(
             &instances,
             &nail_dav::OwnFreeBusy {
@@ -2173,7 +2156,6 @@ impl Service {
                 exclude_event: exclude,
                 calendars: Some(calendars),
             },
-            my_status,
         ))
     }
 

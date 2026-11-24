@@ -13,8 +13,9 @@
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
 use common::{
-    api_service, by_subject, eventually, folder_at, folders, messages, messages_in, mock_oauth,
-    next_matching, oauth_provider, ok, online, send_now, until_some,
+    api_service, assert_distinct_palette_colors, by_subject, eventually, folder_at, folders,
+    messages, messages_in, mock_oauth, next_matching, oauth_provider, ok, online, send_now,
+    until_some,
 };
 use nail_core::testing::TempService;
 
@@ -640,10 +641,8 @@ async fn shared_mailboxes_sending_and_free_busy() {
     assert_eq!(result.attendees[0].periods.len(), 2);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn calendars_contacts_and_to_do() {
-    let env = setup(false, "").await;
-    let service = &env.service;
+/// The Graph account's calendars and To Do lists, once they are there.
+async fn graph_calendars(service: &Service) -> Vec<nail_api::pim::Calendar> {
     let source = nail_api::exchange::exchange_pim_source_id(&AccountId::new(GRAPH));
     let calendars = || async {
         match service
@@ -661,7 +660,46 @@ async fn calendars_contacts_and_to_do() {
         calendars().await.len() >= 4
     })
     .await;
-    let all = calendars().await;
+    calendars().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_calendar_colours_are_kept_or_assigned() {
+    let env = setup_with(false, "", |graph, _| {
+        graph.with_mailbox(None, |mb, _| {
+            mb.calendars[0]["hexColor"] = serde_json::json!("#8e24aa");
+        });
+    })
+    .await;
+    let service = &env.service;
+    let all = graph_calendars(service).await;
+    let color = |name: &str| {
+        all.iter()
+            .find(|c| c.settings.name == name)
+            .and_then(|c| c.settings.color.clone())
+            .unwrap_or_else(|| panic!("{name} has no colour"))
+    };
+    // Graph's exact hexColor wins; a preset colour ("lightGreen") is kept.
+    assert_eq!(color("Calendar"), "#8e24aa");
+    assert_eq!(
+        Some(color("Holidays").as_str()),
+        CategoryColor::Preset4.rgb()
+    );
+    // Lists without a server colour get palette colours of their own.
+    let defaults: Vec<String> = all
+        .iter()
+        .filter(|c| !["Calendar", "Holidays"].contains(&c.settings.name.as_str()))
+        .map(|c| c.settings.color.clone().expect("a default colour"))
+        .collect();
+    assert_ne!(defaults, Vec::<String>::new());
+    assert_distinct_palette_colors(&defaults);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn calendars_contacts_and_to_do() {
+    let env = setup(false, "").await;
+    let service = &env.service;
+    let all = graph_calendars(service).await;
     let calendar = all
         .iter()
         .find(|c| c.settings.name == "Calendar")

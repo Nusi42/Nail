@@ -1,6 +1,7 @@
 //! PIM sources and their collections (calendars / task lists and address
 //! books), sync tokens, and the local "Collected" address book.
 
+use nail_api::pim::calendar_view::next_calendar_color;
 use nail_api::pim::contact::AddressBookRole;
 use nail_api::pim::{
     AddressBook, AddressBookSettings, Calendar, CalendarSettings, PimSourceKind, PimSourceState,
@@ -227,6 +228,72 @@ struct NewCollection<'a> {
     role: Option<&'a str>,
 }
 
+/// The colours every calendar has now (stored settings; calendars without
+/// one count for nothing).
+fn calendar_colors(tx: &Transaction<'_>) -> Result<Vec<String>> {
+    let mut stmt = tx.prepare("SELECT settings FROM pim_collections WHERE kind = 'calendar'")?;
+    let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+    let mut out = Vec::new();
+    for settings in rows {
+        if let Ok(settings) = serde_json::from_str::<CalendarSettings>(&settings?)
+            && let Some(color) = settings.color
+        {
+            out.push(color);
+        }
+    }
+    Ok(out)
+}
+
+/// Schema v25 (R7, ADR 0246): no table changes; the backfill gives each
+/// calendar that never had a colour (every one showed the same default
+/// blue) a distinct palette colour, once.
+pub(crate) const V25: &str = "-- v25: default calendar colours (backfill only)";
+
+/// The backfill of [`V25`]: calendars without a colour, in list order
+/// (order setting, name, id), each get [`next_calendar_color`] over the
+/// colours given so far. Only the stored setting changes (nothing is
+/// written to a server); settings that do not parse are left alone.
+pub(crate) fn backfill_calendar_colors(tx: &Transaction<'_>) -> Result<()> {
+    let mut rows: Vec<(String, serde_json::Value, CalendarSettings)> = {
+        let mut stmt =
+            tx.prepare("SELECT id, settings FROM pim_collections WHERE kind = 'calendar'")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, text) = row?;
+            if let (Ok(raw), Ok(settings)) = (
+                serde_json::from_str::<serde_json::Value>(&text),
+                serde_json::from_str::<CalendarSettings>(&text),
+            ) {
+                out.push((id, raw, settings));
+            }
+        }
+        out
+    };
+    rows.sort_by_cached_key(|(id, _, s)| (s.order, s.name.to_lowercase(), id.clone()));
+    let mut used: Vec<String> = rows
+        .iter()
+        .filter_map(|(_, _, s)| s.color.clone())
+        .collect();
+    for (id, mut raw, settings) in rows {
+        if settings.color.is_some() {
+            continue;
+        }
+        let color = next_calendar_color(used.iter().map(String::as_str))
+            .value()
+            .to_owned();
+        if let Some(object) = raw.as_object_mut() {
+            object.insert("color".into(), serde_json::Value::String(color.clone()));
+            tx.execute(
+                "UPDATE pim_collections SET settings = ?2 WHERE id = ?1",
+                params![id, serde_json::to_string(&raw)?],
+            )?;
+            used.push(color);
+        }
+    }
+    Ok(())
+}
+
 fn insert_collection(tx: &Transaction<'_>, c: &NewCollection<'_>) -> Result<()> {
     let NewCollection {
         id,
@@ -412,20 +479,46 @@ impl Store {
     /// Creates (or replaces the settings of) a calendar / task list.
     /// `account_id` of the argument is not stored (it comes from the
     /// source's configuration).
+    ///
+    /// A new calendar without a colour gets the default colour
+    /// ([`next_calendar_color`] over the colours of the other calendars,
+    /// R7, ADR 0246): a server colour (CalDAV `calendar-color`, Graph
+    /// `hexColor`) or the user's choice always wins, and saving an existing
+    /// calendar without a colour keeps its stored one (only
+    /// [`Self::update_calendar_settings`] clears a colour).
     pub fn save_calendar(&self, calendar: &Calendar, href: Option<&str>) -> Result<()> {
-        let settings = serde_json::to_string(&calendar.settings)?;
         let mut components = calendar.components.clone();
         components.sort();
         components.dedup();
         let components = serde_json::to_string(&components)?;
         let timezone_changed = self.with_tx(|tx| {
-            let before: Option<Option<String>> = tx
+            let stored: Option<(Option<String>, String)> = tx
                 .query_row(
-                    "SELECT timezone FROM pim_collections WHERE id = ?1",
+                    "SELECT timezone, settings FROM pim_collections WHERE id = ?1",
                     [calendar.id.as_str()],
-                    |r| r.get(0),
+                    |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .optional()?;
+            let mut settings = calendar.settings.clone();
+            if settings.color.is_none() {
+                // A save never clears a colour (a sync pass that read the
+                // calendar before another one stored it);
+                // `update_calendar_settings` does.
+                settings.color = if let Some((_, text)) = &stored {
+                    serde_json::from_str::<CalendarSettings>(text)
+                        .ok()
+                        .and_then(|s| s.color)
+                } else {
+                    let used = calendar_colors(tx)?;
+                    Some(
+                        next_calendar_color(used.iter().map(String::as_str))
+                            .value()
+                            .to_owned(),
+                    )
+                };
+            }
+            let before = stored.map(|(timezone, _)| timezone);
+            let settings = serde_json::to_string(&settings)?;
             insert_collection(
                 tx,
                 &NewCollection {
@@ -792,6 +885,48 @@ mod tests {
             .unwrap();
         assert_eq!(gone, [dav]);
         assert_eq!(store.pim_source_ids().unwrap(), ["holidays", "local"]);
+    }
+
+    #[test]
+    fn new_calendars_get_distinct_default_colours() {
+        use nail_api::pim::calendar_view::CalendarColor;
+        let store = Store::open_in_memory().unwrap();
+        let color = |id: &str| {
+            store
+                .calendar(&CalendarId::new(id))
+                .unwrap()
+                .unwrap()
+                .settings
+                .color
+        };
+        let value = |c: CalendarColor| Some(c.value().to_owned());
+        store
+            .save_calendar(&calendar("a", LOCAL_SOURCE_ID, "A"), None)
+            .unwrap();
+        assert_eq!(color("a"), value(CalendarColor::Blue));
+        // A server (or user) colour is kept and counts as used.
+        let mut cyan = calendar("b", LOCAL_SOURCE_ID, "B");
+        cyan.settings.color = Some(CalendarColor::Cyan.value().to_uppercase());
+        store.save_calendar(&cyan, None).unwrap();
+        assert_eq!(color("b"), Some("#0891B2".into()));
+        store
+            .save_calendar(&calendar("c", LOCAL_SOURCE_ID, "C"), None)
+            .unwrap();
+        assert_eq!(color("c"), value(CalendarColor::Green));
+        // Saving an existing calendar without a colour keeps its colour
+        // (two sync passes); only a settings update clears it.
+        store
+            .save_calendar(&calendar("c", LOCAL_SOURCE_ID, "C"), None)
+            .unwrap();
+        assert_eq!(color("c"), value(CalendarColor::Green));
+        store
+            .update_calendar_settings(&CalendarId::new("c"), &CalendarSettings::named("C"))
+            .unwrap();
+        assert_eq!(color("c"), None);
+        store
+            .save_calendar(&calendar("c", LOCAL_SOURCE_ID, "C"), None)
+            .unwrap();
+        assert_eq!(color("c"), None);
     }
 
     #[test]

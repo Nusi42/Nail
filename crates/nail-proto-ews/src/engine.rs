@@ -733,6 +733,7 @@ impl EwsEngine {
                             todo: false,
                             read_only: false,
                             color: None,
+                            hex_color: None,
                         });
                     }
                 }
@@ -767,6 +768,7 @@ impl EwsEngine {
                             todo: false,
                             read_only: false,
                             color: None,
+                            hex_color: None,
                         });
                     }
                 }

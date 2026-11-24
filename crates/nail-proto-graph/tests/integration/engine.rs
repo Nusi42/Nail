@@ -1290,6 +1290,20 @@ async fn pim_folders() {
     let holidays = all.iter().find(|f| f.name == "Holidays").unwrap();
     assert!(holidays.read_only);
     assert_eq!(holidays.color, Some(CategoryColor::Preset4));
+    // Graph's hexColor: empty (never chosen) reads as none.
+    assert_eq!(holidays.hex_color, None);
+    server.with_mailbox(None, |mb, _| {
+        for (i, calendar) in mb.calendars.iter_mut().enumerate() {
+            calendar["hexColor"] = serde_json::json!(if i == 0 { "#8e24aa" } else { "" });
+        }
+    });
+    let again = folders(&engine, None).await;
+    assert_eq!(
+        default_calendar(&again).hex_color.as_deref(),
+        Some("#8e24aa")
+    );
+    let holidays_again = again.iter().find(|f| f.name == "Holidays").unwrap();
+    assert_eq!(holidays_again.hex_color, None);
     let contacts = folder(
         &all,
         PimFolderKind::Contacts,

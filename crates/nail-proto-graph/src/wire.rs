@@ -381,6 +381,9 @@ pub struct Calendar {
     /// `auto`, `lightBlue`, ….
     #[serde(default)]
     pub color: Option<String>,
+    /// `#rrggbb`; empty when the user never chose a colour.
+    #[serde(default)]
+    pub hex_color: Option<String>,
     /// The user may write.
     #[serde(default)]
     pub can_edit: Option<bool>,
