@@ -15,7 +15,9 @@ import type {
   EditScope,
   EventFields,
   EventInstance,
+  FreeTimeHours,
   InvitationConflict,
+  MessageSummary,
   PimTime,
   Recurrence,
   ReminderId,
@@ -34,8 +36,9 @@ export const pimKeys = {
     ["pim", "instances", from, to, ids, tz] as const,
   overlaps: (eventId: string, from: string, to: string, tz: string) =>
     ["pim", "overlaps", eventId, from, to, tz] as const,
-  freeTime: (from: string, to: string, minutes: number, tz: string) =>
-    ["pim", "free-time", from, to, minutes, tz] as const,
+  recentMail: (email: string) => ["pim", "recent-mail", email] as const,
+  freeTime: (from: string, to: string, minutes: number, tz: string, hours: FreeTimeHours) =>
+    ["pim", "free-time", from, to, minutes, tz, hours] as const,
   event: (id: string | null) => ["pim", "event", id] as const,
   addressBooks: ["pim", "address-books"] as const,
   contacts: (books: readonly string[] | null, group: string | null, limit: number) =>
@@ -144,10 +147,20 @@ export function useEventOverlaps(
   });
 }
 
-export function useFreeTime(range: { from: string; to: string }, minutes: number, tz: string) {
+/**
+ * Free time in `range` (R8, ADR 0251): the core cuts it to `hours` per day
+ * (the working hours of the preferences, or the layout's own), so the
+ * slots come as the views show them.
+ */
+export function useFreeTime(
+  range: { from: string; to: string },
+  minutes: number,
+  tz: string,
+  hours: FreeTimeHours,
+) {
   const client = useClient();
   return useQuery({
-    queryKey: pimKeys.freeTime(range.from, range.to, minutes, tz),
+    queryKey: pimKeys.freeTime(range.from, range.to, minutes, tz, hours),
     queryFn: async () =>
       (
         await client.request(
@@ -158,7 +171,7 @@ export function useFreeTime(range: { from: string; to: string }, minutes: number
             duration_minutes: minutes,
             calendar_ids: null,
             tz,
-            hours: { kind: "any" },
+            hours,
           },
           "FreeTime",
         )
@@ -331,6 +344,44 @@ export function usePimSearch(query: string, contactsOnly = false) {
         )
       ).hits,
     enabled: query.trim() !== "",
+  });
+}
+
+/** How many recent messages the contact card shows (R8, ADR 0251). */
+export const RECENT_MAIL_COUNT = 5;
+
+/** The mail search for messages from or to `email` (the query language's quoting). */
+export function recentMailQuery(email: string): string {
+  const quoted = `"${email.replace(/["\\]/g, "")}"`;
+  return `from:${quoted} OR to:${quoted}`;
+}
+
+/**
+ * The newest messages with a person (R8: the contact card's "Recent mail"),
+ * through the mail search every account and folder shares (`Search`).
+ */
+export function useRecentMail(email: string) {
+  const client = useClient();
+  const text = recentMailQuery(email);
+  return useQuery({
+    // Its own key: the mail lists treat every `search` query as their paged search results.
+    queryKey: pimKeys.recentMail(email),
+    queryFn: async (): Promise<MessageSummary[]> => {
+      const response = await client.call({
+        type: "Search",
+        query: {
+          text,
+          account_id: null,
+          folder_id: null,
+          offset: 0,
+          limit: RECENT_MAIL_COUNT,
+          sort: "date",
+        },
+      });
+      // An address the query language cannot take finds nothing rather than failing the card.
+      return response.type === "SearchResults" ? response.hits.map((h) => h.message) : [];
+    },
+    enabled: email.trim() !== "",
   });
 }
 

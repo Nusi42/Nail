@@ -448,7 +448,7 @@ function InvitationView({
       {answering && mode === "idle" && (
         <>
           {canPickOccurrence && (
-            <ScopeChoice scope={scope} onScope={setScope} day={day} onDay={setDay} tz={tz} />
+            <ScopeChoice scope={scope} onScope={setScope} pick={{ day, onDay: setDay, tz }} />
           )}
           <AnswerForm
             current={invitation.my_status}

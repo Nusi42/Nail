@@ -20,10 +20,30 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   (`UpsertTaskArgs.reminders`, `TaskReminderArg`) and of the MCP tool
   `create_event_from_text` (`CreateEventFromTextArgs`).
 
+### Added — calendar and PIM (ADR 0251)
+
+- The command palette's "New event from text" (`calendar.new-event-from-text`)
+  with the quick-add preview.
+- Right-click menus (menu key, `Shift+F10`) for events, contacts and tasks.
+- The quick look answers one occurrence of a recurring invitation or the
+  series; an invitation answer's mail can be taken back while it waits in
+  the outbox (Undo).
+- Recent mail on the contact card; the conflict choice in the event editor;
+  drawing events with a held finger on touch screens; place and call icons.
+- The free-time view asks the core for the working hours (`FindFreeTime`
+  `hours`) and no longer cuts free time per day itself.
+
 ### Fixed — calendar agenda contrast
 
 - Past entries of the calendar agenda keep a readable contrast (muted text
   instead of a faded entry).
+
+### Fixed — calendar colours and titles (ADR 0251)
+
+- Visible calendars with colours too close to tell apart are shown in
+  distinct palette colours (display only; palette colours stay as picked);
+  the demo seeds' calendars have distinct colours.
+- A taller event card's icons no longer cover the end of its title.
 
 ## [0.8.11] — 2026-11-24
 

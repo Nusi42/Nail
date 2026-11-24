@@ -27,6 +27,7 @@ import type {
   InvitationAction,
   InvitationConflict,
   InvitationTarget,
+  Draft,
   ItipMethod,
   MessageBody,
   PimTime,
@@ -39,6 +40,7 @@ import type {
 } from "../../api/generated";
 import { userAddresses } from "../../api/mockAccounts";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import { saveDraft, sendDraft } from "../../api/mockOutbox";
 import { answerPim, listInstances } from "../pim/mock";
 import { conflictsIn } from "../pim/mockExpand";
 import { localZone, pimTimeIn, sameTime, todayIn, utcString } from "../pim/time";
@@ -266,7 +268,41 @@ function refreshed(core: MockCore, invitation: Invitation): Invitation {
   return next;
 }
 
-/** Records an iTIP message as sent (iMIP mail gets an outbox id). */
+/**
+ * Queues an iMIP mail in the mock outbox like the core does (an automatic
+ * `itip` draft sent with the undo-send delay, R8: undo applies); answers
+ * its outbox id.
+ */
+function queueImip(core: MockCore, method: ItipMethod, recipients: readonly string[]): string {
+  const identity = core.data.accountsConfig.accounts.flatMap((a) => a.identities)[0];
+  if (identity && recipients.length > 0) {
+    const draft: Draft = {
+      id: null,
+      identity_id: identity.id,
+      to: recipients.map((email) => ({ name: null, email })),
+      cc: [],
+      bcc: [],
+      subject: method,
+      mode: "plain",
+      text: "",
+      html: null,
+      markdown: null,
+      attachments: [],
+      context: null,
+      signature: "none",
+      markdown_part: false,
+      automatic: { kind: "itip" },
+    };
+    const saved = saveDraft(core, draft);
+    if (saved.type === "DraftSaved") {
+      const queued = sendDraft(core, saved.draft_id, null, null);
+      if (queued.type === "SendQueued") return queued.entry.id;
+    }
+  }
+  return core.nextId("outbox-itip-");
+}
+
+/** Records an iTIP message as sent (iMIP mail goes through the outbox). */
 function send(
   core: MockCore,
   method: ItipMethod,
@@ -278,7 +314,7 @@ function send(
     method,
     recipients,
     transport,
-    outbox_id: transport === "imip" ? core.nextId("outbox-itip-") : null,
+    outbox_id: transport === "imip" ? queueImip(core, method, recipients) : null,
   };
   state(core).sent.push(sent);
   state(core).comments.push(comment);

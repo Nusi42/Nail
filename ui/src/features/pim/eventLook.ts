@@ -12,7 +12,13 @@ import { instantMs } from "./time";
 
 type T = (id: string, args?: MessageArgs) => string;
 
-const MINUTES_PER_HOUR = 60;
+/** Minutes in an hour. */
+export const MINUTES_PER_HOUR = 60;
+
+/** The icon of an event's place (R8, ADR 0251: the editor's place field and the quick look). */
+export const PLACE_ICON = "map-pin";
+/** The icon of an event's call link (the quick look's Join). */
+export const CALL_ICON = "video";
 
 /** A length split into whole days, hours and minutes (never negative). */
 export function lengthParts(minutes: number): { days: number; hours: number; minutes: number } {

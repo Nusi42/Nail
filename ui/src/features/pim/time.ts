@@ -384,34 +384,23 @@ export interface FreeStretch {
 }
 
 /**
- * The free stretches of one day's working hours: every stretch the core
- * found (`FindFreeTime` knows neither days nor working hours, so one stretch
- * can span several days) is cut to `[startHour, endHour)` of `day` in `tz`;
- * pieces shorter than `minutes` are dropped.
+ * The free slots `FindFreeTime` found that start on `day` in `tz`. With
+ * working or custom hours (R8, ADR 0251) the core already cut every slot to
+ * one day's hours, so this only sorts them by day; it never cuts them.
  */
-export function freeStretchesOfDay(
+export function slotsOfDay(
   slots: readonly FreeStretch[],
   day: CalendarDate,
   tz: string,
-  startHour: number,
-  endHour: number,
-  minutes: number,
 ): FreeStretch[] {
-  const midnight = toZoned(day, tz);
-  const from = midnight.add({ hours: startHour }).toDate().getTime();
-  const to = midnight
-    .add({ hours: Math.max(startHour, endHour) })
+  const from = toZoned(day, tz).toDate().getTime();
+  const to = toZoned(day.add({ days: 1 }), tz)
     .toDate()
     .getTime();
-  const out: FreeStretch[] = [];
-  for (const slot of slots) {
-    const start = Math.max(from, instantMs(slot.start));
-    const end = Math.min(to, instantMs(slot.end));
-    if (end - start >= Math.max(1, minutes) * 60_000) {
-      out.push({ start: utcString(start), end: utcString(end) });
-    }
-  }
-  return out;
+  return slots.filter((slot) => {
+    const start = instantMs(slot.start);
+    return start >= from && start < to;
+  });
 }
 
 /** The days of a range. */

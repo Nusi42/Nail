@@ -20,7 +20,9 @@ use nail_api::pim::{
 use nail_api::triage::NotificationKind;
 use nail_api::{CalendarId, ErrorCode, Event, Request, Response, SecretRef};
 use nail_core::{AdjustableClock, EngineTiming, Service};
-use nail_testkit_net::{MockDavConfig, MockDavServer, MockHttpServer, MockResponse};
+use nail_testkit_net::{
+    MockDavConfig, MockDavServer, MockHttpServer, MockResponse, SEED_PERSONAL_COLOR,
+};
 
 struct Fixture {
     service: Service,
@@ -345,7 +347,7 @@ async fn discovered_calendars_keep_server_colours_and_get_distinct_defaults() {
     };
     // Server colours are kept as they came.
     assert_eq!(color("Holidays"), "#FF5722FF");
-    assert_eq!(color("Personal"), "#3366ccff");
+    assert_eq!(color("Personal"), SEED_PERSONAL_COLOR);
     // Every other calendar (the local ones too) has its own palette colour.
     let Response::Calendars { calendars: all } =
         ok(service, Request::ListCalendars { source_id: None }).await

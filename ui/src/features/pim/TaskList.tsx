@@ -10,7 +10,9 @@
  * list to add to.
  *
  * Keyboard: Up / Down move between tasks, Right / Left expand / collapse
- * subtasks, Space completes, Enter opens the editor, Delete deletes.
+ * subtasks, Space completes, Enter opens the editor, Delete deletes; a
+ * right-click, the menu key or Shift+F10 open a task's menu (Edit, Mark as
+ * done / not done, Delete; R8, ADR 0251).
  */
 import { useId, useRef, useState, type SubmitEvent, type KeyboardEvent } from "react";
 import { TaskListChooser } from "../exchange";
@@ -32,6 +34,7 @@ import { openNewTask } from "./newEvent";
 import { TASK_DIALOG } from "./names";
 import { pimWrite, useCalendars, useTasks } from "./queries";
 import { usePim } from "./store";
+import { usePimContextMenu, type PimMenuEntry } from "./PimMenu";
 import { emptyTaskFields } from "./defaults";
 import { localZone, pimTimeIn } from "./time";
 
@@ -240,7 +243,55 @@ export function TaskList({ node }: WidgetProps) {
       ?.focus();
   };
 
+  const complete = (task: Task) =>
+    void run({ type: "CompleteTask", task_id: task.id, completed: !isDone(task) }, "TaskSaved");
+  const remove = (task: Task) =>
+    void run({ type: "DeleteTask", task_id: task.id, with_subtasks: true }, "PimDeleted");
+  const taskMenu = usePimContextMenu((element) => {
+    const item = element.closest<HTMLElement>("[data-task]");
+    const task = visible.find((r) => r.task.id === item?.dataset.task)?.task;
+    if (!item || !task) return null;
+    const title = task.fields.title || t("common-no-title");
+    const entries: PimMenuEntry[] = [
+      {
+        type: "item",
+        id: "edit",
+        label: t("common-edit"),
+        icon: "pencil",
+        onSelect: () => {
+          open(task);
+        },
+      },
+    ];
+    if (!task.read_only) {
+      entries.push(
+        {
+          type: "item",
+          id: "complete",
+          label: t(isDone(task) ? "pim-task-reopen" : "pim-task-complete", { title }),
+          icon: isDone(task) ? "rotate-ccw" : "check",
+          onSelect: () => {
+            complete(task);
+          },
+        },
+        { type: "separator", id: "sep-delete" },
+        {
+          type: "item",
+          id: "delete",
+          label: t("common-delete"),
+          icon: "trash",
+          danger: true,
+          onSelect: () => {
+            remove(task);
+          },
+        },
+      );
+    }
+    return { label: t("pim-calendar-actions-of", { name: title }), entries, item };
+  });
+
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+    if (taskMenu.onKeyDown(event)) return;
     const target =
       event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-task]") : null;
     if (!target || event.target !== target) return;
@@ -278,11 +329,7 @@ export function TaskList({ node }: WidgetProps) {
         break;
       case " ":
         event.preventDefault();
-        if (!row.task.read_only)
-          void run(
-            { type: "CompleteTask", task_id: id, completed: !isDone(row.task) },
-            "TaskSaved",
-          );
+        if (!row.task.read_only) complete(row.task);
         break;
       case "Enter":
         event.preventDefault();
@@ -290,8 +337,7 @@ export function TaskList({ node }: WidgetProps) {
         break;
       case "Delete":
         event.preventDefault();
-        if (!row.task.read_only)
-          void run({ type: "DeleteTask", task_id: id, with_subtasks: true }, "PimDeleted");
+        if (!row.task.read_only) remove(row.task);
         break;
     }
   };
@@ -361,7 +407,10 @@ export function TaskList({ node }: WidgetProps) {
           data-part="task-list.items"
           aria-label={t("common-tasks")}
           onKeyDown={onKeyDown}
+          onContextMenu={taskMenu.onContextMenu}
         >
+          {/* A portal: nothing of it is inside the tree. */}
+          {taskMenu.menu}
           {visible.map(({ task, level, children }) => {
             const done = isDone(task);
             const due = dueMs(task, tz);

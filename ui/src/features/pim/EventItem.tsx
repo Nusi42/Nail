@@ -20,6 +20,9 @@
  * is narrow; free time is hatched (state `free`); an unanswered invitation
  * (`my_status` needs-action, S1) is provisional: dashed outline, no fill,
  * a question mark; a declined one is struck through.
+ *
+ * R8 (ADR 0251): a right-click, the menu key or Shift+F10 open the
+ * occurrence's menu (Open, Edit, Delete; `usePimContextMenu`).
  */
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { Calendar, EventInstance } from "../../api/generated";
@@ -34,6 +37,7 @@ import { usePim, usePimStore } from "./store";
 import { sameTime } from "./time";
 import { nonEmpty } from "../../text/empty";
 import { anchorOf } from "../../widgets/Popover";
+import { usePimContextMenu, type PimContextMenu, type PimMenuEntry } from "./PimMenu";
 import { Icon } from "../../widgets/Icon";
 
 export type DragMode = "move" | "resize";
@@ -78,6 +82,58 @@ export function useOpenInstance() {
     });
     ctx.store.getState().openWindow(EVENT_DIALOG);
   };
+}
+
+/**
+ * The right-click menu of an occurrence (R8, ADR 0251): Open (the quick
+ * look), Edit and — unless it is read-only — Delete. The time grids, the
+ * month and the agenda share it.
+ */
+export function useEventMenu(instance: EventInstance): PimContextMenu {
+  const t = useT();
+  const ctx = useChangeContext();
+  const open = useOpenInstance();
+  const title = instance.title || t("common-no-title");
+  return usePimContextMenu((target) => {
+    const item = target.closest<HTMLElement>(`[data-event="${instance.event_id}"]`);
+    if (!item) return null;
+    const entries: PimMenuEntry[] = [
+      {
+        type: "item",
+        id: "open",
+        label: t("common-open"),
+        icon: "eye",
+        onSelect: () => {
+          const pim = ctx.pim.getState();
+          pim.select({ eventId: instance.event_id, recurrenceId: instance.recurrence_id });
+          pim.setQuickLook({ instance, anchor: anchorOf(item) });
+        },
+      },
+      {
+        type: "item",
+        id: "edit",
+        label: t("common-edit"),
+        icon: "pencil",
+        onSelect: () => {
+          open(instance);
+        },
+      },
+    ];
+    if (!instance.read_only) {
+      entries.push(
+        { type: "separator", id: "sep-delete" },
+        {
+          type: "item",
+          id: "delete",
+          label: t("common-delete"),
+          icon: "trash",
+          danger: true,
+          onSelect: () => void requestDelete(ctx, instance),
+        },
+      );
+    }
+    return { label: t("pim-calendar-actions-of", { name: title }), entries, item };
+  });
 }
 
 export function EventItem({
@@ -144,11 +200,17 @@ export function EventItem({
     });
   };
 
+  const remove = () => {
+    void requestDelete(ctx, instance);
+  };
+  const contextMenu = useEventMenu(instance);
+
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (contextMenu.onKeyDown(event)) return;
     if (event.key === "Delete" || event.key === "Backspace") {
       if (instance.read_only) return;
       event.preventDefault();
-      void requestDelete(ctx, instance);
+      remove();
       return;
     }
     if (!event.altKey || instance.read_only) return;
@@ -197,63 +259,67 @@ export function EventItem({
   ].filter((name): name is string => name !== null);
 
   return (
-    <button
-      type="button"
-      data-part={part}
-      data-geom={geom}
-      data-event={instance.event_id}
-      data-state={allStates.join(" ") || undefined}
-      data-size={short ? "short" : undefined}
-      aria-label={label}
-      onClick={(event) => {
-        if (suppressClick?.()) return;
-        pimStore.getState().setQuickLook({ instance, anchor: anchorOf(event.currentTarget) });
-      }}
-      onDoubleClick={() => {
-        pimStore.getState().setQuickLook(null);
-        open(instance);
-      }}
-      onFocus={() => {
-        pimStore
-          .getState()
-          .select({ eventId: instance.event_id, recurrenceId: instance.recurrence_id });
-      }}
-      onKeyDown={onKeyDown}
-      onPointerDown={
-        onDragStart && !instance.read_only
-          ? (event) => {
-              onDragStart(event, "move");
-            }
-          : undefined
-      }
-    >
-      <span data-part="event-card.title">{title}</span>
-      <span data-part="event-card.time">{shownTime}</span>
-      {instance.location && !short && (
-        <span data-part="event-card.location">{instance.location}</span>
-      )}
-      {icons.length > 0 && (
-        <span data-part="event-card.icons" aria-hidden="true">
-          {icons.map((name) => (
-            <Icon key={name} name={name} part="event-card.icon" />
-          ))}
-        </span>
-      )}
-      {instance.recurring && (
-        <span data-part="event-card.badge" data-badge="recurring">
-          {t("common-repeats")}
-        </span>
-      )}
-      {onDragStart && keys === "time" && !instance.read_only && (
-        <span
-          data-part={`${part}.resize`}
-          aria-hidden="true"
-          onPointerDown={(event) => {
-            event.stopPropagation();
-            onDragStart(event, "resize");
-          }}
-        />
-      )}
-    </button>
+    <>
+      <button
+        type="button"
+        data-part={part}
+        data-geom={geom}
+        data-event={instance.event_id}
+        data-state={allStates.join(" ") || undefined}
+        data-size={short ? "short" : undefined}
+        aria-label={label}
+        onClick={(event) => {
+          if (suppressClick?.()) return;
+          pimStore.getState().setQuickLook({ instance, anchor: anchorOf(event.currentTarget) });
+        }}
+        onContextMenu={contextMenu.onContextMenu}
+        onDoubleClick={() => {
+          pimStore.getState().setQuickLook(null);
+          open(instance);
+        }}
+        onFocus={() => {
+          pimStore
+            .getState()
+            .select({ eventId: instance.event_id, recurrenceId: instance.recurrence_id });
+        }}
+        onKeyDown={onKeyDown}
+        onPointerDown={
+          onDragStart && !instance.read_only
+            ? (event) => {
+                onDragStart(event, "move");
+              }
+            : undefined
+        }
+      >
+        <span data-part="event-card.title">{title}</span>
+        <span data-part="event-card.time">{shownTime}</span>
+        {instance.location && !short && (
+          <span data-part="event-card.location">{instance.location}</span>
+        )}
+        {icons.length > 0 && (
+          <span data-part="event-card.icons" aria-hidden="true">
+            {icons.map((name) => (
+              <Icon key={name} name={name} part="event-card.icon" />
+            ))}
+          </span>
+        )}
+        {instance.recurring && (
+          <span data-part="event-card.badge" data-badge="recurring">
+            {t("common-repeats")}
+          </span>
+        )}
+        {onDragStart && keys === "time" && !instance.read_only && (
+          <span
+            data-part={`${part}.resize`}
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              onDragStart(event, "resize");
+            }}
+          />
+        )}
+      </button>
+      {contextMenu.menu}
+    </>
   );
 }

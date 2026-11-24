@@ -38,6 +38,11 @@ export const DELETE_GROUP_DIALOG = "pim-delete-group";
 /** "Remove the source …?" (Calendars and address books). */
 export const REMOVE_SOURCE_DIALOG = "pim-remove-source";
 
+/** "New event from text" (R8, ADR 0251: the command palette's quick create). */
+export const EVENT_FROM_TEXT_DIALOG = "pim-event-from-text";
+/** The action that opens it (`Feature.actionInfo` lists it in the palette). */
+export const NEW_EVENT_FROM_TEXT_ACTION = "calendar.new-event-from-text";
+
 /** Every dialog (for the catalog: `window-<name>`). */
 export const DIALOGS = [
   EVENT_DIALOG,
@@ -56,6 +61,7 @@ export const DIALOGS = [
   DELETE_CONTACTS_DIALOG,
   DELETE_GROUP_DIALOG,
   REMOVE_SOURCE_DIALOG,
+  EVENT_FROM_TEXT_DIALOG,
 ] as const;
 
 /** The settings page's "Calendar & contacts" section widget (M5b). */

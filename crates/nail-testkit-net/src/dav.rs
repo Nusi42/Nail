@@ -105,6 +105,11 @@ pub const CONTEXT_PATH: &str = "/dav/";
 pub const CALENDARS_PATH: &str = "/dav/calendars/";
 /// Prefix of address book homes (`<user>/` follows).
 pub const ADDRESSBOOKS_PATH: &str = "/dav/addressbooks/";
+/// The Apple `calendar-color` of the seeded `personal` calendar: a fuchsia
+/// that differs clearly from every colour of Nail's calendar palette and from
+/// the other demo calendars (perceptual distance at least 0.08, ADR 0251), so the
+/// demo shows its calendars apart.
+pub const SEED_PERSONAL_COLOR: &str = "#c026d3ff";
 
 const SYNC_TOKEN_PREFIX: &str = "http://nail.mock/sync/";
 const MAX_BODY: usize = 16 * 1024 * 1024;
@@ -556,7 +561,7 @@ impl MockDavServer {
                     format!("{cal_home}personal/"),
                     MockCollectionKind::Calendar(vec!["VEVENT".into(), "VTODO".into()]),
                     "Personal",
-                    Some("#3366ccff"),
+                    Some(SEED_PERSONAL_COLOR),
                     false,
                 ),
                 (

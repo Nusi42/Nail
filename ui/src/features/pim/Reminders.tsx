@@ -17,6 +17,8 @@ import { lengthText } from "./eventLook";
 import { formatInstant } from "./fmt";
 import { EVENT_DIALOG, TASK_DIALOG } from "./names";
 import { PimMenu } from "./PimMenu";
+import { ReplyToast } from "./ReplyToast";
+import { TextToast } from "./TextToast";
 import { dismissReminders, snoozeReminders, useCalendars, useReminders } from "./queries";
 import { usePim, type PimToast } from "./store";
 import { instantMs, localZone, todayIn, toZoned, utcString } from "./time";
@@ -212,24 +214,13 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
 
 function ProblemToast({ toast }: { toast: Extract<PimToast, { kind: "problem" }> }) {
   const t = useT();
-  const dismissToast = usePim((s) => s.dismissToast);
   return (
-    <li data-part="pim.toast" data-kind="problem">
-      <p data-part="pim.toast.title" role="alert">
-        {t(toast.message.id, toast.message.args)}
-      </p>
-      <div data-part="pim.toast.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          onClick={() => {
-            dismissToast(toast.id);
-          }}
-        >
-          {t("common-close")}
-        </button>
-      </div>
-    </li>
+    <TextToast
+      id={toast.id}
+      kind="problem"
+      role="alert"
+      text={t(toast.message.id, toast.message.args)}
+    />
   );
 }
 
@@ -267,6 +258,8 @@ export function PimToasts() {
           {toasts.map((toast) =>
             toast.kind === "reminder" ? (
               <ReminderToast key={toast.id} toast={toast} />
+            ) : toast.kind === "reply" ? (
+              <ReplyToast key={toast.id} toast={toast} />
             ) : (
               <ProblemToast key={toast.id} toast={toast} />
             ),

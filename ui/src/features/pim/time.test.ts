@@ -19,7 +19,7 @@ import {
   DEFAULT_VIEW_OPTIONS,
   busyDays,
   dateString,
-  freeStretchesOfDay,
+  slotsOfDay,
   workingDaysFrom,
   workingDaysOf,
   instancesOfDay,
@@ -382,22 +382,20 @@ describe("free time (M5b review)", () => {
     );
   });
 
-  it("cuts a free stretch spanning several days to each day's working hours", () => {
-    // One free stretch from Monday noon to Thursday 10:00 (UTC), as
-    // FindFreeTime returns it for a calendar free for days.
-    const slots = [{ start: "2026-10-05T12:00:00Z", end: "2026-10-08T10:00:00Z" }];
-    const day = (d: number) =>
-      freeStretchesOfDay(slots, new CalendarDate(2026, 10, d), "UTC", 8, 18, 30);
-    expect(day(5)).toEqual([{ start: "2026-10-05T12:00:00Z", end: "2026-10-05T18:00:00Z" }]);
-    expect(day(6)).toEqual([{ start: "2026-10-06T08:00:00Z", end: "2026-10-06T18:00:00Z" }]);
-    expect(day(7)).toEqual([{ start: "2026-10-07T08:00:00Z", end: "2026-10-07T18:00:00Z" }]);
-    expect(day(8)).toEqual([{ start: "2026-10-08T08:00:00Z", end: "2026-10-08T10:00:00Z" }]);
-    expect(day(9)).toEqual([]);
-    // Working hours in the view's zone; pieces shorter than the duration go.
-    expect(
-      freeStretchesOfDay(slots, new CalendarDate(2026, 10, 8), "Europe/Berlin", 8, 18, 30),
-    ).toEqual([{ start: "2026-10-08T06:00:00Z", end: "2026-10-08T10:00:00Z" }]);
-    expect(freeStretchesOfDay(slots, new CalendarDate(2026, 10, 8), "UTC", 9, 18, 90)).toEqual([]);
+  it("sorts the free slots by the day they start on, without cutting them", () => {
+    // Slots as FindFreeTime with working hours answers them: already one day's hours each.
+    const slots = [
+      { start: "2026-10-05T12:00:00Z", end: "2026-10-05T16:00:00Z" },
+      { start: "2026-10-06T08:00:00Z", end: "2026-10-06T16:00:00Z" },
+      { start: "2026-10-06T22:30:00Z", end: "2026-10-06T23:30:00Z" },
+    ];
+    const day = (d: number, tz = "UTC") => slotsOfDay(slots, new CalendarDate(2026, 10, d), tz);
+    expect(day(5)).toEqual([slots[0]]);
+    expect(day(6)).toEqual([slots[1], slots[2]]);
+    expect(day(7)).toEqual([]);
+    // In Berlin (UTC+2) 22:30 UTC is already the next day.
+    expect(day(6, "Europe/Berlin")).toEqual([slots[1]]);
+    expect(day(7, "Europe/Berlin")).toEqual([slots[2]]);
   });
 });
 

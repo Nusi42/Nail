@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   CalendarId,
   CalendarPreferences,
+  FreeTimeHours,
   ParsedEventText,
   Task,
   Weekday,
@@ -23,6 +24,7 @@ import { DEFAULT_CALENDAR_PREFERENCES, MINUTES_PER_DAY } from "../../api/generat
 import { DAY_MS } from "../../state/clock";
 import type { NailClient } from "../../api/client";
 import { useClient } from "../../state/queries";
+import { MINUTES_PER_HOUR } from "./eventLook";
 import { pimWrite, type PimWriteContext } from "./queries";
 import { WEEKDAYS, isKnownZone, localZone, type CalendarDate } from "./time";
 
@@ -238,4 +240,25 @@ export async function parseEventText(
   return (
     await client.request({ type: "ParseEventText", text, tz, now: null, locale }, "EventTextParsed")
   ).parsed;
+}
+
+/**
+ * The hours free time is searched in (R8, ADR 0251; `FindFreeTime.hours`):
+ * the working hours of the preferences — the one rule the views shade —
+ * unless the layout gives the free-time view hours of its own
+ * (`work-start` / `work-end`, whole hours, `end` exclusive), which then
+ * count on the preferences' working days.
+ */
+export function freeTimeHours(
+  prefs: CalendarPreferences,
+  layout: { start: number; end: number } | null,
+): FreeTimeHours {
+  if (layout === null) return { kind: "working-hours" };
+  const start = Math.min(23, Math.max(0, layout.start));
+  const end = Math.min(24, Math.max(start + 1, layout.end));
+  return {
+    kind: "custom",
+    work_hours: { start_minute: start * MINUTES_PER_HOUR, end_minute: end * MINUTES_PER_HOUR },
+    work_days: [...prefs.work_days],
+  };
 }

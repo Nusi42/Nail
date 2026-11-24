@@ -11,6 +11,7 @@ import {
   viewZonesOf,
   weekdayOf,
   workHourRange,
+  freeTimeHours,
   workHoursValid,
 } from "./prefs";
 import { localZone, parseDay } from "./time";
@@ -120,3 +121,30 @@ describe("task drag", () => {
 
 // The working-hours rule is the core's `WorkHours::is_valid` (the form and the mock use this port).
 describeVectors("calendar", calendarVectors, { workHoursValid });
+
+describe("free time hours (R8, ADR 0251)", () => {
+  const prefs: CalendarPreferences = {
+    ...DEFAULT_CALENDAR_PREFERENCES,
+    work_days: ["mon", "tue"],
+    work_hours: { start_minute: 9 * 60, end_minute: 17 * 60 },
+  };
+
+  it("asks the core for the working hours of the preferences", () => {
+    expect(freeTimeHours(prefs, null)).toEqual({ kind: "working-hours" });
+  });
+
+  it("asks for the layout's own hours on the preferences' working days", () => {
+    expect(freeTimeHours(prefs, { start: 7, end: 12 })).toEqual({
+      kind: "custom",
+      work_hours: { start_minute: 420, end_minute: 720 },
+      work_days: ["mon", "tue"],
+    });
+    // Never empty or past midnight.
+    expect(freeTimeHours(prefs, { start: 10, end: 10 })).toMatchObject({
+      work_hours: { start_minute: 600, end_minute: 660 },
+    });
+    expect(freeTimeHours(prefs, { start: 30, end: 40 })).toMatchObject({
+      work_hours: { start_minute: 23 * 60, end_minute: 24 * 60 },
+    });
+  });
+});

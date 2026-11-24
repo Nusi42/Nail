@@ -16,6 +16,7 @@ import { must } from "../../test/must";
 import { renderSettings, saveSettingsDone } from "../settings/testing";
 import { EVENT_DIALOG } from "./names";
 import { pimStoreFor } from "./store";
+import { eventTitled } from "./testing";
 import { dateString, localZone, todayIn } from "./time";
 import { stubResize } from "./viewsTesting";
 
@@ -74,10 +75,7 @@ describe("quick add (S2)", () => {
     expect(preview).not.toHaveTextContent("tomorrow");
     expect(chips[2]).toHaveTextContent(/12:30.*1:30/);
     await user.keyboard("{Enter}");
-    await waitFor(() => {
-      expect(pimOf(env).events.some((e) => e.fields.title === "Lunch with Bob")).toBe(true);
-    });
-    const created = must(pimOf(env).events.find((e) => e.fields.title === "Lunch with Bob"));
+    const created = await eventTitled(env, "Lunch with Bob");
     expect(created.fields.location).toBe("Corner café");
     const tomorrow = dateString(today().add({ days: 1 }));
     expect(created.fields.start).toMatchObject({ type: "zoned", local: `${tomorrow}T12:30:00` });

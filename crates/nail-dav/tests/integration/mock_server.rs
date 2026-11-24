@@ -18,7 +18,7 @@ use nail_dav::{
     write_object,
 };
 use nail_discovery::{DnsLookup, MxRecord, NetError, SrvRecord};
-use nail_testkit_net::{DnsZone, MockDavConfig, MockDavServer, ZoneAnswer};
+use nail_testkit_net::{DnsZone, MockDavConfig, MockDavServer, SEED_PERSONAL_COLOR, ZoneAnswer};
 use pretty_assertions::assert_eq;
 use url::Url;
 
@@ -124,7 +124,7 @@ async fn discovers_calendars_from_the_server_url() {
     assert!(!personal.read_only && personal.supports_sync);
     assert!(personal.ctag.is_some() && personal.sync_token.is_some());
     let shown = personal.to_discovered();
-    assert_eq!(shown.color.as_deref(), Some("#3366ccff"));
+    assert_eq!(shown.color.as_deref(), Some(SEED_PERSONAL_COLOR));
     let tasks = found
         .collections
         .iter()

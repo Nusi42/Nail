@@ -1800,3 +1800,11 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   reminders and of `create_event_from_text`. UI mock: `pim/mockCalendarView.ts` `freeTimeWindows`,
   `api/mockMailActions.ts` `listTargetMessageIds` (the rules mock's list runs). Texts: `status-retry-failed` /
   `status-dismiss-failed` (`app.ftl`), slot `pim-actions.ftl`.
+- Calendar and PIM UI (P1, ADR 0252): `pim/colors.ts` `displayColors` / `colorDistance` (OKLab,
+  `MIN_COLOR_DISTANCE`; `colorOf` shows the result), the seed colour `nail_testkit_net::SEED_PERSONAL_COLOR`;
+  `pim/PimMenu.tsx` (`PimMenuPopup` shared by `PimMenu` and `usePimContextMenu`, the right-click menus;
+  `EventItem.tsx` `useEventMenu`); `pim/QuickAdd.tsx` `EventFromTextDialog` (window `pim-event-from-text`, action
+  `calendar.new-event-from-text` in `pim/index.ts` `actionInfo`); `pim/ReplyToast.tsx` (undo for invitation
+  answers, `offerReplyUndo` from `scheduling/queries.ts`), `pim/TextToast.tsx`; `pim/common.tsx` `SyncState` (the
+  conflict choice of contacts and events); `pim/queries.ts` `useRecentMail` (own key `pimKeys.recentMail`: the mail
+  lists treat every `search` entry as theirs); `TimeGrid.tsx` `TOUCH_HOLD_MS` / `TOUCH_SLOP` (touch drawing).

@@ -20,7 +20,7 @@ import {
   FOCUS_RING,
   VISUALLY_HIDDEN,
 } from "../../theme/declarations";
-import { p } from "../../theme/selectors";
+import { p, ps } from "../../theme/selectors";
 import { T } from "../../theme/tokens";
 
 /** One line of text in the strip and the lanes (their rows must not collapse). */
@@ -36,6 +36,7 @@ export const LOOK_BASE_CSS = [
   `${p("pim.popover.title")} { margin: 0; min-width: 0; overflow-wrap: anywhere; }`,
   `${p("pim.popover.facts")} { display: flex; flex-direction: column; gap: ${T.xs}; margin: 0; }`,
   `${p("pim.popover.fact.label")} { ${VISUALLY_HIDDEN} }`,
+  `${p("pim.popover.place")} { display: flex; align-items: center; gap: ${T.xs}; min-width: 0; }`,
   `${p("pim.popover.fact.value")} { display: flex; flex-direction: column; gap: 2px; margin: 0; min-width: 0; overflow-wrap: anywhere; }`,
   `${p("pim.popover.people")} { list-style: none; margin: 0; padding: 0; }`,
   `${p("pim.popover.person")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; }`,
@@ -110,7 +111,7 @@ ${p("pim.compact.chip")} {
 }
 ${p("pim.compact.chip")}:focus-within, ${p("pim.compact.chip")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 1px; }
 ${p("pim.compact.chip")}[aria-expanded="true"] { color: ${T.accent}; background-color: ${T.accentSoft}; }
-${p("pim.compact.chip.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
+${ps("pim.compact.chip.icon", "pim.compact.place.icon", "pim.popover.place.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
 ${p("pim.compact.select")} { border: none; font: inherit; color: inherit; background-color: transparent; }
 ${p("pim.compact.select")}:focus-visible { outline: none; }
 ${p("pim.compact.place.input")} {

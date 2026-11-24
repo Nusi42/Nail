@@ -13,11 +13,36 @@ the list of agreed follow-ups, and steadier automated tests.
 - **Free time within your working hours** — finding free time (the free-time
   view, scheduling and agents asking Nail) offers only slots inside the working
   hours and work days set in Settings → Calendar & contacts.
+- **New event from text, anywhere** — the command palette (`Ctrl+K`) has
+  **New event from text**: type "Lunch with Bob tomorrow 12:30" and press
+  `Enter`, with the same preview as the calendar's quick add.
+- **Right-click menus for events, contacts and tasks** — **Open**, **Edit**
+  and **Delete** (tasks: **Mark as done**), also with the menu key or
+  `Shift+F10`.
+- **One occurrence or the whole series** — the quick look answers a
+  repeating invitation for all its occurrences or for the one you clicked.
+- **Undo for invitation answers** — the answer to the organizer waits a few
+  seconds like any sent mail; **Undo** in its notice keeps it from going
+  out (your calendar keeps the answer).
+- **Recent mail on the contact card** — the newest messages with the person;
+  a click opens one.
+- **Conflicts of events** — an event changed in Nail and on the server
+  offers in its editor which version to keep, like contacts do.
+- **Drawing events on touch screens** — hold a finger on empty time, then
+  drag to draw an event; a finger that moves at once scrolls.
+- **Icons for place and call** — the place field and the quick look show a
+  map pin, the quick look's **Join** a camera.
 
 ### Fixed in 0.8.12
 
 - Past events in the agenda stay readable: they are shown in a muted text
   colour instead of fading the whole entry.
+- Calendars whose colours are too close to tell apart (for example a
+  server's blue next to Nail's blue) are shown in clearly different colours;
+  a colour you pick in Nail is always shown as picked.
+- The title of a short meeting in the week view is no longer hidden behind
+  its small icons when the event has room for it; the icons sit at the end
+  of the time line.
 
 ## Nail 0.8.11 (`0.8.11`)
 

@@ -7,7 +7,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { CalendarDate } from "@internationalized/date";
 import { useId, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import type { AddressBook, Calendar, CalendarId, LocalizedMessage } from "../../api/generated";
+import type {
+  AddressBook,
+  Calendar,
+  CalendarId,
+  ConflictChoice,
+  LocalizedMessage,
+  PimItemSync,
+} from "../../api/generated";
 import { errorMessageOf } from "../../api/client";
 import { useT } from "../../i18n/I18nProvider";
 import { optionString, type WidgetNode } from "../../layout/widgetRegistry";
@@ -15,7 +22,7 @@ import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { useGeometry } from "../../theme/ThemeProvider";
 import type { ChangeContext } from "./changes";
-import { eventCardDeclarations, swatchDeclarations } from "./colors";
+import { displayColorOf, eventCardDeclarations, swatchDeclarations } from "./colors";
 import { usePimStore } from "./store";
 import { isKnownZone, localZone } from "./time";
 import { TextField } from "../../widgets/forms";
@@ -393,13 +400,16 @@ export function Problem({
   );
 }
 
-/** The colour of an event: its own, else its calendar's (`null` = the theme's). */
+/**
+ * The colour of an event: its own, else its calendar's as shown (`displayColors`:
+ * kept apart from the other visible calendars'; `null` = the theme's).
+ */
 export function colorOf(
   calendars: readonly Calendar[] | undefined,
   calendarId: CalendarId,
   own: string | null,
 ): string | null {
-  return own ?? calendars?.find((c) => c.id === calendarId)?.settings.color ?? null;
+  return own ?? displayColorOf(calendars, calendarId);
 }
 
 /**
@@ -479,3 +489,48 @@ export function NumberField({
     />
   );
 }
+
+/**
+ * A PIM item's server state (`*.sync`, not shown while synced) and, for a
+ * conflict, the choice which version to keep (`ResolvePimConflict`): the
+ * contact card and, since R8 (ADR 0251), the event editor.
+ */
+export function SyncState({
+  sync,
+  part,
+  onKeep,
+  busy = false,
+}: {
+  sync: PimItemSync;
+  /** The block's part; its text is `<part>.text`. */
+  part: string;
+  /** The user chose; the caller resolves through the queue. */
+  onKeep: (keep: ConflictChoice) => void;
+  busy?: boolean;
+}) {
+  const t = useT();
+  if (sync === "synced") return null;
+  return (
+    <div data-part={part} data-state={sync}>
+      <p data-part={`${part}.text`}>{t(`pim-sync-${sync}`)}</p>
+      {sync === "conflict" &&
+        CONFLICT_CHOICES.map((keep) => (
+          <button
+            key={keep}
+            type="button"
+            data-part="form.button"
+            data-keep={keep}
+            disabled={busy}
+            onClick={() => {
+              onKeep(keep);
+            }}
+          >
+            {t(`pim-conflict-keep-${keep}`)}
+          </button>
+        ))}
+    </div>
+  );
+}
+
+/** The versions a conflict can keep, in the order offered. */
+export const CONFLICT_CHOICES: readonly ConflictChoice[] = ["server", "local"];

@@ -11,6 +11,10 @@
  * `calendar.quick-add.chip` (`data-kind`: title, date, time, recurrence,
  * location, calendar; resolved values, not the words as typed),
  * `calendar.quick-add.status` (polite).
+ *
+ * R8 (ADR 0251): the same field is the window "New event from text" of the
+ * command palette (`EventFromTextDialog`): it stays open for the next
+ * event after Enter, and Tab closes it when the editor opens.
  */
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState, type KeyboardEvent } from "react";
@@ -29,7 +33,16 @@ import { parseEventText } from "./prefs";
 import { choiceOf } from "./recurrence";
 import { useRecurrenceText } from "./RecurrenceEditor";
 import { saveEvent, useCalendars } from "./queries";
-import { dateString, makePimTime, pimTimeIn, shiftPimTime, toCalendarDate } from "./time";
+import {
+  dateString,
+  localZone,
+  makePimTime,
+  pimTimeIn,
+  shiftPimTime,
+  toCalendarDate,
+  todayIn,
+} from "./time";
+import type { DialogProps } from "../../layout/dialogRegistry";
 import {
   DEFAULT_NEW_EVENT_TIME,
   quickChips,
@@ -89,7 +102,17 @@ function useQuickChipWords(tz: string): QuickChipWords {
   };
 }
 
-export function QuickAdd({ day, tz }: { day: CalendarDate; tz: string }) {
+export interface QuickAddProps {
+  /** The day of a text without a date. */
+  day: CalendarDate;
+  tz: string;
+  /** After Tab handed the text to the editor (the window closes). */
+  onEditor?: () => void;
+  /** Takes the focus when it shows (a window of its own). */
+  focusOnShow?: boolean;
+}
+
+export function QuickAdd({ day, tz, onEditor, focusOnShow = false }: QuickAddProps) {
   const t = useT();
   const format = useDateFormat();
   const locale = useLocale();
@@ -155,6 +178,7 @@ export function QuickAdd({ day, tz }: { day: CalendarDate; tz: string }) {
     const parsed = await parse(current);
     const fields = quickFields(current, parsed, day, tz);
     setText("");
+    onEditor?.();
     openNewEvent(ctx, day, null, tz, target?.id ?? null, fields, parsed.recurrence);
   };
 
@@ -193,6 +217,8 @@ export function QuickAdd({ day, tz }: { day: CalendarDate; tz: string }) {
           setStatus("");
         }}
         onKeyDown={onKeyDown}
+        // eslint-disable-next-line jsx-a11y/no-autofocus -- only in the window "New event from text", which opens on request for this field (dialog pattern).
+        autoFocus={focusOnShow}
       />
       {chips.length > 0 && text.trim() !== "" && (
         <ul
@@ -220,6 +246,26 @@ export function QuickAdd({ day, tz }: { day: CalendarDate; tz: string }) {
       <p data-part="calendar.quick-add.status" aria-live="polite">
         {status}
       </p>
+    </div>
+  );
+}
+
+/** The window "New event from text" (R8, ADR 0251; the palette's `calendar.new-event-from-text`). */
+export function EventFromTextDialog({ close }: DialogProps) {
+  const t = useT();
+  const tz = localZone();
+  const calendars = useCalendars();
+  const writable = defaultEventCalendar(calendars.data ?? []) !== null;
+  return (
+    <div data-part="pim.from-text">
+      <p data-part="pim.editor.hint">
+        {calendars.isPending
+          ? t("common-loading")
+          : writable
+            ? t("pim-act-from-text-intro")
+            : t("pim-act-from-text-no-calendar")}
+      </p>
+      <QuickAdd day={todayIn(tz)} tz={tz} onEditor={close} focusOnShow />
     </div>
   );
 }

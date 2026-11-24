@@ -1001,7 +1001,7 @@ carddav "{MULTI_CARDDAV_ID}" name="Work contacts" url="http://127.0.0.1:{dav}/" 
     auth "password" username="{MULTI_DAV_USER}"
 }}
 
-calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.1:{http}/holidays.ics" color="#d33"
+calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.1:{http}/holidays.ics" color="#a16207"
 
 oauth-provider "{MULTI_GMAIL_PROVIDER}" client-id="nail-test-client" auth-url="{oauth_auth}" token-url="{oauth_token}" {{
     scopes "https://mail.google.com/"

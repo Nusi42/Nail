@@ -83,10 +83,15 @@ export interface QuickLook {
   anchor: AnchorRect;
 }
 
-/** A toast: a fired reminder, or a PIM write the server refused. */
+/**
+ * A toast: a fired reminder, a PIM write the server refused, or an answer
+ * to an invitation waiting in the outbox (R8: undo send; `undone` once it
+ * was taken back).
+ */
 export type PimToast =
   | { kind: "reminder"; id: string; reminder: Reminder }
-  | { kind: "problem"; id: string; message: LocalizedMessage };
+  | { kind: "problem"; id: string; message: LocalizedMessage }
+  | { kind: "reply"; id: string; outboxId: string; state: "waiting" | "undone" };
 
 export interface PimState {
   /** The day the views show (`YYYY-MM-DD`), `null` = today. */

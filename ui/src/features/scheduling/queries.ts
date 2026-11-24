@@ -18,6 +18,8 @@ import type {
 } from "../../api/generated";
 import { queryKeys, useAccounts, useClient, useIdentities } from "../../state/queries";
 import { pimKeys } from "../pim/queries";
+import { offerReplyUndo } from "../pim/ReplyToast";
+import { useUiStoreApi } from "../../state/uiStore";
 
 /** Query keys of this feature. */
 export const schedulingKeys = {
@@ -173,6 +175,7 @@ export async function scheduleWrite(
  */
 export function useSchedulingRunner() {
   const client = useClient();
+  const store = useUiStoreApi();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
@@ -182,7 +185,9 @@ export function useSchedulingRunner() {
     setProblem(null);
     setDone(null);
     try {
-      await scheduleWrite({ client, queryClient }, request);
+      const result = await scheduleWrite({ client, queryClient }, request);
+      // R8: an answer mailed to the organizer waits in the outbox; its toast offers Undo.
+      if (request.type === "RespondToInvitation") offerReplyUndo(store, result);
       setDone(success);
       return true;
     } catch (error) {

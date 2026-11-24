@@ -16,6 +16,7 @@ import { stringMatching } from "../../test/matchers";
 import { must } from "../../test/must";
 import { BERLIN } from "../../test/mockIds";
 import { EVENT_DIALOG } from "./names";
+import { TOUCH_HOLD_MS, TOUCH_SLOP } from "./TimeGrid";
 import { TASK_DRAG_TYPE, isoWeekNumber } from "./prefs";
 import { pimStoreFor } from "./store";
 import { localZone, makePimTime, parseDay, todayIn } from "./time";
@@ -102,6 +103,74 @@ function invitation(env: Env, id: string, hour: number, status: Attendee["status
     },
   };
 }
+
+/** A finger on the slots at `y` (100 px per hour). */
+function touchSlots(kind: "pointerDown" | "pointerMove" | "pointerUp", y: number, x = 50) {
+  fireEvent[kind](slots(), {
+    button: 0,
+    clientX: x,
+    clientY: y,
+    pointerId: 7,
+    pointerType: "touch",
+  });
+}
+
+/** Waits until a held finger starts drawing. */
+const holdLongEnough = () =>
+  act(() => new Promise<void>((resolve) => setTimeout(resolve, TOUCH_HOLD_MS + 50)));
+
+describe("time grid: drawing with a finger (R8)", () => {
+  it("draws after the finger is held still, and stops the grid from scrolling meanwhile", async () => {
+    const env = createEnv();
+    await renderDay(env);
+    touchSlots("pointerDown", 1008);
+    // Not yet: the finger might be about to scroll.
+    expect(document.querySelector('[data-part="calendar.draft"]')).toBeNull();
+    await holdLongEnough();
+    const move = createEvent.touchMove(slots(), { cancelable: true });
+    touchSlots("pointerMove", 1152);
+    fireEvent(slots(), move);
+    expect(move.defaultPrevented).toBe(true);
+    expect(must(document.querySelector('[data-part="calendar.draft"]')).textContent).toMatch(
+      /1 hour,? 30 minutes/,
+    );
+    touchSlots("pointerUp", 1152);
+    const { draft } = await draftTitle();
+    expect(draft.textContent).toMatch(/10:00\s?AM\s?–\s?11:30\s?AM/);
+  });
+
+  it("lets a finger that moves at once scroll, and never draws", async () => {
+    const env = createEnv();
+    await renderDay(env);
+    touchSlots("pointerDown", 1008);
+    touchSlots("pointerMove", 1008 + TOUCH_SLOP + 20);
+    await holdLongEnough();
+    const move = createEvent.touchMove(slots(), { cancelable: true });
+    fireEvent(slots(), move);
+    expect(move.defaultPrevented).toBe(false);
+    expect(document.querySelector('[data-part="calendar.draft"]')).toBeNull();
+    touchSlots("pointerUp", 1200);
+    expect(screen.queryByRole("dialog", { name: "New event" })).toBeNull();
+  });
+
+  it("takes a quick tap like a click: the 15-minute slot under the finger", async () => {
+    const env = createEnv();
+    await renderDay(env);
+    touchSlots("pointerDown", 1040);
+    touchSlots("pointerUp", 1040);
+    const { draft } = await draftTitle();
+    expect(draft.textContent).toMatch(/10:15\s?AM\s?–\s?11:15\s?AM/);
+  });
+
+  it("drops a pending hold when the browser takes the touch over", async () => {
+    const env = createEnv();
+    await renderDay(env);
+    touchSlots("pointerDown", 1008);
+    fireEvent.pointerCancel(slots(), { pointerId: 7, pointerType: "touch" });
+    await holdLongEnough();
+    expect(document.querySelector('[data-part="calendar.draft"]')).toBeNull();
+  });
+});
 
 describe("time grid: drawing a new event", () => {
   it("draws a range in 15-minute steps and saves it with the inline title", async () => {

@@ -23,7 +23,7 @@ import { useGeometry } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
 import { calendarGroups, isTaskList, removalOf, type CalendarGroup } from "./calendarGroups";
 import { CALENDAR_COLORS, isCssColor, paletteColorOf, swatchDeclarations } from "./colors";
-import { Problem, geomId, problemOf, useChangeContext } from "./common";
+import { Problem, colorOf, geomId, problemOf, useChangeContext } from "./common";
 import {
   CALENDAR_SETTINGS_DIALOG,
   IMPORT_DIALOG,
@@ -250,6 +250,7 @@ export function CalendarListView({
                   <CalendarRow
                     key={calendar.id}
                     calendar={calendar}
+                    color={colorOf(calendars.data, calendar.id, null)}
                     asButtons={asButtons}
                     entries={rowEntries(calendar)}
                     removable={removalOf(calendar, sourceList) !== null}
@@ -274,6 +275,8 @@ export function CalendarListView({
 
 interface RowProps {
   calendar: Calendar;
+  /** The colour it is shown in (`colorOf`: kept apart from the other visible calendars'). */
+  color: string | null;
   asButtons: boolean;
   entries: readonly PimMenuEntry[];
   removable: boolean;
@@ -284,6 +287,7 @@ interface RowProps {
 
 function CalendarRow({
   calendar,
+  color,
   asButtons,
   entries,
   removable,
@@ -293,7 +297,7 @@ function CalendarRow({
 }: RowProps) {
   const t = useT();
   const geom = geomId("toggle", calendar.id);
-  useGeometry(geom, swatchDeclarations(calendar.settings.color));
+  useGeometry(geom, swatchDeclarations(color));
   const name = calendar.settings.name;
   const states = [
     calendar.settings.visible ? null : "hidden",
@@ -310,7 +314,7 @@ function CalendarRow({
           type="checkbox"
           data-part="calendar-list.toggle"
           data-geom={geom}
-          data-colored={isCssColor(calendar.settings.color) ? "" : undefined}
+          data-colored={isCssColor(color) ? "" : undefined}
           checked={calendar.settings.visible}
           onChange={(e) => {
             onToggle(e.target.checked);

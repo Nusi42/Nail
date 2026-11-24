@@ -35,6 +35,7 @@ import type {
   Calendar,
   CalendarEvent,
   ConferenceLink,
+  ConflictChoice,
   EditScope,
   EventFields,
   EventStatus,
@@ -68,9 +69,12 @@ import {
   EditorFooter,
   colorOf,
   geomId,
+  problemOf,
   Swatch,
+  SyncState,
 } from "./common";
 import {
+  PLACE_ICON,
   alarmsForChoice,
   lengthText,
   reminderChoiceOf,
@@ -81,7 +85,7 @@ import {
 import { Icon } from "../../widgets/Icon";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { formatInstant } from "./fmt";
-import { deleteEvent, saveEvent, useCalendars, useEvent } from "./queries";
+import { deleteEvent, pimWrite, saveEvent, useCalendars, useEvent } from "./queries";
 import { RoomFinder } from "../exchange";
 import { AttendeePicker, MeetingPanel } from "../scheduling";
 import { useMyAddresses } from "../scheduling/queries";
@@ -501,6 +505,25 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
     close,
   });
 
+  // R8 (ADR 0251): changed here and on the server — the contact card's choice. The kept
+  // version replaces what the form shows, so the editor closes once it is resolved.
+  const [conflictProblem, setConflictProblem] = useState<LocalizedMessage | null>(null);
+  const keepVersion = async (keep: ConflictChoice) => {
+    if (!event) return;
+    setConflictProblem(null);
+    try {
+      await pimWrite(
+        ctx,
+        { type: "ResolvePimConflict", item: { type: "event", event_id: event.id }, keep },
+        "Done",
+      );
+      finish();
+      close();
+    } catch (error) {
+      setConflictProblem(problemOf(error));
+    }
+  };
+
   /** Delete…: asks first (the occurrence's scope names the verb), then deletes and closes. */
   const askDelete = () => {
     if (!event) return;
@@ -578,6 +601,16 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             autoFocus
           />
         </div>
+
+        {event && (
+          <SyncState
+            sync={event.sync}
+            part="pim.editor.sync"
+            busy={busy}
+            onKeep={(keep) => void keepVersion(keep)}
+          />
+        )}
+        <Problem message={conflictProblem} part="pim.editor.sync.problem" />
 
         {scopeEditable && (
           <fieldset data-part="pim.editor.scope">
@@ -792,6 +825,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           <label data-part="pim.look.hidden" htmlFor={ids.location}>
             {t("pim-event-location")}
           </label>
+          <Icon name={PLACE_ICON} part="pim.compact.place.icon" />
           <input
             id={ids.location}
             name="location"

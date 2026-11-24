@@ -43,7 +43,7 @@ mod stream;
 
 pub use dav::{
     DavRequest, MockCollection, MockCollectionKind, MockDavConfig, MockDavServer, MockDavUser,
-    MockObject, MockScheduleMessage,
+    MockObject, MockScheduleMessage, SEED_PERSONAL_COLOR,
 };
 pub use dns::{DnsZone, MockDnsServer, MxAnswer, SrvAnswer, ZoneAnswer};
 pub use http::{MockHttpServer, MockResponse, RecordedRequest};

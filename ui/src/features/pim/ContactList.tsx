@@ -5,7 +5,8 @@
  *
  * Keyboard: Up / Down / Home / End move (and show) the contact, Shift +
  * arrows extend the selection, Space toggles a contact in the selection,
- * Enter edits it, Delete deletes the selection.
+ * Enter edits it, Delete deletes the selection; a right-click, the menu key
+ * or Shift+F10 open a contact's menu (Open, Edit, Delete; R8, ADR 0251).
  * Options: `address-books` (ids), `page-size` (default 200), `header`
  * (M5b review: the Contacts view's header — the title, the search, "New
  * contact" as the primary button and a "More" menu with Groups, Find
@@ -35,7 +36,7 @@ import { Icon } from "../../widgets/Icon";
 import { gestureOf, pick, stepFrom, type SelectGesture } from "../../widgets/listSelection";
 import { Problem, problemOf, useChangeContext, BookOptions } from "./common";
 import { CONTACT_DIALOG, GROUPS_DIALOG, MERGE_DIALOG } from "./names";
-import { PimMenu, type PimMenuEntry } from "./PimMenu";
+import { PimMenu, usePimContextMenu, type PimMenuEntry } from "./PimMenu";
 import { useAddressBooks, useContactGroups, useContactSearch, useContacts } from "./queries";
 import { usePim, usePimStore } from "./store";
 import { askDeleteContacts } from "./contactDelete";
@@ -128,7 +129,62 @@ export function ContactList({ node }: WidgetProps) {
     });
   };
 
+  const editContact = (id: string) => {
+    pim.getState().editContact({ mode: "edit", contactId: id });
+    ctx.store.getState().openWindow(CONTACT_DIALOG);
+  };
+  const contactMenu = usePimContextMenu((target) => {
+    const item = target.closest<HTMLElement>('[data-part="contact-list.item"]');
+    const contact = contacts.find((c) => c.id === item?.dataset.contact);
+    if (!item || !contact) return null;
+    const name = contactLabel(contact) ?? t("pim-contact-unnamed");
+    const entries: PimMenuEntry[] = [
+      {
+        type: "item",
+        id: "open",
+        label: t("common-open"),
+        icon: "eye",
+        onSelect: () => {
+          show(contact.id, "single");
+        },
+      },
+      {
+        type: "item",
+        id: "edit",
+        label: t("common-edit"),
+        icon: "pencil",
+        onSelect: () => {
+          editContact(contact.id);
+        },
+      },
+    ];
+    if (!contact.read_only) {
+      entries.push(
+        { type: "separator", id: "sep-delete" },
+        {
+          type: "item",
+          id: "delete",
+          label: t("common-delete-ask"),
+          icon: "trash",
+          danger: true,
+          onSelect: () => {
+            askDeleteContacts(ctx, t, {
+              ids: [contact.id],
+              name,
+              onDeleted: () => {
+                pim.getState().setSelectedContacts([]);
+                pim.getState().showContact(null);
+              },
+            });
+          },
+        },
+      );
+    }
+    return { label: t("pim-calendar-actions-of", { name }), entries, item };
+  });
+
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+    if (contactMenu.onKeyDown(event)) return;
     if (!active) return;
     let next: string | undefined;
     switch (event.key) {
@@ -150,8 +206,7 @@ export function ContactList({ node }: WidgetProps) {
         return;
       case "Enter":
         event.preventDefault();
-        pim.getState().editContact({ mode: "edit", contactId: active });
-        ctx.store.getState().openWindow(CONTACT_DIALOG);
+        editContact(active);
         return;
       case "Delete":
         event.preventDefault();
@@ -328,7 +383,10 @@ export function ContactList({ node }: WidgetProps) {
           aria-label={t("common-contacts")}
           data-part="contact-list.items"
           onKeyDown={onKeyDown}
+          onContextMenu={contactMenu.onContextMenu}
         >
+          {/* A portal: nothing of it is inside the list. */}
+          {contactMenu.menu}
           {contacts.map((c) => {
             const selected = selection.includes(c.id);
             const states = [
@@ -350,8 +408,7 @@ export function ContactList({ node }: WidgetProps) {
                   onClick(e, c.id);
                 }}
                 onDoubleClick={() => {
-                  pim.getState().editContact({ mode: "edit", contactId: c.id });
-                  ctx.store.getState().openWindow(CONTACT_DIALOG);
+                  editContact(c.id);
                 }}
               >
                 <span

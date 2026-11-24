@@ -42,7 +42,9 @@ bar in the colour on their leading edge.
   place and the calendar the event goes to. **Enter** adds the event to your default calendar and shows its
   day, **Tab** opens the event editor with everything filled in, **Esc**
   empties the field. Without a date or time the event goes on the shown day
-  at 9:00.
+  at 9:00. The same field is in the command palette (`Ctrl+K`): **New
+  event from text** opens it in a small window from anywhere in Nail; it
+  stays open for the next event, and **Tab** closes it as the editor opens.
 - **Search:** the search field (**/** puts the cursor there) finds events
   by title, place and notes. A repeating event is listed by its next
   occurrence (or its last, once the series has ended). The results are
@@ -77,8 +79,17 @@ narrower than about 90 pixels shows three days, then one day; **Previous**
 and **Next** then move by the days shown. On touch screens **New event**
 floats in any window.
 
-Events are shown in their calendar's colour. An event that repeats says so
-when you move to it with a screen reader.
+Events are shown in their calendar's colour. When two calendars you show
+have colours too close to tell apart (for example a blue a server set next to
+Nail's blue), the one whose colour came from the server is shown in the next
+clearly different colour of Nail's palette; nothing is changed on the server.
+A colour you pick in Nail is always shown as you picked it. An event that
+repeats says so when you move to it with a screen reader.
+
+Right-click an event (or press the menu key or **Shift+F10** on it) for
+**Open** (its quick look), **Edit** and **Delete**. Contacts in the contact
+list have **Open**, **Edit** and **Delete…**, tasks **Edit**, **Mark as done**
+(or not done) and **Delete**.
 
 ### What the time grid shows
 
@@ -116,6 +127,9 @@ when you move to it with a screen reader.
   times and the title, **Esc** drops it.
 - **Click empty time** to start an hour-long event at the 15-minute step
   under the pointer; **double-click** opens the editor there at once.
+- **On a touch screen**, hold a finger still on empty time for a moment,
+  then drag to draw the event; a finger that moves at once scrolls the
+  grid, and a short tap works like a click.
 - **With the keyboard:** in the hours of the grid, **Shift + ↑ / ↓** extend
   the range by an hour, **Enter** asks for the title of an event over it.
 - **Drag a task** (from the all-day row or the **Due this week** list) onto
@@ -208,7 +222,11 @@ in a small window beside it, without leaving the week:
   organize the meeting;
 - for an invitation, **Accept**, **Maybe** or **Decline** answer it there and
   then. An invitation you have not answered yet also says which of your
-  events it overlaps.
+  events it overlaps. For a repeating invitation, **Answer for** chooses
+  **All occurrences** or **One occurrence** (the one you clicked).
+- an answer that goes to the organizer as an email waits a few seconds in
+  the outbox, like any mail you send: **Undo** in the notice that appears
+  keeps it from going out. Your calendar keeps the answer.
 
 Keys: **Enter** edits (the **Edit** button has the focus), **Delete** deletes,
 **Esc** or a click elsewhere closes it, and the focus goes back to the event.
@@ -247,7 +265,11 @@ the common things first:
   - **Calendar**, with its colour.
   - **Show me as** busy or free.
   - **Call link:** links to join a video call or dial in.
-- **Place:** where the event is ("Add a place or room").
+- **Place:** where the event is ("Add a place or room"), marked with a map pin.
+- **Changed here and on the server:** when an event was changed in Nail and
+  on the server before Nail could save it, the editor says so and offers
+  **Keep the server's version** or **Keep my version**; the editor closes once
+  you chose, so open the event again to see the version you kept.
 - **People:** a line that says who answered what, the attendees (add people
   by address; suggestions come from your contacts; each attendee has a role
   and shows their answer) and when everyone is free (see
@@ -305,8 +327,11 @@ The Contacts view has a header with the search, **New contact** and a
 contact is chosen). The contact list searches by name, address, phone number or organization,
 and filters by address book and group. Choose a contact to see its card:
 photo, every email address, phone number, address, web page and extra field,
-birthday and anniversary, notes, groups, the contacts it is linked with, and
-upcoming meetings with that person.
+birthday and anniversary, notes, groups, the contacts it is linked with,
+**Recent mail** with that person (the newest messages from or to the
+contact's main address; click one to open it in Mail) and upcoming meetings
+with that person. A contact changed in Nail and on the server at the same
+time offers **Keep the server's version** and **Keep my version**.
 
 - **New contact** / **Edit** open the contact editor: name parts and how the
   name is shown, nicknames, organization and job title, any number of email

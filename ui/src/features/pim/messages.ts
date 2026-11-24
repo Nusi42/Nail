@@ -34,6 +34,7 @@ import {
 } from "./constants";
 import { LIST_FIELDS, SINGLE_FIELDS } from "./merge";
 import { CALENDAR_COLORS } from "./colors";
+import { CONFLICT_CHOICES } from "./common";
 import { DIALOGS, PIM_SETTINGS_WIDGET } from "./names";
 import { SIMPLE_FREQUENCIES } from "./recurrence";
 import { VIEW_KINDS } from "./time";
@@ -63,6 +64,7 @@ export function runtimeIds(): string[] {
     ...SOURCE_STATES.map((s) => `pim-source-state-${s}`),
     ...SOURCE_KINDS_ALL.map((k) => `pim-source-kind-${k}`),
     ...SYNC_STATES.map((s) => `pim-sync-${s}`),
+    ...CONFLICT_CHOICES.map((keep) => `pim-conflict-keep-${keep}`),
     ...DIALOGS.map((d) => `window-${d}`),
     ...VIEW_KINDS.map((v) => `pim-view-${v}`),
     ...EVENT_STATUSES.map((s) => `pim-status-${s}`),

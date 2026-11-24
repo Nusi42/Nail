@@ -16,21 +16,11 @@ import { must } from "../../test/must";
 import { seedSchedulingDemo } from "../scheduling/mockSeed";
 import { EventPopoverHost, focusAfterDelete, occurrenceFields } from "./EventPopover";
 import { EVENT_DIALOG, SCOPE_DIALOG } from "./names";
+import { PimToasts } from "./Reminders";
+import { instancesOf } from "./testing";
 import { pimStoreFor } from "./store";
-import { localZone } from "./time";
 
 const ANCHOR = { left: 10, top: 10, width: 80, height: 40 };
-
-/** The occurrences of event `id` the mock core expands (four weeks back to a year on). */
-async function instancesOf(env: Env, id: string): Promise<EventInstance[]> {
-  const from = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const to = new Date(Date.now() + 365 * 86_400_000).toISOString();
-  const answer = await env.client.request(
-    { type: "ListEventInstances", from, to, calendar_ids: null, tz: localZone() },
-    "EventInstances",
-  );
-  return answer.instances.filter((i) => i.event_id === id);
-}
 
 /** Opens the quick look on occurrence `index` of event `id` (the host must be rendered). */
 async function showQuickLook(env: Env, id: string, index = 0) {
@@ -88,6 +78,19 @@ function addInvitation(env: Env): void {
     ],
   };
   events.push(invitation);
+}
+
+/** Accepts the invitation from the quick look with the toasts shown (undo-send delay `secs`). */
+async function acceptWithToasts(secs?: number) {
+  const user = userEvent.setup();
+  const env = createEnv();
+  if (secs !== undefined) env.transport.data.accountsConfig.undo_send_secs = secs;
+  addInvitation(env);
+  renderWithProviders(<PimToasts />, env);
+  const { popover } = await openQuickLook(env, "ev-invite");
+  const answers = within(popover).getByRole("group", { name: "Your answer" });
+  await user.click(within(answers).getByRole("button", { name: "Accept" }));
+  return { env, user };
 }
 
 describe("the quick look", () => {
@@ -183,6 +186,71 @@ describe("the quick look", () => {
       response: "accept",
       send: true,
     });
+  });
+
+  it("offers Undo while the answer waits in the outbox, and takes the mail back (R8)", async () => {
+    const { env, user } = await acceptWithToasts();
+    const toast = await screen.findByText("Your answer goes out in a moment.");
+    const data = env.transport.data;
+    const queued = must(data.outbox.find((e) => e.state === "scheduled"));
+    expect(data.drafts.get(queued.draft_id)?.automatic).toEqual({ kind: "itip" });
+    await user.click(within(must(toast.closest("li"))).getByRole("button", { name: "Undo" }));
+    expect(
+      await screen.findByText("Your answer was not sent. Your calendar keeps it."),
+    ).toBeInTheDocument();
+    expect(data.outbox.some((e) => e.id === queued.id)).toBe(false);
+    expect(data.drafts.has(queued.draft_id)).toBe(false);
+    // The calendar keeps the answer.
+    const invite = must(data.features.pim.events.find((e) => e.id === "ev-invite"));
+    expect(invite.fields.attendees.find((a) => a.email === "ada@work.example")?.status).toBe(
+      "accepted",
+    );
+  });
+
+  it("drops the Undo once the answer left the outbox (R8)", async () => {
+    const { env } = await acceptWithToasts(0);
+    await waitFor(() => {
+      expect(screen.queryByText("Your answer goes out in a moment.")).toBeNull();
+    });
+    expect(
+      pimStoreFor(env.store)
+        .getState()
+        .toasts.some((t) => t.kind === "reply"),
+    ).toBe(false);
+  });
+
+  it("answers one occurrence of a recurring invitation, or the whole series (R8)", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    addInvitation(env);
+    const events = env.transport.data.features.pim.events;
+    const standup = must(events.find((e) => e.id === "ev-standup"));
+    must(events.find((e) => e.id === "ev-invite")).recurrence = structuredClone(standup.recurrence);
+    const { popover, instance } = await openQuickLook(env, "ev-invite", 1);
+    const scope = within(popover).getByRole("group", { name: "Answer for" });
+    // The whole series unless the user picks this occurrence (the invitation card's default).
+    expect(within(scope).getByRole("radio", { name: "All occurrences" })).toBeChecked();
+    await user.click(within(scope).getByRole("radio", { name: "One occurrence" }));
+    const answers = within(popover).getByRole("group", { name: "Your answer" });
+    await user.click(within(answers).getByRole("button", { name: "Decline" }));
+    await within(popover).findByText(/Declined/);
+    expect(requestsOf(env, "RespondToInvitation").at(-1)).toMatchObject({
+      target: { type: "event", event_id: "ev-invite", recurrence_id: instance.recurrence_id },
+      response: "decline",
+    });
+    // Only that occurrence changed: the series still waits for an answer.
+    const series = must(events.find((e) => e.id === "ev-invite"));
+    expect(series.fields.attendees.find((a) => a.email === "ada@work.example")?.status).toBe(
+      "needs-action",
+    );
+    expect(series.overrides).toHaveLength(1);
+  });
+
+  it("answers a single event without asking for the scope", async () => {
+    const env = createEnv();
+    addInvitation(env);
+    const { popover } = await openQuickLook(env, "ev-invite");
+    expect(within(popover).queryByRole("group", { name: "Answer for" })).toBeNull();
   });
 
   it("lets an organizer send the update, and has no axe violations", async () => {

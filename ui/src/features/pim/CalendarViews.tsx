@@ -25,7 +25,7 @@
  */
 import type { CalendarDate } from "@internationalized/date";
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
-import type { Calendar, EventInstance } from "../../api/generated";
+import type { Calendar, EventInstance, FreeTimeHours } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useNow } from "../../state/clock";
@@ -35,7 +35,7 @@ import { anchorOf } from "../../widgets/Popover";
 import { requestDelete } from "./changes";
 import { Swatch, colorOf, geomId, useChangeContext, useFollowingDay } from "./common";
 import { useDayDrag } from "./dayDrag";
-import { EventItem, useOpenInstance } from "./EventItem";
+import { EventItem, useEventMenu, useOpenInstance } from "./EventItem";
 import { dayDate, formatClock, formatDay, formatHour } from "./fmt";
 import { lengthText } from "./eventLook";
 import { MonthGrid } from "./MonthGrid";
@@ -44,7 +44,7 @@ import { useCalendarPreferences, weekStartOf } from "./prefs";
 import { useFreeTime } from "./queries";
 import {
   dateString,
-  freeStretchesOfDay,
+  slotsOfDay,
   instantIn,
   instantMs,
   rangeInstants,
@@ -399,6 +399,7 @@ function AgendaEntry({
         ? t("pim-views-agenda-until", { time: end })
         : start;
   const spoken = row.time === "timed" ? t("common-time-range", { start, end }) : time;
+  const menu = useEventMenu(instance);
   const states = [
     row.past ? "past" : null,
     instance.my_status === "declined" ? "declined" : null,
@@ -426,7 +427,9 @@ function AgendaEntry({
         ctx.pim.getState().setQuickLook(null);
         open(instance);
       }}
+      onContextMenu={menu.onContextMenu}
       onKeyDown={(event) => {
+        if (menu.onKeyDown(event)) return;
         if ((event.key === "Delete" || event.key === "Backspace") && !instance.read_only) {
           event.preventDefault();
           void requestDelete(ctx, instance);
@@ -444,6 +447,8 @@ function AgendaEntry({
       />
       <span data-part={`${part}.title`}>{title}</span>
       {instance.location && <span data-part={`${part}.place`}>{instance.location}</span>}
+      {/* A portal: nothing of it is inside the button. */}
+      {menu.menu}
     </button>
   );
 }
@@ -579,17 +584,20 @@ export function FreeTimeView({
   minutes,
   dayStartHour,
   dayEndHour,
+  hours,
 }: Omit<DayViewProps, "anchor" | "onDay" | "calendars"> & {
   minutes: number;
   dayStartHour: number;
   dayEndHour: number;
+  /** Which hours count (R8, ADR 0251): the core cuts the free time to them. */
+  hours: FreeTimeHours;
 }) {
   const t = useT();
   const format = useDateFormat();
   const locale = useLocale();
   const ctx = useChangeContext();
   const instants = rangeInstants(range, tz);
-  const free = useFreeTime(instants, minutes, tz);
+  const free = useFreeTime(instants, minutes, tz, hours);
   const ticks = hourTicks(dayStartHour, dayEndHour);
   const noTitle = t("common-no-title");
   const list = new Intl.ListFormat(locale, { type: "unit", style: "short" });
@@ -609,14 +617,7 @@ export function FreeTimeView({
         const dayStart = midnight.add({ hours: dayStartHour }).toDate().getTime();
         const dayEnd = midnight.add({ hours: dayEndHour }).toDate().getTime();
         const position = (ms: number) => (ms - dayStart) / Math.max(1, dayEnd - dayStart);
-        const slots = freeStretchesOfDay(
-          free.data ?? [],
-          day,
-          tz,
-          dayStartHour,
-          dayEndHour,
-          minutes,
-        );
+        const slots = slotsOfDay(free.data ?? [], day, tz);
         const blocks = busyBlocks(instances, day, tz, dayStart, dayEnd);
         const allDay = busyAllDay(instances, day, tz);
         const total = Math.round(freeMinutes(slots));

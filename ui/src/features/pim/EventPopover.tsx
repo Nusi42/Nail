@@ -10,14 +10,16 @@
  * a recurring occurrence asks "this / following / all" first, a single
  * event goes through the queue and its undo), Send update for an
  * organizer, and Accept / Maybe / Decline for an invitation — an
- * unanswered one (`needs-action`) also lists what it overlaps.
+ * unanswered one (`needs-action`) also lists what it overlaps; for an
+ * occurrence of a recurring invitation the answer goes to the whole series
+ * or to this occurrence only (R8, ADR 0251; the invitation card's choice).
  *
  * Keyboard and focus: the popover is a dialog named by the title; Edit has
  * the focus on open (Enter edits), Delete / Backspace delete, Esc or a
  * press outside close it and the focus goes back to the card (the shared
  * `Popover`). The host is mounted once (the feature's `effects`).
  */
-import type { KeyboardEvent, ReactNode } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import type {
   CalendarEvent,
   EventFields,
@@ -30,13 +32,22 @@ import { useT } from "../../i18n/I18nProvider";
 import { Popover } from "../../widgets/Popover";
 import { nonEmpty } from "../../text/empty";
 import { isTextInput } from "../menus/targets";
-import { AnswerForm } from "../scheduling/Answer";
+import { AnswerForm, ScopeChoice, type AnswerScope } from "../scheduling/Answer";
 import { isMine, RESPONSES } from "../scheduling/model";
 import { useMyAddresses, useSchedulingRunner, useSchedulingSettings } from "../scheduling/queries";
 import { requestDelete } from "./changes";
 import { colorOf, geomId, Problem, Swatch, useChangeContext } from "./common";
 import { useOpenInstance } from "./EventItem";
-import { joinLinkOf, lengthText, minutesOf, myAttendee, peopleSummary } from "./eventLook";
+import {
+  CALL_ICON,
+  PLACE_ICON,
+  joinLinkOf,
+  lengthText,
+  minutesOf,
+  myAttendee,
+  peopleSummary,
+} from "./eventLook";
+import { Icon } from "../../widgets/Icon";
 import { formatClock, formatDay, zoneLabel } from "./fmt";
 import { useCalendars, useEvent, useEventOverlaps } from "./queries";
 import { usePim, usePimStore } from "./store";
@@ -95,6 +106,9 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
   const mine = useMyAddresses();
   const tz = localZone();
   const { busy, problem, done, run } = useSchedulingRunner();
+  const [scope, setScope] = useState<AnswerScope>("series");
+  // Only an occurrence of a series can be answered on its own.
+  const occurrence = instance.recurring && instance.recurrence_id !== null;
 
   const calendar = calendars.data?.find((c) => c.id === instance.calendar_id) ?? null;
   const title = nonEmpty(instance.title) ?? t("common-no-title");
@@ -133,7 +147,11 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
     void run(
       {
         type: "RespondToInvitation",
-        target: { type: "event", event_id: instance.event_id, recurrence_id: null },
+        target: {
+          type: "event",
+          event_id: instance.event_id,
+          recurrence_id: occurrence && scope === "occurrence" ? instance.recurrence_id : null,
+        },
         response,
         comment,
         send,
@@ -202,7 +220,10 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
         )}
         {location && (
           <Fact field="place" label={t("pim-look-place")}>
-            {location}
+            <span data-part="pim.popover.place">
+              <Icon name={PLACE_ICON} part="pim.popover.place.icon" />
+              <span data-part="pim.popover.place.text">{location}</span>
+            </span>
           </Fact>
         )}
         {people.length > 0 && (
@@ -255,6 +276,9 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
           })}
         </p>
       )}
+      {me !== null && !organizing && !readOnly && occurrence && (
+        <ScopeChoice scope={scope} onScope={setScope} />
+      )}
       {me !== null && !organizing && !readOnly && (
         <AnswerForm
           current={myStatus}
@@ -286,6 +310,7 @@ function QuickLook({ instance, close }: { instance: EventInstance; close: () => 
             target="_blank"
             rel="noreferrer noopener"
           >
+            <Icon name={CALL_ICON} part="form.button.icon" />
             {t("pim-look-join")}
           </a>
         )}

@@ -132,6 +132,24 @@ interface DraftState {
 /** Pointer travel (CSS pixels) after which a press on a slot draws a range instead of clicking. */
 const DRAW_THRESHOLD = 4;
 
+/**
+ * Touch (R8, ADR 0251): a finger held this long on an empty slot without
+ * moving starts drawing; a finger that moves sooner scrolls the grid.
+ */
+export const TOUCH_HOLD_MS = 400;
+
+/** Finger travel (CSS pixels) before the hold ends: from then on the touch scrolls. */
+export const TOUCH_SLOP = 8;
+
+/** A touch on an empty slot that has not become a scroll or a drawing yet. */
+interface TouchPress {
+  timer: ReturnType<typeof setTimeout>;
+  x: number;
+  y: number;
+  dayIndex: number;
+  minute: number;
+}
+
 const pct = (value: number) => `${String(Math.round(value * 10000) / 100)}%`;
 
 function Positioned({
@@ -235,6 +253,27 @@ export function TimeGrid({
   const [create, setCreate] = useState<CreateState | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const justDragged = useRef(false);
+  const touchPress = useRef<TouchPress | null>(null);
+  /** A touch drawing is under way: the grid must not scroll (`touchmove` below). */
+  const touchDrawing = useRef(false);
+  const clearTouchPress = () => {
+    if (touchPress.current) clearTimeout(touchPress.current.timer);
+    touchPress.current = null;
+  };
+  // While a finger draws, its moves draw instead of scrolling the grid (only a
+  // non-passive listener may cancel them); a pending press dies with the grid.
+  useEffect(() => {
+    const element = slotsRef.current;
+    if (!element) return;
+    const onTouchMove = (event: TouchEvent) => {
+      if (touchDrawing.current && event.cancelable) event.preventDefault();
+    };
+    element.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      element.removeEventListener("touchmove", onTouchMove);
+      if (touchPress.current) clearTimeout(touchPress.current.timer);
+    };
+  }, []);
   const [chosenSlot, setSlot] = useState<{ day: number; hour: number; extent: number | null }>(
     () => ({
       day: Math.max(
@@ -389,15 +428,35 @@ export function TimeGrid({
     if (event.button !== 0) return;
     const at = pointAt(event.clientX, event.clientY);
     if (!at) return;
+    const begin = (startY: number) => {
+      setDraft(null);
+      setCreate({
+        dayIndex: at.dayIndex,
+        anchor: at.minute,
+        startY,
+        range: dragRange(at.minute, at.minute, fromMinute, toMinute),
+        moved: false,
+      });
+    };
+    if (event.pointerType === "touch") {
+      // A finger scrolls unless it is held still first (then it draws).
+      clearTouchPress();
+      const y = event.clientY;
+      touchPress.current = {
+        timer: setTimeout(() => {
+          touchPress.current = null;
+          touchDrawing.current = true;
+          begin(y);
+        }, TOUCH_HOLD_MS),
+        x: event.clientX,
+        y,
+        dayIndex: at.dayIndex,
+        minute: at.minute,
+      };
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDraft(null);
-    setCreate({
-      dayIndex: at.dayIndex,
-      anchor: at.minute,
-      startY: event.clientY,
-      range: dragRange(at.minute, at.minute, fromMinute, toMinute),
-      moved: false,
-    });
+    begin(event.clientY);
   };
 
   // ---- Dragging ----
@@ -426,6 +485,14 @@ export function TimeGrid({
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const press = touchPress.current;
+    if (press) {
+      // Moved before the hold ended: a scroll, not a drawing.
+      if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > TOUCH_SLOP) {
+        clearTouchPress();
+      }
+      return;
+    }
     if (create) {
       const rect = box();
       if (!rect) return;
@@ -455,6 +522,14 @@ export function TimeGrid({
   };
 
   const onPointerUp = () => {
+    const press = touchPress.current;
+    if (press) {
+      // A tap: like a click, the 15-minute slot under the finger.
+      clearTouchPress();
+      showDraft(press.dayIndex, clickRange(press.minute, NEW_EVENT_MINUTES, fromMinute, toMinute));
+      return;
+    }
+    touchDrawing.current = false;
     if (create) {
       const finished = create;
       setCreate(null);
@@ -561,6 +636,8 @@ export function TimeGrid({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => {
+        clearTouchPress();
+        touchDrawing.current = false;
         setDrag(null);
         setCreate(null);
       }}

@@ -247,7 +247,16 @@ ${p("contact-list.item")}[aria-selected="true"] > :not(${p("contact-list.avatar"
 ${p("contact-card.header")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.lg}; padding-bottom: ${T.md}; border-bottom: 1px solid ${T.border}; }
 ${p("contact-card.name")} { margin: 0; font-family: ${T.fontDisplay}; font-weight: ${T.semibold}; }
 ${p("contact-card.heading")} { margin: 0 0 ${T.xs}; ${SECTION_LABEL} }
-${p("contact-card.section")} { display: grid; gap: ${T.xs}; }`;
+${p("contact-card.section")} { display: grid; gap: ${T.xs}; }
+${p("contact-card.mail")} {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: ${T.xs};
+  width: 100%; box-sizing: border-box; padding: ${T.xxs} ${T.xs}; border: none; border-radius: ${T.rSm};
+  font: inherit; text-align: start; color: ${T.fg}; background: none; cursor: pointer;
+}
+${p("contact-card.mail")}:hover { background-color: ${T.subtle}; }
+${p("contact-card.mail")}:focus-visible { ${FOCUS_RING} }
+${p("contact-card.mail")}[data-state~="unread"] > ${p("contact-card.mail.subject")} { font-weight: ${T.semibold}; }
+${p("contact-card.mail.date")} { font-size: ${T.small}; color: ${T.muted}; }`;
 
 const VIEW_HEADER = `${p("pim.view-header")} {
   display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm} ${T.md};

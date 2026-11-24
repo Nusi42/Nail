@@ -20,6 +20,7 @@
  */
 import type { Event as NailEvent } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
+import type { ActionInfo } from "../../actions/palette";
 import type { Feature, FeatureEventHandler } from "../types";
 import { CalendarWidget } from "./Calendar";
 import { PIM_CONFIRMS, pimConfirmDialogs } from "./Confirm";
@@ -32,10 +33,12 @@ import {
   CALENDAR_SETTINGS_DIALOG,
   CONTACT_DIALOG,
   EVENT_DIALOG,
+  EVENT_FROM_TEXT_DIALOG,
   GROUPS_DIALOG,
   IMPORT_DIALOG,
   MERGE_DIALOG,
   NEW_CALENDAR_DIALOG,
+  NEW_EVENT_FROM_TEXT_ACTION,
   PIM_SETTINGS_WIDGET,
   REMOVE_CALENDAR_DIALOG,
   SCOPE_DIALOG,
@@ -44,6 +47,7 @@ import {
 } from "./names";
 import { openNewEvent, openNewTask } from "./newEvent";
 import { pimKeys } from "./queries";
+import { EventFromTextDialog } from "./QuickAdd";
 import { PimToasts } from "./Reminders";
 import { EventPopoverHost } from "./EventPopover";
 import { ScopeDialog } from "./ScopeDialog";
@@ -172,6 +176,12 @@ export const actions: Feature["actions"] = {
       openNewEvent({ store: ctx.store, pim }, day, DEFAULT_NEW_EVENT_TIME, tz);
     },
   },
+  /** "New event from text" (R8): the quick-add field in a window of its own. */
+  [NEW_EVENT_FROM_TEXT_ACTION]: {
+    run: (ctx) => {
+      ctx.store.getState().openWindow(EVENT_FROM_TEXT_DIALOG);
+    },
+  },
   "calendar.calendars": {
     run: (ctx) => {
       ctx.store.getState().openWindow(SOURCES_DIALOG);
@@ -245,6 +255,15 @@ export const actions: Feature["actions"] = {
   },
 };
 
+/** Command-palette descriptions of the actions the palette does not describe itself (`pim-actions.ftl`). */
+export const actionInfo: Readonly<Record<string, ActionInfo>> = {
+  [NEW_EVENT_FROM_TEXT_ACTION]: {
+    title: "pim-act-from-text-title",
+    keywords: "pim-act-from-text-keywords",
+    icon: "calendar-plus",
+  },
+};
+
 /** Dialog names → components. */
 export const dialogs: NonNullable<Feature["dialogs"]> = {
   [EVENT_DIALOG]: EventEditorDialog,
@@ -258,6 +277,7 @@ export const dialogs: NonNullable<Feature["dialogs"]> = {
   [CALENDAR_SETTINGS_DIALOG]: CalendarSettingsDialog,
   [NEW_CALENDAR_DIALOG]: NewCalendarDialog,
   [REMOVE_CALENDAR_DIALOG]: RemoveCalendarDialog,
+  [EVENT_FROM_TEXT_DIALOG]: EventFromTextDialog,
   ...pimConfirmDialogs,
 };
 
@@ -284,6 +304,10 @@ export const windows: NonNullable<Feature["windows"]> = {
     min_size: { width: 400, height: 340 },
   },
   [REMOVE_CALENDAR_DIALOG]: { confirmation: true },
+  [EVENT_FROM_TEXT_DIALOG]: {
+    size: { width: 520, height: 260 },
+    min_size: { width: 360, height: 200 },
+  },
   ...Object.fromEntries(PIM_CONFIRMS.map((kind) => [kind, { confirmation: true }])),
 };
 

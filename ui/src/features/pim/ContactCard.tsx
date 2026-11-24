@@ -5,11 +5,19 @@
  * contacts it is linked with in other address books (merged persons; each
  * can be unlinked), its sync state (a conflict can be resolved), and the
  * upcoming meetings with this person (design: "A contact view shows recent
- * mail and upcoming meetings with that person").
+ * mail and upcoming meetings with that person"); since R8 (ADR 0251) also
+ * the recent mail with the person (`RecentMail`: the newest messages from
+ * or to the primary address through the mail search; a click opens one in
+ * the mail view).
  */
 import { colorSlot } from "../../theme/skin";
 import type { CalendarDate } from "@internationalized/date";
 import { useState } from "react";
+import { VIEW_SHOW_ACTION } from "../../api/generated";
+import { useActions } from "../../actions/ActionsProvider";
+import { formatDateTime } from "../../i18n/format";
+import { useLocale } from "../../i18n/I18nProvider";
+import { useUiStoreApi } from "../../state/uiStore";
 import type {
   Contact,
   ContactDate,
@@ -19,7 +27,7 @@ import type {
 } from "../../api/generated";
 import { useDateFormat, type DateFormatter } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
-import { Problem, problemOf, useChangeContext } from "./common";
+import { Problem, problemOf, SyncState, useChangeContext } from "./common";
 import { initialsOf } from "./ContactList";
 import { askDeleteContacts } from "./contactDelete";
 import { formatDay, formatPimTime } from "./fmt";
@@ -31,6 +39,7 @@ import {
   useContactGroups,
   useContactPhoto,
   usePimSearch,
+  useRecentMail,
 } from "./queries";
 import { usePim } from "./store";
 import { localZone } from "./time";
@@ -253,47 +262,20 @@ function ContactDetails({ contact }: { contact: Contact }) {
         </div>
       </header>
 
-      {contact.sync !== "synced" && (
-        <div data-part="contact-card.sync" data-state={contact.sync}>
-          <p data-part="contact-card.sync.text">{t(`pim-sync-${contact.sync}`)}</p>
-          {contact.sync === "conflict" && (
-            <>
-              <button
-                type="button"
-                data-part="form.button"
-                onClick={() =>
-                  void run(
-                    {
-                      type: "ResolvePimConflict",
-                      item: { type: "contact", contact_id: contact.id },
-                      keep: "server",
-                    },
-                    "Done",
-                  )
-                }
-              >
-                {t("pim-conflict-keep-server")}
-              </button>
-              <button
-                type="button"
-                data-part="form.button"
-                onClick={() =>
-                  void run(
-                    {
-                      type: "ResolvePimConflict",
-                      item: { type: "contact", contact_id: contact.id },
-                      keep: "local",
-                    },
-                    "Done",
-                  )
-                }
-              >
-                {t("pim-conflict-keep-local")}
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      <SyncState
+        sync={contact.sync}
+        part="contact-card.sync"
+        onKeep={(keep) =>
+          void run(
+            {
+              type: "ResolvePimConflict",
+              item: { type: "contact", contact_id: contact.id },
+              keep,
+            },
+            "Done",
+          )
+        }
+      />
       <Problem message={problem} />
 
       <ValueList title={t("pim-contact-emails")} values={f.emails} field="emails" />
@@ -389,6 +371,7 @@ function ContactDetails({ contact }: { contact: Contact }) {
           }
         />
       )}
+      {primaryEmail && <RecentMail email={primaryEmail} />}
       {primaryEmail && (meetings.data ?? []).length > 0 && (
         <div data-part="contact-card.section" data-field="meetings">
           <h3 data-part="contact-card.heading">{t("pim-contact-meetings")}</h3>
@@ -461,5 +444,53 @@ function LinkedItem({
         {t("pim-contact-unlink")}
       </button>
     </li>
+  );
+}
+
+/** The mail view's key in the layout's views (`view.show`). */
+const MAIL_VIEW = "mail";
+
+/** The newest messages with `email` (R8); nothing while there are none. */
+function RecentMail({ email }: { email: string }) {
+  const t = useT();
+  const locale = useLocale();
+  const store = useUiStoreApi();
+  const actions = useActions();
+  const recent = useRecentMail(email);
+  const messages = recent.data ?? [];
+  if (messages.length === 0) return null;
+  const open = (message: (typeof messages)[number]) => {
+    const ui = store.getState();
+    ui.selectAccount(message.account_id);
+    ui.selectFolder(message.folder_id);
+    ui.selectMessage(message.id);
+    void actions.dispatch(VIEW_SHOW_ACTION, [MAIL_VIEW]);
+  };
+  return (
+    <div data-part="contact-card.section" data-field="recent-mail">
+      <h3 data-part="contact-card.heading">{t("pim-act-recent-mail")}</h3>
+      <ul data-part="contact-card.values">
+        {messages.map((message) => {
+          const subject = message.subject || t("common-no-subject");
+          const when = formatDateTime(message.date, locale);
+          return (
+            <li key={message.id} data-part="contact-card.value">
+              <button
+                type="button"
+                data-part="contact-card.mail"
+                data-state={message.flags.seen ? undefined : "unread"}
+                aria-label={t("pim-act-recent-mail-open", { subject, when })}
+                onClick={() => {
+                  open(message);
+                }}
+              >
+                <span data-part="contact-card.mail.subject">{subject}</span>
+                <span data-part="contact-card.mail.date">{when}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

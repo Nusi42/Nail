@@ -6,6 +6,10 @@
  * only (appended to `PIM_SKIN_CSS`, like `skin.ts`). Only that package
  * edits this file during R7 (ADR 0246), so the packages never touch the
  * same stylesheet; the integrator may fold it into `parts.ts` / `skin.ts`.
+ *
+ * R8 (ADR 0251 item 6): a taller card's icons sit at the end of its time
+ * line instead of over the corner of the title (where they hid the end of
+ * a title the card had room for); the title takes the card's whole width.
  */
 import { ACCENT_BAR, ONE_LINE } from "../../theme/declarations";
 import { HC, p, ps, pss } from "../../theme/selectors";
@@ -45,8 +49,13 @@ ${p("calendar.task")} { display: flex; align-items: center; min-width: 0; overfl
 ${p("calendar.task.title")} { ${ONE_LINE} }
 ${p("calendar.event")}[data-size="short"] { flex-direction: row; align-items: baseline; min-height: ${SHORT_CARD_MIN_HEIGHT}; }
 ${p("event-card.icons")} { display: inline-flex; flex: 0 0 auto; align-items: center; }
-${p("calendar.event")}:not([data-size="short"]) > ${p("event-card.icons")} { position: absolute; top: 0; inset-inline-end: 0; }
+${p("calendar.event")}:not([data-size="short"]) { flex-flow: row wrap; align-content: flex-start; }
+${p("calendar.event")}:not([data-size="short"]) > ${p("event-card.title")}, ${p("calendar.event")}:not([data-size="short"]) > ${p("event-card.location")} { flex: 0 0 100%; }
+${p("calendar.event")}:not([data-size="short"]) > ${p("event-card.time")} { flex: 1 1 0; min-width: 0; }
+${p("calendar.event")}:not([data-size="short"]) > ${p("event-card.icons")} { order: 1; margin-inline-start: auto; }
+${p("calendar.event")}:not([data-size="short"]) > ${p("event-card.location")} { order: 2; }
 @container (max-width: ${ICONS_MIN_CARD}) { ${p("event-card.icons")} { display: none; } }
+${p("calendar.slots")} { touch-action: manipulation; }
 ${p("calendar.new-event")} { display: grid; }
 ${p("calendar.new-event.actions")} { display: flex; justify-content: flex-end; }`;
 

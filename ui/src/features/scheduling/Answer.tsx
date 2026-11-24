@@ -399,14 +399,15 @@ export type AnswerScope = "series" | "occurrence";
 export interface ScopeChoiceProps {
   scope: AnswerScope;
   onScope: (scope: AnswerScope) => void;
-  /** The occurrence's day. */
-  day: CalendarDate;
-  onDay: (day: CalendarDate) => void;
-  tz: string;
+  /**
+   * The occurrence's day, to pick (the invitation card), or nothing when
+   * the occurrence is the one shown (the quick look, R8).
+   */
+  pick?: { day: CalendarDate; onDay: (day: CalendarDate) => void; tz: string };
 }
 
-/** "All occurrences" or "only the occurrence on …" for a recurring invitation. */
-export function ScopeChoice({ scope, onScope, day, onDay, tz }: ScopeChoiceProps) {
+/** "All occurrences" or "one occurrence" (on a day to pick) for a recurring invitation. */
+export function ScopeChoice({ scope, onScope, pick }: ScopeChoiceProps) {
   const t = useT();
   return (
     <ScopeRadios
@@ -417,15 +418,15 @@ export function ScopeChoice({ scope, onScope, day, onDay, tz }: ScopeChoiceProps
       label={(value) => t(`scheduling-scope-${value}`)}
       onChange={onScope}
     >
-      {scope === "occurrence" && (
+      {scope === "occurrence" && pick && (
         <DateTimeInput
           label={t("scheduling-scope-day")}
           field="occurrence"
-          day={day}
+          day={pick.day}
           time={null}
-          tz={tz}
+          tz={pick.tz}
           onChange={(picked) => {
-            onDay(picked);
+            pick.onDay(picked);
           }}
         />
       )}
