@@ -26,6 +26,7 @@ import {
 import { useNow } from "../../state/clock";
 import { Icon } from "../../widgets/Icon";
 import { Problem, problemOf, useChangeContext } from "./common";
+import { EmptyState } from "./EmptyState";
 import { formatPimTime } from "./fmt";
 import { openNewTask } from "./newEvent";
 import { TASK_DIALOG } from "./names";
@@ -119,11 +120,46 @@ export function priorityKey(priority: number | null): "high" | "medium" | "low" 
   return "low";
 }
 
+/** A field and "Add" that create a task with the typed title (the task list, Due this week). */
+export function AddTaskForm({
+  part,
+  label,
+  value,
+  onChange,
+  onSubmit,
+}: {
+  part: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: (event: SubmitEvent) => Promise<void>;
+}) {
+  const t = useT();
+  const id = useId();
+  return (
+    <form data-part={part} onSubmit={(e) => void onSubmit(e)}>
+      <label data-part="form.label" htmlFor={id}>
+        {label}
+      </label>
+      <input
+        id={id}
+        data-part="form.input"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+      />
+      <button type="submit" data-part="form.button" disabled={value.trim() === ""}>
+        {t("common-add")}
+      </button>
+    </form>
+  );
+}
+
 export function TaskList({ node }: WidgetProps) {
   const t = useT();
   const format = useDateFormat();
   const ctx = useChangeContext();
-  const ids = { list: useId(), add: useId(), completed: useId() };
   const tz = localZone();
   const fixed = optionList(node, "lists", []);
   const sortOption = optionString(node, "sort", "due");
@@ -302,27 +338,22 @@ export function TaskList({ node }: WidgetProps) {
         {!header && addTarget && newTask(undefined)}
       </div>
       {quickAdd && addTarget && (
-        <form data-part="task-list.add" onSubmit={(e) => void add(e)}>
-          <label data-part="form.label" htmlFor={ids.add}>
-            {t("pim-task-quick-add", { list: addTarget.settings.name })}
-          </label>
-          <input
-            id={ids.add}
-            data-part="form.input"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-            }}
-          />
-          <button type="submit" data-part="form.button" disabled={title.trim() === ""}>
-            {t("common-add")}
-          </button>
-        </form>
+        <AddTaskForm
+          part="task-list.add"
+          label={t("pim-task-quick-add", { list: addTarget.settings.name })}
+          value={title}
+          onChange={setTitle}
+          onSubmit={add}
+        />
       )}
       <Problem message={problem} />
       {tasks.isError && <Problem message={problemOf(tasks.error)} />}
       {visible.length === 0 ? (
-        <p data-part="task-list.empty">{t("pim-tasks-empty")}</p>
+        <EmptyState
+          view="tasks"
+          icon="list-checks"
+          text={t(showCompleted ? "pim-tasks-empty" : "pim-views-tasks-empty")}
+        />
       ) : (
         <ul
           ref={treeRef}

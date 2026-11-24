@@ -4,7 +4,7 @@
  * from data, and how an event card shows its calendar's colour.
  *
  * A card is the theme's background tinted with a little of the calendar
- * colour (`EVENT_TINT` per cent) plus a solid bar in the colour on the
+ * colour (`EVENT_TINT` per cent; 20 since R7, ADR 0246) plus a solid bar in the colour on the
  * leading edge, and its text is always the theme's `fg`. A light tint keeps
  * the card's luminance close to the theme's background, so the text stays
  * readable for any colour in every theme (`colors.test.ts` checks the
@@ -19,7 +19,7 @@ import { CALENDAR_PALETTE } from "../../api/generated";
 import type { CalendarColor, PaletteColor } from "../../api/generated";
 
 /** Per cent of the calendar colour in an event card's background. */
-export const EVENT_TINT = 16;
+export const EVENT_TINT = 20;
 
 /** Ids of the palette's colours (`pim-color-<id>` names each); the core's `CalendarColor`. */
 export type CalendarColorId = CalendarColor;

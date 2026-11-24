@@ -10,6 +10,10 @@
  * Options: `actions` (`menu`, the default, or `buttons`: settings and
  * remove as icon buttons next to each row) and `show-sources` (a header per
  * source; `false` = one list).
+ *
+ * R7 (ADR 0246): the colour squares are filled with the calendar's colour
+ * and keep it as an outline when the calendar is hidden (M1); the widget
+ * ends with the "Due this week" panel (S12, `DueTasks.tsx`).
  */
 import { useId, useState } from "react";
 import type { Calendar, LocalizedMessage } from "../../api/generated";
@@ -30,13 +34,19 @@ import {
 import { PimMenu, type PimMenuEntry } from "./PimMenu";
 import { pimWrite, useCalendars, usePimSources } from "./queries";
 import { sourceName } from "./Sources";
+import { DueTasks } from "./DueTasks";
+import { useCalendarZones } from "./viewHooks";
 
 export function CalendarList({ node }: WidgetProps) {
   return (
-    <CalendarListView
-      asButtons={optionString(node, "actions", "menu") === "buttons"}
-      bySource={optionBool(node, "show-sources", true)}
-    />
+    <>
+      <CalendarListView
+        asButtons={optionString(node, "actions", "menu") === "buttons"}
+        bySource={optionBool(node, "show-sources", true)}
+      />
+      {/* R7 (S12): the tasks due this week under the calendars. */}
+      <DueTasks tz={useCalendarZones().zone} lists={null} />
+    </>
   );
 }
 

@@ -54,6 +54,29 @@ new events drawn straight onto the week.
 - **Reminders say how soon** — "in 30 minutes", with the calendar's name
   and colour; **Dismiss** comes first and snoozing is one button with a
   menu of other times.
+- **Calendars you can tell apart** — events get a stronger tint of their
+  calendar's colour with a solid edge, and the colour squares in the
+  calendar list are larger. New calendars get a colour no other calendar
+  uses yet.
+- **Quick add** — type “Lunch with Bob tomorrow 12:30 at Corner café” in the
+  field under the calendar toolbar: chips show what Nail understood, Enter
+  adds the event, Tab opens the editor with it filled in.
+- **Search in the calendar** — find events from the toolbar (**/** jumps
+  there), grouped into upcoming and past; choose one to see its day.
+- **Narrow windows and phones** — the calendar list becomes a drawer, New
+  event floats in the corner, and the week shows three days or one day
+  instead of squeezing seven columns.
+- **Easier to read views** — the month view draws events of several days as
+  one bar and other events as “dot, time, title” lines; the agenda has a
+  time column, Today / Tomorrow, faded past events and a now line; the year
+  view shades busy days; the free-time view has an hour axis, labelled busy
+  times and the free time per day; the mini-month marks the shown days,
+  event days and week numbers.
+- **Calendar preferences** — working hours and days, the first day of the
+  week, week numbers and declined invitations in Settings → Calendar &
+  contacts; time zones from the chip in the calendar toolbar.
+- **Due this week** — the tasks due this week next to the calendar, to tick
+  off, add or drag onto the week. Empty views now say what to do next.
 
 ### Corrected in 0.8.11
 

@@ -59,6 +59,28 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 - The reminder toast's relative time, calendar colour and name, Dismiss
   first and a split snooze button.
 
+### Added — calendar views and shell (ADR 0246)
+
+- Calendar toolbar: quick add from text with a live preview of the parsed
+  parts (`ParseEventText`; Enter adds, Tab opens the editor), event search
+  over `SearchPim` grouped upcoming / past (`/` focuses it), and a time zone
+  chip that saves the view zone and a second zone in the calendar
+  preferences.
+- Narrow windows: the calendar window's narrow breakpoint in `layout.kdl`
+  drops the sidebar; the calendar then offers it as a drawer, floats New
+  event, and falls back to three days, then one, when day columns would get
+  narrower than 90 px.
+- Views: month bars across days and "dot, time, title" lines, agenda time
+  column, sticky Today / Tomorrow headers, now marker and "until …" for
+  midnight-crossing events, year heat shading, free-time axis with labelled
+  busy blocks and daily totals, empty states with the nearest event,
+  mini-month band, dots and week numbers.
+- Settings: the calendar preferences (working hours and days, week start,
+  week numbers, declined invitations) with the settings save bar; a "Due
+  this week" panel under the calendar list (`ListTasksDue`).
+- Event cards use a 20 % tint of the calendar colour; the new-calendar
+  dialog no longer picks a colour itself.
+
 ### Fixed — deferred writes are retried soon (ADR 0245)
 
 - A replay pass that defers writes retries the account's queue within

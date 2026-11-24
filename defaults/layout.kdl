@@ -116,15 +116,33 @@ layout "default" {
     // The calendar, contacts and tasks views (M3a, M5b;
     // userDocs/en/calendar-contacts-tasks.md). Opened with `window.open`
     // they show as windows over the main window.
-    window "calendar" size="1100x760" min-size="720x480" {
-        stack id="calendar-root" sizes="auto 1fr" {
-            toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
-            split "horizontal" id="calendar-panes" sizes="260px 1fr" min-sizes="200px 480px" collapsible="true false" {
-                stack id="calendar-sidebar" label="@pim.pane.calendars" sizes="auto 1fr" {
-                    mini-month id="calendar-mini-month"
-                    // Calendars by source with colour squares, "…" and "+" menus.
-                    calendar-list id="calendar-list"
+    // Wide windows: the sidebar (mini-month, calendars, tasks due this week) | the calendar.
+    breakpoint min-width=900 {
+        window "calendar" size="1100x760" min-size="720x480" {
+            stack id="calendar-root" sizes="auto 1fr" {
+                toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
+                split "horizontal" id="calendar-panes" sizes="260px 1fr" min-sizes="200px 480px" collapsible="true false" {
+                    stack id="calendar-sidebar" label="@pim.pane.calendars" sizes="auto 1fr" {
+                        mini-month id="calendar-mini-month"
+                        // Calendars by source with colour squares, "…" and "+" menus,
+                        // then the tasks due this week.
+                        calendar-list id="calendar-list"
+                    }
+                    calendar id="calendar-main" view="week" views="day week month year agenda free-time" scroll-to=8
                 }
+            }
+        }
+    }
+
+    // Narrow windows (phones, small browser windows; R7): the calendar alone.
+    // Without a sidebar in the layout, its "Show calendars" button opens the
+    // mini-month, the calendars and the tasks due this week as a drawer, and
+    // "New event" floats over the view. A week whose day columns would get
+    // narrower than about 90 px shows three days, then one.
+    breakpoint max-width=899 {
+        window "calendar" size="1100x760" min-size="720x480" {
+            stack id="calendar-root" sizes="auto 1fr" {
+                toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
                 calendar id="calendar-main" view="week" views="day week month year agenda free-time" scroll-to=8
             }
         }

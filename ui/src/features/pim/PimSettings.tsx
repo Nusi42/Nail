@@ -1,6 +1,7 @@
 /**
  * The `pim-settings` widget (M5b, WP164): the settings page's "Calendar &
- * contacts" section — the calendars and task lists (settings and remove as
+ * contacts" section — the calendar preferences (R7, `CalendarPrefsForm`),
+ * the calendars and task lists (settings and remove as
  * buttons), the subscriptions and CalDAV / CardDAV servers with the form to
  * add one, and importing `.ics` / `.vcf` files. The settings search finds
  * it through the labels in `PIM_SETTINGS_INFO` (`Feature.settings`).
@@ -11,12 +12,21 @@ import type { SettingsWidgetInfo } from "../../layout/settingsIndex";
 import { useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
 import { CalendarListView } from "./CalendarList";
+import { CalendarPrefsForm } from "./CalendarPrefsForm";
 import { IMPORT_DIALOG } from "./names";
 import { SourcesPanel } from "./Sources";
 
 /** Fluent ids of every setting label the section shows (the settings search). */
 export const PIM_SETTINGS_INFO: SettingsWidgetInfo = {
   labels: [
+    // R7 (S6): the calendar preferences.
+    "pim-views-prefs-title",
+    "pim-views-prefs-start",
+    "pim-views-prefs-end",
+    "pim-views-prefs-days",
+    "pim-views-prefs-week-start",
+    "pim-views-prefs-week-numbers",
+    "pim-views-prefs-show-declined",
     "pim-settings-calendars",
     "pim-calendar-name",
     "pim-calendar-color-label",
@@ -55,6 +65,7 @@ export function PimSettings() {
   const store = useUiStoreApi();
   return (
     <div data-part="pim-settings">
+      <CalendarPrefsForm />
       <section data-part="card" data-field="calendars" aria-labelledby={ids.calendars}>
         <h3 data-part="card.title" id={ids.calendars}>
           {t("pim-settings-calendars")}

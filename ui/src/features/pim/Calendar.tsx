@@ -18,9 +18,22 @@
  * narrow), the segmented view switch and "New event". When the segmented
  * switch does not fit, the view menu replaces it (`switchFit.ts`).
  * Keys: the widget is the `calendar` key context.
+ *
+ * R7 (ADR 0246): the toolbar has the time zone chip (C5); a second row
+ * (`calendar.tools`) has quick create from text (S2) and the search (S9,
+ * `/` focuses it). The
+ * views place events in the zones of `viewZonesOf` (layout option, then
+ * the preferences) and leave out declined invitations when the preference
+ * says so. Narrow windows (M7): when the window's layout has no calendar
+ * sidebar at its width (the narrow breakpoint of `layout.kdl`), a
+ * "Calendars" button opens the mini-month, the calendar list and the tasks
+ * due this week as a drawer; a time grid whose day columns would be
+ * narrower than `MIN_DAY_COLUMN_PX` shows three days, then one; narrow and
+ * touch layouts get a floating "New event" button instead of the
+ * toolbar's.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import type { ViewKind } from "./time";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
@@ -35,7 +48,27 @@ import {
 import { useNow } from "../../state/clock";
 import { Icon } from "../../widgets/Icon";
 import { AgendaList, FreeTimeView, MonthView, YearView } from "./CalendarViews";
-import { Problem, problemOf, useChangeContext, useViewZone } from "./common";
+import { CalendarListView } from "./CalendarList";
+import { CalendarSearch } from "./CalendarSearch";
+import { Problem, problemOf, useChangeContext } from "./common";
+import { DueTasks } from "./DueTasks";
+import { CalendarEmpty } from "./EmptyState";
+import { useCalendarPreferences } from "./prefs";
+import { QuickAdd } from "./QuickAdd";
+import { MiniMonthView } from "./SmallWidgets";
+import {
+  useCalendarZones,
+  useCoarsePointer,
+  useElementWidth,
+  useLayoutShowsSidebar,
+} from "./viewHooks";
+import {
+  DEFAULT_NEW_EVENT_TIME,
+  TIME_GRID_VIEWS,
+  narrowFallback,
+  shownInstances,
+} from "./viewsModel";
+import { ZoneChip } from "./ZoneChip";
 import { dayDate, formatDay } from "./fmt";
 import { openNewEvent } from "./newEvent";
 import { useCalendars, useInstances } from "./queries";
@@ -46,7 +79,6 @@ import {
   DEFAULT_VIEW_OPTIONS,
   VIEW_KINDS,
   daysOf,
-  isKnownZone,
   isViewKind,
   parseDay,
   rangeInstants,
@@ -59,8 +91,6 @@ import {
 } from "./time";
 import type { DateFormatter } from "../../i18n/format";
 import type { MessageArgs } from "../../i18n/localizer";
-
-const TIME_GRID_VIEWS: readonly ViewKind[] = ["day", "multi-day", "week", "work-week"];
 
 /** The anchor day of the views (today when none is set). */
 export function useAnchor(tz: string): CalendarDate {
@@ -175,32 +205,105 @@ function ViewSwitch({
   );
 }
 
+/**
+ * The calendar sidebar as a drawer over the view (narrow windows): the
+ * mini-month, the calendar list and the tasks due this week. Esc, the
+ * close button or choosing a day closes it.
+ */
+function CalendarDrawer({
+  id,
+  tz,
+  calendarIds,
+  onClose,
+}: {
+  id: string;
+  tz: string;
+  calendarIds: readonly string[] | null;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const ref = useRef<HTMLElement>(null);
+  const anchor = usePim((s) => s.anchor);
+  const opened = useRef(anchor);
+  const close = useEffectEvent(onClose);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('[data-field="drawer-close"]')?.focus();
+    // Esc inside the drawer closes it.
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape" || !(event.target instanceof Node)) return;
+      if (!ref.current?.contains(event.target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, []);
+  // Choosing a day in the mini-month shows it: the drawer gets out of the way.
+  useEffect(() => {
+    if (anchor !== opened.current) close();
+  }, [anchor]);
+  return (
+    <aside ref={ref} id={id} data-part="calendar.drawer" aria-label={t("common-calendars")}>
+      <div data-part="calendar.drawer.header">
+        <h2 data-part="calendar.drawer.title">{t("common-calendars")}</h2>
+        <button
+          type="button"
+          data-part="form.button"
+          data-variant="icon ghost"
+          data-field="drawer-close"
+          aria-label={t("common-close")}
+          title={t("common-close")}
+          onClick={onClose}
+        >
+          <Icon name="x" part="form.button.icon" />
+        </button>
+      </div>
+      <MiniMonthView tz={tz} calendarIds={calendarIds} />
+      <CalendarListView asButtons={false} bySource />
+      <DueTasks tz={tz} lists={null} />
+    </aside>
+  );
+}
+
 export function CalendarWidget({ node, nodeKey }: WidgetProps) {
   const t = useT();
   const format = useDateFormat();
   const locale = useLocale();
   const ctx = useChangeContext();
   const pim = usePimStore();
-  const tz = useViewZone(node);
-  const secondaryOption = optionString(node, "secondary-zone", "");
-  const secondaryTz = secondaryOption && isKnownZone(secondaryOption) ? secondaryOption : null;
+  const prefs = useCalendarPreferences();
+  const zones = useCalendarZones(node);
+  const tz = zones.zone;
+  const zoneFixed =
+    optionString(node, "time-zone", "") !== "" || optionString(node, "secondary-zone", "") !== "";
   const own = optionString(node, "view", "week");
   const override = usePim((s) => s.view);
-  const view: ViewKind = override ?? (isViewKind(own) ? own : "week");
+  const chosen: ViewKind = override ?? (isViewKind(own) ? own : "week");
   const views = optionList(node, "views", VIEW_KINDS).filter(isViewKind);
   const calendarIds = optionList(node, "calendars", []);
+  const shownIds = calendarIds.length > 0 ? calendarIds : null;
   const header = optionBool(node, "header", true);
   const switchStyle = optionString(node, "view-switch", "segmented");
   const hourStart = clampHour(optionNumber(node, "hour-start", 0), 0);
   const hourEnd = Math.max(hourStart + 1, clampHour(optionNumber(node, "hour-end", 24), 24));
   const anchor = useAnchor(tz);
-  const options = viewOptions(node, view);
-  const range = viewRange(view, anchor, locale, options);
-  const instances = useInstances(
-    rangeInstants(range, tz),
-    calendarIds.length > 0 ? calendarIds : null,
-    tz,
+  const sectionRef = useRef<HTMLElement>(null);
+  const width = useElementWidth(sectionRef);
+  // Narrow panes: a week whose day columns would get too narrow shows three days, then one.
+  const chosenOptions = viewOptions(node, chosen);
+  const fallback = narrowFallback(
+    chosen,
+    viewRange(chosen, anchor, locale, chosenOptions).count,
+    width,
+    zones.second ? 2 : 1,
   );
+  const view: ViewKind = fallback?.view ?? chosen;
+  const options = fallback ? { ...chosenOptions, days: fallback.days } : chosenOptions;
+  const range = viewRange(view, anchor, locale, options);
+  const instances = useInstances(rangeInstants(range, tz), shownIds, tz);
   const calendars = useCalendars();
   const today = todayIn(tz, useNow());
   const title = rangeTitle(view, range, anchor, format, t);
@@ -211,6 +314,11 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
     header && switchStyle !== "menu" && views.length > 1,
     `${view} ${title}`,
   );
+  const drawerMode = !useLayoutShowsSidebar(node);
+  const coarse = useCoarsePointer();
+  const floatingNew = drawerMode || coarse;
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerId = useId();
 
   useEffect(() => {
     pim.getState().setShown({ view, days: options.days });
@@ -223,10 +331,13 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
     goTo(day);
     pim.getState().setView("day");
   };
-  const list = instances.data ?? [];
+  const newEvent = () => {
+    openNewEvent(ctx, anchor, DEFAULT_NEW_EVENT_TIME, tz);
+  };
+  const list = shownInstances(instances.data ?? [], prefs);
 
   let body: React.ReactNode;
-  if ((TIME_GRID_VIEWS as readonly string[]).includes(view)) {
+  if (TIME_GRID_VIEWS.includes(view)) {
     body = (
       <TimeGrid
         nodeKey={nodeKey}
@@ -234,7 +345,7 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
         instances={list}
         calendars={calendars.data}
         tz={tz}
-        secondaryTz={secondaryTz}
+        secondaryTz={zones.second}
         hourStart={hourStart}
         hourEnd={hourEnd}
         scrollTo={clampHour(optionNumber(node, "scroll-to", 8), 8)}
@@ -265,10 +376,33 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
         calendars={calendars.data}
         tz={tz}
         label={t("pim-view-agenda")}
+        empty={
+          instances.isSuccess && (
+            <CalendarEmpty
+              view="agenda"
+              range={range}
+              tz={tz}
+              calendarIds={shownIds}
+              onToday={() => {
+                pim.getState().setAnchor(null);
+              }}
+              onNew={newEvent}
+              onDay={showDay}
+            />
+          )
+        }
       />
     );
   } else {
-    const workStart = clampHour(optionNumber(node, "work-start", 8), 8);
+    // The layout's hours win; else the working hours of the preferences.
+    const workStart = clampHour(
+      optionNumber(node, "work-start", Math.floor(prefs.work_hours.start_minute / 60)),
+      0,
+    );
+    const workEnd = clampHour(
+      optionNumber(node, "work-end", Math.ceil(prefs.work_hours.end_minute / 60)),
+      24,
+    );
     body = (
       <FreeTimeView
         nodeKey={nodeKey}
@@ -277,15 +411,17 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
         tz={tz}
         minutes={Math.max(5, Math.trunc(optionNumber(node, "duration", 30)))}
         dayStartHour={workStart}
-        dayEndHour={Math.max(workStart + 1, clampHour(optionNumber(node, "work-end", 18), 18))}
+        dayEndHour={Math.max(workStart + 1, workEnd)}
       />
     );
   }
 
   return (
     <section
+      ref={sectionRef}
       data-part="calendar"
       data-view={view}
+      data-fallback={fallback ? chosen : undefined}
       data-key-context="calendar"
       aria-label={t("pim-calendar-label", { view: t(`pim-view-${view}`), range: title })}
       aria-busy={instances.isFetching}
@@ -296,6 +432,23 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
           data-part="calendar.toolbar"
           data-switch={switchStyle === "menu" || narrowSwitch ? "menu" : "segmented"}
         >
+          {drawerMode && (
+            <button
+              type="button"
+              data-part="form.button"
+              data-variant="icon ghost"
+              data-field="calendar-drawer"
+              aria-label={t("pim-views-drawer-open")}
+              title={t("pim-views-drawer-open")}
+              aria-expanded={drawerOpen}
+              aria-controls={drawerOpen ? drawerId : undefined}
+              onClick={() => {
+                setDrawerOpen((open) => !open);
+              }}
+            >
+              <Icon name="panel-left" part="form.button.icon" />
+            </button>
+          )}
           <div data-part="calendar.nav" role="group" aria-label={t("pim-nav-label")}>
             <button
               type="button"
@@ -341,26 +494,55 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
           {views.length > 1 && (
             <ViewSwitch
               views={views}
-              view={view}
+              view={chosen}
               menu={switchStyle === "menu" || narrowSwitch}
               onChange={(kind) => {
                 pim.getState().setView(kind);
               }}
             />
           )}
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="primary"
-            data-field="calendar-new-event"
-            onClick={() => {
-              openNewEvent(ctx, anchor, { hour: 9, minute: 0 }, tz);
-            }}
-          >
-            <Icon name="plus" part="form.button.icon" />
-            <span data-part="form.button.label">{t("pim-action-new-event")}</span>
-          </button>
+          <ZoneChip zones={zones} fixed={zoneFixed} />
+          {!floatingNew && (
+            <button
+              type="button"
+              data-part="form.button"
+              data-variant="primary"
+              data-field="calendar-new-event"
+              onClick={newEvent}
+            >
+              <Icon name="plus" part="form.button.icon" />
+              <span data-part="form.button.label">{t("pim-action-new-event")}</span>
+            </button>
+          )}
         </div>
+      )}
+      {header && (
+        <div data-part="calendar.tools">
+          <QuickAdd day={anchor} tz={tz} />
+          <CalendarSearch tz={tz} calendars={calendars.data} />
+        </div>
+      )}
+      {drawerMode && drawerOpen && (
+        <CalendarDrawer
+          id={drawerId}
+          tz={tz}
+          calendarIds={shownIds}
+          onClose={() => {
+            setDrawerOpen(false);
+          }}
+        />
+      )}
+      {floatingNew && (
+        <button
+          type="button"
+          data-part="calendar.fab"
+          data-field="calendar-new-event"
+          aria-label={t("pim-action-new-event")}
+          title={t("pim-action-new-event")}
+          onClick={newEvent}
+        >
+          <Icon name="plus" part="calendar.fab.icon" />
+        </button>
       )}
       {instances.isError && <Problem message={problemOf(instances.error)} />}
       {body}

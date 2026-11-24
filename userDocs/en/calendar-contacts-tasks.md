@@ -27,19 +27,52 @@ work.
 ## Calendar views
 
 A calendar widget shows one of these views. The toolbar shows **Today**,
-**Previous** and **Next**, the days shown, and a switch for the views (Day,
-Week, Month, Year, Agenda, Free time). When the calendar is too narrow for
-the switch and the whole range, a **View** menu takes the switch's place.
-Events show their title, time and place on a light tint of their calendar's
-colour.
+**Previous** and **Next**, the days shown, a switch for the views (Day,
+Week, Month, Year, Agenda, Free time), the time zone chip and **New
+event**; the row below has the quick-add field and the search field. When the calendar is too narrow for the switch and the
+whole range, a **View** menu takes the switch's place. Events show their
+title, time and place on a tint of their calendar's colour with a solid
+bar in the colour on their leading edge.
+
+- **Quick add:** the field under the toolbar reads a sentence such as
+  “Lunch with Bob tomorrow 12:30 at Corner café”. While you type, chips
+  show what Nail understood (title, date, time, length, repetition, place,
+  all day). **Enter** adds the event to your default calendar and shows its
+  day, **Tab** opens the event editor with everything filled in, **Esc**
+  empties the field. Without a date or time the event goes on the shown day
+  at 9:00.
+- **Search:** the search field (**/** puts the cursor there) finds events
+  by title, place and notes. The results are grouped into **Upcoming**
+  (soonest first) and **Past** (latest first); **↓ / ↑** and **Enter**, or
+  a click, show the event's day.
+- **Time zones:** the chip with the globe names the zone the views show
+  (and a second zone, if you added one). Choose it to show the calendar in
+  another zone or to add a second zone as an extra hour column; the choice
+  is saved with your calendar preferences. A calendar whose layout sets
+  `time-zone` or `secondary-zone` keeps those.
 
 | View | What it shows |
 | --- | --- |
 | Day, Days, Week, Work week | A time grid: the hours of the day from top to bottom, one column per day, all-day events in a row on top |
-| Month | Every day of the month with its events (days of the months before and after are dimmed, today is framed); **n more** opens the day when not all fit |
-| Year | Twelve small months with their names; days with events are marked. Choose a day to see it |
-| Agenda | The events of the next days as a list |
-| Free time | When you are free during the working hours (8:00 to 18:00 and at least 30 minutes by default) of the next five working days, starting with the shown day; weekends are left out. Choose a free stretch to plan an event there |
+| Month | Every day of the month (days of the months before and after are dimmed, today's date is a filled circle). Events of a day or more are one bar across their days; other events are lines with a dot in the calendar's colour, the start time and the title. **n more** opens the day when not all fit |
+| Year | Twelve small months with their names. Each day is shaded by how many hours are booked (the darker, the busier), today is ringed. Choose a day to see it |
+| Agenda | The events of the next days as a list: a time column, the calendar's colour as a dot, the title and the place. The day headers (**Today**, **Tomorrow**, then the date) stay on top while you scroll, past events are faded and a red line marks now. An event that runs past midnight shows **until 1:00 AM** on its second day |
+| Free time | When you are free during the working hours (from your calendar preferences, at least 30 minutes by default) of the next five working days, starting with the shown day; weekends are left out. An hour axis runs above the days, busy times show their titles, each day says how much time is free, and a day without free time says why (for example **Busy all day: Team offsite**). Choose a free stretch to plan an event there |
+
+When there is nothing in the days shown, the view says so and offers **Back
+to today** and **New event**, and names the nearest event before or after
+(choose it to see its day).
+
+### Narrow windows and phones
+
+In a window narrower than 900 pixels (or the web mode on a phone) the
+calendar uses the whole width: **Show calendars** (the panel button in the
+toolbar) opens the mini-month, the calendar list and **Due this week** as a
+drawer (**Esc**, **Close** or choosing a day closes it), and **New event**
+is a round button floating in the corner. A week whose day columns would get
+narrower than about 90 pixels shows three days, then one day; **Previous**
+and **Next** then move by the days shown. On touch screens **New event**
+floats in any window.
 
 Events are shown in their calendar's colour. An event that repeats says so
 when you move to it with a screen reader.
@@ -88,8 +121,28 @@ when you move to it with a screen reader.
 
 The **mini-month** (a small calendar for any window) and **today's agenda**
 follow the same day: choosing a day in the mini-month shows it in every
-calendar view. Weeks start on the day your language uses (Monday in German,
-Sunday in American English).
+calendar view. The mini-month marks the days the calendar shows as a band,
+puts a dot in each calendar's colour under days with events, keeps today
+marked when you page to other months and shows week numbers when you turn
+them on. Weeks start on the day your language uses (Monday in German, Sunday
+in American English), unless you choose another day in the calendar
+preferences.
+
+### Calendar preferences
+
+**Settings → Calendar & contacts → Calendar preferences** sets the working
+day (**Working day starts** / **ends**, 8:00 to 18:00 by default), the
+**Work days** (Monday to Friday), the day the **Week starts on**, **Show
+week numbers** (ISO weeks, as printed in European calendars) and **Show
+declined invitations** (struck through; off leaves them out). Changes apply
+with the page's **Save**. The free-time view uses the working day; the time
+grid shades the time outside it.
+
+### Due this week
+
+Below the calendars, **Due this week** lists the open tasks due this week.
+Tick one to complete it, or add a task due today with the field below the
+list. Drag a task onto the week to block time for it (the task stays).
 
 ### Moving events
 
@@ -126,6 +179,8 @@ change) cannot be moved.
 | Month view | Arrow keys move between days, **Home** / **End** to the start / end of the week, **Enter** shows the day |
 | Mini-month, year view, date picker | As in the month view; **Page Up** / **Page Down** go to the previous / next month, with **Shift** a year |
 | An event | **Enter** opens its quick look (double-click opens the editor), **Delete** deletes it, **Alt** + arrows move it |
+| Anywhere in the calendar | **/** puts the cursor in the search field |
+| Quick add | **Enter** adds the event, **Tab** opens the editor, **Esc** empties the field |
 
 Your layout can also bind keys to the calendar actions (for example **t** for
 today); see [Layout options](#layout-options).
@@ -296,6 +351,8 @@ task. Tick a task to complete it; a repeating task moves on to its next
 date instead. Overdue tasks are marked.
 
 - **Add a task to …** adds a task quickly; **New task** opens the editor.
+- Without open tasks the list says so and points to the field and **New
+  task**.
 - The task editor has the title, task list, **Subtask of**, status, percent
   done, priority, start and due date (each with or without a time), notes,
   location, web page, categories, repetition (needs a due date) and
@@ -435,13 +492,13 @@ The widgets and their options (all optional):
 
 | Widget | Options |
 | --- | --- |
-| `calendar` | `view` (`day`, `multi-day`, `week`, `work-week`, `month`, `year`, `agenda`, `free-time`), `views` (the views the switcher offers, separated by spaces), `days` (days of `multi-day`, `agenda`, `free-time`), `calendars` (calendar ids; default all shown), `time-zone`, `secondary-zone` (a second hour column), `hour-start`, `hour-end`, `scroll-to` (hour shown first), `max-events` (month), `duration` (free-time minutes), `work-start`, `work-end` (free-time hours), `header=#false` (no navigation bar), `view-switch` (`segmented`, the default, or `menu`: a drop-down) |
+| `calendar` | `view` (`day`, `multi-day`, `week`, `work-week`, `month`, `year`, `agenda`, `free-time`), `views` (the views the switcher offers, separated by spaces), `days` (days of `multi-day`, `agenda`, `free-time`), `calendars` (calendar ids; default all shown), `time-zone`, `secondary-zone` (a second hour column), `hour-start`, `hour-end`, `scroll-to` (hour shown first), `max-events` (month), `duration` (free-time minutes), `work-start`, `work-end` (free-time hours; default: the working day of the calendar preferences), `header=#false` (no navigation bar), `view-switch` (`segmented`, the default, or `menu`: a drop-down) |
 | `mini-month` | `time-zone`, `calendars` |
 | `agenda` | `days` (default 1: today), `time-zone`, `calendars` |
 | `task-list` | `lists` (task list ids), `show-completed`, `sort` (`due`, `priority`, `title`, `manual`), `quick-add`, `header=#true` (the Tasks view's header with the title and **New task**) |
 | `contact-list` | `address-books` (ids), `page-size`, `header=#true` (the Contacts view's header with the title, the search, **New contact** and **More**) |
 | `contact-card` | — |
-| `calendar-list` | `actions` (`menu`, the default: a **…** menu per calendar, or `buttons`), `show-sources` (`#false` = one list without source headers) |
+| `calendar-list` | `actions` (`menu`, the default: a **…** menu per calendar, or `buttons`), `show-sources` (`#false` = one list without source headers); the list ends with **Due this week** |
 | `pim-settings` | — (the settings page's Calendar & contacts section) |
 
 Actions for toolbars, menus and keys: `calendar.goto-today`,
@@ -465,7 +522,10 @@ keys context="calendar" {
 ```
 
 Every part of these widgets can be styled in `theme.kdl` (parts such as
-`calendar.event`, `calendar.month.day`, `contact-list.item`,
+`calendar.event`, `calendar.month.day`, `calendar.month.bar`,
+`calendar.month.line`, `calendar.agenda.entry`, `calendar.quick-add.chip`,
+`calendar.search.hit`, `calendar.drawer`, `calendar.fab`, `due-tasks.item`,
+`contact-list.item`,
 `task-list.item`, `pim.datetime`, `pim.toast`; states such as `:today`,
 `:selected`, `:outside`, `:busy`, `:recurring`, `:done`, `:overdue`). The
 calendar colour reaches an event as its left border colour.

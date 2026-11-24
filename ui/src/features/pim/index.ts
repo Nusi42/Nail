@@ -54,6 +54,7 @@ import { CALENDAR_LIST_INFO, PIM_SETTINGS_INFO, PimSettings } from "./PimSetting
 import { SourcesDialog } from "./Sources";
 import { pimStoreFor } from "./store";
 import { TaskList } from "./TaskList";
+import { DEFAULT_NEW_EVENT_TIME } from "./viewsModel";
 import {
   isViewKind,
   localZone,
@@ -124,8 +125,9 @@ function step(ctx: ActionContext, direction: 1 | -1): void {
   const pim = pimOf(ctx).getState();
   const tz = localZone();
   const anchor = (pim.anchor ? parseDay(pim.anchor) : null) ?? todayIn(tz);
+  // The view on screen: a narrow window may show fewer days than the chosen view (R7).
   const shown = pim.shown ?? { view: pim.view ?? "week", days: DEFAULT_VIEW_OPTIONS.days };
-  const next = stepAnchor(pim.view ?? shown.view, anchor, direction, {
+  const next = stepAnchor(shown.view, anchor, direction, {
     ...DEFAULT_VIEW_OPTIONS,
     days: shown.days,
   });
@@ -167,7 +169,7 @@ export const actions: Feature["actions"] = {
       const tz = localZone();
       const day =
         (pim.getState().anchor ? parseDay(pim.getState().anchor ?? "") : null) ?? todayIn(tz);
-      openNewEvent({ store: ctx.store, pim }, day, { hour: 9, minute: 0 }, tz);
+      openNewEvent({ store: ctx.store, pim }, day, DEFAULT_NEW_EVENT_TIME, tz);
     },
   },
   "calendar.calendars": {

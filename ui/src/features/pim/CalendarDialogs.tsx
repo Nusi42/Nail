@@ -242,12 +242,6 @@ function CalendarSettingsForm({ calendar, close }: { calendar: Calendar; close: 
 // ---------------------------------------------------------------------------
 // New calendar / task list
 
-/** The first palette colour no calendar uses yet (else the first). */
-export function unusedColor(calendars: readonly Calendar[]): string {
-  const used = new Set(calendars.map((c) => (c.settings.color ?? "").toLowerCase()));
-  return (CALENDAR_COLORS.find((c) => !used.has(c.value)) ?? CALENDAR_COLORS[0])?.value ?? "";
-}
-
 export function NewCalendarDialog({ close }: DialogProps) {
   const t = useT();
   const target = usePim((s) => s.newCalendar);
@@ -278,7 +272,8 @@ function NewCalendarForm({
   const ctx = useChangeContext();
   const sources = usePimSources();
   const { form, busy, problem, onSubmit } = useCalendarEditor(
-    () => ({ name: "", color: unusedColor(calendars), reminders: true }),
+    // No colour chosen: the core gives the calendar one no other calendar uses (R7, ADR 0246).
+    () => ({ name: "", color: "", reminders: true }),
     async (values) => {
       await pimWrite(
         ctx,

@@ -23,6 +23,7 @@ import { must } from "../../test/must";
 import { stringMatching } from "../../test/matchers";
 import { inTimeZone } from "../../test/env";
 import { BERLIN } from "../../test/mockIds";
+import { stubResize } from "./viewsTesting";
 
 inTimeZone(BERLIN);
 
@@ -92,7 +93,7 @@ describe("calendar widget", () => {
     expect(document.querySelector('[data-part="calendar"]')).toHaveAttribute("data-view", "month");
     expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "Year" }));
-    expect(document.querySelectorAll('[data-part="calendar.year.month"]')).toHaveLength(12);
+    expect(document.querySelectorAll('[data-part="calendar.year.grid"]')).toHaveLength(12);
     await user.click(screen.getByRole("button", { name: "Agenda" }));
     expect(await screen.findByRole("button", { name: /Design review/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Free time" }));
@@ -338,6 +339,8 @@ describe("calendar toolbar and event cards (M5b)", () => {
       "calendar-next",
       "calendar.title",
       "calendar-view",
+      // R7: the time zone chip before New event.
+      "calendar-zone",
       "calendar-new-event",
     ]);
     // The range is one heading; its full text is the tooltip when it is cut.
@@ -395,7 +398,7 @@ describe("calendar toolbar and event cards (M5b)", () => {
     // Personal is #3b82f6: a bar in the colour and a light tint of it.
     const css = geometryText();
     expect(css).toMatch(/border-left-color: rgb\(59, 130, 246\)/);
-    expect(css).toMatch(/color-mix\(in srgb, #3b82f6 16%, var\(--nail-color-bg\)\)/);
+    expect(css).toMatch(/color-mix\(in srgb, #3b82f6 20%, var\(--nail-color-bg\)\)/);
   });
 });
 
@@ -429,7 +432,7 @@ describe("calendar views after the M5b review", () => {
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "year" } }), env, { locale: "en" });
     await settleQueries(env);
-    const titles = [...document.querySelectorAll('[data-part="calendar.year.month.title"]')];
+    const titles = [...document.querySelectorAll('[data-part="calendar.year.grid.title"]')];
     expect(titles.map((t) => t.textContent)).toEqual([
       "January",
       "February",
@@ -454,48 +457,33 @@ describe("calendar views after the M5b review", () => {
     expect(grid.parentElement).toHaveAttribute("data-part", "calendar.month.frame");
   });
 
-  it("shows only the start time on month chips, after the title (the label keeps both)", async () => {
+  it("shows timed month events as dot, start time and title (the label keeps both times)", async () => {
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "month" } }), env);
     const lunch = await screen.findByRole("button", { name: /Lunch with Grace/ });
-    expect(lunch).toHaveAttribute("data-part", "calendar.chip");
+    // R7 (S8): a timed event is a "dot, time, title" line.
+    expect(lunch).toHaveAttribute("data-part", "calendar.month.line");
     const parts = [...lunch.children].map((c) => c.getAttribute("data-part"));
     expect(parts.slice(0, 2)).toEqual(["event-card.title", "event-card.time"]);
     const time = lunch.querySelector('[data-part="event-card.time"]')?.textContent ?? "";
     expect(time).toMatch(/^\d{1,2}:\d{2}\s?(AM|PM)$/);
     expect(lunch.getAttribute("aria-label")).toMatch(/–|-/);
+    // The time is drawn first, after the colour dot.
     expect(PIM_SKIN_CSS).toMatch(
-      /\[data-part="calendar\.month\.item"\] > \[data-part="calendar\.chip"\] > \[data-part="event-card\.time"\] \{ order: 0;/,
+      /\[data-part="calendar\.month\.line"\] > \[data-part="event-card\.time"\] \{ order: -1;/,
     );
+    expect(PIM_SKIN_CSS).toMatch(/\[data-part="calendar\.month\.line"\]::before \{ content: "";/);
   });
 
   it("offers the view menu when the segmented switch does not fit, and returns", async () => {
-    const callbacks = new Set<() => void>();
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        constructor(private readonly cb: () => void) {}
-        observe() {
-          callbacks.add(this.cb);
-        }
-        disconnect() {
-          callbacks.delete(this.cb);
-        }
-        unobserve = vi.fn();
-      },
-    );
     const size = { bar: 700 };
-    const client = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
-    const scroll = Object.getOwnPropertyDescriptor(Element.prototype, "scrollWidth");
-    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
-      configurable: true,
-      get(this: HTMLElement) {
-        const part = this.getAttribute("data-part");
-        if (part === "calendar.toolbar") return size.bar;
-        if (part === "segmented") return Math.min(380, Math.max(0, size.bar - 580));
-        return 100;
-      },
+    const resize = stubResize((el) => {
+      const part = el.getAttribute("data-part");
+      if (part === "calendar.toolbar") return size.bar;
+      if (part === "segmented") return Math.min(380, Math.max(0, size.bar - 580));
+      return 100;
     });
+    const scroll = Object.getOwnPropertyDescriptor(Element.prototype, "scrollWidth");
     Object.defineProperty(Element.prototype, "scrollWidth", {
       configurable: true,
       get(this: Element) {
@@ -522,23 +510,15 @@ describe("calendar views after the M5b review", () => {
       );
       // Still too narrow: stays.
       size.bar = 900;
-      act(() => {
-        callbacks.forEach((cb) => {
-          cb();
-        });
-      });
+      resize.notify();
       expect(screen.getByRole("combobox", { name: "View" })).toBeInTheDocument();
       // As wide as the segmented row needed: back.
       size.bar = 1000;
-      act(() => {
-        callbacks.forEach((cb) => {
-          cb();
-        });
-      });
+      resize.notify();
       const group = screen.getByRole("group", { name: "View" });
       expect(within(group).getAllByRole("button")).toHaveLength(4);
     } finally {
-      if (client) Object.defineProperty(HTMLElement.prototype, "clientWidth", client);
+      resize.restore();
       if (scroll) Object.defineProperty(Element.prototype, "scrollWidth", scroll);
     }
   });

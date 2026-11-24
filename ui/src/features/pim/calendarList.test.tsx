@@ -16,7 +16,6 @@ import {
   NewCalendarDialog,
   RemoveCalendarDialog,
   calendarFormIssues,
-  unusedColor,
 } from "./CalendarDialogs";
 import { calendarGroups, isTaskList, removalOf } from "./calendarGroups";
 import {
@@ -148,9 +147,8 @@ describe("calendar groups", () => {
     expect(calendarFormIssues("Garden", "red;x")).toEqual({ id: "pim-calendar-color-invalid" });
     expect(calendarFormIssues("Garden", "")).toBeNull();
     expect(calendarFormIssues("Garden", "#3b82f6")).toBeNull();
-    const used = calendar("x", "local", 0);
-    used.settings.color = "#2563EB";
-    expect(unusedColor([used])).toBe("#0891b2");
+    // No colour is fine: the core gives the new calendar one (R7, ADR 0246).
+    expect(calendarFormIssues("Garden", "")).toBeNull();
   });
 });
 
