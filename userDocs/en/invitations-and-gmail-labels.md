@@ -10,9 +10,16 @@ card above the message text. The card tells you:
   proposes;
 - whether your calendar already matches it ("Not answered yet", "Changes
   your calendar", "A newer version exists", …);
-- when and where the meeting is, how it repeats, who organizes it, who is
-  invited and what they answered;
-- whether it overlaps something else in your calendar.
+- when and where the meeting is, how it repeats, who organizes it, and
+  everyone invited with their answer on one line ("Grace Hopper
+  (organizer) accepted, Bob maybe, you not answered"; click the line for
+  the full list);
+- whether it overlaps something else in your calendar: a small strip of
+  the day shows the invitation (dashed) under the events it overlaps, and
+  all-day events it meets are named below it.
+
+The message's calendar part (`.ics`) is the card itself, so it is not
+listed again among the attachments.
 
 ### Warnings about forged messages
 
@@ -48,10 +55,15 @@ on their own either, and neither is anything in a message marked as junk.
 
 ### Answering
 
-Choose **Accept**, **Maybe** or **Decline**. You can add a note for the
+Choose **Accept**, **Maybe** or **Decline** in the answer control (your
+current answer is the one pressed). **Add a note** adds a note for the
 organizer. Clear **Send my answer to the organizer** to only update your
 own calendar without telling anyone. If you turned on **Ask before sending
-an answer** in the invitation settings, Nail asks first.
+an answer** in the invitation settings, Nail asks first. **Forward
+invitation**, **Open in calendar** and asking the organizer for the latest
+version are in the card's **More** menu. You can also answer from the
+calendar: click the invitation there — an unanswered one looks provisional
+— and answer in its [quick look](calendar-contacts-tasks.md#the-quick-look).
 
 For a repeating meeting that is already in your calendar you can answer
 for **All occurrences** or for **One occurrence**: pick the day of the
@@ -61,9 +73,9 @@ occurrence with the date picker.
 note). Your calendar does not change until the organizer agrees.
 
 Depending on the message the card also offers **Add to calendar**,
-**Update my calendar**, **Remove from calendar** (for cancellations),
+**Update my calendar** and **Remove from calendar** (for cancellations);
 **Ask for the latest version**, **Forward invitation** and **Open in
-calendar**.
+calendar** are in its **More** menu.
 
 ### The mail Nail sends
 
@@ -121,19 +133,24 @@ The command `scheduling.settings` opens the invitation settings:
 
 ## Finding a time
 
-The attendee list of the event editor shows everyone's availability for
-the meeting's day: busy times, times people might be busy, and
-out-of-office times, with the meeting drawn on top. Nail names the people
-who are busy at the chosen time and suggests times when everyone is free;
-choose one to move the meeting there. Use **Back** / **Next** / **Today**
-to look at other days.
+The people block of the event editor shows everyone's availability for the
+meeting's day: one lane per person with their name and where the
+information comes from, and their busy times, times they might be busy and
+out-of-office times along an hour axis. The meeting is a frame across every
+lane: drag it to another time, or focus it (**Tab**) and move it with the
+arrow keys in 15-minute steps (**Shift** + arrows: an hour). Nail names the
+people who are busy at the chosen time and suggests other times when
+everyone is free; choose one to move the meeting there. When nobody's free
+time lines up on that day, Nail says so once and offers **Try the next
+day**. Use **Back** / **Next** / **Today** to look at other days.
 
 Availability comes from your own calendars (subscriptions and other
 read-only calendars do not count) and, for other people, from your CalDAV
 calendar server (its scheduling outbox). People Nail knows nothing about
-show "No information"; a server that does not share someone's
+show "No information" (their lane is hatched and they are not counted when
+Nail says that everyone is free); a server that does not share someone's
 availability with you shows "availability could not be checked" for that
-person.
+person. Nail only shows how busy someone is, never what their events are.
 
 The command `scheduling.find-time` (or the `freebusy-timeline` widget)
 opens **Find a time** on its own: add people, choose the length, pick a

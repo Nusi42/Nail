@@ -15,9 +15,19 @@
  * `Delete…` at the start (it asks first, `./Confirm.tsx`), Save and Cancel
  * by role; ×, Esc and Cancel with unsaved changes ask with the shared
  * prompt (Save / Don't save / Cancel). Ctrl+Enter in the description saves.
+ *
+ * R7 (S3, ADR 0246): a compact layout — the title as a large field; one
+ * row with the start day and time, the end time (its day only when it
+ * differs), the length and the time zone; chips for Repeat, Reminder,
+ * Calendar, Busy / Free and Call link; the repetition's details only while
+ * it repeats; the place; the people (summary, attendees, free/busy); the
+ * notes; and "More options" for the end's day and zone, a second zone,
+ * status, visibility, the web page and detailed reminders. Days read as
+ * text ("Fri, Nov 27, 2026"), not as numeric fields.
  */
 import type { CalendarDate } from "@internationalized/date";
 import { useEffect, useId, useMemo, useState } from "react";
+import { MINUTES_PER_DAY } from "../../api/generated";
 import type {
   Alarm,
   AlarmAction,
@@ -44,7 +54,7 @@ import {
   type AlarmUnit,
   ALARM_WHEN,
 } from "./constants";
-import { useT } from "../../i18n/I18nProvider";
+import { useLocale, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { wallDelta } from "./changes";
 import {
@@ -56,14 +66,26 @@ import {
   useEditorSave,
   EditorLoadError,
   EditorFooter,
+  colorOf,
+  geomId,
+  Swatch,
 } from "./common";
+import {
+  alarmsForChoice,
+  lengthText,
+  reminderChoiceOf,
+  reminderChoices,
+  reminderText,
+  type ReminderChoice,
+} from "./eventLook";
+import { Icon } from "../../widgets/Icon";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { formatInstant } from "./fmt";
 import { deleteEvent, saveEvent, useCalendars, useEvent } from "./queries";
 import { RoomFinder } from "../exchange";
 import { AttendeePicker, MeetingPanel } from "../scheduling";
 import { useMyAddresses } from "../scheduling/queries";
-import { RecurrenceEditor } from "./RecurrenceEditor";
+import { RecurrenceDetails, RepeatSelect } from "./RecurrenceEditor";
 import { choiceOf, recurrenceOf, type RecurrenceChoice } from "./recurrence";
 import { emptyEventFields } from "./defaults";
 import { usePim, type EventEditorTarget } from "./store";
@@ -341,6 +363,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
     transparency: useId(),
     visibility: useId(),
     problem: useId(),
+    calls: useId(),
   };
   const writable = calendars.filter((c) => !c.read_only && c.components.includes("event"));
   const viewerTz = localZone();
@@ -358,6 +381,8 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
     initialForm(target, event, writable, occurrence, viewerTz),
   );
   const [secondary, setSecondary] = useState<string>("");
+  // The call links show when the event has one, or after "Call link".
+  const [callOpen, setCallOpen] = useState(() => form.conferences.length > 0);
   const zones = useMemo(() => timeZoneNames(), []);
   const update = (patch: Partial<EventForm>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -508,40 +533,45 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
         })
       : null;
 
+  const endOnOtherDay = form.endDay.compare(form.startDay) !== 0;
+  const lengthMinutes = Math.round(
+    (pimTimeIn(preview.end, "UTC").toDate().getTime() -
+      pimTimeIn(preview.start, "UTC").toDate().getTime()) /
+      60_000,
+  );
+  const calendarColor = colorOf(calendars, form.calendarId, null);
+  const endDateField = (
+    <DateTimeInput
+      label={t("pim-look-end-date")}
+      field="end-date"
+      display="text"
+      day={form.endDay}
+      time={null}
+      tz={form.endTz ?? form.tz ?? viewerTz}
+      onChange={(day) => {
+        update({ endDay: day });
+      }}
+    />
+  );
+
   return (
     <DialogForm part="pim.editor" dialog="event" busy={busy} onSubmit={() => void submit()}>
       <EditorMain readOnly={readOnly} busy={busy}>
-        <div data-part="form.field" data-field="title">
-          <label data-part="form.label" htmlFor={ids.title}>
+        <div data-part="pim.compact.title" data-field="title">
+          <label data-part="pim.look.hidden" htmlFor={ids.title}>
             {t("pim-event-title")}
           </label>
           <input
             id={ids.title}
-            data-part="form.input"
+            data-part="pim.compact.title.input"
             value={form.title}
+            placeholder={t("pim-look-title-placeholder")}
             onChange={(e) => {
               update({ title: e.target.value });
             }}
             // eslint-disable-next-line jsx-a11y/no-autofocus -- the editor dialog opens on request; its title field takes the focus (dialog pattern).
             autoFocus
           />
-        </div>
-        <div data-part="form.field" data-field="calendar">
-          <label data-part="form.label" htmlFor={ids.calendar}>
-            {t("common-calendar")}
-          </label>
-          <select
-            id={ids.calendar}
-            data-part="form.select"
-            value={form.calendarId}
-            onChange={(e) => {
-              update({ calendarId: e.target.value });
-            }}
-          >
-            <CalendarOptions
-              calendars={readOnly ? calendars.filter((c) => c.id === form.calendarId) : writable}
-            />
-          </select>
         </div>
 
         {scopeEditable && (
@@ -564,8 +594,66 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           </fieldset>
         )}
 
-        <fieldset data-part="pim.editor.when">
-          <legend data-part="form.section.title">{t("common-when")}</legend>
+        <div data-part="pim.compact.when" role="group" aria-label={t("common-when")}>
+          <DateTimeInput
+            label={t("common-start")}
+            field="start"
+            display="text"
+            labelHidden
+            day={form.startDay}
+            time={form.allDay ? null : form.startTime}
+            tz={form.tz ?? viewerTz}
+            invalid={problem?.id === "pim-issue-end-before-start"}
+            onChange={(day, time) => {
+              update(movedStart(form, day, time));
+            }}
+          />
+          <span data-part="pim.compact.arrow" aria-hidden="true">
+            {t("pim-look-arrow")}
+          </span>
+          <DateTimeInput
+            label={t("common-end")}
+            field="end"
+            display="text"
+            labelHidden
+            showDay={form.allDay || endOnOtherDay}
+            day={form.endDay}
+            time={form.allDay ? null : form.endTime}
+            tz={form.endTz ?? form.tz ?? viewerTz}
+            invalid={problem?.id === "pim-issue-end-before-start"}
+            describedBy={problem ? ids.problem : undefined}
+            onChange={(day, time) => {
+              update({ endDay: day, endTime: time ?? form.endTime });
+            }}
+          />
+          {lengthMinutes > 0 && (
+            <span data-part="pim.compact.length">
+              {t("pim-look-length", {
+                length: lengthText(t, format.locale, lengthMinutes),
+              })}
+            </span>
+          )}
+          {!form.allDay && (
+            <div data-part="pim.compact.chip" data-field="time-zone">
+              <label data-part="pim.look.hidden" htmlFor={ids.tz}>
+                {t("pim-event-time-zone")}
+              </label>
+              <select
+                id={ids.tz}
+                data-part="pim.compact.select"
+                value={form.tz ?? ""}
+                onChange={(e) => {
+                  update({
+                    tz: e.target.value === "" ? null : e.target.value,
+                    endTz: e.target.value === "" ? null : form.endTz,
+                  });
+                }}
+              >
+                <option value="">{t("pim-time-zone-floating")}</option>
+                {tzOptions}
+              </select>
+            </div>
+          )}
           <label data-part="form.check" data-field="all-day">
             <input
               type="checkbox"
@@ -576,175 +664,140 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             />
             <span>{t("common-all-day")}</span>
           </label>
-          <DateTimeInput
-            label={t("common-start")}
-            field="start"
-            day={form.startDay}
-            time={form.allDay ? null : form.startTime}
-            tz={form.tz ?? viewerTz}
-            invalid={problem?.id === "pim-issue-end-before-start"}
-            onChange={(day, time) => {
-              // Moving the start keeps the length (end moves along).
-              const deltaDays = day.compare(form.startDay);
-              const minutes = time
-                ? time.hour * 60 + time.minute - (form.startTime.hour * 60 + form.startTime.minute)
-                : 0;
-              const endTotal = form.endTime.hour * 60 + form.endTime.minute + minutes;
-              const endDay = form.endDay.add({ days: deltaDays + Math.floor(endTotal / 1440) });
-              const rest = ((endTotal % 1440) + 1440) % 1440;
-              update({
-                startDay: day,
-                startTime: time ?? form.startTime,
-                endDay,
-                endTime: { hour: Math.floor(rest / 60), minute: rest % 60 },
-              });
-            }}
-          />
-          {secondaryLine(preview.start) && (
-            <p data-part="pim.editor.secondary" data-field="start">
-              {t("pim-secondary-time", {
-                zone: zoneText(secondary),
-                time: secondaryLine(preview.start) ?? "",
-              })}
-            </p>
-          )}
-          <DateTimeInput
-            label={t("common-end")}
-            field="end"
-            day={form.endDay}
-            time={form.allDay ? null : form.endTime}
-            tz={form.endTz ?? form.tz ?? viewerTz}
-            invalid={problem?.id === "pim-issue-end-before-start"}
-            describedBy={problem ? ids.problem : undefined}
-            onChange={(day, time) => {
-              update({ endDay: day, endTime: time ?? form.endTime });
-            }}
-          />
-          {secondaryLine(preview.end) && (
-            <p data-part="pim.editor.secondary" data-field="end">
-              {t("pim-secondary-time", {
-                zone: zoneText(secondary),
-                time: secondaryLine(preview.end) ?? "",
-              })}
-            </p>
-          )}
-          {!form.allDay && (
-            <>
-              <div data-part="form.field" data-field="time-zone">
-                <label data-part="form.label" htmlFor={ids.tz}>
-                  {t("pim-event-time-zone")}
-                </label>
-                <select
-                  id={ids.tz}
-                  data-part="form.select"
-                  value={form.tz ?? ""}
-                  onChange={(e) => {
-                    update({
-                      tz: e.target.value === "" ? null : e.target.value,
-                      endTz: e.target.value === "" ? null : form.endTz,
-                    });
-                  }}
-                >
-                  <option value="">{t("pim-time-zone-floating")}</option>
-                  {tzOptions}
-                </select>
-              </div>
-              {form.tz !== null && (
-                <label data-part="form.check" data-field="end-zone">
-                  <input
-                    type="checkbox"
-                    checked={form.endTz !== null}
-                    onChange={(e) => {
-                      update({ endTz: e.target.checked ? form.tz : null });
-                    }}
-                  />
-                  <span>{t("pim-event-end-zone-toggle")}</span>
-                </label>
-              )}
-              {form.endTz !== null && (
-                <div data-part="form.field" data-field="end-time-zone">
-                  <label data-part="form.label" htmlFor={ids.endTz}>
-                    {t("pim-event-end-time-zone")}
-                  </label>
-                  <select
-                    id={ids.endTz}
-                    data-part="form.select"
-                    value={form.endTz}
-                    onChange={(e) => {
-                      update({ endTz: e.target.value });
-                    }}
-                  >
-                    {tzOptions}
-                  </select>
-                </div>
-              )}
-              <div data-part="form.field" data-field="secondary-zone">
-                <label data-part="form.label" htmlFor={ids.secondary}>
-                  {t("pim-event-secondary-zone")}
-                </label>
-                <select
-                  id={ids.secondary}
-                  data-part="form.select"
-                  value={secondary}
-                  onChange={(e) => {
-                    setSecondary(e.target.value);
-                  }}
-                >
-                  <option value="">{t("pim-secondary-zone-none")}</option>
-                  {tzOptions}
-                </select>
-              </div>
-            </>
-          )}
-        </fieldset>
+        </div>
+        {secondaryLine(preview.start) && (
+          <p data-part="pim.editor.secondary" data-field="start">
+            {t("pim-secondary-time", {
+              zone: zoneText(secondary),
+              time: secondaryLine(preview.start) ?? "",
+            })}
+          </p>
+        )}
+        {secondaryLine(preview.end) && (
+          <p data-part="pim.editor.secondary" data-field="end">
+            {t("pim-secondary-time", {
+              zone: zoneText(secondary),
+              time: secondaryLine(preview.end) ?? "",
+            })}
+          </p>
+        )}
 
-        <RecurrenceEditor
-          value={form.recurrence}
-          onChange={(recurrence) => {
-            update({ recurrence });
-          }}
-          start={preview.start}
-          disabled={recurrenceLocked}
-          tz={form.tz ?? viewerTz}
-        />
+        <div data-part="pim.compact.chips" role="group" aria-label={t("pim-look-options")}>
+          <RepeatSelect
+            part="pim.compact.chip"
+            selectPart="pim.compact.select"
+            labelHidden
+            value={form.recurrence}
+            onChange={(recurrence) => {
+              update({ recurrence });
+            }}
+            start={preview.start}
+            disabled={recurrenceLocked}
+          />
+          <ReminderChip
+            value={form.alarms}
+            onChange={(alarms) => {
+              update({ alarms });
+            }}
+          />
+          <div data-part="pim.compact.chip" data-field="calendar">
+            <Swatch
+              geom={geomId("editor", form.calendarId, calendarColor)}
+              color={calendarColor}
+              part="pim.compact.dot"
+            />
+            <label data-part="pim.look.hidden" htmlFor={ids.calendar}>
+              {t("common-calendar")}
+            </label>
+            <select
+              id={ids.calendar}
+              data-part="pim.compact.select"
+              value={form.calendarId}
+              onChange={(e) => {
+                update({ calendarId: e.target.value });
+              }}
+            >
+              <CalendarOptions
+                calendars={readOnly ? calendars.filter((c) => c.id === form.calendarId) : writable}
+              />
+            </select>
+          </div>
+          <div data-part="pim.compact.chip" data-field="transparency">
+            <label data-part="pim.look.hidden" htmlFor={ids.transparency}>
+              {t("pim-event-transparency")}
+            </label>
+            <select
+              id={ids.transparency}
+              data-part="pim.compact.select"
+              value={form.transparency}
+              onChange={(e) => {
+                update({ transparency: e.target.value as Transparency });
+              }}
+            >
+              {TRANSPARENCIES.map((s) => (
+                <option key={s} value={s}>
+                  {t(`pim-transparency-${s}`)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            data-part="pim.compact.chip"
+            data-field="call-link"
+            aria-expanded={callOpen}
+            aria-controls={callOpen ? ids.calls : undefined}
+            onClick={() => {
+              if (!callOpen && form.conferences.length === 0) {
+                update({ conferences: [{ uri: "", label: null, features: ["video"] }] });
+              }
+              setCallOpen((open) => !open);
+            }}
+          >
+            <Icon name="link" part="pim.compact.chip.icon" />
+            <span data-part="pim.compact.chip.text">{t("pim-look-call-link")}</span>
+          </button>
+        </div>
+
+        {form.recurrence.type !== "none" && (
+          <RecurrenceDetails
+            value={form.recurrence}
+            onChange={(recurrence) => {
+              update({ recurrence });
+            }}
+            start={preview.start}
+            disabled={recurrenceLocked}
+            tz={form.tz ?? viewerTz}
+          />
+        )}
         {recurrenceLocked && <p data-part="pim.editor.hint">{t("pim-recurrence-locked")}</p>}
 
-        <TextField
-          id={ids.location}
-          name="location"
-          labelId="pim-event-location"
-          value={form.location}
-          onChange={(v) => {
-            update({ location: v });
-          }}
-        />
+        {callOpen && (
+          <div id={ids.calls} data-part="pim.compact.calls">
+            <ConferenceEditor
+              value={form.conferences}
+              onChange={(conferences) => {
+                update({ conferences });
+              }}
+            />
+          </div>
+        )}
 
-        <ConferenceEditor
-          value={form.conferences}
-          onChange={(conferences) => {
-            update({ conferences });
-          }}
-        />
-
-        <TextAreaField
-          id={ids.description}
-          name="description"
-          labelId="pim-event-description"
-          value={form.description}
-          onChange={(v) => {
-            update({ description: v });
-          }}
-        />
-        <TextField
-          id={ids.url}
-          name="url"
-          labelId="pim-event-url"
-          type="url"
-          value={form.url}
-          onChange={(v) => {
-            update({ url: v });
-          }}
-        />
+        <div data-part="pim.compact.place" data-field="location">
+          <label data-part="pim.look.hidden" htmlFor={ids.location}>
+            {t("pim-event-location")}
+          </label>
+          <input
+            id={ids.location}
+            name="location"
+            data-part="pim.compact.place.input"
+            value={form.location}
+            placeholder={t("pim-look-place-placeholder")}
+            onChange={(e) => {
+              update({ location: e.target.value });
+            }}
+          />
+        </div>
 
         <AttendeePicker
           value={form.attendees}
@@ -784,74 +837,125 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
         {target.mode === "edit" && event !== null && event.fields.attendees.length > 0 && (
           <MeetingPanel event={event} recurrenceId={occurrence} />
         )}
-        <AlarmEditor
-          value={form.alarms}
-          onChange={(alarms) => {
-            update({ alarms });
+
+        <TextAreaField
+          id={ids.description}
+          name="description"
+          labelId="pim-look-notes"
+          value={form.description}
+          onChange={(v) => {
+            update({ description: v });
           }}
-          tz={viewerTz}
         />
 
-        <fieldset data-part="pim.editor.flags">
-          <legend data-part="form.section.title">{t("pim-event-flags")}</legend>
-          <div data-part="form.field" data-field="status">
-            <label data-part="form.label" htmlFor={ids.status}>
-              {t("common-status")}
-            </label>
-            <select
-              id={ids.status}
-              data-part="form.select"
-              value={form.status}
-              onChange={(e) => {
-                update({ status: e.target.value as EventStatus });
+        <details data-part="pim.compact.more">
+          <summary data-part="pim.compact.more.summary">{t("pim-look-more")}</summary>
+          <div data-part="pim.compact.more.body">
+            {!form.allDay && !endOnOtherDay && endDateField}
+            {!form.allDay && form.tz !== null && (
+              <label data-part="form.check" data-field="end-zone">
+                <input
+                  type="checkbox"
+                  checked={form.endTz !== null}
+                  onChange={(e) => {
+                    update({ endTz: e.target.checked ? form.tz : null });
+                  }}
+                />
+                <span>{t("pim-event-end-zone-toggle")}</span>
+              </label>
+            )}
+            {!form.allDay && form.endTz !== null && (
+              <div data-part="form.field" data-field="end-time-zone">
+                <label data-part="form.label" htmlFor={ids.endTz}>
+                  {t("pim-event-end-time-zone")}
+                </label>
+                <select
+                  id={ids.endTz}
+                  data-part="form.select"
+                  value={form.endTz}
+                  onChange={(e) => {
+                    update({ endTz: e.target.value });
+                  }}
+                >
+                  {tzOptions}
+                </select>
+              </div>
+            )}
+            {!form.allDay && (
+              <div data-part="form.field" data-field="secondary-zone">
+                <label data-part="form.label" htmlFor={ids.secondary}>
+                  {t("pim-event-secondary-zone")}
+                </label>
+                <select
+                  id={ids.secondary}
+                  data-part="form.select"
+                  value={secondary}
+                  onChange={(e) => {
+                    setSecondary(e.target.value);
+                  }}
+                >
+                  <option value="">{t("pim-secondary-zone-none")}</option>
+                  {tzOptions}
+                </select>
+              </div>
+            )}
+            <div data-part="form.field" data-field="status">
+              <label data-part="form.label" htmlFor={ids.status}>
+                {t("common-status")}
+              </label>
+              <select
+                id={ids.status}
+                data-part="form.select"
+                value={form.status}
+                onChange={(e) => {
+                  update({ status: e.target.value as EventStatus });
+                }}
+              >
+                {EVENT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`pim-status-${s}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div data-part="form.field" data-field="visibility">
+              <label data-part="form.label" htmlFor={ids.visibility}>
+                {t("pim-event-visibility")}
+              </label>
+              <select
+                id={ids.visibility}
+                data-part="form.select"
+                value={form.visibility}
+                onChange={(e) => {
+                  update({ visibility: e.target.value as Visibility });
+                }}
+              >
+                {VISIBILITIES.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`pim-visibility-${s}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <TextField
+              id={ids.url}
+              name="url"
+              labelId="pim-event-url"
+              type="url"
+              value={form.url}
+              onChange={(v) => {
+                update({ url: v });
               }}
-            >
-              {EVENT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`pim-status-${s}`)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div data-part="form.field" data-field="transparency">
-            <label data-part="form.label" htmlFor={ids.transparency}>
-              {t("pim-event-transparency")}
-            </label>
-            <select
-              id={ids.transparency}
-              data-part="form.select"
-              value={form.transparency}
-              onChange={(e) => {
-                update({ transparency: e.target.value as Transparency });
+            />
+            <AlarmEditor
+              value={form.alarms}
+              onChange={(alarms) => {
+                update({ alarms });
               }}
-            >
-              {TRANSPARENCIES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`pim-transparency-${s}`)}
-                </option>
-              ))}
-            </select>
+              tz={viewerTz}
+            />
           </div>
-          <div data-part="form.field" data-field="visibility">
-            <label data-part="form.label" htmlFor={ids.visibility}>
-              {t("pim-event-visibility")}
-            </label>
-            <select
-              id={ids.visibility}
-              data-part="form.select"
-              value={form.visibility}
-              onChange={(e) => {
-                update({ visibility: e.target.value as Visibility });
-              }}
-            >
-              {VISIBILITIES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`pim-visibility-${s}`)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </fieldset>
+        </details>
       </EditorMain>
 
       <Problem message={problem} id={ids.problem} />
@@ -863,6 +967,70 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
         close={close}
       />
     </DialogForm>
+  );
+}
+
+/**
+ * The form after moving the start: the length is kept (the end moves along,
+ * across midnight when it has to).
+ */
+export function movedStart(
+  form: EventForm,
+  day: CalendarDate,
+  time: Clock | null,
+): Partial<EventForm> {
+  const deltaDays = day.compare(form.startDay);
+  const minutes = time
+    ? time.hour * 60 + time.minute - (form.startTime.hour * 60 + form.startTime.minute)
+    : 0;
+  const endTotal = form.endTime.hour * 60 + form.endTime.minute + minutes;
+  const endDay = form.endDay.add({ days: deltaDays + Math.floor(endTotal / MINUTES_PER_DAY) });
+  const rest = ((endTotal % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  return {
+    startDay: day,
+    startTime: time ?? form.startTime,
+    endDay,
+    endTime: { hour: Math.floor(rest / 60), minute: rest % 60 },
+  };
+}
+
+/**
+ * The reminder chip (R7 S3): no reminder, at the start, or a common time
+ * before it; other alarms show as "Custom reminders" and are edited in
+ * "More options" (`AlarmEditor`).
+ */
+export function ReminderChip({
+  value,
+  onChange,
+}: {
+  value: Alarm[];
+  onChange: (value: Alarm[]) => void;
+}) {
+  const t = useT();
+  const locale = useLocale();
+  const id = useId();
+  const current = reminderChoiceOf(value);
+  return (
+    <div data-part="pim.compact.chip" data-field="reminder">
+      <Icon name="bell" part="pim.compact.chip.icon" />
+      <label data-part="pim.look.hidden" htmlFor={id}>
+        {t("pim-look-reminder")}
+      </label>
+      <select
+        id={id}
+        data-part="pim.compact.select"
+        value={current}
+        onChange={(e) => {
+          onChange(alarmsForChoice(e.target.value as ReminderChoice, value));
+        }}
+      >
+        {reminderChoices(current).map((choice) => (
+          <option key={choice} value={choice}>
+            {reminderText(t, locale, choice)}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

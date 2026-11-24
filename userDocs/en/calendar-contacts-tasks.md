@@ -130,37 +130,73 @@ change) cannot be moved.
 Your layout can also bind keys to the calendar actions (for example **t** for
 today); see [Layout options](#layout-options).
 
+## The quick look
+
+Click an event (or press **Enter** or **Space** on it) to see it at a glance
+in a small window beside it, without leaving the week:
+
+- the title with its calendar's colour, the day, the time with its length
+  and time zone ("3:00 – 4:00 PM · 1 hour · UTC"), the calendar and the
+  place;
+- the people: how many answered what ("3 people · 2 accepted, 1 not
+  answered") and the first few names with their answers;
+- **Join** when the event has a call link;
+- **Edit** opens the full editor, **Delete** deletes the event (a repeating
+  event asks which occurrences first; a deleted event can be brought back
+  with **Undo**), and **Send update** sends your changes to everyone when you
+  organize the meeting;
+- for an invitation, **Accept**, **Maybe** or **Decline** answer it there and
+  then. An invitation you have not answered yet also says which of your
+  events it overlaps.
+
+Keys: **Enter** edits (the **Edit** button has the focus), **Delete** deletes,
+**Esc** or a click elsewhere closes it, and the focus goes back to the event.
+A double-click on an event opens the editor directly.
+
 ## The event editor
 
-Open an event by double-clicking it (a single click or **Enter** shows its
-quick look first), or create one with **New event**, by double-clicking an
+Open an event from its quick look (**Edit** or **Enter**) or by
+double-clicking it, or create one with **New event**, by double-clicking an
 hour or a day, or with **More options** after drawing it on the grid (see
-[Creating events on the grid](#creating-events-on-the-grid)).
+[Creating events on the grid](#creating-events-on-the-grid)). The editor shows
+the common things first:
 
-- **Title, calendar, location, description, web page.**
-- **When:** start and end, or **All day**. Dates and times are typed or
-  changed part by part with the arrow keys; **Choose…** opens a month to pick
-  the day. The order of day, month and year and the 12- or 24-hour clock
-  follow Nail's language, not the system's.
-- **Time zone:** events can be in any time zone, or have **no time zone**
-  (the same clock time everywhere, for example "lunch at noon" while
-  travelling). The end can be in another zone than the start (a flight).
-  **Also show the times in** shows the start and end in a second zone while
-  you edit.
-- **Repeat:** daily, weekly on chosen days, monthly (on the same day, or on
-  the first / second / … / last weekday of the month), yearly; every n days /
-  weeks / months / years; ending never, after a number of times or on a
-  date. A sentence below says what you chose ("Every 2 weeks on Monday,
-  Thursday, until 31 Dec 2026"). Repetitions made in other programs that
-  this editor cannot show are kept as they are ("custom rule") unless you
-  replace them.
-- **Video calls and dial-in:** links to join the call.
-- **Attendees:** add people by address; suggestions come from your
-  contacts. Each attendee has a role (chair, required, optional, for
-  information) and shows their answer. (Sending invitations arrives later.)
-- **Reminders:** any number, a time before or after the start or end.
-- **Status** (confirmed, tentative, cancelled), **Show me as** (busy, free)
-  and **Visibility**.
+- **Title** in a large field at the top.
+- **When** on one line: the day as text in Nail's language ("Fri, Nov 27,
+  2026"; click it to pick another day from a month), the start and end
+  times, how long the event is ("Length: 1 hour") and its **time zone**.
+  The end's day shows only when it differs from the start's (an event over
+  midnight or over several days); **All day** turns the times off. Times are
+  typed or changed part by part with the arrow keys; the 12- or 24-hour
+  clock follows Nail's language, not the system's. An event can have **no
+  time zone** (the same clock time everywhere, for example "lunch at noon"
+  while travelling).
+- **Options** as a row of small choices:
+  - **Repeats:** never, daily, weekly, monthly or yearly. While the event
+    repeats, the details appear below: every n days / weeks / months / years,
+    the weekdays, monthly on the same day or on the first / second / … / last
+    weekday, ending never, after a number of times or on a date, and a
+    sentence that says what you chose ("Every 2 weeks on Monday, Thursday,
+    until 31 Dec 2026"). Repetitions made in other programs that this editor
+    cannot show are kept as they are ("custom rule") unless you replace
+    them.
+  - **Reminder:** none, at the start, or 5, 10, 15 or 30 minutes, an hour
+    or a day before. Other reminders show as **Custom reminders**; edit them
+    under **More options**.
+  - **Calendar**, with its colour.
+  - **Show me as** busy or free.
+  - **Call link:** links to join a video call or dial in.
+- **Place:** where the event is ("Add a place or room").
+- **People:** a line that says who answered what, the attendees (add people
+  by address; suggestions come from your contacts; each attendee has a role
+  and shows their answer) and when everyone is free (see
+  [Finding a time](invitations-and-gmail-labels.md#finding-a-time)).
+- **Notes.**
+- **More options:** the end's day, a different time zone for the end (a
+  flight), **Also show the times in** (the start and end in a second zone
+  while you edit), **Status** (confirmed, tentative, cancelled),
+  **Visibility**, the **Web page** and every reminder in detail (any number,
+  a time before or after the start or end).
 
 When you open one occurrence of a repeating event, choose what to change:
 
@@ -175,9 +211,11 @@ The delete button follows the same choice.
 ## Reminders
 
 When a reminder is due, Nail shows it in a small box at the bottom of the
-window (the desktop app also shows a system notification). Choose **Open**
-to see the event or task, **Snooze** to be reminded again (in 5 to 60
-minutes, or tomorrow morning), or **Dismiss**. Dismissing is saved in the
+window (the desktop app also shows a system notification). It says how soon
+the event starts ("in 30 minutes"), its time and calendar, with the
+calendar's colour on its edge. **Dismiss** comes first; **Snooze 10 minutes**
+reminds you again in ten minutes, and the arrow beside it offers 5, 15 or 30
+minutes, an hour or tomorrow morning; **Open** shows the event or task. Dismissing is saved in the
 event or task (on the server too), so your other devices stop reminding you;
 snoozing applies to this computer.
 

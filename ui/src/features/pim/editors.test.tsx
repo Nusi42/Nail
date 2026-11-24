@@ -38,6 +38,7 @@ import { pimQuestion } from "./Confirm";
 import { closeGuardOf, MAIN_GUARD } from "../../layout/closeGuard";
 import { footerOrder, viewerOs } from "../../widgets/dialog";
 import { confirmPim } from "./testing";
+import { chooseFromMenu } from "./lookTesting";
 import { PimToasts } from "./Reminders";
 import { ScopeDialog } from "./ScopeDialog";
 import { SourcesDialog } from "./Sources";
@@ -618,8 +619,9 @@ describe("reminders", () => {
     });
     const toast = await screen.findByRole("group", { name: "Reminder: Design review" });
     expect(within(toast).getByRole("alert")).toHaveTextContent("Design review");
-    await user.selectOptions(within(toast).getByLabelText("Remind me again in"), "30");
-    await user.click(within(toast).getByRole("button", { name: "Snooze" }));
+    // R7 C3: snoozing is one split button; its menu offers the other times.
+    expect(within(toast).getByRole("button", { name: "Snooze 10 minutes" })).toBeInTheDocument();
+    await chooseFromMenu(user, toast, "More snooze times", "30 minutes");
     await waitFor(() => {
       expect(pimOf(env).reminders[0]?.state).toBe("snoozed");
     });

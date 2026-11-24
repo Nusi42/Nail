@@ -4,12 +4,15 @@ import {
   answerCounts,
   busyDuring,
   canRespond,
+  hoursOf,
   isMine,
   mergeBusy,
   placeSpan,
   responseOfStatus,
+  shownByInvitationCard,
   splitAddresses,
   statusOfResponse,
+  stripWindow,
   suggestSlots,
 } from "./model";
 import { SCHEDULING_BASE_CSS } from "./parts";
@@ -132,5 +135,24 @@ describe("scheduling model", () => {
     expect(firstStart(tz, 8, 18, 60, Date.parse("2026-10-01T17:10:00Z"))).toMatchObject({
       local: "2026-10-02T08:00:00",
     });
+  });
+});
+
+describe("R7: the invitation card's strip and the reader's iCalendar part", () => {
+  it("shows the invitation and its overlaps on whole hours, padded, at least four hours", () => {
+    const base = Date.parse(at(14));
+    const invitation = { start: base + H / 2, end: base + 1.5 * H };
+    expect(stripWindow(invitation, [])).toEqual({ start: base - H, end: base + 3 * H });
+    const early = { start: base - 3 * H, end: base - 2 * H };
+    expect(stripWindow(invitation, [early])).toEqual({ start: base - 4 * H, end: base + 3 * H });
+    expect(hoursOf({ start: base - H / 2, end: base + 2 * H })).toEqual([base, base + H]);
+  });
+
+  it("leaves out only the iCalendar part of a message with a card", () => {
+    expect(shownByInvitationCard(true, { mime: "text/calendar" })).toBe(true);
+    expect(shownByInvitationCard(true, { mime: "text/calendar; method=REQUEST" })).toBe(true);
+    expect(shownByInvitationCard(true, { mime: "application/ics" })).toBe(true);
+    expect(shownByInvitationCard(true, { mime: "application/pdf" })).toBe(false);
+    expect(shownByInvitationCard(false, { mime: "text/calendar" })).toBe(false);
   });
 });

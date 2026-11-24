@@ -1744,3 +1744,13 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`pim/events.rs` `tasks_due`) and `ParseEventText` (`nail-event-text`). `nail_api::testing::busy_instance` is the
   shared `EventInstance` of tests; `crates/nail-core/tests/common` has `error`. The UI derives `CALENDAR_COLORS`
   from the generated `CALENDAR_PALETTE`; the mock's user addresses are `userAddresses` (`api/mockAccounts.ts`).
+- Quick look and editor (P2, ADR 0247): `EventPopover.tsx` fills the quick look (facts, people, Join, Edit /
+  Delete / Send update, the answer for an invitation; `occurrenceFields`); `eventLook.ts` holds its pure helpers
+  (lengths as text, the reminder chip's choices, people summaries, call links, overlaps). The compact
+  `EventEditor.tsx` uses `RepeatSelect` / `RecurrenceDetails` (`RecurrenceEditor.tsx`), `ReminderChip` and
+  `DateTimeInput`'s `display="text"`. `scheduling/Answer.tsx` `AnswerSegments` is the one answer control (card,
+  meeting panel, quick look); the card's day strip uses `model.ts` `stripWindow` / `hoursOf`; the reader leaves out
+  the iCalendar part through `shownByInvitationCard` and `useInvitationCard` (`widgets/AttachmentList.tsx`). The
+  free/busy lanes (`FreeBusyTimeline.tsx` `Lanes`) have the movable meeting frame (`FRAME_STEP_MINUTES`). Styles:
+  `lookStyle.ts` (`pim.look.hidden` is the visually hidden label). Tests: `pim/lookTesting.ts` `chooseFromMenu`;
+  e2e `support/invitations.ts` (iMIP mails), `support/eventEditor.ts` (`startNewEvent`), `r7-p2-look.spec.ts`.

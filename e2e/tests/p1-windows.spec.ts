@@ -572,7 +572,7 @@ const GROUPS: Record<string, Group> = {
       await expectLinedUpAtWidths(page, "event editor", () => [
         event.getByRole("textbox", { name: "Title", exact: true }),
         event.getByRole("textbox", { name: "Location", exact: true }),
-        event.getByRole("textbox", { name: "Description", exact: true }),
+        event.getByRole("textbox", { name: "Notes", exact: true }),
       ]);
       await sweep.close("pim-event-editor");
       await meetingStep(sweep, calendar, { editor: "pim-event-editor-meeting", cancel: false });

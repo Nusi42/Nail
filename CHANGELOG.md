@@ -42,6 +42,23 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   day's start, ISO week number in the corner; tasks due in the all-day row
   with a check box; a task dropped on the grid creates an event.
 
+### Added — the quick look and the compact editor (ADR 0246)
+
+- A quick look beside an event (time with length and zone, calendar,
+  place, people with their answers, Join, Edit / Delete / Send update,
+  Accept / Maybe / Decline with the overlaps of an unanswered invitation).
+- The compact event editor: a large title, one time row with the day as
+  text and the length, option chips (repeat, reminder, calendar, busy,
+  call link), "More options" for the rest.
+- The invitation card's segmented answer, mini day strip, one-line
+  attendee summary and "More" menu; the iCalendar part is no attachment
+  of its own while the card shows it.
+- The scheduling lanes: a lane per person with its source, a draggable
+  meeting frame (arrow keys too), suggestion buttons without the chosen
+  time, consistent texts and hidden role labels.
+- The reminder toast's relative time, calendar colour and name, Dismiss
+  first and a split snooze button.
+
 ### Fixed — deferred writes are retried soon (ADR 0245)
 
 - A replay pass that defers writes retries the account's queue within

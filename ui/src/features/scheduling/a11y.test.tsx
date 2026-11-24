@@ -21,6 +21,7 @@ import {
 import { dialogs, InvitationCard, MeetingPanel } from ".";
 import { firstStart, newAttendee, AttendeePicker } from "./AttendeePicker";
 import { DEMO_INVITATIONS, seedSchedulingDemo } from "./mockSeed";
+import { chooseFromMenu } from "../pim/lookTesting";
 import { CANCEL_DIALOG, DIALOGS } from "./names";
 import { schedulingStoreFor } from "./store";
 import { localZone, makePimTime, todayIn } from "../pim/time";
@@ -67,7 +68,7 @@ describe("axe: invitation cards", () => {
       within(first).getByRole("button", { name: /Choose the date for Proposed start/ }),
     );
     await user.click(within(second).getByRole("radio", { name: "One occurrence" }));
-    await user.click(within(second).getByRole("button", { name: "Forward invitation" }));
+    await chooseFromMenu(user, second, "More", "Forward invitation");
     await user.click(within(second).getByRole("button", { name: "Forward" }));
     await user.click(within(third).getByRole("button", { name: "Accept" }));
     expect(within(third).getByText(/Send “Accept”/)).toBeInTheDocument();

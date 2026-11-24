@@ -3,13 +3,16 @@
  * shows (`AttachmentInfo.shown_in_body`: a `cid:` logo, a photo placed in
  * the text) are left out until the user asks for them: a disclosure button
  * lists them too, so they stay downloadable. With nothing hidden the list
- * is the plain card list.
+ * is the plain card list. The iCalendar part of an invitation is left out
+ * altogether: the invitation card shows it (R7, ADR 0246).
  */
 import { useState } from "react";
 import type { MessageBody } from "../api/generated";
 import { useT } from "../i18n/I18nProvider";
 import { AttachmentCard } from "./AttachmentCard";
 import { Icon } from "./Icon";
+import { shownByInvitationCard } from "../features/scheduling/model";
+import { useInvitationCard } from "../features/scheduling/queries";
 
 export interface AttachmentListProps {
   message: MessageBody;
@@ -18,12 +21,17 @@ export interface AttachmentListProps {
   previewId: (index: number) => string;
 }
 
-/** The attachments listed: all of them when `expanded`, else those the body does not show. */
+/**
+ * The attachments listed: all of them when `expanded`, else those the body
+ * does not show — never the iCalendar part the invitation card shows.
+ */
 export function listedAttachments(
-  message: Pick<MessageBody, "attachments">,
+  message: Pick<MessageBody, "attachments" | "invitation">,
   expanded: boolean,
+  carded = message.invitation !== undefined,
 ): MessageBody["attachments"] {
-  return expanded ? message.attachments : message.attachments.filter((a) => !a.shown_in_body);
+  const own = message.attachments.filter((a) => !shownByInvitationCard(carded, a));
+  return expanded ? own : own.filter((a) => !a.shown_in_body);
 }
 
 export function AttachmentList({ message, accountId, previewId }: AttachmentListProps) {
@@ -31,10 +39,12 @@ export function AttachmentList({ message, accountId, previewId }: AttachmentList
   // Collapsed again for every other message.
   const [expandedFor, setExpandedFor] = useState<string | null>(null);
   const expanded = expandedFor === message.id;
-  const total = message.attachments.length;
+  const carded = useInvitationCard(message);
+  const all = listedAttachments(message, true, carded);
+  const total = all.length;
   if (total === 0) return null;
-  const embedded = message.attachments.some((a) => a.shown_in_body);
-  const listed = listedAttachments(message, expanded);
+  const embedded = all.some((a) => a.shown_in_body);
+  const listed = listedAttachments(message, expanded, carded);
   return (
     <div data-part="message-view.attachment-list" data-state={expanded ? "expanded" : undefined}>
       {listed.length > 0 && (

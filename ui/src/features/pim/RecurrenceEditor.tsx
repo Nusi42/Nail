@@ -4,6 +4,11 @@
  * weekday) / yearly, every n periods, ending never / after n times / on a
  * day, with a readable summary. A rule the simple editor cannot show is
  * kept as it is ("custom") until the user replaces it.
+ *
+ * R7 (S3, ADR 0246): the pieces stand alone too — `RepeatSelect` (the
+ * "Repeats" choice, a chip in the compact event editor) and
+ * `RecurrenceDetails` (every n, weekdays, the end, the summary), shown
+ * below the chips only while the event repeats.
  */
 import type { CalendarDate } from "@internationalized/date";
 import { useId } from "react";
@@ -35,7 +40,92 @@ export interface RecurrenceEditorProps {
   tz: string;
 }
 
-export function RecurrenceEditor({
+export interface RecurrenceEditorProps {
+  value: RecurrenceChoice;
+  onChange: (value: RecurrenceChoice) => void;
+  /** The series' start (the rule's anchor). */
+  start: PimTime;
+  disabled?: boolean;
+  tz: string;
+}
+
+/** The readable summary of a choice ("Every week on Friday."). */
+function useSummary(value: RecurrenceChoice, start: PimTime): string {
+  const t = useT();
+  const format = useDateFormat();
+  if (value.type === "simple") {
+    const d = describe(
+      value.rule,
+      start,
+      (day: CalendarDate) => formatDay(format, day),
+      (day) => weekdayName(format, day, "long"),
+    );
+    return t(d.id, d.args);
+  }
+  return value.type === "custom" ? t("pim-recurrence-custom") : t("pim-recurrence-none");
+}
+
+export interface RepeatSelectProps {
+  value: RecurrenceChoice;
+  onChange: (value: RecurrenceChoice) => void;
+  start: PimTime;
+  disabled?: boolean;
+  /** The label for screen readers only (the compact editor's chip). */
+  labelHidden?: boolean;
+  /** Part of the field (default `form.field`). */
+  part?: string;
+  /** Part of the select (default `form.select`). */
+  selectPart?: string;
+}
+
+/** "Repeats": never, daily, weekly, monthly, yearly (or the kept custom rule). */
+export function RepeatSelect({
+  value,
+  onChange,
+  start,
+  disabled = false,
+  labelHidden = false,
+  part = "form.field",
+  selectPart = "form.select",
+}: RepeatSelectProps) {
+  const t = useT();
+  const id = useId();
+  const startDay = splitPimTime(start).day;
+  const freqValue =
+    value.type === "none" ? "none" : value.type === "custom" ? "custom" : value.rule.freq;
+  return (
+    <div data-part={part} data-field="freq">
+      <label data-part={labelHidden ? "pim.look.hidden" : "form.label"} htmlFor={id}>
+        {t("common-repeats")}
+      </label>
+      <select
+        id={id}
+        data-part={selectPart}
+        value={freqValue}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (next === "none") onChange({ type: "none" });
+          else if (next === "custom") return;
+          else onChange({ type: "simple", rule: defaultRule(next as SimpleFrequency, startDay) });
+        }}
+      >
+        <option value="none">{t("pim-recurrence-freq-none")}</option>
+        {SIMPLE_FREQUENCIES.map((f) => (
+          <option key={f} value={f}>
+            {t(`pim-recurrence-freq-${f}`)}
+          </option>
+        ))}
+        {value.type === "custom" && (
+          <option value="custom">{t("pim-recurrence-freq-custom")}</option>
+        )}
+      </select>
+    </div>
+  );
+}
+
+/** How a repeating event repeats: every n, weekdays, monthly mode, the end and the summary. */
+export function RecurrenceDetails({
   value,
   onChange,
   start,
@@ -46,59 +136,18 @@ export function RecurrenceEditor({
   const format = useDateFormat();
   const ids = { freq: useId(), interval: useId(), count: useId(), summary: useId() };
   const startDay = splitPimTime(start).day;
-  const freqValue =
-    value.type === "none" ? "none" : value.type === "custom" ? "custom" : value.rule.freq;
-
+  const summary = useSummary(value, start);
   const setRule = (patch: Partial<SimpleRule>) => {
     if (value.type !== "simple") return;
     onChange({ type: "simple", rule: { ...value.rule, ...patch } });
   };
-
-  const summary =
-    value.type === "simple"
-      ? (() => {
-          const d = describe(
-            value.rule,
-            start,
-            (day: CalendarDate) => formatDay(format, day),
-            (day) => weekdayName(format, day, "long"),
-          );
-          return t(d.id, d.args);
-        })()
-      : value.type === "custom"
-        ? t("pim-recurrence-custom")
-        : t("pim-recurrence-none");
-
   return (
-    <fieldset data-part="pim.recurrence" disabled={disabled} aria-describedby={ids.summary}>
-      <legend data-part="form.section.title">{t("pim-recurrence-legend")}</legend>
-      <div data-part="form.field" data-field="freq">
-        <label data-part="form.label" htmlFor={ids.freq}>
-          {t("common-repeats")}
-        </label>
-        <select
-          id={ids.freq}
-          data-part="form.select"
-          value={freqValue}
-          onChange={(event) => {
-            const next = event.target.value;
-            if (next === "none") onChange({ type: "none" });
-            else if (next === "custom") return;
-            else onChange({ type: "simple", rule: defaultRule(next as SimpleFrequency, startDay) });
-          }}
-        >
-          <option value="none">{t("pim-recurrence-freq-none")}</option>
-          {SIMPLE_FREQUENCIES.map((f) => (
-            <option key={f} value={f}>
-              {t(`pim-recurrence-freq-${f}`)}
-            </option>
-          ))}
-          {value.type === "custom" && (
-            <option value="custom">{t("pim-recurrence-freq-custom")}</option>
-          )}
-        </select>
-      </div>
-
+    <fieldset
+      data-part="pim.recurrence.details"
+      disabled={disabled}
+      aria-label={t("pim-recurrence-legend")}
+      aria-describedby={ids.summary}
+    >
       {value.type === "simple" && (
         <>
           <div data-part="form.field" data-field="interval">
@@ -260,6 +309,30 @@ export function RecurrenceEditor({
       <p id={ids.summary} data-part="pim.recurrence.summary" aria-live="polite">
         {summary}
       </p>
+    </fieldset>
+  );
+}
+
+/** The whole recurrence editor (the task editor's): the choice and its details. */
+export function RecurrenceEditor({
+  value,
+  onChange,
+  start,
+  disabled = false,
+  tz,
+}: RecurrenceEditorProps) {
+  const t = useT();
+  return (
+    <fieldset data-part="pim.recurrence" disabled={disabled}>
+      <legend data-part="form.section.title">{t("pim-recurrence-legend")}</legend>
+      <RepeatSelect value={value} onChange={onChange} start={start} disabled={disabled} />
+      <RecurrenceDetails
+        value={value}
+        onChange={onChange}
+        start={start}
+        disabled={disabled}
+        tz={tz}
+      />
     </fieldset>
   );
 }

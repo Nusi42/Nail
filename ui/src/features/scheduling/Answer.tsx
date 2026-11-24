@@ -7,7 +7,7 @@
  * occurrence" choice for recurring invitations.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useId, useState, type SubmitEvent } from "react";
+import { useId, useState, type ReactNode, type SubmitEvent } from "react";
 import type {
   InvitationResponse,
   LocalizedMessage,
@@ -23,6 +23,51 @@ import { plausibleEmail } from "../../state/addresses";
 import { TextAreaField } from "../../widgets/forms";
 import { ConfirmDialog, DialogFooter } from "../../widgets/dialog";
 
+export interface AnswerSegmentsProps {
+  /** The user's current answer (the pressed segment). */
+  current: ParticipationStatus | null;
+  /** Answers on offer (shown in the order of `RESPONSES`: Accept first). */
+  available: readonly InvitationResponse[];
+  busy: boolean;
+  onAnswer: (response: InvitationResponse) => void;
+}
+
+/**
+ * Accept / Maybe / Decline as one segmented control (R7, ADR 0246): toggle
+ * buttons in a group named "Your answer", the current answer pressed. An
+ * unanswered invitation has none pressed; Accept is first and stands out.
+ */
+export function AnswerSegments({ current, available, busy, onAnswer }: AnswerSegmentsProps) {
+  const t = useT();
+  const pressed = responseOfStatus(current);
+  return (
+    <div
+      data-part="segmented"
+      data-field="answer"
+      data-state={pressed === null ? "open" : undefined}
+      role="group"
+      aria-label={t("invitation-my-status")}
+    >
+      {RESPONSES.filter((r) => available.includes(r)).map((response) => (
+        <button
+          key={response}
+          type="button"
+          data-part="segmented.option"
+          data-action={response}
+          aria-pressed={pressed === response}
+          // aria-disabled, not disabled: the focus stays on the answer while it is sent.
+          aria-disabled={busy || undefined}
+          onClick={() => {
+            if (!busy) onAnswer(response);
+          }}
+        >
+          {t(`scheduling-answer-${response}`)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export interface AnswerFormProps {
   /** The user's current answer (pressed button). */
   current: ParticipationStatus | null;
@@ -34,9 +79,20 @@ export interface AnswerFormProps {
   confirm: boolean;
   busy: boolean;
   onAnswer: (response: InvitationResponse, comment: string | null, send: boolean) => void;
+  /**
+   * Only the answer control (the quick look): no note, the answer is sent.
+   * The full form adds "Add a note" and the "send my answer" switch.
+   */
+  compact?: boolean;
+  /** Shown in the answer row after the segments (the card's secondary actions). */
+  children?: ReactNode;
 }
 
-/** Accept / Maybe / Decline with a comment and the "send a response" switch. */
+/**
+ * The answer control (`AnswerSegments`) with, below it, "Add a note" (a
+ * comment for the organizer, opened on request) and the "send my answer"
+ * switch; with the scheduling setting it asks before sending.
+ */
 export function AnswerForm({
   current,
   available,
@@ -44,16 +100,19 @@ export function AnswerForm({
   confirm,
   busy,
   onAnswer,
+  compact = false,
+  children,
 }: AnswerFormProps) {
   const t = useT();
-  const ids = { comment: useId(), send: useId() };
+  const commentId = useId();
   const [comment, setComment] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false);
   const [send, setSend] = useState(true);
   const [pending, setPending] = useState<InvitationResponse | null>(null);
-  const pressed = responseOfStatus(current);
+  const note = () => (noteOpen && send ? comment.trim() || null : null);
   const answer = (response: InvitationResponse) => {
     if (confirm && send) setPending(response);
-    else onAnswer(response, comment.trim() || null, send);
+    else onAnswer(response, note(), send);
   };
 
   if (pending !== null) {
@@ -69,14 +128,14 @@ export function AnswerForm({
         action={t("common-send")}
         onConfirm={() => {
           setPending(null);
-          onAnswer(pending, comment.trim() || null, true);
+          onAnswer(pending, note(), true);
         }}
         secondary={{
           label: t("scheduling-answer-confirm-no-send"),
           action: "dont-send",
           onClick: () => {
             setPending(null);
-            onAnswer(pending, comment.trim() || null, false);
+            onAnswer(pending, null, false);
           },
         }}
         cancel={{
@@ -91,53 +150,57 @@ export function AnswerForm({
   }
 
   return (
-    <div data-part="scheduling.answer">
-      <div data-part="form.field" data-field="comment">
-        <label data-part="form.label" htmlFor={ids.comment}>
-          {t("scheduling-answer-comment")}
-        </label>
-        <textarea
-          id={ids.comment}
-          data-part="form.textarea"
-          value={comment}
-          disabled={!send}
-          onChange={(e) => {
-            setComment(e.target.value);
-          }}
-        />
+    <div data-part="scheduling.answer" data-state={compact ? "compact" : undefined}>
+      <div data-part="scheduling.answer.row">
+        <AnswerSegments current={current} available={available} busy={busy} onAnswer={answer} />
+        {children}
       </div>
-      <label data-part="form.check" data-field="send">
-        <input
-          type="checkbox"
-          checked={send}
-          onChange={(e) => {
-            setSend(e.target.checked);
-          }}
-        />
-        <span>{t("scheduling-answer-send")}</span>
-      </label>
-      <div
-        data-part="scheduling.answer.buttons"
-        role="group"
-        aria-label={t("invitation-my-status")}
-      >
-        {RESPONSES.filter((r) => available.includes(r)).map((response) => (
-          <button
-            key={response}
-            type="button"
-            data-part="form.button"
-            data-action={response}
-            data-variant={pressed === response ? "primary" : undefined}
-            aria-pressed={pressed === response}
-            disabled={busy}
-            onClick={() => {
-              answer(response);
+      {!compact && (
+        <div data-part="scheduling.answer.options">
+          {!noteOpen && (
+            <button
+              type="button"
+              data-part="form.button"
+              data-variant="ghost"
+              data-action="add-note"
+              disabled={!send}
+              onClick={() => {
+                setNoteOpen(true);
+              }}
+            >
+              {t("pim-look-add-note")}
+            </button>
+          )}
+          <label data-part="form.check" data-field="send">
+            <input
+              type="checkbox"
+              checked={send}
+              onChange={(e) => {
+                setSend(e.target.checked);
+              }}
+            />
+            <span>{t("scheduling-answer-send")}</span>
+          </label>
+        </div>
+      )}
+      {!compact && noteOpen && (
+        <div data-part="form.field" data-field="comment">
+          <label data-part="form.label" htmlFor={commentId}>
+            {t("scheduling-answer-comment")}
+          </label>
+          <textarea
+            id={commentId}
+            data-part="form.textarea"
+            value={comment}
+            disabled={!send}
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- opened on request ("Add a note"): the note field takes the focus.
+            autoFocus
+            onChange={(e) => {
+              setComment(e.target.value);
             }}
-          >
-            {t(`scheduling-answer-${response}`)}
-          </button>
-        ))}
-      </div>
+          />
+        </div>
+      )}
     </div>
   );
 }

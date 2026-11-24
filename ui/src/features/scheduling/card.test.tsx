@@ -8,10 +8,18 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Request } from "../../api/generated";
 import { NodeView } from "../../layout/LayoutRenderer";
-import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderNode,
+  renderWithProviders,
+  settleQueries,
+  widget,
+  type Env,
+} from "../../test/harness";
 import { pimStoreFor } from "../pim/store";
 import { InvitationCard } from ".";
 import { DEMO_INVITATIONS, seedSchedulingDemo } from "./mockSeed";
+import { chooseFromMenu } from "../pim/lookTesting";
 
 function setup(): Env {
   const env = createEnv();
@@ -43,9 +51,36 @@ describe("invitation card", () => {
     expect(within(card).getByText(/overlaps one event/)).toBeInTheDocument();
     expect(within(card).getByText("Design review")).toBeInTheDocument();
     expect(within(card).getByText(/4 people: 2 accepted, 1 maybe/)).toBeInTheDocument();
-    for (const name of ["Accept", "Maybe", "Decline", "Propose a new time", "Forward invitation"]) {
+    for (const name of ["Accept", "Maybe", "Decline", "Propose a new time", "More"]) {
       expect(within(card).getByRole("button", { name })).toBeInTheDocument();
     }
+    // R7 S10: one answer control, Accept first, nothing pressed before an answer.
+    const answers = within(card).getByRole("group", { name: "Your answer" });
+    expect(
+      within(answers)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Accept", "Maybe", "Decline"]);
+    expect(within(answers).getByRole("button", { name: "Accept" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    // The overlap as a strip: the invitation and what it overlaps, each with its time.
+    const strip = within(card).getByRole("list", {
+      name: "Architecture sync and what it overlaps",
+    });
+    expect(
+      within(strip)
+        .getAllByRole("listitem")
+        .map((li) => li.dataset.state),
+    ).toEqual(["busy", "invitation"]);
+    expect(within(strip).getByText("Design review")).toBeInTheDocument();
+    // Everyone with their answer on one line.
+    await waitFor(() => {
+      expect(card.querySelector('[data-part="invitation.attendees.line"]')?.textContent).toMatch(
+        /\(organizer\) accepted.*you not answered/,
+      );
+    });
   });
 
   it("warns first about a forged sender", async () => {
@@ -60,6 +95,7 @@ describe("invitation card", () => {
     const user = userEvent.setup();
     const env = setup();
     const card = await renderCard(env, DEMO_INVITATIONS.newRequest);
+    await user.click(within(card).getByRole("button", { name: "Add a note" }));
     await user.type(within(card).getByLabelText("Note for the organizer (optional)"), "On my way");
     await user.click(within(card).getByRole("button", { name: "Accept" }));
     expect(
@@ -77,7 +113,8 @@ describe("invitation card", () => {
         "true",
       ),
     );
-    expect(within(card).getByRole("button", { name: "Open in calendar" })).toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: "More" }));
+    expect(screen.getByRole("menuitem", { name: "Open in calendar" })).toBeInTheDocument();
   });
 
   it("declines without sending a response", async () => {
@@ -87,7 +124,7 @@ describe("invitation card", () => {
     await user.click(
       within(card).getByRole("checkbox", { name: "Send my answer to the organizer" }),
     );
-    expect(within(card).getByLabelText("Note for the organizer (optional)")).toBeDisabled();
+    expect(within(card).getByRole("button", { name: "Add a note" })).toBeDisabled();
     await user.click(within(card).getByRole("button", { name: "Decline" }));
     expect(await within(card).findByText("Declined. No answer was sent.")).toBeInTheDocument();
     expect(last(env, "RespondToInvitation")).toMatchObject({ response: "decline", send: false });
@@ -143,7 +180,7 @@ describe("invitation card", () => {
     const user = userEvent.setup();
     const env = setup();
     const card = await renderCard(env, DEMO_INVITATIONS.newRequest);
-    await user.click(within(card).getByRole("button", { name: "Forward invitation" }));
+    await chooseFromMenu(user, card, "More", "Forward invitation");
     const form = within(card).getByRole("form", { name: "Forward invitation" });
     await user.type(
       within(form).getByLabelText("To (addresses, separated by commas)"),
@@ -212,7 +249,7 @@ describe("invitation card", () => {
     const user = userEvent.setup();
     const env = setup();
     const card = await renderCard(env, DEMO_INVITATIONS.update);
-    await user.click(within(card).getByRole("button", { name: "Open in calendar" }));
+    await chooseFromMenu(user, card, "More", "Open in calendar");
     expect(env.store.getState().windows).toContain("pim-event-editor");
     expect(pimStoreFor(env.store).getState().eventEditor).toMatchObject({
       mode: "edit",
@@ -253,5 +290,15 @@ describe("invitation card", () => {
       expect(env.transport.requests.filter((r) => r.type === "GetInvitation").length).toBe(2);
     });
     expect(second.container.querySelector('[data-part="invitation"]')).toBeNull();
+  });
+
+  it("leaves the iCalendar part out of the reader's attachments while the card shows it", async () => {
+    const env = setup();
+    env.store.getState().selectMessage(DEMO_INVITATIONS.newRequest);
+    renderNode(widget("message-view"), env);
+    expect(await screen.findByRole("region", { name: /^Invitation:/ })).toBeInTheDocument();
+    await settleQueries(env);
+    expect(screen.queryByText("invite.ics")).toBeNull();
+    expect(screen.queryByRole("list", { name: "Attachments" })).toBeNull();
   });
 });

@@ -192,10 +192,11 @@ describe("axe: PIM dialogs", () => {
     );
     await settle(env);
     await user.click(await screen.findByRole("radio", { name: "All occurrences" }));
-    await user.click(screen.getByRole("button", { name: "Add a call link" }));
+    await user.click(screen.getByRole("button", { name: "Call link" }));
+    await user.click(screen.getByText("More options"));
     await user.selectOptions(screen.getByLabelText("Also show the times in"), "Asia/Tokyo");
     await user.click(screen.getByRole("checkbox", { name: "The end is in another time zone" }));
-    await user.click(screen.getByRole("button", { name: /Choose the date for Start/ }));
+    await user.click(screen.getByRole("button", { name: /^Start, date: / }));
     expect(screen.getAllByRole("grid").length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
   });
@@ -226,7 +227,7 @@ describe("axe: PIM dialogs", () => {
         .pushToast({ kind: "problem", id: "p1", message: { id: "pim-op-failed" } });
     });
     await settle(env);
-    expect(screen.getByRole("button", { name: "Snooze" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Snooze 10 minutes" })).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
   });
 });

@@ -197,3 +197,38 @@ export function answerCounts(
   for (const s of statuses) counts[s]++;
   return counts;
 }
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * The stretch of the day the invitation card's mini day strip shows: the
+ * invitation and what it overlaps, padded by an hour on each side, on whole
+ * hours, at least `minHours` long (R7 S10).
+ */
+export function stripWindow(invitation: Span, others: readonly Span[], minHours = 4): Span {
+  const start = Math.min(invitation.start, ...others.map((o) => o.start)) - HOUR_MS;
+  const end = Math.max(invitation.end, ...others.map((o) => o.end)) + HOUR_MS;
+  const from = Math.floor(start / HOUR_MS) * HOUR_MS;
+  const to = Math.max(Math.ceil(end / HOUR_MS) * HOUR_MS, from + minHours * HOUR_MS);
+  return { start: from, end: to };
+}
+
+/** The whole hours inside a window (their instants), for an hour axis. */
+export function hoursOf(window: Span): number[] {
+  const first = Math.ceil(window.start / HOUR_MS) * HOUR_MS;
+  const out: number[] = [];
+  for (let at = first; at < window.end; at += HOUR_MS) out.push(at);
+  return out;
+}
+
+/** MIME types of an iCalendar part (RFC 5545 §8.1; `application/ics` from older clients). */
+const ICALENDAR_TYPE = /^(text\/calendar|application\/ics)\s*(;|$)/i;
+
+/**
+ * Whether the reader's attachment list leaves a part out: the iCalendar
+ * part of a message whose invitation card shows it (`carded`; R7 S10, ADR
+ * 0246: UI only, no core flag). Other messages keep their `.ics` files.
+ */
+export function shownByInvitationCard(carded: boolean, attachment: { mime: string }): boolean {
+  return carded && ICALENDAR_TYPE.test(attachment.mime.trim());
+}

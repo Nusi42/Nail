@@ -44,6 +44,19 @@ export function useInvitation(messageId: MessageId | null, initial?: Invitation 
   });
 }
 
+/**
+ * Whether the reader shows an invitation card for the message (the card's
+ * own query, so no extra request): its iCalendar part is then no
+ * attachment of its own (R7 S10).
+ */
+export function useInvitationCard(message: {
+  id: MessageId;
+  invitation?: Invitation | null | undefined;
+}): boolean {
+  const query = useInvitation(message.id, message.invitation ?? null);
+  return query.data !== undefined && query.data !== null;
+}
+
 /** Free/busy of `attendees` in `[from, to)`. */
 export function useFreeBusy(
   attendees: readonly string[],

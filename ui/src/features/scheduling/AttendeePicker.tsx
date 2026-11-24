@@ -5,6 +5,9 @@
  * the free/busy timeline of everyone at the meeting's day with suggested
  * free slots (choosing one moves the meeting).
  *
+ * R7 (S11, ADR 0246): a summary line of who answered what; each role
+ * choice is named "Role of <name>" for screen readers only.
+ *
  * `FindTime` (widget `freebusy-timeline`, dialog `scheduling-find-time`)
  * uses the same picker on its own and then opens the PIM event editor with
  * the people and the chosen time.
@@ -19,7 +22,8 @@ import type {
   IdentityId,
   PimTime,
 } from "../../api/generated";
-import { useT } from "../../i18n/I18nProvider";
+import { useLocale, useT } from "../../i18n/I18nProvider";
+import { peopleSummary } from "../pim/eventLook";
 import { optionNumber, optionString, type WidgetProps } from "../../layout/widgetRegistry";
 import { useIdentities } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
@@ -108,6 +112,7 @@ export function AttendeePicker({
   tz = localZone(),
 }: AttendeePickerProps) {
   const t = useT();
+  const locale = useLocale();
   const id = useId();
   const mine = useMyAddresses();
   const [email, setEmail] = useState("");
@@ -167,7 +172,17 @@ export function AttendeePicker({
   return (
     <fieldset data-part="scheduling.attendees">
       <legend data-part="form.section.title">{t("scheduling-attendees-legend")}</legend>
-      {value.length === 0 && <p data-part="scheduling.hint">{t("scheduling-attendees-none")}</p>}
+      {value.length === 0 ? (
+        <p data-part="scheduling.hint">{t("scheduling-attendees-none")}</p>
+      ) : (
+        <p data-part="scheduling.people-summary">
+          {peopleSummary(
+            t,
+            locale,
+            value.map((a) => a.status),
+          )}
+        </p>
+      )}
       <ul data-part="scheduling.attendee-list">
         {value.map((attendee, index) => (
           <li
@@ -187,12 +202,13 @@ export function AttendeePicker({
             <span data-part="scheduling.attendee.status">
               {t(`pim-partstat-${attendee.status}`)}
             </span>
-            <label data-part="form.label" htmlFor={`${id}-role-${String(index)}`}>
-              {t("scheduling-attendee-role", { email: attendee.email })}
+            <label data-part="pim.look.hidden" htmlFor={`${id}-role-${String(index)}`}>
+              {t("pim-look-fb-role", { name: nonEmpty(attendee.name) ?? attendee.email })}
             </label>
             <select
               id={`${id}-role-${String(index)}`}
               data-part="form.select"
+              data-width="content"
               value={attendee.role}
               onChange={(e) => {
                 onChange(

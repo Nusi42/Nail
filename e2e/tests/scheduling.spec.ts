@@ -1,13 +1,17 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { nailPerTest, control } from "../support/nail";
-import {
-  showView,
-  toolbarAction,
-  messageRows,
-  openMail,
-  DEMO_MULTI_CONVERSATIONS,
-} from "../support/views";
+import { showView, toolbarAction, openMail, DEMO_MULTI_CONVERSATIONS } from "../support/views";
 import { eventChip, icalTime, openCalendar } from "../support/calendar";
+import { startNewEvent } from "../support/eventEditor";
+import {
+  deliver as deliverTo,
+  imip,
+  openCard,
+  repliedWith,
+  request,
+  smtp as smtpOf,
+  WORK,
+} from "../support/invitations";
 
 /**
  * Wave M3b (ADR 0070) against `nail serve --seed demo-multi`: iMIP
@@ -19,91 +23,9 @@ import { eventChip, icalTime, openCalendar } from "../support/calendar";
 
 const server = nailPerTest({ seed: "demo-multi" });
 
-const WORK = "ada@work.example";
-const GRACE = "Grace Hopper <grace@example.org>";
-
 const openApp = (page: Page) => openMail(page, server.url, { rows: DEMO_MULTI_CONVERSATIONS });
-
-interface Imip {
-  subject: string;
-  method: string;
-  uid: string;
-  sequence?: number;
-  stamp?: string;
-  lines: string[];
-  from?: string;
-}
-
-/** An iMIP mail to the work account. */
-function imip(m: Imip): string {
-  return [
-    `From: ${m.from ?? GRACE}`,
-    `To: ${WORK}`,
-    `Subject: ${m.subject}`,
-    "Date: Thu, 01 Oct 2026 08:00:00 +0000",
-    `Message-ID: <${m.uid}-${m.method}-${String(m.sequence ?? 0)}@example.org>`,
-    "MIME-Version: 1.0",
-    `Content-Type: text/calendar; method=${m.method}; charset=utf-8`,
-    "",
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Other client//EN",
-    `METHOD:${m.method}`,
-    "BEGIN:VEVENT",
-    `UID:${m.uid}`,
-    `DTSTAMP:${m.stamp ?? "20261001T080000Z"}`,
-    `SEQUENCE:${String(m.sequence ?? 0)}`,
-    ...m.lines,
-    "END:VEVENT",
-    "END:VCALENDAR",
-    "",
-  ].join("\r\n");
-}
-
-function request(uid: string, title: string, days: number, sequence = 0, stamp?: string): string {
-  return imip({
-    subject: title,
-    method: "REQUEST",
-    uid,
-    sequence,
-    ...(stamp ? { stamp } : {}),
-    lines: [
-      `DTSTART:${icalTime(days, 9)}`,
-      `DTEND:${icalTime(days, 10)}`,
-      `SUMMARY:${title}`,
-      "LOCATION:Room 1",
-      "ORGANIZER;CN=Grace Hopper:mailto:grace@example.org",
-      `ATTENDEE;CN=Ada;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${WORK}`,
-      "ATTENDEE;CN=Grace Hopper;PARTSTAT=ACCEPTED:mailto:grace@example.org",
-    ],
-  });
-}
-
-async function deliver(page: Page, raw: string, subject: string): Promise<Locator> {
-  await control(server, "imap-deliver", { raw });
-  // Case-sensitive: a string `hasText` ignores case, and "Retro" also
-  // matched a demo message's "retrouve" whenever its row was rendered.
-  const literal = subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const row = messageRows(page).filter({ hasText: new RegExp(literal) });
-  await expect(row).toHaveCount(1, { timeout: 20_000 });
-  return row;
-}
-
-/** Opens a message and returns its invitation card. */
-async function openCard(page: Page, row: Locator, title: string): Promise<Locator> {
-  await row.click();
-  const card = page.getByRole("region", { name: `Invitation: ${title}` });
-  await expect(card).toBeVisible();
-  return card;
-}
-
-interface SmtpMessage {
-  from: string;
-  to: string[];
-  data: string;
-}
-
-const smtp = () => control<SmtpMessage[]>(server, "smtp-messages");
+const deliver = (page: Page, raw: string, subject: string) => deliverTo(server, page, raw, subject);
+const smtp = () => smtpOf(server);
 
 test("an invitation is accepted: the reply goes out and the event is in the calendar", async ({
   page,
@@ -124,18 +46,7 @@ test("an invitation is accepted: the reply goes out and the event is in the cale
     .click();
   await expect(card.getByText("Accepted. Your answer is on its way.")).toBeVisible();
   // The REPLY leaves through the outbox (undo-send delay) to the organizer.
-  await expect
-    .poll(
-      async () =>
-        (await smtp()).some(
-          (m) =>
-            m.to.includes("grace@example.org") &&
-            m.data.includes("METHOD:REPLY") &&
-            m.data.includes("PARTSTAT=ACCEPTED"),
-        ),
-      { timeout: 30_000 },
-    )
-    .toBe(true);
+  await expect.poll(() => repliedWith(server, "ACCEPTED"), { timeout: 30_000 }).toBe(true);
   const calendar = await openCalendar(page, { agenda: true });
   await expect(eventChip(calendar, "Atlas kickoff")).toBeVisible();
 });
@@ -180,16 +91,9 @@ test("an organizer's update changes the event and a cancellation removes it", as
 });
 
 /** Opens Nail's agenda and a new event titled `title`; the calendar and the event editor. */
-async function newEvent(
-  page: Page,
-  title: string,
-): Promise<{ calendar: Locator; editor: Locator }> {
+async function newEvent(page: Page, title: string) {
   await openApp(page);
-  const calendar = await openCalendar(page, { agenda: true });
-  await calendar.getByRole("button", { name: "New event" }).click();
-  const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title", { exact: true }).fill(title);
-  return { calendar, editor };
+  return startNewEvent(page, title);
 }
 
 test("a counter-proposal is accepted by the organizer and the update goes out", async ({

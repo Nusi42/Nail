@@ -94,8 +94,6 @@ invitation-conflicts-title =
         [one] This overlaps one event in your calendar:
        *[other] This overlaps { $count } events in your calendar:
     }
-invitation-conflict-all-day = all day
-invitation-conflict-tentative = (maybe)
 invitation-transport-server = Your calendar server sends your answer to the organizer.
 invitation-action-accept = { mcp-tool-value-accept }
 invitation-action-tentative = { common-maybe }
@@ -162,7 +160,6 @@ scheduling-forward-comment = Note (optional)
 scheduling-attendees-legend = People and rooms
 scheduling-attendees-none = No one is invited yet.
 scheduling-attendee-me = (you)
-scheduling-attendee-role = Role of { $email }
 scheduling-attendee-invalid = This address is not valid.
 scheduling-kind-individual = { common-person }
 scheduling-kind-room = { invitation-attendee-room }
@@ -191,7 +188,6 @@ freebusy-meeting-busy =
         [one] Busy at the chosen time: { $names }
        *[other] { $count } people are busy at the chosen time: { $names }
     }
-freebusy-suggestions = Times when everyone is free
 freebusy-suggestions-none = No free time for everyone on this day.
 freebusy-suggestion-pick = Move the meeting to { $day }, { $time }
 

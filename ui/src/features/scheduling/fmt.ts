@@ -7,7 +7,7 @@ import type { PimTime, Recurrence } from "../../api/generated";
 import type { DateFormatter } from "../../i18n/format";
 import { formatClock, formatDay, formatPimTime, weekdayName } from "../pim/fmt";
 import { describe, simpleOf } from "../pim/recurrence";
-import { dateString, instantIn, pimTimeIn, splitPimTime } from "../pim/time";
+import { dateString, pimTimeIn, splitPimTime } from "../pim/time";
 
 type T = (id: string, args?: MessageArgs) => string;
 
@@ -50,26 +50,6 @@ export function timeRangeText(
 /** "14:30 – 15:30" of two instants (RFC 3339) in a zone. */
 export function clockRange(t: T, format: DateFormatter, start: string, end: string, tz: string) {
   return t("common-time-range", {
-    start: formatClock(format, start, tz),
-    end: formatClock(format, end, tz),
-  });
-}
-
-/** "Mon 2 Oct, 14:30 – 15:30" of two instants (RFC 3339) in a zone. */
-export function instantRangeText(
-  t: T,
-  format: DateFormatter,
-  start: string,
-  end: string,
-  tz: string,
-): string {
-  const day = instantIn(start, tz);
-  return t("scheduling-time-same-day", {
-    day: formatDay(format, splitPimTime({ type: "date", date: dateString(day) }).day, {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    }),
     start: formatClock(format, start, tz),
     end: formatClock(format, end, tz),
   });

@@ -36,7 +36,10 @@ import { Icon } from "../../widgets/Icon";
 import { Problem } from "../pim/common";
 import { EVENT_DIALOG } from "../pim/names";
 import { pimStoreFor } from "../pim/store";
-import { localZone, splitPimTime, todayIn } from "../pim/time";
+import { localZone, pimTimeIn, splitPimTime, todayIn, utcString } from "../pim/time";
+import { formatClock } from "../pim/fmt";
+import { PimMenu } from "../pim/PimMenu";
+import { useGeometry } from "../../theme/ThemeProvider";
 import {
   AnswerForm,
   ForwardForm,
@@ -45,15 +48,35 @@ import {
   ScopeChoice,
   type AnswerScope,
 } from "./Answer";
-import { instantRangeText, recurrenceText, timeRangeText } from "./fmt";
-import { answerCounts, canRespond, OTHER_ACTIONS, RESPONSES } from "./model";
+import { clockRange, recurrenceText, timeRangeText } from "./fmt";
+import {
+  answerCounts,
+  canRespond,
+  hoursOf,
+  isMine,
+  ms,
+  OTHER_ACTIONS,
+  placeSpan,
+  RESPONSES,
+  stripWindow,
+  type Span,
+} from "./model";
 import {
   scheduleWrite,
   useInvitation,
+  useMyAddresses,
   useSchedulingSettings,
   type SchedulingWrite,
 } from "./queries";
 import { nonEmpty } from "../../text/empty";
+
+/** Secondary actions the card keeps in its "More" menu (R7 S10). */
+const MENU_ACTIONS: readonly InvitationAction[] = [
+  "forward",
+  "open-event",
+  "refresh",
+  "send-current",
+];
 
 /** Issues that warn about a forged sender or a hijacked event (shown first, as alerts). */
 const SPOOFING = new Set([
@@ -120,6 +143,7 @@ function InvitationView({
   const queryClient = useQueryClient();
   const store = useUiStoreApi();
   const settings = useSchedulingSettings();
+  const myAddresses = useMyAddresses();
   const tz = localZone();
   const [mode, setMode] = useState<Mode>("idle");
   const [busy, setBusy] = useState(false);
@@ -230,6 +254,11 @@ function InvitationView({
     : null;
   const counts = answerCounts(invitation.attendees.map((a) => a.status));
   const counter = invitation.counter;
+  const answering = canRespond(invitation);
+  const sender =
+    invitation.method === "reply" || invitation.method === "counter"
+      ? null
+      : (nonEmpty(organizerText) ?? null);
 
   let details: ReactNode = null;
   if (fields) {
@@ -279,6 +308,43 @@ function InvitationView({
     );
   }
 
+  // R7 S10: "Propose a new time" beside the answer, the rest in "More".
+  const menuActions = MENU_ACTIONS.filter(has);
+  const buttonActions = OTHER_ACTIONS.filter((a) => has(a) && !MENU_ACTIONS.includes(a));
+  const secondary = (
+    <>
+      {has("propose-new-time") && fields && (
+        <button
+          type="button"
+          data-part="form.button"
+          data-variant="ghost"
+          data-action="propose-new-time"
+          disabled={busy}
+          onClick={() => {
+            setMode("propose");
+          }}
+        >
+          {t("invitation-action-propose-new-time")}
+        </button>
+      )}
+      {menuActions.length > 0 && (
+        <PimMenu
+          label={t("common-more")}
+          icon="chevron-down"
+          field="card-more"
+          part="invitation.more"
+          showLabel
+          entries={menuActions.map((action) => ({
+            type: "item" as const,
+            id: action,
+            label: t(`invitation-action-${action}`),
+            onSelect: () => void other(action),
+          }))}
+        />
+      )}
+    </>
+  );
+
   return (
     <section
       data-part="invitation"
@@ -296,6 +362,9 @@ function InvitationView({
             role: invitation.role,
           })}
         </p>
+        {sender && (
+          <p data-part="invitation.from">{t("pim-look-invitation-from", { name: sender })}</p>
+        )}
         <h2 data-part="invitation.title">{title}</h2>
         <p data-part="invitation.state" data-state={invitation.state}>
           {t(`invitation-state-${invitation.state}`, { method: invitation.method })}
@@ -369,16 +438,47 @@ function InvitationView({
         </figure>
       )}
 
+      {showConflicts && invitation.role === "attendee" && fields && answering && (
+        <DayStrip invitation={invitation} title={title} tz={tz} />
+      )}
+
+      {invitation.transport === "server" && answering && (
+        <p data-part="invitation.transport">{t("invitation-transport-server")}</p>
+      )}
+
+      {answering && mode === "idle" && (
+        <>
+          {canPickOccurrence && (
+            <ScopeChoice scope={scope} onScope={setScope} day={day} onDay={setDay} tz={tz} />
+          )}
+          <AnswerForm
+            current={invitation.my_status}
+            available={RESPONSES.filter((r) => has(r))}
+            organizer={organizerText}
+            confirm={settings.data?.confirm_replies ?? false}
+            busy={busy}
+            onAnswer={answer}
+          >
+            {secondary}
+          </AnswerForm>
+        </>
+      )}
+
       {invitation.attendees.length > 0 && invitation.method !== "reply" && (
         <details data-part="invitation.attendees" open={attendeesOpen || undefined}>
           <summary data-part="invitation.attendees.summary">
-            {t("invitation-attendees-summary", {
-              count: invitation.attendees.length,
-              accepted: counts.accepted,
-              declined: counts.declined,
-              tentative: counts.tentative,
-              pending: counts["needs-action"],
-            })}
+            <span data-part="invitation.attendees.count">
+              {t("invitation-attendees-summary", {
+                count: invitation.attendees.length,
+                accepted: counts.accepted,
+                declined: counts.declined,
+                tentative: counts.tentative,
+                pending: counts["needs-action"],
+              })}
+            </span>
+            <span data-part="invitation.attendees.line">
+              {attendeeLine(t, format.locale, invitation, myAddresses)}
+            </span>
           </summary>
           <ul data-part="invitation.attendee-list">
             {invitation.attendees.map((a) => (
@@ -402,63 +502,6 @@ function InvitationView({
             ))}
           </ul>
         </details>
-      )}
-
-      {showConflicts && invitation.role === "attendee" && fields && canRespond(invitation) && (
-        <div data-part="invitation.conflicts">
-          {invitation.conflicts.length === 0 ? (
-            <p data-part="invitation.conflicts.none">{t("invitation-conflicts-none")}</p>
-          ) : (
-            <>
-              <p data-part="invitation.conflicts.title">
-                {t("invitation-conflicts-title", { count: invitation.conflicts.length })}
-              </p>
-              <ul data-part="invitation.conflict-list">
-                {invitation.conflicts.map((c) => (
-                  <li
-                    key={`${c.event_id}-${c.start_utc}`}
-                    data-part="invitation.conflict"
-                    data-state={c.tentative ? "tentative" : undefined}
-                  >
-                    <span data-part="invitation.conflict.title">
-                      {c.title || t("common-no-title")}
-                    </span>
-                    <span data-part="invitation.conflict.time">
-                      {c.all_day
-                        ? t("invitation-conflict-all-day")
-                        : instantRangeText(t, format, c.start_utc, c.end_utc, tz)}
-                    </span>
-                    {c.tentative && (
-                      <span data-part="invitation.conflict.tentative">
-                        {t("invitation-conflict-tentative")}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
-
-      {invitation.transport === "server" && canRespond(invitation) && (
-        <p data-part="invitation.transport">{t("invitation-transport-server")}</p>
-      )}
-
-      {canRespond(invitation) && mode === "idle" && (
-        <>
-          {canPickOccurrence && (
-            <ScopeChoice scope={scope} onScope={setScope} day={day} onDay={setDay} tz={tz} />
-          )}
-          <AnswerForm
-            current={invitation.my_status}
-            available={RESPONSES.filter((r) => has(r))}
-            organizer={organizerText}
-            confirm={settings.data?.confirm_replies ?? false}
-            busy={busy}
-            onAnswer={answer}
-          />
-        </>
       )}
 
       {mode === "propose" && fields && (
@@ -501,22 +544,9 @@ function InvitationView({
         />
       )}
 
-      {mode === "idle" && (
+      {mode === "idle" && (buttonActions.length > 0 || (!answering && menuActions.length > 0)) && (
         <div data-part="invitation.actions">
-          {has("propose-new-time") && fields && (
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="propose-new-time"
-              disabled={busy}
-              onClick={() => {
-                setMode("propose");
-              }}
-            >
-              {t("invitation-action-propose-new-time")}
-            </button>
-          )}
-          {OTHER_ACTIONS.filter(has).map((action) => (
+          {buttonActions.map((action) => (
             <button
               key={action}
               type="button"
@@ -535,6 +565,7 @@ function InvitationView({
               {t(`invitation-action-${action}`)}
             </button>
           ))}
+          {!answering && secondary}
         </div>
       )}
 
@@ -543,6 +574,167 @@ function InvitationView({
         {done ? t(done.id, done.args) : ""}
       </p>
     </section>
+  );
+}
+
+/**
+ * "Grace Hopper (organizer) accepted, Bob maybe, you not answered": every
+ * attendee with their answer on one line (R7 S10).
+ */
+function attendeeLine(
+  t: ReturnType<typeof useT>,
+  locale: string,
+  invitation: Invitation,
+  mine: readonly string[],
+): string {
+  const organizer = invitation.organizer?.email.toLowerCase() ?? null;
+  const items = invitation.attendees.map((a) =>
+    t("pim-look-attendee", {
+      name: isMine(a.email, mine) ? t("pim-look-person-you") : (nonEmpty(a.name) ?? a.email),
+      organizer: a.email.toLowerCase() === organizer ? "yes" : "no",
+      status: t(`pim-look-status-${a.status}`),
+    }),
+  );
+  return new Intl.ListFormat(locale, { type: "unit", style: "short" }).format(items);
+}
+
+/**
+ * The mini day strip (R7 S10): the invitation against what it overlaps in
+ * the user's calendars on an hour axis, all-day overlaps as one line. Each
+ * block is a list item with its title and (visually hidden) time, so a
+ * screen reader reads the same overlap the strip shows.
+ */
+function DayStrip({
+  invitation,
+  title,
+  tz,
+}: {
+  invitation: Invitation;
+  title: string;
+  tz: string;
+}) {
+  const t = useT();
+  const format = useDateFormat();
+  const fields = invitation.fields;
+  if (!fields) return null;
+  const allDay = invitation.conflicts.filter((c) => c.all_day);
+  const timed = invitation.conflicts.filter((c) => !c.all_day);
+  const titleOf = (c: { title: string }) => nonEmpty(c.title) ?? t("common-no-title");
+  const heading =
+    invitation.conflicts.length === 0 ? (
+      <p data-part="invitation.conflicts.none">{t("invitation-conflicts-none")}</p>
+    ) : (
+      <p data-part="invitation.conflicts.title">
+        {t("invitation-conflicts-title", { count: invitation.conflicts.length })}
+      </p>
+    );
+  const allDayLine =
+    allDay.length > 0 ? (
+      <p data-part="invitation.strip.all-day">
+        {t("pim-look-strip-all-day", { titles: allDay.map(titleOf).join(", ") })}
+      </p>
+    ) : null;
+  if (fields.start.type === "date") {
+    return (
+      <div data-part="invitation.conflicts">
+        {heading}
+        {allDayLine}
+      </div>
+    );
+  }
+  const span: Span = {
+    start: pimTimeIn(fields.start, tz).toDate().getTime(),
+    end: pimTimeIn(fields.end, tz).toDate().getTime(),
+  };
+  const rows = [
+    ...timed.map((c) => ({
+      key: `${c.event_id}-${c.start_utc}`,
+      state: c.tentative ? "tentative" : "busy",
+      title: titleOf(c),
+      span: { start: ms(c.start_utc), end: ms(c.end_utc) },
+    })),
+    { key: "invitation", state: "invitation", title, span },
+  ];
+  const window = stripWindow(
+    span,
+    rows.map((r) => r.span),
+  );
+  return (
+    <div data-part="invitation.conflicts">
+      {heading}
+      <div data-part="invitation.strip">
+        <div data-part="invitation.strip.axis" aria-hidden="true">
+          {hoursOf(window).map((at) => (
+            <StripBlock
+              key={at}
+              id={stripGeom(invitation.message_id, "hour", at)}
+              part="invitation.strip.hour"
+              span={{ start: at, end: window.end }}
+              window={window}
+            >
+              {formatClock(format, at, tz)}
+            </StripBlock>
+          ))}
+        </div>
+        <ul data-part="invitation.strip.lane" aria-label={t("pim-look-strip-label", { title })}>
+          {rows.map((row) => (
+            <StripBlock
+              key={row.key}
+              id={stripGeom(invitation.message_id, row.key)}
+              part="invitation.strip.block"
+              state={row.state}
+              span={row.span}
+              window={window}
+              item
+            >
+              <span data-part="invitation.strip.title">{row.title}</span>
+              <span data-part="invitation.strip.time">
+                {clockRange(t, format, utcString(row.span.start), utcString(row.span.end), tz)}
+              </span>
+            </StripBlock>
+          ))}
+        </ul>
+      </div>
+      {allDayLine}
+    </div>
+  );
+}
+
+function stripGeom(...parts: (string | number)[]): string {
+  return `inv-strip-${parts.join("-").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+/** One block of the strip, placed through a geometry rule (never inline styles). */
+function StripBlock({
+  id,
+  part,
+  span,
+  window,
+  state,
+  item = false,
+  children,
+}: {
+  id: string;
+  part: string;
+  span: Span;
+  window: Span;
+  state?: string;
+  item?: boolean;
+  children: ReactNode;
+}) {
+  const place = placeSpan(span, window) ?? { left: 0, width: 0 };
+  useGeometry(id, {
+    left: `${String(Math.round(place.left * 10000) / 100)}%`,
+    width: `${String(Math.max(1, Math.round(place.width * 10000) / 100))}%`,
+  });
+  return item ? (
+    <li data-part={part} data-geom={id} data-state={state}>
+      {children}
+    </li>
+  ) : (
+    <span data-part={part} data-geom={id}>
+      {children}
+    </span>
   );
 }
 

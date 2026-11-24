@@ -10,8 +10,15 @@ import type { Attendee, CalendarEvent, PimTime } from "../../api/generated";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { pimStoreFor } from "../pim/store";
-import { localZone, makePimTime, todayIn } from "../pim/time";
-import { actions, AttendeePicker, dialogs, MeetingPanel, schedulingKeys } from ".";
+import { localZone, makePimTime, pimTimeIn, todayIn } from "../pim/time";
+import {
+  actions,
+  AttendeePicker,
+  dialogs,
+  FreeBusyTimeline,
+  MeetingPanel,
+  schedulingKeys,
+} from ".";
 import { newAttendee } from "./AttendeePicker";
 import { DEMO_INVITATIONS, seedSchedulingDemo } from "./mockSeed";
 import { CANCEL_DIALOG, FIND_TIME_DIALOG, SETTINGS_DIALOG } from "./names";
@@ -101,8 +108,67 @@ describe("attendee picker and free/busy timeline", () => {
     expect(start.type).toBe("zoned");
     expect(end.type).toBe("zoned");
     await waitFor(() =>
-      expect(screen.getByText("Everyone is free at the chosen time.")).toBeInTheDocument(),
+      // Linus shares no availability: "everyone" means everyone who shares it (R7 S11).
+      expect(
+        screen.getByText("Everyone with shared availability is free at the chosen time."),
+      ).toBeInTheDocument(),
     );
+    expect(screen.getByText("1 person shares no availability and is not counted.")).toBeVisible();
+    // The chosen time is not offered again, and "no free time" never shows beside "free".
+    expect(screen.queryByText(/no time on this day when everyone is free/)).toBeNull();
+    expect(screen.getByText("Other times when everyone is free:")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("slider", { name: /^Meeting time: / })).toBeInTheDocument(),
+    );
+  });
+
+  it("moves the chosen time with the frame's arrow keys (R7 S11)", async () => {
+    const user = userEvent.setup();
+    const env = setup();
+    const onTime = vi.fn();
+    renderWithProviders(
+      <Picker initial={[newAttendee("grace@navy.example", null)]} onTime={onTime} />,
+      env,
+    );
+    const frame = await screen.findByRole("slider", { name: /^Meeting time: / });
+    frame.focus();
+    await user.keyboard("{ArrowRight}");
+    const [start] = onTime.mock.calls.at(-1) as [PimTime, PimTime];
+    expect(start).toMatchObject({ local: expect.stringMatching(/T14:45:00$/) as unknown });
+    await user.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+    const [earlier] = onTime.mock.calls.at(-1) as [PimTime, PimTime];
+    expect(earlier).toMatchObject({ local: expect.stringMatching(/T13:45:00$/) as unknown });
+  });
+
+  it("says once that nobody's free time lines up, and offers the next day", async () => {
+    const user = userEvent.setup();
+    const env = setup();
+    const onDay = vi.fn();
+    const start = pimTimeIn(at(14), tz).toDate().getTime();
+    renderWithProviders(
+      <FreeBusyTimeline
+        nodeKey="busy-day"
+        people={[{ email: "katherine@nasa.example", name: "Katherine Johnson" }]}
+        day={tomorrow}
+        onDay={onDay}
+        meeting={{ start, end: start + 3_600_000 }}
+        durationMinutes={60}
+        tz={tz}
+        hourStart={14}
+        hourEnd={15}
+        onPick={() => undefined}
+      />,
+      env,
+    );
+    expect(
+      await screen.findByText(/^Busy at the chosen time: Katherine Johnson/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("There is no time on this day when everyone is free."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/free at the chosen time/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Try the next day" }));
+    expect(onDay).toHaveBeenCalledWith(tomorrow.add({ days: 1 }));
   });
 
   it("steps through days and asks the core again", async () => {
@@ -140,7 +206,13 @@ describe("attendee picker and free/busy timeline", () => {
     await user.selectOptions(screen.getByLabelText("Kind"), "room");
     await user.click(screen.getByRole("button", { name: "Add" }));
     expect(screen.getAllByText("room-4@work.example").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Role of room-4@work.example")).toHaveValue("non-participant");
+    // The role's label is for screen readers only (R7 S11).
+    const role = screen.getByLabelText("Role of room-4@work.example");
+    expect(role).toHaveValue("non-participant");
+    expect(document.querySelector(`label[for="${role.id}"]`)).toHaveAttribute(
+      "data-part",
+      "pim.look.hidden",
+    );
     await user.click(screen.getByRole("button", { name: "Remove room-4@work.example" }));
     expect(screen.getByText("No one is invited yet.")).toBeInTheDocument();
   });

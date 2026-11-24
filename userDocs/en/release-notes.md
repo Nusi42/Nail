@@ -30,6 +30,30 @@ new events drawn straight onto the week.
   working day, and the week number shows when you switch it on.
 - **Tasks in the calendar** — tasks due on a shown day appear in the all-day
   row with a check box; drag a task onto a time to block it.
+- **A quick look at an event** — one click on an event shows it beside the
+  week: when (with its length and time zone), where, the calendar, who is
+  invited and what they answered, and **Join** for a call. **Edit**
+  (**Enter**) opens the editor, **Delete** deletes, **Esc** closes it, and an
+  invitation is answered right there with **Accept**, **Maybe** or
+  **Decline** — an unanswered one also says what it overlaps. Organizers
+  get **Send update**.
+- **A shorter event editor** — the title in a large field, the time on one
+  line with the day as text ("Fri, Nov 27, 2026") and the length, small
+  choices for repeat, reminder, calendar, busy / free and call link, then
+  the place, the people and the notes; the rest waits behind **More
+  options**.
+- **Invitations in the reader read faster** — one answer control with
+  Accept first, a small strip of the day that shows what the invitation
+  overlaps, everyone's answer on one line and the other actions in a
+  **More** menu. The calendar part of the message no longer shows as an
+  "Unnamed attachment".
+- **Finding a time** — a lane per person with where their availability
+  comes from, the meeting as a frame you drag (or move with the arrow keys)
+  and suggested times as buttons; the texts no longer contradict each
+  other.
+- **Reminders say how soon** — "in 30 minutes", with the calendar's name
+  and colour; **Dismiss** comes first and snoozing is one button with a
+  menu of other times.
 
 ### Corrected in 0.8.11
 

@@ -7,15 +7,17 @@
  * desktop shell's OS notification and the remote UI's Web Notification
  * come from the core's `NotificationRequested` (triage feature).
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Reminder } from "../../api/generated";
-import { useDateFormat } from "../../i18n/format";
+import { useDateFormat, type DateFormatter } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
 import { useNow } from "../../state/clock";
-import { Problem, problemOf, useChangeContext } from "./common";
+import { colorOf, geomId, Problem, problemOf, Swatch, useChangeContext } from "./common";
+import { lengthText } from "./eventLook";
 import { formatInstant } from "./fmt";
 import { EVENT_DIALOG, TASK_DIALOG } from "./names";
-import { dismissReminders, snoozeReminders, useReminders } from "./queries";
+import { PimMenu } from "./PimMenu";
+import { dismissReminders, snoozeReminders, useCalendars, useReminders } from "./queries";
 import { usePim, type PimToast } from "./store";
 import { instantMs, localZone, todayIn, toZoned, utcString } from "./time";
 
@@ -52,17 +54,48 @@ export function ReminderStartup() {
   return null;
 }
 
+/** The snooze the split button's main part offers. */
+export const DEFAULT_SNOOZE: SnoozeChoice = "10";
+
+/** "10 minutes" / "Tomorrow morning": a snooze choice as text. */
+function snoozeText(t: ReturnType<typeof useT>, locale: string, choice: SnoozeChoice): string {
+  return choice === "tomorrow" ? t("pim-snooze-tomorrow") : lengthText(t, locale, Number(choice));
+}
+
+/**
+ * When a reminder's item starts, relative to now ("in 30 minutes", "now",
+ * "5 minutes ago"; all-day items "today" / "tomorrow"), `null` without a
+ * start.
+ */
+export function reminderWhen(
+  format: DateFormatter,
+  reminder: Reminder,
+  now: number,
+): string | null {
+  if (reminder.starts_at === null) return null;
+  return format.relative(new Date(instantMs(reminder.starts_at)), now);
+}
+
+/**
+ * A fired reminder (R7 C3, ADR 0246): the title with how soon it starts
+ * ("in 30 minutes"), the time and the calendar's name, the calendar's
+ * colour on the toast's edge, Dismiss as the primary action, snoozing as
+ * one split button (the main part snoozes for ten minutes, its menu offers
+ * the other times) and Open.
+ */
 function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" }> }) {
   const t = useT();
   const format = useDateFormat();
   const ctx = useChangeContext();
+  const calendars = useCalendars();
+  const now = useNow();
   const dismissToast = usePim((s) => s.dismissToast);
-  const select = useId();
-  const [choice, setChoice] = useState<SnoozeChoice>("10");
   const [problem, setProblem] = useState<ReturnType<typeof problemOf> | null>(null);
   const r = toast.reminder;
   const tz = localZone();
-  const when = r.starts_at
+  const calendar = calendars.data?.find((c) => c.id === r.calendar_id) ?? null;
+  const color = colorOf(calendars.data, r.calendar_id, null);
+  const time = r.starts_at
     ? r.all_day
       ? formatInstant(format, r.starts_at, tz, { dateStyle: "full" })
       : formatInstant(format, r.starts_at, tz, {
@@ -71,6 +104,12 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
           minute: "2-digit",
         })
     : null;
+  const relative = reminderWhen(format, r, now);
+  const calendarName = calendar?.settings.name ?? null;
+  const meta =
+    time !== null && calendarName !== null
+      ? t("pim-look-reminder-meta", { time, calendar: calendarName })
+      : (time ?? calendarName);
 
   const act = async (fn: () => Promise<unknown>) => {
     setProblem(null);
@@ -81,6 +120,8 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
       setProblem(problemOf(error));
     }
   };
+  const snooze = (choice: SnoozeChoice) =>
+    void act(() => snoozeReminders(ctx, [r.id], snoozeUntil(choice, Date.now(), tz)));
 
   const open = () => {
     const pim = ctx.pim.getState();
@@ -106,47 +147,19 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
         role="group"
         aria-label={t("pim-reminder-label", { title: r.title })}
       >
-        <p data-part="pim.toast.title" role="alert">
-          {r.target.type === "task"
-            ? t("pim-reminder-task", { title: r.title })
-            : t("pim-reminder-event", { title: r.title })}
-        </p>
-        {when && <p data-part="pim.toast.time">{t("pim-reminder-when", { time: when })}</p>}
+        <Swatch geom={geomId("reminder", r.id, color)} color={color} part="pim.reminder.edge" />
+        <div data-part="pim.reminder.head">
+          <p data-part="pim.toast.title" role="alert">
+            {r.target.type === "task"
+              ? t("pim-reminder-task", { title: r.title })
+              : t("pim-reminder-event", { title: r.title })}
+          </p>
+          {relative && <span data-part="pim.reminder.when">{relative}</span>}
+        </div>
+        {meta && <p data-part="pim.reminder.meta">{meta}</p>}
         {r.location && <p data-part="pim.toast.location">{r.location}</p>}
         <Problem message={problem} />
-        <div data-part="pim.toast.actions">
-          <button type="button" data-part="form.button" onClick={open}>
-            {t("common-open")}
-          </button>
-          <label data-part="form.label" htmlFor={select}>
-            {t("pim-reminder-snooze-for")}
-          </label>
-          <select
-            id={select}
-            data-part="form.select"
-            value={choice}
-            onChange={(e) => {
-              setChoice(e.target.value as SnoozeChoice);
-            }}
-          >
-            {SNOOZE_CHOICES.map((c) => (
-              <option key={c} value={c}>
-                {c === "tomorrow"
-                  ? t("pim-snooze-tomorrow")
-                  : t("pim-snooze-minutes", { minutes: Number(c) })}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="snooze"
-            onClick={() =>
-              void act(() => snoozeReminders(ctx, [r.id], snoozeUntil(choice, Date.now(), tz)))
-            }
-          >
-            {t("common-snooze")}
-          </button>
+        <div data-part="pim.reminder.actions">
           <button
             type="button"
             data-part="form.button"
@@ -155,6 +168,41 @@ function ReminderToast({ toast }: { toast: Extract<PimToast, { kind: "reminder" 
             onClick={() => void act(() => dismissReminders(ctx, [r.id]))}
           >
             {t("common-dismiss")}
+          </button>
+          <div data-part="pim.reminder.split" role="group" aria-label={t("common-snooze")}>
+            <button
+              type="button"
+              data-part="form.button"
+              data-action="snooze"
+              onClick={() => {
+                snooze(DEFAULT_SNOOZE);
+              }}
+            >
+              {t("pim-look-snooze", { length: snoozeText(t, format.locale, DEFAULT_SNOOZE) })}
+            </button>
+            <PimMenu
+              label={t("pim-look-snooze-more")}
+              icon="chevron-down"
+              field="reminder-snooze"
+              part="pim.reminder.more"
+              entries={SNOOZE_CHOICES.map((choice) => ({
+                type: "item" as const,
+                id: choice,
+                label: snoozeText(t, format.locale, choice),
+                onSelect: () => {
+                  snooze(choice);
+                },
+              }))}
+            />
+          </div>
+          <button
+            type="button"
+            data-part="form.button"
+            data-action="open"
+            data-variant="ghost"
+            onClick={open}
+          >
+            {t("common-open")}
           </button>
         </div>
       </div>
