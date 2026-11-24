@@ -1,4 +1,4 @@
-# 0247 — R7 quick look, compact editor, invitation card, scheduling lanes, reminder toast
+# 0248 — R7 quick look, compact editor, invitation card, scheduling lanes, reminder toast
 
 Status: accepted (2026-11-24)
 

@@ -443,7 +443,7 @@
     ],
     "calendar": [
       {
-        "min_width": null,
+        "min_width": 900,
         "max_width": null,
         "root": {
           "type": "stack",
@@ -528,6 +528,45 @@
                   "source": null
                 }
               ]
+            }
+          ]
+        }
+      },
+      {
+        "min_width": null,
+        "max_width": 899,
+        "root": {
+          "type": "stack",
+          "id": "calendar-root",
+          "label": null,
+          "sizes": [
+            "auto",
+            "1fr"
+          ],
+          "children": [
+            {
+              "type": "widget",
+              "id": "calendar-toolbar",
+              "label": "@pim.toolbar.calendar",
+              "kind": "toolbar",
+              "options": {
+                "toolbar": "calendar"
+              },
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "calendar-main",
+              "label": null,
+              "kind": "calendar",
+              "options": {
+                "scroll-to": 8,
+                "view": "week",
+                "views": "day week month year agenda free-time"
+              },
+              "rows": [],
+              "source": null
             }
           ]
         }

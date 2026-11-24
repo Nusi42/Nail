@@ -1,4 +1,4 @@
-# 0247 — R7 calendar views and shell
+# 0249 — R7 calendar views and shell
 
 Status: accepted (2026-11-24)
 

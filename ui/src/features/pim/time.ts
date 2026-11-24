@@ -295,11 +295,6 @@ export interface ViewRange {
   count: number;
 }
 
-/** The first day of the week of `day`: on `first` when given, else as the locale says. */
-function weekStart(day: CalendarDate, locale: string, first: Weekday | null | undefined) {
-  return first ? startOfWeek(day, locale, DAY_OF_WEEK[first]) : startOfWeek(day, locale);
-}
-
 export function viewRange(
   view: ViewKind,
   anchor: CalendarDate,
@@ -313,7 +308,7 @@ export function viewRange(
     case "agenda":
       return { start: anchor, count: Math.max(1, options.days) };
     case "week":
-      return { start: weekStart(anchor, locale, options.weekStart), count: 7 };
+      return { start: startOfWeekFor(anchor, locale, options.weekStart), count: 7 };
     case "work-week":
       return {
         start: startOfWeek(anchor, locale, DAY_OF_WEEK[options.workWeekStart]),
@@ -322,7 +317,7 @@ export function viewRange(
     case "free-time":
       return workingDaysFrom(anchor, locale, Math.max(1, options.days));
     case "month": {
-      const first = weekStart(startOfMonth(anchor), locale, options.weekStart);
+      const first = startOfWeekFor(startOfMonth(anchor), locale, options.weekStart);
       const last = endOfMonth(anchor);
       const days = last.compare(first) + 1;
       return { start: first, count: Math.ceil(days / 7) * 7 };
@@ -440,22 +435,26 @@ export function weeksOf(range: ViewRange): CalendarDate[][] {
   return weeks;
 }
 
-/** The first day of the week of `day` as the locale says. */
-export function startOfWeekFor(day: CalendarDate, locale: string): CalendarDate {
-  return startOfWeek(day, locale);
+/** The first day of the week of `day`: on `first` when given, else as the locale says. */
+export function startOfWeekFor(
+  day: CalendarDate,
+  locale: string,
+  first: Weekday | null = null,
+): CalendarDate {
+  return first ? startOfWeek(day, locale, DAY_OF_WEEK[first]) : startOfWeek(day, locale);
 }
 
 /**
  * The day a key moves to in a grid of days with a week per row: arrows by
  * a day or a week, Home / End to the week's first / last day, and with
  * `pages` PageUp / PageDown by a month (with Shift a year); `null` for any
- * other key.
+ * other key. Weeks start on `weekStart` when given, else as the locale says.
  */
 export function dayGridMove(
   key: string,
   focused: CalendarDate,
   locale: string,
-  options: { pages?: boolean; shift?: boolean } = {},
+  options: { pages?: boolean; shift?: boolean; weekStart?: Weekday | null } = {},
 ): CalendarDate | null {
   switch (key) {
     case "ArrowLeft":
@@ -467,9 +466,9 @@ export function dayGridMove(
     case "ArrowDown":
       return focused.add({ weeks: 1 });
     case "Home":
-      return startOfWeekFor(focused, locale);
+      return startOfWeekFor(focused, locale, options.weekStart);
     case "End":
-      return startOfWeekFor(focused, locale).add({ days: 6 });
+      return startOfWeekFor(focused, locale, options.weekStart).add({ days: 6 });
     case "PageUp":
       if (options.pages !== true) return null;
       return focused.add(options.shift === true ? { years: -1 } : { months: -1 });
@@ -481,9 +480,18 @@ export function dayGridMove(
   }
 }
 
-/** The days of one month as a grid of weeks starting as the locale says. */
-export function monthGrid(month: CalendarDate, locale: string): CalendarDate[][] {
-  return weeksOf(viewRange("month", startOfMonth(month), locale));
+/**
+ * The days of one month as a grid of weeks starting on `first` when given,
+ * else as the locale says.
+ */
+export function monthGrid(
+  month: CalendarDate,
+  locale: string,
+  first: Weekday | null = null,
+): CalendarDate[][] {
+  return weeksOf(
+    viewRange("month", startOfMonth(month), locale, { ...DEFAULT_VIEW_OPTIONS, weekStart: first }),
+  );
 }
 
 // ---------------------------------------------------------------------------

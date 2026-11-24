@@ -36,6 +36,7 @@ const CARDS = ["calendar.event", "calendar.chip"];
 /** Structure of the package's parts (selectors through `[data-part]` only). */
 export const GRID_BASE_CSS = `${p("calendar.gutter")} { position: relative; }
 ${p("calendar.now-label")} { position: absolute; inset-inline-end: 0; transform: translateY(-50%); pointer-events: none; white-space: nowrap; }
+${p("calendar.hour")}[data-state~="near-now"] { visibility: hidden; }
 ${ps("calendar.off-hours", "calendar.draft", "calendar.slot-range")} { position: absolute; box-sizing: border-box; pointer-events: none; }
 ${p("calendar.draft")} { z-index: ${DRAFT_LAYER}; overflow: hidden; }
 ${p("calendar.now")}[data-state~="today"]::before { content: ""; position: absolute; }
@@ -99,6 +100,6 @@ ${p("calendar.task")} {
 }
 ${p("calendar.task")}[data-state~="read-only"] { cursor: default; }
 ${p("calendar.task.check")} { margin: 0; accent-color: ${T.accent}; }
-${p("calendar.new-event")} { gap: ${T.sm}; font-family: ${T.fontUi}; font-size: ${T.body}; }
+${p("calendar.new-event")} { gap: ${T.sm}; }
 ${ps("calendar.new-event.when", "calendar.new-event.calendar")} { font-size: ${T.small}; color: ${T.muted}; }
 ${p("calendar.new-event.actions")} { gap: ${T.xs}; }`;

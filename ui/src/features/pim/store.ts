@@ -15,6 +15,7 @@ import type {
   EventInstance,
   LocalizedMessage,
   PimTime,
+  Recurrence,
   Reminder,
   TaskFields,
   TaskId,
@@ -40,6 +41,8 @@ export type EventEditorTarget =
       calendarId: CalendarId | null;
       /** Pre-filled fields ("create event from email"). */
       fields: EventFields | null;
+      /** A pre-filled repetition (quick add's "every Monday"); absent = none. */
+      recurrence?: Recurrence | null;
     }
   | {
       mode: "edit";

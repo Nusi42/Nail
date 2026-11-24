@@ -1,4 +1,4 @@
-# 0247 — Time grid: cascaded overlaps and drawing new events (R7 P1)
+# 0247 — Time grid: cascaded overlaps and drawing new events (R7)
 
 Status: accepted (2026-11-24)
 
@@ -42,8 +42,8 @@ editor.
 - **Event clicks:** `EventItem` opens the quick look on a click (and Enter
   / Space, which click a button) and the editor on a double-click, in every
   view that shows cards.
-- **Icons:** the bundled Lucide set has no "repeat" icon, so repeats show
-  `refresh-cw`; people `users`, reminders `bell`, read-only `lock`, an
+- **Icons:** repeats show `repeat` (bundled for this at integration, with
+  `video` for the editor's call link chip); people `users`, reminders `bell`, read-only `lock`, an
   unanswered invitation `circle-question-mark`. A theme may replace any of
   them by name.
 - **Working time:** working days get hatched stretches outside the working

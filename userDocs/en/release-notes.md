@@ -11,32 +11,60 @@ new events drawn straight onto the week.
 
 ### New in 0.8.11
 
+- **Every calendar in its own colour** — events get a stronger tint of their
+  calendar's colour with a solid edge, and the colour squares in the
+  calendar list are larger. A new or newly found calendar without a colour
+  gets one that no other calendar has yet, calendars that all showed the
+  same blue get distinct colours once, and colours set on the server
+  (CalDAV, Microsoft 365) are kept.
 - **Overlapping events you can read** — events that overlap cascade, each
   later one indented and on top, so every title shows; short events show on
   one line with their start time.
-- **Draw new events on the week** — drag on empty time to draw an event in
-  15-minute steps, type its title and press `Enter`; **More options** opens
-  the editor. A click starts an hour-long event at the 15-minute step under
-  the pointer; `Shift+↑` / `Shift+↓` and `Enter` do the same from the
-  keyboard.
-- **Today and now at a glance** — today's date in a filled circle, the now
-  line with a dot and the time beside the hours, under the events instead of
-  over their text.
-- **What an event card knows** — icons for repeats, people, reminders and
-  read-only events; free time hatched; unanswered invitations look
-  provisional and declined ones are struck through (or hidden).
-- **Working hours, weekends and week numbers** — time outside your working
-  hours is hatched, days off are tinted, the grid opens at the start of your
-  working day, and the week number shows when you switch it on.
-- **Tasks in the calendar** — tasks due on a shown day appear in the all-day
-  row with a check box; drag a task onto a time to block it.
 - **A quick look at an event** — one click on an event shows it beside the
   week: when (with its length and time zone), where, the calendar, who is
   invited and what they answered, and **Join** for a call. **Edit**
   (**Enter**) opens the editor, **Delete** deletes, **Esc** closes it, and an
   invitation is answered right there with **Accept**, **Maybe** or
   **Decline** — an unanswered one also says what it overlaps. Organizers
-  get **Send update**.
+  get **Send update**. A double-click opens the editor directly.
+- **Draw new events on the week** — drag on empty time to draw an event in
+  15-minute steps, type its title and press `Enter`; **More options** opens
+  the editor. A click starts an hour-long event at the 15-minute step under
+  the pointer; `Shift+↑` / `Shift+↓` and `Enter` do the same from the
+  keyboard.
+- **Type an event as a sentence** — type “Lunch with Bob tomorrow 12:30 at
+  Corner café”, “Yoga every Monday 7pm”, “Offsite Dec 4 all day” or “Sync
+  3-4pm” in the quick-add field under the calendar toolbar: chips show what
+  Nail understood (day, time, length, repetition, place), `Enter` adds the
+  event and `Tab` opens the editor with it filled in (English).
+- **Today and now at a glance** — today's date in a filled circle, the now
+  line with a dot and the time beside the hours, under the events instead of
+  over their text.
+- **What an event card knows** — icons for repeats, people, reminders and
+  read-only events; free time hatched. Nail knows your own answer to each
+  meeting, also when you answered from another of your addresses:
+  unanswered invitations look provisional, and declined ones are struck
+  through (or hidden).
+- **Working hours, weekends and week numbers** — time outside your working
+  hours is hatched, days off are tinted, the grid opens at the start of your
+  working day, and the week number shows when you switch it on.
+- **Calendar preferences** — working hours and days, the first day of the
+  week, week numbers and declined invitations in Settings → Calendar &
+  contacts; time zones from the chip in the calendar toolbar.
+- **Tasks in the calendar** — tasks due on a shown day appear in the all-day
+  row with a check box, and a **Due this week** list next to the calendar
+  lets you tick them off, add one, or drag one onto a time to block it.
+- **Search in the calendar** — find events from the toolbar (**/** jumps
+  there), grouped into upcoming and past; choose one to see its day.
+- **Easier to read views** — the month view draws events of several days as
+  one bar and other events as “dot, time, title” lines; the agenda has a
+  time column, Today / Tomorrow, faded past events and a now line; the year
+  view shades busy days; the free-time view has an hour axis, labelled busy
+  times and the free time per day; the mini-month marks the shown days,
+  event days and week numbers. Empty views say what to do next.
+- **Narrow windows and phones** — the calendar list becomes a drawer, New
+  event floats in the corner, and the week shows three days or one day
+  instead of squeezing seven columns.
 - **A shorter event editor** — the title in a large field, the time on one
   line with the day as text ("Fri, Nov 27, 2026") and the length, small
   choices for repeat, reminder, calendar, busy / free and call link, then
@@ -54,39 +82,6 @@ new events drawn straight onto the week.
 - **Reminders say how soon** — "in 30 minutes", with the calendar's name
   and colour; **Dismiss** comes first and snoozing is one button with a
   menu of other times.
-- **Calendars you can tell apart** — events get a stronger tint of their
-  calendar's colour with a solid edge, and the colour squares in the
-  calendar list are larger. New calendars get a colour no other calendar
-  uses yet.
-- **Quick add** — type “Lunch with Bob tomorrow 12:30 at Corner café” in the
-  field under the calendar toolbar: chips show what Nail understood, Enter
-  adds the event, Tab opens the editor with it filled in.
-- **Search in the calendar** — find events from the toolbar (**/** jumps
-  there), grouped into upcoming and past; choose one to see its day.
-- **Narrow windows and phones** — the calendar list becomes a drawer, New
-  event floats in the corner, and the week shows three days or one day
-  instead of squeezing seven columns.
-- **Easier to read views** — the month view draws events of several days as
-  one bar and other events as “dot, time, title” lines; the agenda has a
-  time column, Today / Tomorrow, faded past events and a now line; the year
-  view shades busy days; the free-time view has an hour axis, labelled busy
-  times and the free time per day; the mini-month marks the shown days,
-  event days and week numbers.
-- **Calendar preferences** — working hours and days, the first day of the
-  week, week numbers and declined invitations in Settings → Calendar &
-  contacts; time zones from the chip in the calendar toolbar.
-- **Due this week** — the tasks due this week next to the calendar, to tick
-  off, add or drag onto the week. Empty views now say what to do next.
-- **Every calendar in its own colour** — a new or newly found calendar
-  without a colour gets one that no other calendar has yet, and calendars
-  that all showed the same blue get distinct colours once. Colours set on
-  the server (CalDAV, Microsoft 365) are kept.
-- **Type an event as a sentence** — "Lunch with Bob tomorrow 12:30 at
-  Corner café", "Yoga every Monday 7pm", "Offsite Dec 4 all day" or "Sync
-  3-4pm" become an event with the right day, time, length, repetition and
-  place (English).
-- **Unanswered invitations stand out** — the calendar knows your own answer
-  to each meeting, including answers given from another of your addresses.
 - **Agents see your working hours** — `find_free_time` can keep to your
   working hours and days, and `list_tasks` can list tasks due in a range
   ([MCP](mcp.md)).

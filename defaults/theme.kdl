@@ -3320,7 +3320,6 @@ theme "default" mode="system" {
     part "calendar.slots" { display "grid"; }
     part "calendar.slot-row" { display "contents"; }
     part "calendar.slot" { height 48; border-top "$border.thin"; border-left "$border.thin"; }
-    part "calendar.slot:today" { background-color "$color.bg-subtle"; }
     part "calendar.slot:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
     part "calendar.columns" { position "absolute"; top 0; right 0; bottom 0; left 0; display "grid"; pointer-events "none"; }
     part "calendar.column" { position "relative"; margin 0; padding 0; }
@@ -3333,26 +3332,15 @@ theme "default" mode="system" {
 
     // Year
     part "calendar.year" { display "grid"; grid-template-columns "repeat(auto-fill, minmax(200px, 1fr))"; align-content "start"; align-items "start"; gap "$space.lg"; padding "$space.md"; overflow-y "auto"; }
-    part "calendar.year.month" { border-collapse "collapse"; font-size "$font-size.xs"; }
-    part "calendar.year.month.day" { padding "$space.xxs"; text-align "center"; cursor "pointer"; }
-    part "calendar.year.month.day:outside" { color "$color.fg-muted"; }
-    part "calendar.year.month.day:busy" { font-weight "$font-weight.bold"; }
-    part "calendar.year.month.day:today" { color "$color.accent-fg"; background-color "$color.accent"; border-radius "50%"; }
 
     // Agenda (view and widget)
     part "calendar.agenda" { overflow-y "auto"; padding "$space.sm" "$space.md"; }
-    part "calendar.agenda.date" { margin "$space.md" 0 "$space.xs"; font-size "$font-size.md"; }
-    part "calendar.agenda.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
     part "agenda" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.sm"; }
     part "agenda.title" { margin 0; font-size "$font-size.md"; }
-    part "agenda.list.date" { margin "$space.xs" 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
-    part "agenda.list.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
-    part "agenda.list.empty" { margin 0; color "$color.fg-muted"; }
 
     // Free time
     part "calendar.free-time" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.md"; overflow-y "auto"; }
     part "calendar.free-time.track" { position "relative"; height 32; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; }
-    part "calendar.free-time.busy" { position "absolute"; top 0; bottom 0; background-color "$color.bg-raised"; }
     part "calendar.free-time.slot" { position "absolute"; top 2; bottom 2; overflow "hidden"; border "1px solid $color.success"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg"; background-color "$color.bg"; white-space "nowrap"; }
     part "calendar.free-time.date" { margin 0; font-size "$font-size.sm"; }
 

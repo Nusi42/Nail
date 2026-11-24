@@ -10113,18 +10113,6 @@
     {
       "selector": "calendar.slot",
       "states": [
-        "today"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "background-color": "var(--nail-color-bg-subtle)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.slot",
-      "states": [
         "focus-visible"
       ],
       "conditions": [],
@@ -10229,67 +10217,6 @@
       "source": null
     },
     {
-      "selector": "calendar.year.month",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "border-collapse": "collapse",
-        "font-size": "var(--nail-font-size-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.year.month.day",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-xxs)",
-        "text-align": "center",
-        "cursor": "pointer"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.year.month.day",
-      "states": [
-        "outside"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.year.month.day",
-      "states": [
-        "busy"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-weight": "var(--nail-font-weight-bold)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.year.month.day",
-      "states": [
-        "today"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-accent-fg)",
-        "background-color": "var(--nail-color-accent)",
-        "border-radius": "50%"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar.agenda",
       "states": [],
       "conditions": [],
@@ -10297,31 +10224,6 @@
       "declarations": {
         "overflow-y": "auto",
         "padding": "var(--nail-space-sm) var(--nail-space-md)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.agenda.date",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "var(--nail-space-md) 0 var(--nail-space-xs)",
-        "font-size": "var(--nail-font-size-md)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.agenda.list",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": "var(--nail-space-xxs)",
-        "margin": "0",
-        "padding": "0"
       },
       "source": null
     },
@@ -10350,43 +10252,6 @@
       "source": null
     },
     {
-      "selector": "agenda.list.date",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "var(--nail-space-xs) 0",
-        "font-size": "var(--nail-font-size-sm)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "agenda.list.list",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": "var(--nail-space-xxs)",
-        "margin": "0",
-        "padding": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "agenda.list.empty",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar.free-time",
       "states": [],
       "conditions": [],
@@ -10411,19 +10276,6 @@
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)",
         "background-color": "var(--nail-color-bg-subtle)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.free-time.busy",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "position": "absolute",
-        "top": "0",
-        "bottom": "0",
-        "background-color": "var(--nail-color-bg-raised)"
       },
       "source": null
     },

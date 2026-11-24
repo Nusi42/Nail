@@ -21,13 +21,15 @@ import { pimStoreFor } from "./store";
 import { CalendarDate, localZone, makePimTime, todayIn } from "./time";
 import { dateFormatter } from "../../i18n/format";
 import { chooseFromMenu } from "./lookTesting";
+import type { Recurrence } from "../../api/generated";
+import { recurrenceOf } from "./recurrence";
 
 inTimeZone(BERLIN);
 
 const START = "Start";
 
 /** Opens the editor on a new event tomorrow 15:00–16:00 (Berlin). */
-function openNew(env: Env, close = vi.fn()) {
+function openNew(env: Env, close = vi.fn(), recurrence: Recurrence | null = null) {
   const day = todayIn(localZone()).add({ days: 1 });
   pimStoreFor(env.store)
     .getState()
@@ -37,6 +39,7 @@ function openNew(env: Env, close = vi.fn()) {
       end: makePimTime(day, { hour: 16, minute: 0 }, BERLIN),
       calendarId: "cal-personal",
       fields: null,
+      recurrence,
     });
   const view = renderWithProviders(
     <EventEditorDialog name="pim-event-editor" close={close} />,
@@ -87,6 +90,37 @@ describe("the compact event editor", () => {
       alarms: [{ action: "display", trigger: { type: "relative", offset_secs: -1800 } }],
       start: { type: "zoned", local: `${day.toString()}T15:00:00` },
     });
+    expect(created.recurrence?.rules[0]?.freq).toBe("weekly");
+  });
+
+  it("starts with a repetition handed over by quick add and saves it", async () => {
+    const user = userEvent.setup({ delay: null });
+    const env = createEnv();
+    const day = todayIn(localZone()).add({ days: 1 });
+    const weekly = must(
+      recurrenceOf(
+        {
+          type: "simple",
+          rule: {
+            freq: "weekly",
+            interval: 1,
+            weekdays: [],
+            monthly: "day",
+            end: { type: "never" },
+          },
+        },
+        makePimTime(day, { hour: 15, minute: 0 }, BERLIN),
+        null,
+      ),
+    );
+    const { close } = openNew(env, vi.fn(), weekly);
+    await user.type(await screen.findByLabelText("Title"), "Standup");
+    const options = screen.getByRole("group", { name: "Options" });
+    expect(within(options).getByLabelText("Repeats")).toHaveValue("weekly");
+    await clickAndClose(user, "Save", close);
+    const created = must(
+      env.transport.data.features.pim.events.find((e) => e.fields.title === "Standup"),
+    );
     expect(created.recurrence?.rules[0]?.freq).toBe("weekly");
   });
 

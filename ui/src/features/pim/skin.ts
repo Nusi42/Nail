@@ -8,8 +8,8 @@
  *   range on one line that never wraps (the range is cut with an
  *   ellipsis), the segmented view switch (`segmented[field=calendar-view]`)
  *   and "New event".
- * - Event cards (`calendar.event`, `calendar.chip`, `calendar.agenda.event`,
- *   `agenda.list.event` with `event-card.title` / `.time` / `.location`):
+ * - Event cards (`calendar.event`, `calendar.chip` with `event-card.title` /
+ *   `.time` / `.location`):
  *   title first, the text always `fg`; the calendar colour arrives as a
  *   geometry rule (bar + light tint, `colors.ts`); High contrast drops the
  *   tint and outlines the card.
@@ -88,12 +88,7 @@ const DATETIME = `${p("pim.datetime.controls")} > ${p("pim.datetime.date")} { fl
 ${p("pim.datetime.date")} > ${p("pim.datetime.input")} { display: flex; width: 100%; }
 ${p("pim.datetime.time")} > ${p("pim.datetime.input")} { display: flex; width: 100%; }`;
 
-const CARD_PARTS = [
-  "calendar.event",
-  "calendar.chip",
-  "calendar.agenda.event",
-  "agenda.list.event",
-];
+const CARD_PARTS = ["calendar.event", "calendar.chip"];
 
 const CARDS = `${ps(...CARD_PARTS)} {
   border: none; border-left: ${ACCENT_BAR} solid ${T.accent}; border-radius: ${T.rSm};
@@ -121,13 +116,9 @@ ${p("calendar.event")} > ${p("event-card.title")} {
 ${p("calendar.event")} > ${p("event-card.time")}, ${p("calendar.event")} > ${p("event-card.location")} { flex: 0 0 auto; }
 ${p("calendar.event")} { container: nail-event / size; }
 @container nail-event (max-height: 3.5rem) { ${p("calendar.event")} > ${p("event-card.title")} { -webkit-line-clamp: 1; } }
-${ps("calendar.chip", "calendar.agenda.event", "agenda.list.event")} { align-items: baseline; gap: ${T.xs}; padding: 1px ${T.xs}; white-space: nowrap; }
+${p("calendar.chip")} { align-items: baseline; gap: ${T.xs}; padding: 1px ${T.xs}; white-space: nowrap; }
 ${p("calendar.chip")} > ${p("event-card.time")} { order: -1; flex: 0 0 auto; }
 ${p("calendar.chip")} > ${p("event-card.location")} { display: none; }
-${ps("calendar.agenda.event", "agenda.list.event")} { width: 100%; gap: ${T.md}; padding: ${T.xs} ${T.sm}; }
-${ps("calendar.agenda.event", "agenda.list.event")} > ${p("event-card.time")} { order: -1; flex: 0 0 9em; }
-${ps("calendar.agenda.event", "agenda.list.event")} > ${p("event-card.title")} { flex: 0 1 auto; }
-${ps("calendar.agenda.event", "agenda.list.event")} > ${p("event-card.location")} { flex: 1 1 0; }
 ${hc(...CARD_PARTS)} {
   background-color: ${T.bg};
   border-top: 2px solid ${T.fg}; border-right: 2px solid ${T.fg}; border-bottom: 2px solid ${T.fg};
@@ -153,24 +144,14 @@ ${p("calendar.month.day")} {
   background-color: ${T.bg};
 }
 ${p("calendar.month.day")}[data-state~="outside"] { color: ${T.muted}; background-color: ${T.subtle}; }
-${p("calendar.month.day")}[data-state~="today"] { box-shadow: inset 0 0 0 2px ${T.accent}; }
 ${p("calendar.month.day")}[data-state~="drop-target"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
 ${p("calendar.month.day")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("calendar.month.date")} { display: block; margin-bottom: ${T.xxs}; padding: 0 ${T.xxs}; font-size: ${T.small}; font-variant-numeric: tabular-nums; }
 ${p("calendar.month.events")} { display: grid; gap: 1px; min-width: 0; }
 ${p("calendar.month.events")} > * { ${oneLine} }
-${p("calendar.month.item")} > ${p("calendar.chip")} { width: 100%; max-width: 100%; }
-${p("calendar.month.item")} { container-type: inline-size; }
-${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.title")} { flex: 0 1 auto; }
-${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { order: 0; flex: 0 0 auto; }
-@container (max-width: 8.5rem) { ${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { display: none; } }
 ${p("calendar.month.more")} { padding: 0 ${T.xs}; font-size: ${T.label}; ${QUIET_BUTTON} }
 ${p("calendar.month.more")}:hover { ${QUIET_HOVER} }
-${p("calendar.month.more")}:focus-visible { ${focusRing} }
-${p("calendar.year.month.title")} {
-  caption-side: top; padding: 0 ${T.xxs} ${T.xs}; text-align: start;
-  font-family: ${T.fontDisplay}; font-size: ${T.body}; font-weight: ${T.semibold}; color: ${T.fg};
-}`;
+${p("calendar.month.more")}:focus-visible { ${focusRing} }`;
 
 const MINI_MONTH = `${p("mini-month")} { padding: ${T.sm}; }
 ${p("mini-month.header")} { display: flex; align-items: center; gap: ${T.xxs}; margin-bottom: ${T.xs}; }

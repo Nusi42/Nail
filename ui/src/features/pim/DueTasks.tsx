@@ -18,10 +18,10 @@ import { useNow } from "../../state/clock";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { emptyTaskFields } from "./defaults";
 import { formatPimTime } from "./fmt";
-import { setTaskDrag, useTasksDue } from "./prefs";
+import { setTaskDrag, useCalendarPreferences, useTasksDue, weekStartOf } from "./prefs";
 import { pimWrite, useCalendars } from "./queries";
 import { AddTaskForm, dueMs } from "./TaskList";
-import { dateString, rangeInstants, todayIn, viewRange } from "./time";
+import { DEFAULT_VIEW_OPTIONS, dateString, rangeInstants, todayIn, viewRange } from "./time";
 
 export function DueTasks({
   tz,
@@ -38,7 +38,8 @@ export function DueTasks({
   const titleId = useId();
   const now = useNow();
   const today = todayIn(tz, now);
-  const week = viewRange("week", today, locale);
+  const weekStart = weekStartOf(useCalendarPreferences());
+  const week = viewRange("week", today, locale, { ...DEFAULT_VIEW_OPTIONS, weekStart });
   const tasks = useTasksDue(rangeInstants(week, tz), lists, tz);
   const calendars = useCalendars();
   const target = (calendars.data ?? []).find(

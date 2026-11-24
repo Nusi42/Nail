@@ -39,7 +39,7 @@ import { EventItem, useOpenInstance } from "./EventItem";
 import { dayDate, formatClock, formatDay, formatHour } from "./fmt";
 import { MonthGrid } from "./MonthGrid";
 import { openNewEvent } from "./newEvent";
-import { useCalendarPreferences } from "./prefs";
+import { useCalendarPreferences, weekStartOf } from "./prefs";
 import { useFreeTime } from "./queries";
 import {
   dateString,
@@ -357,6 +357,7 @@ export function YearView({
           heat={heat}
           narrow
           weekNumbers={prefs.show_week_numbers}
+          weekStart={weekStartOf(prefs)}
           caption={format.dateTime(dayDate(month), { month: "long", timeZone: "UTC" })}
           onFocusDay={setFocused}
           onSelect={onDay}

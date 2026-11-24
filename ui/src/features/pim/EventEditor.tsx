@@ -88,6 +88,7 @@ import { useMyAddresses } from "../scheduling/queries";
 import { RecurrenceDetails, RepeatSelect } from "./RecurrenceEditor";
 import { choiceOf, recurrenceOf, type RecurrenceChoice } from "./recurrence";
 import { emptyEventFields } from "./defaults";
+import { defaultEventCalendar, writableEventCalendars } from "./newEvent";
 import { usePim, type EventEditorTarget } from "./store";
 import {
   localZone,
@@ -156,16 +157,20 @@ function initialForm(
   viewerTz: string,
 ): EventForm {
   if (target.mode === "new") {
-    const calendar =
-      writable.find((c) => c.id === target.calendarId) ??
-      writable.find((c) => c.source_id === "local") ??
-      writable[0];
+    const calendar = defaultEventCalendar(writable, target.calendarId);
     const base = target.fields ?? emptyEventFields(target.start, target.end);
     const fields: EventFields = {
       ...base,
       alarms: target.fields ? base.alarms : (calendar?.settings.default_alarms ?? []),
     };
-    return formOf(fields, calendar?.id ?? "", null, fields.start, viewerTz, "all");
+    return formOf(
+      fields,
+      calendar?.id ?? "",
+      target.recurrence ?? null,
+      fields.start,
+      viewerTz,
+      "all",
+    );
   }
   // The editor of an existing event opens once the event is loaded.
   if (event === null) throw new Error(`event ${target.eventId} is not loaded`);
@@ -365,7 +370,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
     problem: useId(),
     calls: useId(),
   };
-  const writable = calendars.filter((c) => !c.read_only && c.components.includes("event"));
+  const writable = writableEventCalendars(calendars);
   const viewerTz = localZone();
   const myAddresses = useMyAddresses();
   const occurrence =
@@ -565,7 +570,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
             id={ids.title}
             data-part="pim.compact.title.input"
             value={form.title}
-            placeholder={t("pim-look-title-placeholder")}
+            placeholder={t("pim-event-title-placeholder")}
             onChange={(e) => {
               update({ title: e.target.value });
             }}
@@ -754,7 +759,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
               setCallOpen((open) => !open);
             }}
           >
-            <Icon name="link" part="pim.compact.chip.icon" />
+            <Icon name="video" part="pim.compact.chip.icon" />
             <span data-part="pim.compact.chip.text">{t("pim-look-call-link")}</span>
           </button>
         </div>
@@ -849,7 +854,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
         />
 
         <details data-part="pim.compact.more">
-          <summary data-part="pim.compact.more.summary">{t("pim-look-more")}</summary>
+          <summary data-part="pim.compact.more.summary">{t("pim-more-options")}</summary>
           <div data-part="pim.compact.more.body">
             {!form.allDay && !endOnOtherDay && endDateField}
             {!form.allDay && form.tz !== null && (

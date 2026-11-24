@@ -220,6 +220,11 @@ describe("time grid: reading aids", () => {
     const today = must(document.querySelector('[data-part="calendar.now"][data-state="today"]'));
     expect(document.querySelector('[data-part="calendar.now"][data-state="week"]')).not.toBeNull();
     expect(document.querySelector('[data-part="calendar.now-label"]')?.textContent).toMatch(/\d/);
+    // At most the hour label next to now gives way to the now label.
+    const nearNow = document.querySelectorAll(
+      '[data-part="calendar.hour"][data-state~="near-now"]',
+    );
+    expect(nearNow.length).toBeLessThanOrEqual(1);
     // Under the event layer: the line comes before the columns.
     const columns = must(document.querySelector('[data-part="calendar.columns"]'));
     expect(today.compareDocumentPosition(columns) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -263,7 +268,7 @@ describe("time grid: reading aids", () => {
     const icons = [...standup.querySelectorAll('[data-part="event-card.icon"]')].map((i) =>
       i.getAttribute("data-icon"),
     );
-    expect(icons).toEqual(["refresh-cw", "users", "bell"]);
+    expect(icons).toEqual(["repeat", "users", "bell"]);
     const lunch = await screen.findByRole("button", { name: /Lunch with Grace/ });
     expect(lunch).not.toHaveAttribute("data-size");
     expect(lunch.querySelector('[data-part="event-card.icons"]')).toBeNull();

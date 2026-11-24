@@ -41,7 +41,6 @@ import {
   narrowFallback,
   nearestOutside,
   quickChips,
-  shownInstances,
 } from "./viewsModel";
 
 const TZ = "UTC";
@@ -127,18 +126,6 @@ describe("narrow windows", () => {
     // A calendar no window holds, or no layout: nothing to replace.
     expect(layoutShowsSidebar(layout, widget("calendar", "elsewhere"), 420)).toBe(true);
     expect(layoutShowsSidebar(null, main, 420)).toBe(true);
-  });
-});
-
-describe("declined invitations", () => {
-  it("are left out only when the preference says so", () => {
-    const declined = {
-      ...occurrence("A", at(MONDAY, 9), at(MONDAY, 10)),
-      my_status: "declined" as const,
-    };
-    const open = occurrence("B", at(MONDAY, 11), at(MONDAY, 12));
-    expect(shownInstances([declined, open], { show_declined: true })).toHaveLength(2);
-    expect(shownInstances([declined, open], { show_declined: false })).toEqual([open]);
   });
 });
 

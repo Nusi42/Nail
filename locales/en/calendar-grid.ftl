@@ -20,9 +20,7 @@ pim-grid-tasks-due = Tasks due
 
 ## Drawing a new event
 
-pim-grid-new-event-placeholder = Add a title
 pim-grid-new-event-when = { $day } · { $time }
-pim-grid-more-options = More options
 # The drawn range while dragging: its times and its length.
 pim-grid-draft-time = { $time } · { $length }
 pim-grid-length = { $hours ->

@@ -136,6 +136,7 @@ pub const BUNDLED_ICONS: &[&str] = &[
     "quote",
     "redo-2",
     "refresh-cw",
+    "repeat",
     "reply",
     "reply-all",
     "rotate-ccw",
@@ -179,6 +180,7 @@ pub const BUNDLED_ICONS: &[&str] = &[
     "user-round",
     "users",
     "users-round",
+    "video",
     "x",
 ];
 

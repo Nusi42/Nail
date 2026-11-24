@@ -29,8 +29,9 @@ work.
 A calendar widget shows one of these views. The toolbar shows **Today**,
 **Previous** and **Next**, the days shown, a switch for the views (Day,
 Week, Month, Year, Agenda, Free time), the time zone chip and **New
-event**; the row below has the quick-add field and the search field. When the calendar is too narrow for the switch and the
-whole range, a **View** menu takes the switch's place. Events show their
+event**; the row below has the quick-add field and the search field. When
+the calendar is too narrow for the switch and the whole range, a **View**
+menu takes the switch's place. Events show their
 title, time and place on a tint of their calendar's colour with a solid
 bar in the colour on their leading edge.
 
@@ -115,8 +116,8 @@ when you move to it with a screen reader.
   under the pointer; **double-click** opens the editor there at once.
 - **With the keyboard:** in the hours of the grid, **Shift + ↑ / ↓** extend
   the range by an hour, **Enter** asks for the title of an event over it.
-- **Drag a task** (from the all-day row or the **Due this week** list) onto a time to
-  block that time for it: an event with the task's title and a length of an
+- **Drag a task** (from the all-day row or the **Due this week** list) onto
+  a time to block that time for it: an event with the task's title and a length of an
   hour; the task stays.
 
 The **mini-month** (a small calendar for any window) and **today's agenda**

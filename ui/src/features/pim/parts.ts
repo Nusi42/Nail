@@ -31,8 +31,6 @@ const PLAIN_LISTS = [
   "calendar.column",
   "calendar.all-day.events",
   "calendar.month.events",
-  "calendar.agenda.list",
-  "agenda.list.list",
   "contact-list.items",
   "contact-card.values",
   "task-list.items",
@@ -72,11 +70,11 @@ export const PIM_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; margin: 0; 
 [data-part="calendar.event"] { position: absolute; box-sizing: border-box; overflow: hidden; pointer-events: auto; display: flex; flex-direction: column; text-align: start; font: inherit; }
 [data-part="calendar.event.resize"] { position: absolute; inset-inline: 0; bottom: 0; height: ${RESIZE_GRIP}; cursor: ns-resize; }
 [data-part="calendar.ghost"], [data-part="calendar.now"] { position: absolute; pointer-events: none; box-sizing: border-box; }
-[data-part="calendar.chip"], [data-part="calendar.agenda.event"], [data-part="agenda.list.event"] { display: flex; min-width: 0; overflow: hidden; text-align: start; font: inherit; }
+[data-part="calendar.chip"] { display: flex; min-width: 0; overflow: hidden; text-align: start; font: inherit; }
 [data-part="calendar.month"] { width: 100%; table-layout: fixed; border-collapse: collapse; }
 [data-part="calendar.month.day"] { vertical-align: top; }
 [data-part="calendar.free-time.track"] { position: relative; }
-[data-part="calendar.free-time.busy"], [data-part="calendar.free-time.slot"] { position: absolute; top: 0; bottom: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+[data-part="calendar.free-time.slot"] { position: absolute; top: 0; bottom: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 [data-part="pim.datetime"] { position: relative; }
 [data-part="pim.datetime.controls"], [data-part="pim.datetime.input"] { display: inline-flex; flex-wrap: wrap; align-items: center; }
 [data-part="pim.datetime.popup"] { position: absolute; top: 100%; z-index: 20; }

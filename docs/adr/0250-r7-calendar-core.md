@@ -1,4 +1,4 @@
-# 0247 — R7 core: reading text, the user's answer, default colours, working hours
+# 0250 — R7 core: reading text, the user's answer, default colours, working hours
 
 Status: accepted (2026-11-24)
 

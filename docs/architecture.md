@@ -775,7 +775,10 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        PimState.quickLook), mockCalendarView.ts (the mock's R7 answers), gridStyle.ts /
                        lookStyle.ts / viewsStyle.ts (per-package style slots), the time grid's R7 pieces
                        (time.ts placeDay cascade + dragRange / clickRange / visibleInstances, NewEventDraft.tsx
-                       the inline title of a drawn event, newEvent.ts defaultEventCalendar / createEventIn),
+                       the inline title of a drawn event, newEvent.ts defaultEventCalendar / createEventIn, the
+                       one "which calendar gets a new event" rule), the views' pieces (viewsModel.ts pure rules,
+                       viewHooks.ts zones / widths / drawer mode, QuickAdd.tsx, CalendarSearch.tsx, ZoneChip.tsx,
+                       EmptyState.tsx, DueTasks.tsx, CalendarPrefsForm.tsx, viewsTesting.ts test helper),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
@@ -1745,7 +1748,7 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`pim/events.rs` `tasks_due`) and `ParseEventText` (`nail-event-text`). `nail_api::testing::busy_instance` is the
   shared `EventInstance` of tests; `crates/nail-core/tests/common` has `error`. The UI derives `CALENDAR_COLORS`
   from the generated `CALENDAR_PALETTE`; the mock's user addresses are `userAddresses` (`api/mockAccounts.ts`).
-- Quick look and editor (P2, ADR 0247): `EventPopover.tsx` fills the quick look (facts, people, Join, Edit /
+- Quick look and editor (ADR 0248): `EventPopover.tsx` fills the quick look (facts, people, Join, Edit /
   Delete / Send update, the answer for an invitation; `occurrenceFields`); `eventLook.ts` holds its pure helpers
   (lengths as text, the reminder chip's choices, people summaries, call links, overlaps). The compact
   `EventEditor.tsx` uses `RepeatSelect` / `RecurrenceDetails` (`RecurrenceEditor.tsx`), `ReminderChip` and
@@ -1755,7 +1758,21 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   free/busy lanes (`FreeBusyTimeline.tsx` `Lanes`) have the movable meeting frame (`FRAME_STEP_MINUTES`). Styles:
   `lookStyle.ts` (`pim.look.hidden` is the visually hidden label). Tests: `pim/lookTesting.ts` `chooseFromMenu`;
   e2e `support/invitations.ts` (iMIP mails), `support/eventEditor.ts` (`startNewEvent`), `r7-p2-look.spec.ts`.
-- Core package (ADR 0247-p4): `nail-event-text` reads English text (`keywords.rs`, `scan.rs`). `my_status` comes from
+- Time grid (ADR 0247): `time.ts` `placeDay` cascades overlaps (`dragRange`, `clickRange`, `snapDown`, `minuteAt`,
+  `visibleInstances` — the one rule for hiding declined occurrences, used by every view); `NewEventDraft.tsx` asks
+  for a drawn event's title in the shared `Popover`; `EventItem.tsx` opens the quick look on a click
+  (`setQuickLook` with `anchorOf`) and the editor on a double-click (`useOpenInstance`); `TimeGrid` opens at the
+  working day's start unless the widget sets `scroll-to`. Styles: `gridStyle.ts`; e2e `r7-p1-grid.spec.ts`.
+- Views and shell (ADR 0249): `viewsModel.ts` (narrow fallback to three days, then one, below about 90 px a
+  column; agenda days, month lanes, year heat, free-time blocks, search groups, quick-add chips, mini-month band
+  and dots), `viewHooks.ts` (`useCalendarZones`, `useElementWidth`, `useLayoutShowsSidebar`, `useCoarsePointer`).
+  The calendar window has two breakpoints in `defaults/layout.kdl` (from 900 px with the sidebar, below without);
+  without a sidebar the calendar offers a "Show calendars" drawer and a floating New event. `PimState.shown` is the
+  view on screen (calendar.next / .previous page by it, the mini-month draws its band). The week start preference
+  reaches `viewRange` (`ViewOptions.weekStart`), `monthGrid`, `dayGridMove` and `MonthGrid` (`weekStart`).
+  Quick add passes a parsed repetition to the editor through `EventEditorTarget` `new.recurrence`. Styles:
+  `viewsStyle.ts`; strings `calendar-views.ftl`; e2e `r7-p3-views.spec.ts`.
+- Core (ADR 0250): `nail-event-text` reads English text (`keywords.rs`, `scan.rs`). `my_status` comes from
   `EventFields::my_status` when instances are read (`Store::list_event_instances_for` with the user's addresses,
   `Service::me`); `nail_dav::own_busy_periods` reads it from the instance. Default colours: `Store::save_calendar`
   gives a new calendar without a colour `next_calendar_color` over the stored colours; schema v25's backfill

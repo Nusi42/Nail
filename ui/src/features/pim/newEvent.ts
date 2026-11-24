@@ -6,7 +6,14 @@
  * drawing a range, a task dropped on the grid.
  */
 import type { CalendarDate } from "@internationalized/date";
-import type { Calendar, CalendarId, EventFields, PimTime, TaskFields } from "../../api/generated";
+import type {
+  Calendar,
+  CalendarId,
+  EventFields,
+  PimTime,
+  Recurrence,
+  TaskFields,
+} from "../../api/generated";
 import { DEFAULT_EVENT_MINUTES, MINUTES_PER_DAY } from "../../api/generated";
 import type { ChangeContext } from "./changes";
 import { emptyEventFields } from "./defaults";
@@ -41,6 +48,7 @@ export function openNewEvent(
   tz: string,
   calendarId: CalendarId | null = null,
   fields: EventFields | null = null,
+  recurrence: Recurrence | null = null,
 ): void {
   const startMinute = time === null ? 0 : time.hour * 60 + time.minute;
   const times =
@@ -50,7 +58,14 @@ export function openNewEvent(
           end: { type: "date" as const, date: dateString(day.add({ days: 1 })) },
         }
       : rangeTimes(day, { start: startMinute, end: startMinute + NEW_EVENT_MINUTES }, tz);
-  openNewEventWith(ctx, fields?.start ?? times.start, fields?.end ?? times.end, calendarId, fields);
+  openNewEventWith(
+    ctx,
+    fields?.start ?? times.start,
+    fields?.end ?? times.end,
+    calendarId,
+    fields,
+    recurrence,
+  );
 }
 
 /**
@@ -96,8 +111,9 @@ function openNewEventWith(
   end: PimTime,
   calendarId: CalendarId | null,
   fields: EventFields | null,
+  recurrence: Recurrence | null = null,
 ): void {
-  ctx.pim.getState().editEvent({ mode: "new", start, end, calendarId, fields });
+  ctx.pim.getState().editEvent({ mode: "new", start, end, calendarId, fields, recurrence });
   ctx.store.getState().openWindow(EVENT_DIALOG);
 }
 

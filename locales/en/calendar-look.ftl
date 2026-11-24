@@ -74,7 +74,6 @@ pim-look-key-close = close
 
 ## The compact event editor
 
-pim-look-title-placeholder = Add a title
 pim-look-place-placeholder = Add a place or room
 pim-look-notes = { common-notes }
 pim-look-arrow = to
@@ -87,7 +86,6 @@ pim-look-reminder-before = { $length } before
 pim-look-reminder-custom = Custom reminders
 pim-look-call-link = Call link
 pim-look-people-none = No one invited yet.
-pim-look-more = More options
 pim-look-end-date = End date
 pim-look-date-choose = { $field }: { $date }
 

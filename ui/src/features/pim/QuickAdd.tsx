@@ -23,11 +23,10 @@ import { Icon } from "../../widgets/Icon";
 import { problemOf, useChangeContext } from "./common";
 import { emptyEventFields } from "./defaults";
 import { formatPimTime } from "./fmt";
-import { openNewEvent } from "./newEvent";
+import { openNewEvent, defaultEventCalendar } from "./newEvent";
 import { parseEventText } from "./prefs";
 import { saveEvent, useCalendars } from "./queries";
 import { dateString, makePimTime, pimTimeIn, shiftPimTime, toCalendarDate } from "./time";
-import { defaultEventCalendar } from "./viewHooks";
 import { DEFAULT_NEW_EVENT_TIME, quickChips } from "./viewsModel";
 
 /** The start and end of a quick-created event: the parsed ones, else the day at the default time. */
@@ -123,7 +122,7 @@ export function QuickAdd({ day, tz }: { day: CalendarDate; tz: string }) {
     const parsed = await parse(current);
     const fields = quickFields(current, parsed, day, tz);
     setText("");
-    openNewEvent(ctx, day, null, tz, target?.id ?? null, fields);
+    openNewEvent(ctx, day, null, tz, target?.id ?? null, fields, parsed.recurrence);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

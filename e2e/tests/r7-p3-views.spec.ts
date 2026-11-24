@@ -93,9 +93,17 @@ test("quick add previews the text as chips and adds the event with Enter", async
   const preview = calendar.getByRole("list", { name: "What Nail understood" });
   await expect(preview.locator('[data-part="calendar.quick-add.chip"]').first()).toBeVisible();
   await expect(preview).toContainText("Lunch with Bob");
+  // The core's reader finds the date, the time and the place.
+  await expect(preview.locator('[data-part="calendar.quick-add.chip"]')).toHaveCount(4);
+  expect(
+    await preview
+      .locator('[data-part="calendar.quick-add.chip"]')
+      .evaluateAll((chips) => chips.map((chip) => chip.getAttribute("data-kind"))),
+  ).toEqual(["title", "date", "time", "location"]);
+  await expect(preview).toContainText("Corner café");
   await field.press("Enter");
   await expect(field).toHaveValue("");
-  await expect(calendar.getByText(/^Added “Lunch with Bob/)).toBeVisible();
+  await expect(calendar.getByText(/^Added “Lunch with Bob” on .*12:30/)).toBeVisible();
   // The calendar shows the event's day.
   await expect(calendar.getByRole("button", { name: /^Lunch with Bob/ }).first()).toBeVisible();
 

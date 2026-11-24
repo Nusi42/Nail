@@ -83,7 +83,7 @@ export function NewEventDraft({ anchor, day, range, tz, calendars, onClose }: Ne
           value={title}
           disabled={saving}
           aria-label={t("pim-event-title")}
-          placeholder={t("pim-grid-new-event-placeholder")}
+          placeholder={t("pim-event-title-placeholder")}
           onChange={(event) => {
             setTitle(event.target.value);
           }}
@@ -104,7 +104,7 @@ export function NewEventDraft({ anchor, day, range, tz, calendars, onClose }: Ne
               openNewEventIn(ctx, day, range, tz, calendar, title.trim());
             }}
           >
-            {t("pim-grid-more-options")}
+            {t("pim-more-options")}
           </button>
           <button
             type="submit"

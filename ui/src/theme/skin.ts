@@ -344,12 +344,14 @@ ${p("problem.details")}[data-mode="follow"]::before { content: ""; position: abs
 
 /**
  * R7 (ADR 0246): the shared popover (`widgets/Popover.tsx`) — a card on
- * the overlay shadow, like a menu, wide enough for a quick look.
+ * the overlay shadow, like a menu, wide enough for a quick look. It is
+ * portalled to the body, so it sets the UI font itself.
  */
 const POPOVER = `${p("popover")} {
   box-sizing: border-box; width: max-content; min-width: calc(16 * ${T.lg}); max-width: ${MENU_MAX_WIDTH};
   max-height: calc(100vh - 2 * ${T.md}); overflow: auto; padding: ${T.md};
   border: 1px solid ${T.border}; border-radius: ${T.rMd}; color: ${T.fg}; background-color: ${T.bg}; box-shadow: ${T.overlay};
+  font-family: ${T.fontUi}; font-size: ${T.body};
 }
 ${p("popover")}:focus { outline: none; }`;
 

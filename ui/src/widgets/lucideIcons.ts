@@ -127,6 +127,7 @@ import {
   Quote,
   Redo2,
   RefreshCw,
+  Repeat,
   Reply,
   ReplyAll,
   RotateCcw,
@@ -166,6 +167,7 @@ import {
   User,
   UserPlus,
   Users,
+  Video,
   X,
 } from "lucide-react";
 export { LEGACY_ICON_NAMES } from "../api/generated";
@@ -285,6 +287,7 @@ export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
   quote: Quote,
   "redo-2": Redo2,
   "refresh-cw": RefreshCw,
+  repeat: Repeat,
   reply: Reply,
   "reply-all": ReplyAll,
   "rotate-ccw": RotateCcw,
@@ -328,5 +331,6 @@ export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
   "user-round": UserRound,
   users: Users,
   "users-round": UsersRound,
+  video: Video,
   x: X,
 };

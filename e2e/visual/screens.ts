@@ -327,7 +327,7 @@ export const SCREENS: readonly Screen[] = [
     async open(page) {
       const calendar = await calendarWeek(page);
       await chooseView(calendar, "Year", "year");
-      await expect(calendar.locator('[data-part="calendar.year.month.title"]')).toHaveCount(12);
+      await expect(calendar.locator('[data-part="calendar.year.grid.title"]')).toHaveCount(12);
     },
   },
   {

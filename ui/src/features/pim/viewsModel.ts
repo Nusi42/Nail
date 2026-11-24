@@ -10,7 +10,6 @@
  */
 import type {
   Calendar,
-  CalendarPreferences,
   EventInstance,
   LayoutNode,
   ParsedEventText,
@@ -131,19 +130,6 @@ export function layoutShowsSidebar(
     return walk(root, (n) => n.type === "widget" && SIDEBAR_KINDS.includes(n.kind));
   }
   return true;
-}
-
-// ---------------------------------------------------------------------------
-// Declined invitations
-
-/** The occurrences the views show: declined ones only with `show_declined` on. */
-export function shownInstances(
-  instances: readonly EventInstance[],
-  prefs: Pick<CalendarPreferences, "show_declined">,
-): EventInstance[] {
-  return prefs.show_declined
-    ? [...instances]
-    : instances.filter((instance) => instance.my_status !== "declined");
 }
 
 // ---------------------------------------------------------------------------

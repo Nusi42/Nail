@@ -59,16 +59,14 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Reminders after a time-zone change | Reminders are replanned hourly, not on an OS time-zone change. | plan.md M3a follow-ups | S |
 | Conflict choice for events | The event editor has no conflict choice (the contact card has one). | plan.md M3a follow-ups | M |
 | `RDATE;VALUE=PERIOD` | Period values of `RDATE` have no ends. | plan.md M3a follow-ups (ADR 0059) | S |
-| Create events by dragging | Events cannot be created by dragging over empty hours (existing events can be moved). | plan.md M3a follow-ups | M |
 | Recent mail on the contact card | The contact card shows upcoming meetings but no recent mail with the person. | plan.md M3a follow-ups | M |
 | Right-click menus for PIM items | Calendar, contact and task items have no right-click menus. (check) | plan.md M3a follow-ups | M |
 | Task invitations | Only `VEVENT` scheduling; `VTODO` invitations show `no-event`. | plan.md M3b follow-ups (ADR 0066) | L |
 | iTIP methods | `ADD` is applied but not built; `COUNTER` / `REFRESH` / `DECLINECOUNTER` always go by iMIP. | plan.md M3b follow-ups (ADR 0066) | M |
 | Delegation | Delegation basics only (one delegate); delegates sending with `SENT-BY` are warned about, not applied (no delegate list). | plan.md M3b follow-ups (ADR 0068) | M |
 | Undo for invitation answers | Undo send for iMIP answers is not wired into the UI toast (the result carries the outbox id). (check) | plan.md M3b follow-ups (ADR 0069) | S |
-| Calendar part as attachment | The calendar part of an iMIP mail also shows as "Unnamed attachment" in the reader. (check) | plan.md M3b follow-ups | S |
 | Schedule inbox | Schedule-inbox items are acknowledged, not applied (servers that only fill the inbox would need it). | plan.md M3b follow-ups (ADR 0068) | M |
-| Free time | Free-slot suggestions are computed in the UI; `FindFreeTime` ignores working hours (the UI cuts per day). | plan.md M3b, M5b follow-ups (ADR 0115) | M |
+| Free time | Free-slot suggestions are computed in the UI; the `FindFreeTime` request ignores working hours (the UI cuts per day; only the MCP tool takes `working_hours`). | plan.md M3b, M5b follow-ups (ADR 0115), R7 (ADR 0250) | M |
 | Occurrence answers | Answering an occurrence from the invitation card needs the event in a calendar. | plan.md M3b follow-ups | S |
 | Exchange calendars | Exchange calendars cannot be created or renamed from Nail. | plan.md M3c follow-ups (ADR 0077) | M |
 | EWS series time zones | EWS series in zones without a Windows id. | plan.md M3c follow-ups (ADR 0074) | M |
@@ -76,6 +74,10 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Graph meeting creates | `MeetingSend::None` on Graph creates. | plan.md M3c follow-ups (ADR 0073) | S |
 | To Do and Exchange contacts | To Do linked resources are not written back, subtasks only one level deep, no nested contact folders. | plan.md M3c follow-ups (ADR 0073) | M |
 | Reminders on tasks from programs | Tasks written by plug-ins / agents have no reminders (`UpsertTaskArgs` has none). | plan.md M4a follow-ups (ADR 0080) | S |
+| Quick create elsewhere | Typing an event as a sentence (`ParseEventText`) works in the calendar's quick-add field only, not from the command palette or over MCP; languages other than English need a keyword table in `nail-event-text`. | R7 (ADRs 0246, 0250) | M |
+| Answering one occurrence from the quick look | The quick look answers an invitation for the whole series; only the editor's meeting panel answers a single occurrence. | R7 (ADR 0248) | S |
+| Drawing events on touch screens | Drawing on the time grid uses pointer capture; on touch screens a vertical drag may scroll instead of draw. | R7 (ADR 0247) | S |
+| Icons for place and call | The editor's place field has no icon (no bundled `map-pin`). | R7 (ADR 0248) | S |
 | Sealed PIM index | A sealed on-disk PIM index, if the in-memory one becomes too slow to build. | plan.md M3a follow-ups | L |
 
 ## Accounts and engines (IMAP, Gmail, Graph, EWS)

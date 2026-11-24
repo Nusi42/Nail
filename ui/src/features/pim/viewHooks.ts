@@ -2,11 +2,10 @@
  * Hooks of the calendar's views and shell (R7, ADR 0246): the zones a
  * widget shows (layout option, then the preferences, then the system's),
  * the width of an element, whether the window's layout shows the calendar
- * sidebar (else the calendar offers it as a drawer), a touch screen, and
- * the calendar quick create adds to.
+ * sidebar (else the calendar offers it as a drawer) and a touch screen.
  */
 import { useContext, useLayoutEffect, useState, useSyncExternalStore, type RefObject } from "react";
-import type { Calendar, LayoutNode } from "../../api/generated";
+import type { LayoutNode } from "../../api/generated";
 import { LayoutContext } from "../../layout/LayoutContext";
 import { useWindowWidth } from "../../layout/useWindowWidth";
 import { optionString, type WidgetNode } from "../../layout/widgetRegistry";
@@ -65,14 +64,4 @@ export function useCoarsePointer(): boolean {
     () => typeof window.matchMedia === "function" && window.matchMedia(COARSE).matches,
     () => false,
   );
-}
-
-/**
- * The calendar a quick-created event goes to: a writable event calendar of
- * this device first, else the first writable one (the event editor's
- * choice for a new event without a calendar).
- */
-export function defaultEventCalendar(calendars: readonly Calendar[]): Calendar | null {
-  const writable = calendars.filter((c) => !c.read_only && c.components.includes("event"));
-  return writable.find((c) => c.source_id === "local") ?? writable[0] ?? null;
 }

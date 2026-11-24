@@ -33,6 +33,7 @@
  * toolbar's.
  */
 import type { CalendarDate } from "@internationalized/date";
+import type { Weekday } from "../../api/generated";
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import type { ViewKind } from "./time";
 import { useDateFormat } from "../../i18n/format";
@@ -53,7 +54,7 @@ import { CalendarSearch } from "./CalendarSearch";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { DueTasks } from "./DueTasks";
 import { CalendarEmpty } from "./EmptyState";
-import { useCalendarPreferences } from "./prefs";
+import { useCalendarPreferences, weekStartOf } from "./prefs";
 import { QuickAdd } from "./QuickAdd";
 import { MiniMonthView } from "./SmallWidgets";
 import {
@@ -62,12 +63,7 @@ import {
   useElementWidth,
   useLayoutShowsSidebar,
 } from "./viewHooks";
-import {
-  DEFAULT_NEW_EVENT_TIME,
-  TIME_GRID_VIEWS,
-  narrowFallback,
-  shownInstances,
-} from "./viewsModel";
+import { DEFAULT_NEW_EVENT_TIME, TIME_GRID_VIEWS, narrowFallback } from "./viewsModel";
 import { ZoneChip } from "./ZoneChip";
 import { dayDate, formatDay } from "./fmt";
 import { openNewEvent } from "./newEvent";
@@ -86,6 +82,7 @@ import {
   todayIn,
   viewRange,
   dateString,
+  visibleInstances,
   type ViewOptions,
   type ViewRange,
 } from "./time";
@@ -124,12 +121,17 @@ export function rangeTitle(
   }
 }
 
-function viewOptions(node: WidgetProps["node"], view: ViewKind): ViewOptions {
+function viewOptions(
+  node: WidgetProps["node"],
+  view: ViewKind,
+  weekStart: Weekday | null,
+): ViewOptions {
   const fallbackDays =
     view === "agenda" ? 14 : view === "free-time" ? 5 : DEFAULT_VIEW_OPTIONS.days;
   return {
     ...DEFAULT_VIEW_OPTIONS,
     days: Math.min(62, Math.max(1, Math.trunc(optionNumber(node, "days", fallbackDays)))),
+    weekStart,
   };
 }
 
@@ -293,7 +295,7 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const width = useElementWidth(sectionRef);
   // Narrow panes: a week whose day columns would get too narrow shows three days, then one.
-  const chosenOptions = viewOptions(node, chosen);
+  const chosenOptions = viewOptions(node, chosen, weekStartOf(prefs));
   const fallback = narrowFallback(
     chosen,
     viewRange(chosen, anchor, locale, chosenOptions).count,
@@ -334,7 +336,10 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
   const newEvent = () => {
     openNewEvent(ctx, anchor, DEFAULT_NEW_EVENT_TIME, tz);
   };
-  const list = shownInstances(instances.data ?? [], prefs);
+  const list = visibleInstances(instances.data ?? [], prefs.show_declined);
+  // Without a `scroll-to` option the grid opens at the start of the working day.
+  const scrollOption = optionNumber(node, "scroll-to", Number.NaN);
+  const scrollTo = Number.isFinite(scrollOption) ? clampHour(scrollOption, 0) : null;
 
   let body: React.ReactNode;
   if (TIME_GRID_VIEWS.includes(view)) {
@@ -348,7 +353,7 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
         secondaryTz={zones.second}
         hourStart={hourStart}
         hourEnd={hourEnd}
-        scrollTo={clampHour(optionNumber(node, "scroll-to", 8), 8)}
+        scrollTo={scrollTo}
         onDay={showDay}
       />
     );

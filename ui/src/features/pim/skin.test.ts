@@ -80,7 +80,7 @@ describe("PIM skin", () => {
       expect(rule, part).toMatch(/color: inherit;/);
       expect(rule, part).not.toMatch(/fg-muted/);
     }
-    for (const part of ["calendar.event", "calendar.chip", "calendar.agenda.event"]) {
+    for (const part of ["calendar.event", "calendar.chip"]) {
       expect(PIM_SKIN_CSS).toContain(`[data-part="${part}"]`);
     }
   });
@@ -164,13 +164,13 @@ describe("PIM skin", () => {
       expect(ruleOf('[data-part="calendar.now"]')).toMatch(/height: 2px;/);
     });
 
-    it("draws the month grid: cell lines, height, outside days, today, drop target, focus", () => {
+    it("draws the month grid: cell lines, height, outside days, drop target, focus", () => {
       expect(ruleOf('[data-part="calendar.month"]')).toMatch(/height: 100%;/);
       const day = ruleOf('[data-part="calendar.month.day"]');
       expect(day).toMatch(/border: 1px solid var\(--nail-color-border\);/);
       expect(day).toMatch(/height: /);
       expect(day).toMatch(/overflow: hidden;/);
-      for (const state of ["outside", "today", "drop-target"]) {
+      for (const state of ["outside", "drop-target"]) {
         expect(PIM_SKIN_CSS).toContain(`[data-part="calendar.month.day"][data-state~="${state}"]`);
       }
       expect(ruleOf('[data-part="calendar.month.day"]:focus-visible')).toMatch(
@@ -179,9 +179,6 @@ describe("PIM skin", () => {
       expect(ruleOf('[data-part="calendar.month.date"]')).toMatch(/display: block;/);
       // Chips are cut at the cell's edge instead of running into the next day.
       expect(ruleOf('[data-part="calendar.month.events"] > *')).toMatch(/text-overflow: ellipsis;/);
-      expect(ruleOf('[data-part="calendar.month.item"] > [data-part="calendar.chip"]')).toMatch(
-        /max-width: 100%;/,
-      );
     });
 
     it("indents subtasks, strikes done tasks, marks the current one", () => {

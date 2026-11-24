@@ -113,7 +113,7 @@ pim-month-day-label =
         [one] { $day }, one event
        *[other] { $day }, { $count } events
     }
-pim-more-events = { $count } more
+pim-more-events = +{ $count } more
 pim-more-events-label = Show all events on { $day } ({ $count } more)
 pim-agenda-empty = Nothing planned.
 pim-agenda-today = Today's agenda
@@ -130,6 +130,10 @@ pim-free-slot-label = Free on { $day }, { $time }: plan an event
 ## Event editor
 
 pim-event-title = { action-field-title }
+# The empty title field of a new event (the inline title on the grid, the editor).
+pim-event-title-placeholder = Add a title
+# Opens the full event editor from a shorter form.
+pim-more-options = More options
 pim-event-time-zone = Time zone
 pim-time-zone-floating = No time zone (same clock time everywhere)
 pim-event-end-zone-toggle = The end is in another time zone

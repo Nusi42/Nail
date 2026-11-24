@@ -1639,9 +1639,22 @@ implemented, the reader and `my_status` stubbed, the `nail-event-text` stub crat
 the mock's answers, `Popover`, `prefs.ts`, the quick look slot, style and locale slots, release slots. Next:
 P1–P4 in parallel.
 
-*Status (P4 core):* done (ADR 0247-p4). The English reader in `nail-event-text`, `my_status` when instances are
+*Status (P4 core):* done (ADR 0250). The English reader in `nail-event-text`, `my_status` when instances are
 read, default colours in `Store::save_calendar` plus the schema v25 backfill, Graph `hexColor`, MCP
 `find_free_time` `working_hours` and `list_tasks` `due_after` / `tz`.
+
+*Status (integration):* done. Package ADRs renumbered: 0247 time grid, 0248 quick look and editor, 0249 views and
+shell, 0250 core. One rule each for a new event's calendar (`newEvent.ts` `defaultEventCalendar`, also the editor
+and quick add) and for hiding declined occurrences (`time.ts` `visibleInstances`, every view); the week start
+preference reaches the week, month, year, mini-month and "Due this week" ranges and the day grids' Home / End; the
+grid opens at the working day without a `scroll-to` option; quick add's Tab passes a parsed repetition to the
+editor (`EventEditorTarget` `new.recurrence`); `repeat` and `video` icons bundled; the shared popover sets the UI
+font; dead theme / skin rules of the replaced parts removed (default-theme and default-layout fixtures
+regenerated). Follow-ups in `docs/backlog.md` (quick create from the palette / MCP and other languages, answering
+one occurrence from the quick look, drawing on touch screens). Flaky under full-suite load, passing alone:
+`nail-core` `replay::tests::a_deferred_pass_logs_once_at_info_without_the_text` (no WARN captured in the last pass)
+and `mail_actions` `the_lab_move_conversation_on_the_imap_server` (timed out once). Next: the reviews, then the
+human gate on the 0.8.11 installer.
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

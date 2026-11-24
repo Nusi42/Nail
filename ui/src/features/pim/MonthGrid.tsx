@@ -22,6 +22,7 @@ import { Swatch, geomId } from "./common";
 import { dayDate, formatDay } from "./fmt";
 import { isoWeekNumber } from "./prefs";
 import { dateString, monthGrid, dayGridMove, type ViewRange } from "./time";
+import type { Weekday } from "../../api/generated";
 import { bandOf } from "./viewsModel";
 
 export interface MonthGridProps {
@@ -57,6 +58,8 @@ export interface MonthGridProps {
   heat?: ReadonlyMap<string, number>;
   /** Show ISO week numbers in front of the weeks. */
   weekNumbers?: boolean;
+  /** The first weekday of a row (`null` = the UI locale's). */
+  weekStart?: Weekday | null;
 }
 
 export function MonthGrid({
@@ -76,11 +79,12 @@ export function MonthGrid({
   dots,
   heat,
   weekNumbers = false,
+  weekStart = null,
 }: MonthGridProps) {
   const t = useT();
   const locale = useLocale();
   const format = useDateFormat();
-  const weeks = monthGrid(month, locale);
+  const weeks = monthGrid(month, locale, weekStart);
   const firstWeek = weeks[0] ?? [];
   const tableRef = useRef<HTMLTableElement>(null);
   const keyboard = useRef(false);
@@ -98,7 +102,11 @@ export function MonthGrid({
       onSelect(focused);
       return;
     }
-    const next = dayGridMove(event.key, focused, locale, { pages: true, shift: event.shiftKey });
+    const next = dayGridMove(event.key, focused, locale, {
+      pages: true,
+      shift: event.shiftKey,
+      weekStart,
+    });
     if (next === null) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     event.preventDefault();

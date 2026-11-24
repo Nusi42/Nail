@@ -22,7 +22,7 @@ import { Problem, problemOf, useFollowingDay } from "./common";
 import { EmptyState } from "./EmptyState";
 import { dayDate } from "./fmt";
 import { MonthGrid } from "./MonthGrid";
-import { useCalendarPreferences } from "./prefs";
+import { useCalendarPreferences, weekStartOf } from "./prefs";
 import { useCalendars, useInstances } from "./queries";
 import { usePim, usePimStore } from "./store";
 import {
@@ -33,10 +33,11 @@ import {
   rangeInstants,
   todayIn,
   viewRange,
+  visibleInstances,
   type ViewKind,
 } from "./time";
 import { useCalendarZones } from "./viewHooks";
-import { dayDots, shownInstances } from "./viewsModel";
+import { dayDots } from "./viewsModel";
 
 /** Views whose days the mini-month marks as a band (a month or year shows anyway). */
 const BAND_VIEWS: readonly ViewKind[] = [
@@ -81,15 +82,20 @@ export function MiniMonthView({
   const today = todayIn(tz, useNow());
   const [focused, setFocused] = useFollowingDay(anchor);
   const month = startOfMonth(focused);
-  const range = viewRange("month", month, locale);
+  const weekStart = weekStartOf(prefs);
+  const range = viewRange("month", month, locale, { ...DEFAULT_VIEW_OPTIONS, weekStart });
   const instances = useInstances(rangeInstants(range, tz), calendarIds, tz);
   const calendars = useCalendars();
-  const list = shownInstances(instances.data ?? [], prefs);
+  const list = visibleInstances(instances.data ?? [], prefs.show_declined);
   const busy = busyDays(list, tz);
   const dots = dayDots(list, calendars.data, daysOf(range), tz);
   const band =
     shown && BAND_VIEWS.includes(shown.view)
-      ? viewRange(shown.view, anchor, locale, { ...DEFAULT_VIEW_OPTIONS, days: shown.days })
+      ? viewRange(shown.view, anchor, locale, {
+          ...DEFAULT_VIEW_OPTIONS,
+          days: shown.days,
+          weekStart,
+        })
       : null;
   const monthName = format.dateTime(dayDate(month), {
     month: "long",
@@ -137,6 +143,7 @@ export function MiniMonthView({
         today={today}
         busy={busy}
         dots={dots}
+        weekStart={weekStart}
         band={band}
         weekNumbers={prefs.show_week_numbers}
         label={monthName}
@@ -173,7 +180,7 @@ export function Agenda({ node, nodeKey }: WidgetProps) {
       <AgendaList
         nodeKey={nodeKey}
         range={range}
-        instances={shownInstances(instances.data ?? [], prefs)}
+        instances={visibleInstances(instances.data ?? [], prefs.show_declined)}
         calendars={calendars.data}
         tz={tz}
         part="agenda.list"

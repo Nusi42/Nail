@@ -198,6 +198,9 @@ function minuteTime(minutes: number): { hour: number; minute: number } {
   return { hour: Math.floor(minutes / 60), minute: minutes % 60 };
 }
 
+/** Minutes around now within which the now label hides an hour label. */
+const NOW_LABEL_MINUTES = 20;
+
 export function TimeGrid({
   nodeKey,
   days,
@@ -667,7 +670,16 @@ export function TimeGrid({
         <div data-part="calendar.body" data-zones={zones}>
           <div data-part="calendar.gutter" aria-hidden="true">
             {hours.map((hour) => (
-              <span key={hour} data-part="calendar.hour">
+              <span
+                key={hour}
+                data-part="calendar.hour"
+                // The now label takes the place of an hour label it would cover.
+                data-state={
+                  showNow && Math.abs(nowWall - hour * 60) < NOW_LABEL_MINUTES
+                    ? "near-now"
+                    : undefined
+                }
+              >
                 {formatHour(format, hour)}
               </span>
             ))}

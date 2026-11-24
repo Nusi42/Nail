@@ -190,7 +190,7 @@ export function EventItem({
   ].filter(Boolean);
   const icons = [
     instance.my_status === "needs-action" ? "circle-question-mark" : null,
-    instance.recurring ? "refresh-cw" : null,
+    instance.recurring ? "repeat" : null,
     instance.has_attendees ? "users" : null,
     instance.has_alarms ? "bell" : null,
     instance.read_only ? "lock" : null,
