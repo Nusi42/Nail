@@ -553,6 +553,7 @@ impl Store {
                     has_attendees: !fields.attendees.is_empty(),
                     has_alarms: !fields.alarms.is_empty(),
                     read_only: event.read_only,
+                    my_status: None,
                 },
             ));
         }

@@ -3,6 +3,19 @@
 What changed in each version of Nail, newest first. Earlier milestones (the
 preview versions) are summarized in the project's `CHANGELOG.md`.
 
+## Nail 0.8.11 (`0.8.11`)
+
+A calendar that reads well: every calendar in its own colour, events you can
+read even when they overlap, a quick look at an event with one click, and
+new events drawn straight onto the week.
+
+### Corrected in 0.8.11
+
+- **Changes wait seconds, not minutes, after a slow answer** — when the
+  server is busy or slow for a moment, Nail tries your queued changes
+  (moves, flags, deletes) again within seconds instead of waiting for the
+  next check for new mail.
+
 ## Nail 0.8.10 (`0.8.10`)
 
 Select a whole message list and act on it at once, however large it is.

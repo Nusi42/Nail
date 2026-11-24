@@ -1523,6 +1523,122 @@ migrations (Delete permanently, New / Rename theme). Next: WD1–WD4 in parallel
 soon on its own (2 s doubling up to a minute, five times, or the server's `Retry-After`), then waits for the polls
 as before; no setting.
 
+### Wave R7 (calendar that reads well)
+
+A design review of the calendar, tasks and invitations found 24 problems (M1–M7 must, S1–S12 should, C1–C5
+could): every calendar the same blue, overlapping and short events unreadable, a click opening the full
+editor, no drag to create, today looking disabled, narrow windows clipping the week, unanswered invitations
+looking committed, no quick create from text, a long editor form, cards hiding what the core knows, a plain
+mini-month, no working hours or week numbers, a bar-stack agenda, repeated multi-day events in the month view,
+no calendar search, a flat invitation card, a contradicting scheduling grid, tasks never meeting the calendar,
+an unlabelled free-time view, a bold-only year view, a terse reminder toast, one-line empty states and hidden
+time zones. The maintainer approved all of them. Release 0.8.11. Contract ADR 0246.
+
+#### Scope decisions for R7
+
+- **Colours:** the palette is core data (`CalendarColor`, `CALENDAR_PALETTE`); new, discovered and existing
+  calendars without a colour get the first unused palette colour, else the least used
+  (`next_calendar_color`); server colours (CalDAV `calendar-color`, Graph `hexColor`) are kept. Event cards
+  get a 20 % tint plus the solid edge.
+- **Grid:** cascaded overlaps (each later event indented, drawn on top, at least 60 % of the column;
+  non-overlapping events expand); events under 45 minutes on one line with a minimum height; icons for
+  repeats, people, reminders and read-only, free time hatched; today as a filled date circle without a column
+  shade; the now line with a dot, a faint line across the week and the time in the gutter, under the event
+  text; drag to create in 15-minute steps with an inline title (Enter saves, More options opens the editor),
+  click-and-release snaps to the 15-minute slot, Shift + arrows on the slot grid.
+- **Quick look:** a click (or Enter / Space on a card) opens a popover beside the event (time, calendar,
+  place, people with answers, call link, Edit / Delete / Join, RSVP); Enter there or a double-click opens the
+  editor; Esc or a click outside close it.
+- **Invitations:** `EventInstance.my_status` (the user's `PARTSTAT`, `null` as organizer or non-attendee);
+  unanswered = dashed outline without fill and a "?"; declined struck through, or hidden with
+  `show_declined` off; the invitation card with one segmented answer (Accept first), a mini day strip, the
+  attendee line and a More menu; the reader no longer lists the `text/calendar` part as an attachment when the
+  card shows it (UI only).
+- **Quick create from text:** the core's `ParseEventText` (crate `nail-event-text`), English only, keywords
+  in a per-language table in the crate (unknown languages read as English); the toolbar field previews chips,
+  Enter adds, Tab opens the editor prefilled. Command palette and MCP stay as they are (backlog).
+- **Preferences (core, app settings):** working hours 8:00–18:00, work days Monday–Friday, week start from the
+  locale, ISO week numbers off, view zone = the system's, no second zone, declined events shown; edited in
+  Settings → Calendar & contacts, the zones also from the toolbar; a widget's layout options still win.
+- **Views:** mini-month band, dots, week numbers; agenda time column, now marker, Tomorrow, "until …" on the
+  second day; month spanning bars, dot lines, today pill; free-time axis, labels, reason and totals; year heat
+  shading; empty states with Back to today / New event and the nearest event outside the range; calendar search
+  (`/`, upcoming / past); narrow windows: sidebar drawer below 900 px, three days then one day when a column
+  gets narrower than about 90 px, a floating New event.
+- **Tasks:** `ListTasksDue`; due tasks with a checkbox in the all-day row, a "Due this week" sidebar panel,
+  dragging a task onto the grid creates an event with its title at that slot (the task stays).
+- **Editor, scheduling, reminders:** the compact editor (large title, one date / time row with the length,
+  option chips, people and notes, More for the time zone of the end, visibility, status and web page; dates
+  as text); the scheduling grid with a lane per attendee, a draggable slot and suggestion chips, no
+  contradicting texts; the reminder toast with relative time, colour edge, Dismiss primary, split snooze.
+- No new UI feature folders; one new crate (`nail-event-text`); new locale slots `calendar-grid.ftl`,
+  `calendar-look.ftl`, `calendar-views.ftl`; per-package style slots instead of new `theme.kdl` parts.
+- **Release:** the R7 items go into "Nail 0.8.11" of the release notes and `CHANGELOG.md` `[Unreleased]`
+  (slots prepared by the contract); packages add their user-visible items, the integrator merges them.
+
+#### Packages of R7
+
+Packages use the contract's shared pieces and do not change them (`ui/src/widgets/Popover.tsx`,
+`ui/src/features/pim/prefs.ts`, `PimState.quickLook`, `colorOf`, the mock's `mockCalendarView.ts`, the
+`nail-api` R7 types and requests, the palette source of `colors.ts`); a needed change goes into the report for
+the integrator. Each UI package owns its locale slot (`pim.ftl` / `common.ftl` only through the integrator),
+its style slot, the userDocs/en pages of its features and the e2e specs of its features plus
+`e2e/tests/r7-<package>-*.spec.ts`. Tests that expect the editor after one click on an event move to Enter in
+the quick look or a double-click (P1 changes the click and fixes them).
+
+- **Contract (done):** ADR 0246; `nail_api::pim::calendar_view` (palette and default-colour rule, preferences,
+  parsed text), `EventInstance.my_status` (stub `None`), the requests `GetCalendarPreferences` /
+  `SetCalendarPreferences` (implemented, app settings, backup check), `ParseEventText` (stub reader),
+  `ListTasksDue` (implemented); the stub crate `nail-event-text`; generated TS and constants; the UI mock
+  (`mockCalendarView.ts`, `my_status` from `userAddresses`); `Popover` + `placePopover` (PimMenu uses it);
+  `prefs.ts`; the quick look slot (`EventPopoverHost` in `effects`); style and locale slots; release slots.
+- **P1 — time grid (parallel):** `ui/src/features/pim/{TimeGrid,EventItem}.tsx`, `time.ts` (`placeDay`, the
+  view range's week start from `weekStartOf`), `newEvent.ts`, `dayDrag.ts`, `initialScroll.ts` and their tests,
+  `gridStyle.ts`, `calendar-grid.ftl`: M2 cascade and expand, M3 short cards, M4 opening the quick look
+  (`setQuickLook` with `anchorOf(card)`), M5 drag to create with the inline title (`Popover`), 15-minute click
+  snapping, Shift + arrows, M6 today circle and now line, S1 provisional / declined looks, S4 icons and hatched
+  free time, S6 off-hours and weekend shading (`offHours`), the week number corner (`isoWeekNumber`),
+  scrolling to the working day, C5 the second gutter from `viewZonesOf`, S12 due tasks in the all-day row
+  (`useTasksDue`, checkbox = `CompleteTask`) and dropping a task (`taskOfDrag`) to create an event; e2e
+  `r7-p1-grid.spec.ts`.
+- **P2 — quick look and editor (parallel):** `EventPopover.tsx`, `EventEditor.tsx`, `RecurrenceEditor.tsx`,
+  `Reminders.tsx`, `DateTimeInput.tsx`, `ui/src/features/scheduling/` (MeetingPanel, FreeBusyTimeline,
+  InvitationCard, Answer), the mail reader's handling of the `text/calendar` part, `lookStyle.ts`,
+  `calendar-look.ftl`: M4 the quick look's content (Enter opens the editor, Delete, Join, RSVP for
+  `needs-action`), S3 the compact editor, S10 the invitation card, S11 the scheduling grid, C3 the reminder
+  toast; e2e `r7-p2-look.spec.ts`.
+- **P3 — views and shell (parallel):** `Calendar.tsx` (toolbar search with `/`, quick-add field with chips
+  through `parseEventText`, zone chips saving the preferences, responsive day count), `CalendarViews.tsx`
+  (agenda, free time, year), `MonthGrid.tsx`, `SmallWidgets.tsx` (mini-month), `CalendarList.tsx`,
+  `CalendarDialogs.tsx` (no client-side default colour: the core assigns it), `colors.ts` (20 % tint),
+  `TaskList.tsx` (empty states, the "Due this week" panel with `setTaskDrag`), `PimSettings.tsx` (the
+  preferences with the settings save bar), `defaults/layout.kdl` breakpoints (drawer, floating New event),
+  `viewsStyle.ts`, `calendar-views.ftl`: M7, S5, S7, S8, S9, C1, C2, C4, C5 (toolbar), the S6 settings, M1's
+  fill; e2e `r7-p3-views.spec.ts`.
+- **P4 — core (parallel):** the crates: `nail-event-text` (the English reader: today / tomorrow / weekdays /
+  dates, times and ranges with am / pm, "for 2 hours", "every Monday 9am", "all day", "at …"; spans and title;
+  property tests), `my_status` in the instance cache and the expansion (the user's addresses; a store
+  migration if the cache needs a column), the default colour on `CreateCalendar` and on discovery / sync
+  (CalDAV `calendar-color`, Graph `hexColor`, existing calendars without a colour), refinements of the
+  contract's `ListTasksDue` and preferences if needed, and their Rust tests
+  (`crates/nail-core/tests/calendar_view.rs` and the crates' own).
+- **Integration:** rebase, renumber package ADRs, fold the style and locale slots where useful, the shared ftl
+  files, the 0.8.11 release notes and `CHANGELOG.md`, regenerate fixtures (the default theme if a `theme.kdl`
+  rule went, the generated API), the full suite incl. `npm run visual` (baselines change), memory `r7-status`.
+
+Gates: every suite green; a week with three overlapping meetings shows every title; 15-minute events show their
+title; one click opens the quick look and Enter the editor; drawing on the grid creates an event with the
+dragged times; at 420 px the calendar shows one or three days with a drawer and a floating New event; an
+unanswered invitation looks provisional and can be answered from the quick look; "Lunch with Bob tomorrow 12:30
+at Corner café" creates that event; a new calendar gets a colour no other calendar has; working hours shade the
+grid and the week number shows when switched on; due tasks appear in the all-day row; the maintainer's human
+gate on the 0.8.11 installer, then release.
+
+*Status (contract):* done (ADR 0246). Core: the R7 types, requests and constants, preferences and tasks due
+implemented, the reader and `my_status` stubbed, the `nail-event-text` stub crate; UI: the generated contract,
+the mock's answers, `Popover`, `prefs.ts`, the quick look slot, style and locale slots, release slots. Next:
+P1–P4 in parallel.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

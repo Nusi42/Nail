@@ -2,6 +2,7 @@
 import type { CalendarId } from "./CalendarId";
 import type { EventId } from "./EventId";
 import type { EventStatus } from "./EventStatus";
+import type { ParticipationStatus } from "./ParticipationStatus";
 import type { PimTime } from "./PimTime";
 import type { Transparency } from "./Transparency";
 
@@ -83,4 +84,11 @@ has_alarms: boolean,
 /**
  * Read-only.
  */
-read_only: boolean, };
+read_only: boolean, 
+/**
+ * The user's own participation (`PARTSTAT` of the attendee whose
+ * address is one of the user's identities); `null` when the user is
+ * not an attendee (no attendees, or the organizer). `needs-action`
+ * marks an unanswered invitation (R7, ADR 0246).
+ */
+my_status: ParticipationStatus | null, };

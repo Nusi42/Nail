@@ -177,6 +177,10 @@ macro_rules! pim_event_task_requests {
             | $crate::Request::CompleteTask { .. }
             | $crate::Request::MoveTask { .. }
             | $crate::Request::DeleteTask { .. }
+            | $crate::Request::ListTasksDue { .. }
+            | $crate::Request::ParseEventText { .. }
+            | $crate::Request::GetCalendarPreferences
+            | $crate::Request::SetCalendarPreferences { .. }
     };
 }
 

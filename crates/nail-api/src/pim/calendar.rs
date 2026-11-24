@@ -925,6 +925,11 @@ pub struct EventInstance {
     pub has_alarms: bool,
     /// Read-only.
     pub read_only: bool,
+    /// The user's own participation (`PARTSTAT` of the attendee whose
+    /// address is one of the user's identities); `null` when the user is
+    /// not an attendee (no attendees, or the organizer). `needs-action`
+    /// marks an unanswered invitation (R7, ADR 0246).
+    pub my_status: Option<ParticipationStatus>,
 }
 
 /// A stretch of free time ([`crate::Request::FindFreeTime`]).

@@ -6,33 +6,22 @@ import type {
   Event as NailEvent,
   Recurrence,
   Request,
-  Response,
 } from "../../api/generated";
 import { MockTransport } from "../../api/mock";
 import { createUiStore } from "../../state/uiStore";
 import type { FeatureEventContext } from "../types";
 import { PIM_EVENTS, handlePimEvent, pimKeys, pimStoreFor } from ".";
 import { PIM_REQUESTS, createPimMockState, fireReminder, isPimRequest, parseImport } from "./mock";
+import { defaultPreferences } from "./mockCalendarView";
 import { expandEvent, occurrenceStarts } from "./mockExpand";
 import { emptyEventFields } from "./mockSeed";
 import { plainRecurrence } from "./recurrence";
 import { inTimeZone } from "../../test/env";
 import { must } from "../../test/must";
+import { mockOk as ok } from "./testing";
 import { BERLIN } from "../../test/mockIds";
 
 inTimeZone(BERLIN);
-
-type Of<T extends Response["type"]> = Extract<Response, { type: T }>;
-
-async function ok<T extends Response["type"]>(
-  t: MockTransport,
-  request: Request,
-  type: T,
-): Promise<Of<T>> {
-  const response = await t.send(request);
-  expect(response.type, JSON.stringify(response)).toBe(type);
-  return response as Of<T>;
-}
 
 function weekly(
   days: ("mon" | "tue" | "wed" | "thu" | "fri")[],
@@ -173,7 +162,7 @@ describe("recurrence expansion (mock)", () => {
 describe("pim mock", () => {
   it("routes exactly its requests", () => {
     expect(new Set(PIM_REQUESTS).size).toBe(PIM_REQUESTS.length);
-    expect(PIM_REQUESTS).toHaveLength(52);
+    expect(PIM_REQUESTS).toHaveLength(56);
     expect(isPimRequest({ type: "ListPimSources" })).toBe(true);
     expect(isPimRequest({ type: "Ping" })).toBe(false);
   });
@@ -432,6 +421,20 @@ describe("pim mock", () => {
         until: "2030-01-01T00:00:00Z",
       },
       DismissReminders: { type: "DismissReminders", reminder_ids: ["rem-review"] },
+      GetCalendarPreferences: { type: "GetCalendarPreferences" },
+      SetCalendarPreferences: {
+        type: "SetCalendarPreferences",
+        preferences: defaultPreferences(),
+      },
+      ParseEventText: { type: "ParseEventText", text: "Lunch", tz: "UTC", now: null, locale: null },
+      ListTasksDue: {
+        type: "ListTasksDue",
+        from: "2026-11-23T00:00:00Z",
+        to: "2026-11-30T00:00:00Z",
+        tz: "UTC",
+        calendar_ids: null,
+        include_completed: false,
+      },
     };
     for (const type of PIM_REQUESTS) {
       const response = await t.send(samples[type]);

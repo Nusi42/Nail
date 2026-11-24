@@ -315,7 +315,7 @@ status: PimOpStatus, } | { "type": "InvitationsChanged",
 /**
  * The messages.
  */
-message_ids: Array<MessageId>, } | { "type": "SchedulingSettingsChanged" } | { "type": "GmailLabelsChanged", 
+message_ids: Array<MessageId>, } | { "type": "SchedulingSettingsChanged" } | { "type": "CalendarPreferencesChanged" } | { "type": "GmailLabelsChanged", 
 /**
  * The account.
  */

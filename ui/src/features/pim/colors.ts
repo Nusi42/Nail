@@ -15,32 +15,23 @@
  * (`useGeometry`), never inline styles, and only when they look like a CSS
  * colour (`#rgb`, `#rrggbb`, `#rrggbbaa` or a colour keyword).
  */
+import { CALENDAR_PALETTE } from "../../api/generated";
+import type { CalendarColor, PaletteColor } from "../../api/generated";
 
 /** Per cent of the calendar colour in an event card's background. */
 export const EVENT_TINT = 16;
 
-/** Ids of the palette's colours (`pim-color-<id>` names each). */
-export type CalendarColorId =
-  "blue" | "cyan" | "green" | "amber" | "orange" | "red" | "pink" | "purple" | "slate";
+/** Ids of the palette's colours (`pim-color-<id>` names each); the core's `CalendarColor`. */
+export type CalendarColorId = CalendarColor;
 
 /** One colour of the palette: id and value. */
-export interface PaletteColor {
-  id: CalendarColorId;
-  value: string;
-}
+export type { PaletteColor };
 
-/** The colours offered for calendars and task lists. */
-export const CALENDAR_COLORS: readonly PaletteColor[] = [
-  { id: "blue", value: "#2563eb" },
-  { id: "cyan", value: "#0891b2" },
-  { id: "green", value: "#16a34a" },
-  { id: "amber", value: "#ca8a04" },
-  { id: "orange", value: "#ea580c" },
-  { id: "red", value: "#dc2626" },
-  { id: "pink", value: "#db2777" },
-  { id: "purple", value: "#9333ea" },
-  { id: "slate", value: "#64748b" },
-];
+/**
+ * The colours offered for calendars and task lists, in the order the core
+ * hands out defaults to new and discovered calendars (R7, ADR 0246).
+ */
+export const CALENDAR_COLORS: readonly PaletteColor[] = CALENDAR_PALETTE;
 
 const HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const KEYWORD_RE = /^[a-z]{3,32}$/i;

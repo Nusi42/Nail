@@ -342,6 +342,17 @@ ${p("problem.details")}[data-mode="toggle"] { max-width: ${floatingWidth(PROBLEM
 ${p("problem.details")}[data-mode="follow"] { position: absolute; inset-inline: 0; top: 100%; z-index: 20; margin-top: ${T.xs}; }
 ${p("problem.details")}[data-mode="follow"]::before { content: ""; position: absolute; inset-inline: 0; bottom: 100%; height: calc(${T.xs} + 1px); }`;
 
+/**
+ * R7 (ADR 0246): the shared popover (`widgets/Popover.tsx`) — a card on
+ * the overlay shadow, like a menu, wide enough for a quick look.
+ */
+const POPOVER = `${p("popover")} {
+  box-sizing: border-box; width: max-content; min-width: calc(16 * ${T.lg}); max-width: ${MENU_MAX_WIDTH};
+  max-height: calc(100vh - 2 * ${T.md}); overflow: auto; padding: ${T.md};
+  border: 1px solid ${T.border}; border-radius: ${T.rMd}; color: ${T.fg}; background-color: ${T.bg}; box-shadow: ${T.overlay};
+}
+${p("popover")}:focus { outline: none; }`;
+
 const MENUS = `${p("context-menu")}, ${p("context-menu.popup")} {
   width: max-content; min-width: calc(16 * ${T.lg}); max-width: ${MENU_MAX_WIDTH};
 }
@@ -685,6 +696,7 @@ export const SKIN_CSS = [
   SWITCH,
   CHIPS_TAGS_BADGES,
   MENUS,
+  POPOVER,
   PROBLEM,
   TABS,
   CARDS_WINDOWS,

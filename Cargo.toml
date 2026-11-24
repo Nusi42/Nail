@@ -26,6 +26,7 @@ members = [
     "crates/nail-triage",
     "crates/nail-plugins",
     "crates/nail-ical",
+    "crates/nail-event-text",
     "crates/nail-dav",
     "crates/nail-itip",
     "crates/nail-proto-gmail",
@@ -73,6 +74,7 @@ default-members = [
     "crates/nail-triage",
     "crates/nail-plugins",
     "crates/nail-ical",
+    "crates/nail-event-text",
     "crates/nail-dav",
     "crates/nail-itip",
     "crates/nail-proto-gmail",
@@ -127,6 +129,7 @@ nail-sieve = { path = "crates/nail-sieve" }
 nail-triage = { path = "crates/nail-triage" }
 nail-plugins = { path = "crates/nail-plugins" }
 nail-ical = { path = "crates/nail-ical" }
+nail-event-text = { path = "crates/nail-event-text" }
 nail-dav = { path = "crates/nail-dav" }
 nail-itip = { path = "crates/nail-itip" }
 nail-proto-gmail = { path = "crates/nail-proto-gmail" }

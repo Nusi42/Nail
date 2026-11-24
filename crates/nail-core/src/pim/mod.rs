@@ -15,6 +15,8 @@
 //!   `sync-collection` (`nail-dav`, ADR 0060), replay of the PIM queue,
 //!   backoff while offline.
 //! * [`events`] — events (edit scopes), instances, free time; tasks.
+//! * [`calendar_view`] — the calendar preferences and quick create from
+//!   text (R7, ADR 0246; the parser is `nail-event-text`).
 //! * [`contacts`] — contacts, groups, duplicates, merging, photos.
 //! * [`import`] — `.ics` / `.vcf` imports and "create event / task from
 //!   email".
@@ -22,6 +24,7 @@
 //!   its task, snooze / dismiss, notifications.
 //! * [`search`] — the PIM search index (in memory, rebuilt from the store).
 
+mod calendar_view;
 mod contacts;
 pub(crate) mod engine;
 mod events;
@@ -47,6 +50,7 @@ use tokio::sync::Notify;
 use crate::error::{CoreError, Result};
 use crate::service::Service;
 
+pub(crate) use calendar_view::CALENDAR_PREFERENCES_KEY;
 pub(crate) use engine::SourceHandle;
 
 /// PIM state of a running core.

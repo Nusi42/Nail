@@ -31,6 +31,7 @@
 //! `nail-ical`; this module is the wire model only.
 
 pub mod calendar;
+pub mod calendar_view;
 pub mod contact;
 pub mod import;
 pub mod mcp;
@@ -49,6 +50,10 @@ pub use calendar::{
     Alarm, AlarmAction, AlarmTrigger, Attendee, Calendar, CalendarComponent, CalendarEvent,
     CalendarSettings, ConferenceLink, EditScope, EventFields, EventInstance, EventOverride,
     FreeSlot, Organizer, PimAttachment, Recurrence, RecurrenceEnd, RecurrenceRule,
+};
+pub use calendar_view::{
+    CalendarColor, CalendarPreferences, PaletteColor, ParsedEventText, ParsedPart, ParsedSpan,
+    WorkHours,
 };
 pub use contact::{
     AddressBook, AddressBookSettings, Contact, ContactFields, ContactGroup, ContactMatch,
@@ -334,11 +339,14 @@ pub enum PimIssue {
     TaskCycle,
     /// Too many items in one list (attendees, alarms, addresses, …).
     TooMany,
+    /// Working hours that end before they start or after midnight
+    /// ([`CalendarPreferences`]).
+    InvalidWorkHours,
 }
 
 impl PimIssue {
     /// All issues.
-    pub const ALL: [PimIssue; 15] = [
+    pub const ALL: [PimIssue; 16] = [
         Self::InvalidDate,
         Self::InvalidTime,
         Self::InvalidTimeZone,
@@ -354,6 +362,7 @@ impl PimIssue {
         Self::InvalidUrl,
         Self::TaskCycle,
         Self::TooMany,
+        Self::InvalidWorkHours,
     ];
 
     /// Fluent message id, e.g. `pim-issue-invalid-date`.
@@ -374,6 +383,7 @@ impl PimIssue {
             Self::InvalidUrl => "pim-issue-invalid-url",
             Self::TaskCycle => "pim-issue-task-cycle",
             Self::TooMany => "pim-issue-too-many",
+            Self::InvalidWorkHours => "pim-issue-invalid-work-hours",
         }
     }
 }

@@ -69,6 +69,7 @@ pub fn ui_constants() -> Result<Constants, serde_json::Error> {
     let c = limits(c)?;
     let c = hosts(c)?;
     let c = contract_enums(c)?;
+    let c = calendar(c)?;
     labeled_enums(c)
 }
 
@@ -1237,6 +1238,48 @@ fn contract_enums(c: Constants) -> Result<Constants, serde_json::Error> {
         "readonly RuleTrigger[\"type\"][]",
         &["RuleTrigger"],
     )
+}
+
+/// How the calendar reads (R7, ADR 0246): the palette and its ids, the
+/// default preferences, quick-create limits and the default event length.
+fn calendar(c: Constants) -> Result<Constants, serde_json::Error> {
+    use crate::pim::calendar_view::{
+        self as view, CalendarColor, CalendarPreferences, ParsedPart, calendar_palette,
+    };
+    c.enum_values("CalendarColor", &CalendarColor::ALL)?
+        .enum_values(
+            "ParsedPart",
+            &every!(ParsedPart: Date, Time, Duration, Recurrence, Location, AllDay),
+        )?
+        .typed(
+            "CALENDAR_PALETTE",
+            "The calendar colours in palette order (the order the core hands out defaults).",
+            &calendar_palette(),
+            "readonly PaletteColor[]",
+            &["PaletteColor"],
+        )?
+        .typed(
+            "DEFAULT_CALENDAR_PREFERENCES",
+            "The calendar preferences before the user changes them.",
+            &CalendarPreferences::default(),
+            "CalendarPreferences",
+            &["CalendarPreferences"],
+        )?
+        .add(
+            "DEFAULT_EVENT_MINUTES",
+            "Length of a new event when only its start is known (minutes).",
+            &view::DEFAULT_EVENT_MINUTES,
+        )?
+        .add(
+            "MAX_EVENT_TEXT",
+            "Longest text quick create reads (characters).",
+            &view::MAX_EVENT_TEXT,
+        )?
+        .add(
+            "MINUTES_PER_DAY",
+            "Minutes in a day (the latest end of the working hours).",
+            &view::MINUTES_PER_DAY,
+        )
 }
 
 /// The Fluent ids of agent and plug-in writes (`nail_api::agents`; the

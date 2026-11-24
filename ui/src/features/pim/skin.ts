@@ -34,6 +34,9 @@ import {
   VISUALLY_HIDDEN,
 } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
+import { GRID_SKIN_CSS } from "./gridStyle";
+import { LOOK_SKIN_CSS } from "./lookStyle";
+import { VIEWS_SKIN_CSS } from "./viewsStyle";
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
 /** One line, cut with an ellipsis. */
@@ -347,7 +350,13 @@ export const PIM_SKIN_CSS = [
   CONTACTS,
   TASKS,
   DATETIME,
-].join("\n");
+  // R7 (ADR 0246): the packages' style slots.
+  GRID_SKIN_CSS,
+  LOOK_SKIN_CSS,
+  VIEWS_SKIN_CSS,
+]
+  .filter((section) => section !== "")
+  .join("\n");
 
 /**
  * Parts whose rules in `defaults/theme.kdl` predate this skin and override

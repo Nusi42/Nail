@@ -28,6 +28,7 @@ chrono.workspace = true
 chrono-tz.workspace = true
 
 [dev-dependencies]
+nail-api = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 # Tests render the iMIP texts from locales/en/itip.ftl (the same
 # fluent-bundle nail-config uses; Apache-2.0 OR MIT).

@@ -37,6 +37,7 @@ import type {
   SchedulingTransport,
   SentItip,
 } from "../../api/generated";
+import { userAddresses } from "../../api/mockAccounts";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { answerPim, listInstances } from "../pim/mock";
 import { instantMs, localZone, pimTimeIn, sameTime, todayIn, utcString } from "../pim/time";
@@ -147,14 +148,7 @@ function notFound(what: string): Response {
 
 /** The user's addresses: every identity and account address. */
 export function myAddresses(core: MockCore): string[] {
-  const d = core.data;
-  const out = new Set<string>();
-  for (const account of d.accountsConfig.accounts) {
-    out.add(account.email.toLowerCase());
-    for (const identity of account.identities) out.add(identity.email.toLowerCase());
-  }
-  for (const account of d.accounts) if (account.email) out.add(account.email.toLowerCase());
-  return [...out];
+  return userAddresses(core.data);
 }
 
 /** Calls the PIM mock like the core writes through the PIM queue. */

@@ -248,6 +248,7 @@ ${[
 [data-part="search-bar.input"]::-webkit-search-cancel-button { display: none; }
 ${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${String(d)}"], [data-part="folder-picker.item"][data-depth="${String(d)}"] { margin-inline-start: ${String(d * 16)}px; }`).join("\n")}
 [data-part="context-menu"] { position: fixed; z-index: 1000; }
+[data-part="popover"] { position: fixed; z-index: 1000; }
 [data-part="context-menu.item"] { display: flex; align-items: center; width: 100%; font: inherit; text-align: start; }
 [data-part="context-menu.submenu"] { position: relative; }
 [data-part="context-menu.popup"] { position: absolute; inset-inline-start: 100%; top: 0; }

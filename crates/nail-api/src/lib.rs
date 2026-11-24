@@ -364,6 +364,8 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     pim::mcp::McpContactResource::export_all(&cfg)?;
     pim::mcp::McpContactSearchResult::export_all(&cfg)?;
     pim::mcp::McpTasksResource::export_all(&cfg)?;
+    // R7: the calendar palette (only in the generated constants).
+    pim::PaletteColor::export_all(&cfg)?;
     // M3b: scheduling and Gmail types the UI names but that are reachable
     // only through optional fields, or not at all (issues, actions, the
     // folder mapping, label kinds).

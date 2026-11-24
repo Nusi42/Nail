@@ -8,6 +8,26 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Added — a calendar that reads well, contract (ADR 0246)
+
+- The calendar palette is core data (`CalendarColor`, `CALENDAR_PALETTE`)
+  with one rule for default colours (`next_calendar_color`: the first
+  unused colour, else the least used).
+- Calendar preferences in the app settings (`GetCalendarPreferences` /
+  `SetCalendarPreferences`, `CalendarPreferencesChanged`): working hours
+  and days, week start, ISO week numbers, the view zone and a second zone,
+  showing declined events.
+- `ListTasksDue` lists open tasks due in a range for the calendar views.
+- `ParseEventText` reads a sentence as an event (crate `nail-event-text`;
+  the reader itself follows).
+- `EventInstance.my_status` carries the user's own participation status.
+
+### Fixed — deferred writes are retried soon (ADR 0245)
+
+- A replay pass that defers writes retries the account's queue within
+  seconds (2 s doubling up to a minute, five times, or the server's
+  `Retry-After`) instead of at the next poll.
+
 ## [0.8.10] — 2026-11-23
 
 ### Added — select all and large mail actions (ADR 0235)

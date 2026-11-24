@@ -12,6 +12,7 @@ import type { BackupContents } from "./BackupContents";
 import type { BodyPolicy } from "./BodyPolicy";
 import type { CalendarComponent } from "./CalendarComponent";
 import type { CalendarId } from "./CalendarId";
+import type { CalendarPreferences } from "./CalendarPreferences";
 import type { CalendarSettings } from "./CalendarSettings";
 import type { CancelScope } from "./CancelScope";
 import type { ComposerMode } from "./ComposerMode";
@@ -1394,7 +1395,48 @@ calendar_ids: Array<CalendarId> | null,
 /**
  * IANA zone for all-day and floating events.
  */
-tz: string, } | { "type": "ListAddressBooks", 
+tz: string, } | { "type": "GetCalendarPreferences" } | { "type": "SetCalendarPreferences", 
+/**
+ * The preferences.
+ */
+preferences: CalendarPreferences, } | { "type": "ParseEventText", 
+/**
+ * The text.
+ */
+text: string, 
+/**
+ * IANA zone the times are meant in (the view's zone).
+ */
+tz: string, 
+/**
+ * "Now" for relative words (RFC 3339); `null` = the core's clock.
+ */
+now: string | null, 
+/**
+ * Language of the keywords (BCP 47, e.g. `en`); `null` = the UI
+ * language; unknown languages fall back to English.
+ */
+locale: string | null, } | { "type": "ListTasksDue", 
+/**
+ * Range start (RFC 3339).
+ */
+from: string, 
+/**
+ * Range end (RFC 3339).
+ */
+to: string, 
+/**
+ * IANA zone that due dates and floating times are placed in.
+ */
+tz: string, 
+/**
+ * Task lists; `null` = every visible one.
+ */
+calendar_ids: Array<CalendarId> | null, 
+/**
+ * Include completed and cancelled tasks.
+ */
+include_completed: boolean, } | { "type": "ListAddressBooks", 
 /**
  * One source; `null` = all.
  */

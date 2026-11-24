@@ -9,6 +9,9 @@
  * (`ui/src/theme/compile.ts`, next to `PLUGIN_BASE_CSS`).
  */
 import { LINE_BOX, noticeStack } from "../../theme/declarations";
+import { GRID_BASE_CSS } from "./gridStyle";
+import { LOOK_BASE_CSS } from "./lookStyle";
+import { VIEWS_BASE_CSS } from "./viewsStyle";
 
 /**
  * The time grid's hour labels column (one per time zone shown); the same as
@@ -82,4 +85,4 @@ export const PIM_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; margin: 0; 
 [data-part="contact-card.photo"], [data-part="pim.editor.photo"] { object-fit: cover; }
 [data-part="contact-card.address"] { display: flex; flex-direction: column; font-style: normal; }
 [data-part="pim.editor.main"], [data-part="pim.recurrence.weekdays"], [data-part="pim.scope.choices"] { margin: 0; min-width: 0; }
-`;
+${[GRID_BASE_CSS, LOOK_BASE_CSS, VIEWS_BASE_CSS].filter((css) => css !== "").join("\n")}`;

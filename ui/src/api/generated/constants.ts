@@ -19,6 +19,8 @@ import type { BackupIssue } from "./BackupIssue";
 import type { BackupItem } from "./BackupItem";
 import type { BadgeSource } from "./BadgeSource";
 import type { BusyKind } from "./BusyKind";
+import type { CalendarColor } from "./CalendarColor";
+import type { CalendarPreferences } from "./CalendarPreferences";
 import type { CancelScope } from "./CancelScope";
 import type { CategoryColor } from "./CategoryColor";
 import type { ColorScheme } from "./ColorScheme";
@@ -93,6 +95,8 @@ import type { NotificationSettings } from "./NotificationSettings";
 import type { NotifyFolders } from "./NotifyFolders";
 import type { PageOrientation } from "./PageOrientation";
 import type { PageSize } from "./PageSize";
+import type { PaletteColor } from "./PaletteColor";
+import type { ParsedPart } from "./ParsedPart";
 import type { ParticipationStatus } from "./ParticipationStatus";
 import type { PimIssue } from "./PimIssue";
 import type { PimItemSync } from "./PimItemSync";
@@ -936,7 +940,7 @@ export const TASK_STATUS_VALUES = ["needs-action","in-process","completed","canc
 export const DUPLICATE_REASON_VALUES = ["email","phone","name"] as const satisfies readonly DuplicateReason[];
 
 /** Every `PimIssue`, in the contract's order. */
-export const PIM_ISSUE_VALUES = ["invalid-date","invalid-time","invalid-time-zone","end-before-start","mixed-all-day","invalid-recurrence","invalid-scope","invalid-email","missing-name","invalid-priority","invalid-color","invalid-alarm","invalid-url","task-cycle","too-many"] as const satisfies readonly PimIssue[];
+export const PIM_ISSUE_VALUES = ["invalid-date","invalid-time","invalid-time-zone","end-before-start","mixed-all-day","invalid-recurrence","invalid-scope","invalid-email","missing-name","invalid-priority","invalid-color","invalid-alarm","invalid-url","task-cycle","too-many","invalid-work-hours"] as const satisfies readonly PimIssue[];
 
 /** Every `PimSourceKind`, in the contract's order. */
 export const PIM_SOURCE_KIND_VALUES = ["local","ics","caldav","carddav","exchange"] as const satisfies readonly PimSourceKind[];
@@ -988,6 +992,27 @@ export const PARTICIPATION_STATUS_VALUES = ["needs-action","accepted","declined"
 
 /** The rule triggers without parameters (`RuleTrigger::SIMPLE`), by their `type`. */
 export const RULE_SIMPLE_TRIGGERS = ["arrival","on-send","manual"] as const satisfies readonly RuleTrigger["type"][];
+
+/** Every `CalendarColor`, in the contract's order. */
+export const CALENDAR_COLOR_VALUES = ["blue","cyan","green","amber","orange","red","pink","purple","slate"] as const satisfies readonly CalendarColor[];
+
+/** Every `ParsedPart`, in the contract's order. */
+export const PARSED_PART_VALUES = ["date","time","duration","recurrence","location","all-day"] as const satisfies readonly ParsedPart[];
+
+/** The calendar colours in palette order (the order the core hands out defaults). */
+export const CALENDAR_PALETTE = [{"id":"blue","value":"#2563eb"},{"id":"cyan","value":"#0891b2"},{"id":"green","value":"#16a34a"},{"id":"amber","value":"#ca8a04"},{"id":"orange","value":"#ea580c"},{"id":"red","value":"#dc2626"},{"id":"pink","value":"#db2777"},{"id":"purple","value":"#9333ea"},{"id":"slate","value":"#64748b"}] as const satisfies readonly PaletteColor[];
+
+/** The calendar preferences before the user changes them. */
+export const DEFAULT_CALENDAR_PREFERENCES = {"work_hours":{"start_minute":480,"end_minute":1080},"work_days":["mon","tue","wed","thu","fri"],"week_start":null,"show_week_numbers":false,"time_zone":null,"second_time_zone":null,"show_declined":true} as const satisfies CalendarPreferences;
+
+/** Length of a new event when only its start is known (minutes). */
+export const DEFAULT_EVENT_MINUTES = 60 as const;
+
+/** Longest text quick create reads (characters). */
+export const MAX_EVENT_TEXT = 500 as const;
+
+/** Minutes in a day (the latest end of the working hours). */
+export const MINUTES_PER_DAY = 1440 as const;
 
 /** Every `ThemeKind`, in the contract's order. */
 export const THEME_KIND_VALUES = ["light","dark","high-contrast"] as const satisfies readonly ThemeKind[];

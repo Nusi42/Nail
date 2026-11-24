@@ -29,6 +29,7 @@ url.workspace = true
 nail-discovery.workspace = true
 
 [dev-dependencies]
+nail-api = { workspace = true, features = ["testing"] }
 nail-testkit.workspace = true
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

@@ -4518,6 +4518,7 @@ dependencies = [
  "nail-core",
  "nail-dav",
  "nail-discovery",
+ "nail-event-text",
  "nail-exchange",
  "nail-ical",
  "nail-itip",
@@ -4604,6 +4605,15 @@ dependencies = [
  "tracing",
  "url",
  "windows",
+]
+
+[[package]]
+name = "nail-event-text"
+version = "0.8.10"
+dependencies = [
+ "chrono",
+ "nail-api",
+ "serde_json",
 ]
 
 [[package]]

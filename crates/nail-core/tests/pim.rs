@@ -7,7 +7,7 @@
 
 #[expect(dead_code, reason = "each test crate uses part of the shared helpers")]
 mod common;
-use common::ok;
+use common::{error, ok};
 use nail_core::testing::TempService;
 
 use nail_api::pim::calendar::Frequency;
@@ -18,13 +18,6 @@ use nail_api::pim::{
 };
 use nail_api::{CalendarId, ErrorCode, Request, Response};
 use nail_core::Service;
-
-async fn error(service: &Service, request: Request) -> ErrorCode {
-    match service.handle(request).await {
-        Response::Error { code, .. } => code,
-        other => panic!("expected an error, got {other:?}"),
-    }
-}
 
 fn berlin(local: &str) -> PimTime {
     PimTime::zoned(local, "Europe/Berlin")

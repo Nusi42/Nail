@@ -110,6 +110,14 @@ pub(crate) async fn ok(service: &Service, request: Request) -> Response {
     response
 }
 
+/// The error code of the core's answer; any other answer fails the test.
+pub(crate) async fn error(service: &Service, request: Request) -> nail_api::ErrorCode {
+    match service.handle(request).await {
+        Response::Error { code, .. } => code,
+        other => panic!("expected an error, got {other:?}"),
+    }
+}
+
 /// The folders of `account`.
 pub(crate) async fn folders(service: &Service, account: &str) -> Vec<Folder> {
     match service

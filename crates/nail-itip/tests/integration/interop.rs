@@ -9,8 +9,7 @@ use chrono_tz::Tz;
 use nail_api::localized::LocalizedMessage;
 use nail_api::pim::PimTime;
 use nail_api::pim::calendar::{
-    Attendee, AttendeeKind, CalendarEvent, EventInstance, EventStatus, ParticipationStatus,
-    Transparency,
+    Attendee, AttendeeKind, CalendarEvent, EventInstance, ParticipationStatus,
 };
 use nail_api::scheduling::{
     InvitationAction, InvitationRole, InvitationState, ItipIssue, ItipMethod, SchedulingTransport,
@@ -164,24 +163,12 @@ fn google_invitation_accepted_and_recorded_by_the_organizer() {
     let spans = conflicts::invited_spans(&object, from, to, Tz::UTC);
     assert!(spans.len() >= 10);
     let dentist = EventInstance {
-        event_id: "dentist".into(),
-        calendar_id: "cal".into(),
-        recurrence_id: None,
-        start: PimTime::utc("2026-10-12T08:15:00"),
-        end: PimTime::utc("2026-10-12T09:00:00"),
-        start_utc: "2026-10-12T08:15:00Z".into(),
-        end_utc: "2026-10-12T09:00:00Z".into(),
-        all_day: false,
         title: "Dentist".into(),
-        location: None,
-        status: EventStatus::Confirmed,
-        transparency: Transparency::Busy,
-        color: None,
-        recurring: false,
-        overridden: false,
-        has_attendees: false,
-        has_alarms: false,
-        read_only: false,
+        ..nail_api::testing::busy_instance(
+            "dentist",
+            "2026-10-12T08:15:00Z",
+            "2026-10-12T09:00:00Z",
+        )
     };
     let found = conflicts::find_conflicts(&spans, &[dentist], None);
     assert_eq!(found.len(), 1);

@@ -71,6 +71,7 @@ use crate::mail_actions::{MailAction, MailActionResult, MailTargetResolution, Me
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpRateLimits, McpServerInfo, McpSettings};
 use crate::ops::{FlagChange, MoveTarget, OpStatus, OpsSummary};
 use crate::pim::calendar::FreeSlot;
+use crate::pim::calendar_view::{CalendarPreferences, ParsedEventText};
 use crate::pim::contact::DuplicateGroup;
 use crate::pim::import::{PimImportPreview, PimImportResult, PimImportSource};
 use crate::pim::source::{PimOpStatus, PimSourceTestResult};
@@ -1792,6 +1793,54 @@ pub enum Request {
         calendar_ids: Option<Vec<CalendarId>>,
         /// IANA zone for all-day and floating events.
         tz: String,
+    },
+
+    // --- Calendar preferences and quick create (R7, ADR 0246) ---
+    /// Answered with [`Response::CalendarPreferences`].
+    GetCalendarPreferences,
+    /// Replace the calendar preferences. Answered with
+    /// [`Response::CalendarPreferences`], followed by
+    /// [`Event::CalendarPreferencesChanged`]; `invalid_request` with a
+    /// `pim-issue-*` id ([`CalendarPreferences::issues`], a zone the core
+    /// does not know).
+    SetCalendarPreferences {
+        /// The preferences.
+        preferences: CalendarPreferences,
+    },
+    /// Read a sentence as an event ("Lunch with Bob tomorrow 12:30 at
+    /// Corner café"); nothing is saved. Answered with
+    /// [`Response::EventTextParsed`]; `invalid_request` for text over
+    /// [`crate::pim::calendar_view::MAX_EVENT_TEXT`] characters or an
+    /// unknown zone.
+    ParseEventText {
+        /// The text.
+        text: String,
+        /// IANA zone the times are meant in (the view's zone).
+        tz: String,
+        /// "Now" for relative words (RFC 3339); `null` = the core's clock.
+        #[serde(default)]
+        now: Option<String>,
+        /// Language of the keywords (BCP 47, e.g. `en`); `null` = the UI
+        /// language; unknown languages fall back to English.
+        #[serde(default)]
+        locale: Option<String>,
+    },
+    /// Tasks whose due date / time falls in `[from, to)` (dates resolved in
+    /// `tz`), by due, for the calendar views. Answered with
+    /// [`Response::Tasks`]; `invalid_request` for a range over 400 days.
+    ListTasksDue {
+        /// Range start (RFC 3339).
+        from: String,
+        /// Range end (RFC 3339).
+        to: String,
+        /// IANA zone that due dates and floating times are placed in.
+        tz: String,
+        /// Task lists; `null` = every visible one.
+        #[serde(default)]
+        calendar_ids: Option<Vec<CalendarId>>,
+        /// Include completed and cancelled tasks.
+        #[serde(default)]
+        include_completed: bool,
     },
 
     // --- Address books, contacts and groups (M3a) ---
@@ -4010,6 +4059,17 @@ pub enum Response {
         /// Free slots, by start.
         slots: Vec<FreeSlot>,
     },
+    /// Answer to [`Request::GetCalendarPreferences`] and
+    /// [`Request::SetCalendarPreferences`].
+    CalendarPreferences {
+        /// The preferences.
+        preferences: CalendarPreferences,
+    },
+    /// Answer to [`Request::ParseEventText`].
+    EventTextParsed {
+        /// What the text describes.
+        parsed: Box<ParsedEventText>,
+    },
     /// Answer to [`Request::ListAddressBooks`].
     AddressBooks {
         /// The address books.
@@ -4077,7 +4137,7 @@ pub enum Response {
         /// The queued operations.
         op_ids: Vec<OpId>,
     },
-    /// Answer to [`Request::ListTasks`].
+    /// Answer to [`Request::ListTasks`] and [`Request::ListTasksDue`].
     Tasks {
         /// The tasks.
         tasks: Vec<Task>,
@@ -4890,6 +4950,9 @@ pub enum Event {
     },
     /// The scheduling settings changed.
     SchedulingSettingsChanged,
+    /// The calendar preferences changed (R7); clients refetch
+    /// [`Request::GetCalendarPreferences`].
+    CalendarPreferencesChanged,
     /// Labels of a Gmail account were added, changed or removed (locally
     /// or by sync); clients refetch [`Request::ListGmailLabels`] (M3b).
     GmailLabelsChanged {

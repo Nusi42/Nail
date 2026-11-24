@@ -15,6 +15,7 @@ import type { AutomaticReplies } from "./AutomaticReplies";
 import type { BackupManifest } from "./BackupManifest";
 import type { Calendar } from "./Calendar";
 import type { CalendarEvent } from "./CalendarEvent";
+import type { CalendarPreferences } from "./CalendarPreferences";
 import type { ConfigBackup } from "./ConfigBackup";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { ConfigMergePreview } from "./ConfigMergePreview";
@@ -86,6 +87,7 @@ import type { OpsSummary } from "./OpsSummary";
 import type { OutboxEntry } from "./OutboxEntry";
 import type { OutboxId } from "./OutboxId";
 import type { PairingCode } from "./PairingCode";
+import type { ParsedEventText } from "./ParsedEventText";
 import type { PdfFile } from "./PdfFile";
 import type { PimImportPreview } from "./PimImportPreview";
 import type { PimImportResult } from "./PimImportResult";
@@ -835,7 +837,15 @@ fields: EventFields, } | { "type": "FreeTime",
 /**
  * Free slots, by start.
  */
-slots: Array<FreeSlot>, } | { "type": "AddressBooks", 
+slots: Array<FreeSlot>, } | { "type": "CalendarPreferences", 
+/**
+ * The preferences.
+ */
+preferences: CalendarPreferences, } | { "type": "EventTextParsed", 
+/**
+ * What the text describes.
+ */
+parsed: ParsedEventText, } | { "type": "AddressBooks", 
 /**
  * The address books.
  */

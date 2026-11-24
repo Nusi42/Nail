@@ -13,10 +13,12 @@
  * import of uploaded text. Writes answer with queued operation ids and the
  * "replay" reports `PimOpStatus` plus a change event, like the PIM queue.
  */
+import { MAX_EVENT_TEXT } from "../../api/generated";
 import type {
   AddressBook,
   Calendar,
   CalendarEvent,
+  CalendarPreferences,
   Contact,
   ContactFields,
   ContactGroup,
@@ -40,12 +42,20 @@ import type {
   Task,
   TaskFields,
 } from "../../api/generated";
+import { userAddresses } from "../../api/mockAccounts";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import {
+  defaultPreferences,
+  mockParseEventText,
+  preferencesIssue,
+  tasksDue,
+} from "./mockCalendarView";
 import { endFor, expandEvent, instantOf, occurrenceStarts, sameOccurrence } from "./mockExpand";
 import { demoPim, emptyContactFields, emptyEventFields, emptyTaskFields } from "./mockSeed";
 import {
   dateString,
   instantMs,
+  isKnownZone,
   localString,
   localZone,
   makePimTime,
@@ -59,6 +69,7 @@ import {
 } from "./time";
 import { fromAbsolute } from "@internationalized/date";
 import { nonEmpty } from "../../text/empty";
+import { charCount } from "../../text/chars";
 import { plausibleEmail } from "../../state/addresses";
 
 /** The requests this feature answers. */
@@ -115,6 +126,11 @@ export const PIM_REQUESTS = [
   "ListReminders",
   "SnoozeReminders",
   "DismissReminders",
+  // R7 (ADR 0246).
+  "GetCalendarPreferences",
+  "SetCalendarPreferences",
+  "ParseEventText",
+  "ListTasksDue",
 ] as const satisfies readonly Request["type"][];
 
 export type PimRequest = Extract<Request, { type: (typeof PIM_REQUESTS)[number] }>;
@@ -133,6 +149,8 @@ export interface PimMockState {
   groups: ContactGroup[];
   tasks: Task[];
   reminders: Reminder[];
+  /** The calendar preferences (R7). */
+  preferences: CalendarPreferences;
   /** Answer every PIM request `unsupported` (the core before WP75). */
   unsupported: boolean;
   /** Make the next write's replay fail (tests). */
@@ -155,11 +173,12 @@ export function createPimMockState(
       groups: [],
       tasks: [],
       reminders: [],
+      preferences: defaultPreferences(),
       unsupported: false,
       failNextOp: false,
     };
   }
-  return { ...seed, unsupported: false, failNextOp: false };
+  return { ...seed, preferences: defaultPreferences(), unsupported: false, failNextOp: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -519,6 +538,7 @@ export function listInstances(
   to: string,
   calendarIds: string[] | null,
   tz: string,
+  mine: readonly string[] = [],
 ): EventInstance[] {
   const ids = calendarIds ?? visibleCalendarIds(pim, "event");
   const fromMs = instantMs(from);
@@ -526,7 +546,7 @@ export function listInstances(
   return pim.events
     .filter((e) => ids.includes(e.calendar_id))
     .flatMap((e) =>
-      expandEvent(e, fromMs, toMs, tz, calendarOf(pim, e.calendar_id)?.read_only ?? false),
+      expandEvent(e, fromMs, toMs, tz, calendarOf(pim, e.calendar_id)?.read_only ?? false, mine),
     )
     .sort(
       (a, b) => instantMs(a.start_utc) - instantMs(b.start_utc) || a.title.localeCompare(b.title),
@@ -1031,7 +1051,14 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
         type: "EventInstances",
         from: request.from,
         to: request.to,
-        instances: listInstances(pim, request.from, request.to, request.calendar_ids, request.tz),
+        instances: listInstances(
+          pim,
+          request.from,
+          request.to,
+          request.calendar_ids,
+          request.tz,
+          userAddresses(core.data),
+        ),
       };
     case "GetEvent": {
       const event = pim.events.find((e) => e.id === request.event_id);
@@ -1412,6 +1439,33 @@ export function answerPim(core: MockCore, request: PimRequest): Response {
             ),
         ),
       };
+    }
+    case "ListTasksDue": {
+      const lists = request.calendar_ids ?? visibleCalendarIds(pim, "task");
+      const tasks = pim.tasks.filter((t) => lists.includes(t.calendar_id));
+      return {
+        type: "Tasks",
+        tasks: clone(
+          tasksDue(tasks, request.from, request.to, request.tz, request.include_completed),
+        ),
+      };
+    }
+    case "GetCalendarPreferences":
+      return { type: "CalendarPreferences", preferences: clone(pim.preferences) };
+    case "SetCalendarPreferences": {
+      const issue = preferencesIssue(request.preferences);
+      if (issue) return invalid(issue);
+      pim.preferences = clone(request.preferences);
+      core.emit({ type: "CalendarPreferencesChanged" });
+      return { type: "CalendarPreferences", preferences: clone(pim.preferences) };
+    }
+    case "ParseEventText": {
+      if (charCount(request.text) > MAX_EVENT_TEXT) {
+        return errorResponse("invalid_request", "the text is too long");
+      }
+      if (!isKnownZone(request.tz)) return invalid("invalid-time-zone");
+      const at = request.now === null ? Date.now() : instantMs(request.now);
+      return { type: "EventTextParsed", parsed: mockParseEventText(request.text, request.tz, at) };
     }
     case "GetTask": {
       const task = pim.tasks.find((t) => t.id === request.task_id);

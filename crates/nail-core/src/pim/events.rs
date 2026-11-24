@@ -109,6 +109,36 @@ pub(super) async fn handle(service: &Service, request: Request) -> Result<Respon
                 .call(move |s| s.list_tasks(calendar_ids.as_deref(), include_completed))
                 .await?,
         },
+        Request::ListTasksDue {
+            from,
+            to,
+            tz,
+            calendar_ids,
+            include_completed,
+        } => Response::Tasks {
+            tasks: service
+                .tasks_due(&from, &to, &tz, calendar_ids, include_completed)
+                .await?,
+        },
+        Request::GetCalendarPreferences => Response::CalendarPreferences {
+            preferences: service.calendar_preferences().await?,
+        },
+        Request::SetCalendarPreferences { preferences } => Response::CalendarPreferences {
+            preferences: service.set_calendar_preferences(preferences).await?,
+        },
+        Request::ParseEventText {
+            text,
+            tz,
+            now,
+            locale,
+        } => Response::EventTextParsed {
+            parsed: Box::new(super::calendar_view::parse_event_text(
+                &text,
+                &tz,
+                now.as_deref(),
+                locale.as_deref(),
+            )?),
+        },
         Request::GetTask { task_id } => Response::PimTask {
             task: Box::new(service.task(&task_id).await?),
         },
@@ -356,6 +386,35 @@ impl Service {
             .await?;
         instances.retain(|i| i.status != nail_api::pim::calendar::EventStatus::Cancelled);
         Ok(instances)
+    }
+
+    /// Tasks due in `[from, to)` (R7, ADR 0246): due dates and floating
+    /// times placed in `tz`, by due.
+    async fn tasks_due(
+        &self,
+        from: &str,
+        to: &str,
+        tz: &str,
+        lists: Option<Vec<CalendarId>>,
+        include_completed: bool,
+    ) -> Result<Vec<Task>> {
+        let (from, to) = range(from, to)?;
+        let zone = request_zone(tz)?;
+        let tasks = self
+            .inner
+            .store
+            .call(move |s| s.list_tasks(lists.as_deref(), include_completed))
+            .await?;
+        let mut due: Vec<(i64, Task)> = tasks
+            .into_iter()
+            .filter_map(|task| {
+                let at = nail_store::pim::time::cache_time(task.fields.due.as_ref()?)
+                    .map(|t| nail_store::pim::time::place(t, &zone))?;
+                (from <= at && at < to).then_some((at, task))
+            })
+            .collect();
+        due.sort_by_key(|(at, _)| *at);
+        Ok(due.into_iter().map(|(_, task)| task).collect())
     }
 
     async fn free_time(

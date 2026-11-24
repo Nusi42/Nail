@@ -56,6 +56,17 @@ function withUsername<T extends IncomingServer | OutgoingServer>(server: T, emai
   return server;
 }
 
+/** The user's addresses (lower case): every account and identity address. */
+export function userAddresses(d: MockData): string[] {
+  const out = new Set<string>();
+  for (const account of d.accountsConfig.accounts) {
+    out.add(account.email.toLowerCase());
+    for (const identity of account.identities) out.add(identity.email.toLowerCase());
+  }
+  for (const account of d.accounts) if (account.email) out.add(account.email.toLowerCase());
+  return [...out];
+}
+
 export function discover(d: MockData, email: string): Response {
   const address = email.trim();
   if (!EMAIL_RE.test(address)) return errorResponse("invalid_request", "not an email address");

@@ -212,33 +212,13 @@ pub fn is_busy(invited: &[InvitedSpan], periods: &[BusyPeriod]) -> bool {
 mod tests {
     use super::*;
     use crate::object::parse_itip;
-    use nail_api::pim::PimTime;
 
     fn at(text: &str) -> DateTime<Utc> {
         time::parse_instant(text).unwrap()
     }
 
     fn instance(id: &str, start: &str, end: &str) -> EventInstance {
-        EventInstance {
-            event_id: id.into(),
-            calendar_id: "cal".into(),
-            recurrence_id: None,
-            start: PimTime::utc(start.trim_end_matches('Z')),
-            end: PimTime::utc(end.trim_end_matches('Z')),
-            start_utc: start.into(),
-            end_utc: end.into(),
-            all_day: false,
-            title: id.into(),
-            location: None,
-            status: EventStatus::Confirmed,
-            transparency: Transparency::Busy,
-            color: None,
-            recurring: false,
-            overridden: false,
-            has_attendees: false,
-            has_alarms: false,
-            read_only: false,
-        }
+        nail_api::testing::busy_instance(id, start, end)
     }
 
     const WEEKLY: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//T//EN\r\nMETHOD:REQUEST\r\n\

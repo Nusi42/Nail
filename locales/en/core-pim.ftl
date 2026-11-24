@@ -23,6 +23,7 @@ pim-issue-invalid-alarm = A reminder is not valid.
 pim-issue-invalid-url = A web address is not valid.
 pim-issue-task-cycle = A task cannot be its own subtask.
 pim-issue-too-many = There are too many entries in one list.
+pim-issue-invalid-work-hours = Working hours must end after they start, by midnight.
 
 ## Problems with calendar and contact sources (PimSourceIssue)
 

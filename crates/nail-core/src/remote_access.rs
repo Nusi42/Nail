@@ -1558,6 +1558,7 @@ impl Service {
             // M3a PIM: full grants only until WP75 narrows per source.
             Event::PimSourcesChanged
             | Event::CalendarsChanged
+            | Event::CalendarPreferencesChanged
             | Event::AddressBooksChanged
             | Event::EventsChanged { .. }
             | Event::TasksChanged { .. }

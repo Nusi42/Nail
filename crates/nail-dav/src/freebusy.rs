@@ -384,7 +384,6 @@ pub fn own_busy_periods(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nail_api::pim::PimTime;
     use pretty_assertions::assert_eq;
 
     fn p(start: &str, end: &str, kind: BusyKind) -> BusyPeriod {
@@ -619,26 +618,7 @@ mod tests {
     }
 
     fn instance(id: &str, start: &str, end: &str) -> EventInstance {
-        EventInstance {
-            event_id: EventId::new(id),
-            calendar_id: CalendarId::new("cal-1"),
-            recurrence_id: None,
-            start: PimTime::zoned(start.trim_end_matches('Z'), "UTC"),
-            end: PimTime::zoned(end.trim_end_matches('Z'), "UTC"),
-            start_utc: start.to_owned(),
-            end_utc: end.to_owned(),
-            all_day: false,
-            title: id.to_owned(),
-            location: None,
-            status: EventStatus::Confirmed,
-            transparency: Transparency::Busy,
-            color: None,
-            recurring: false,
-            overridden: false,
-            has_attendees: false,
-            has_alarms: false,
-            read_only: false,
-        }
+        nail_api::testing::busy_instance(id, start, end)
     }
 
     #[test]
@@ -670,7 +650,7 @@ mod tests {
             from: "2026-10-01T00:00:00Z".into(),
             to: "2026-10-02T00:00:00Z".into(),
             exclude_event: Some(EventId::new("editing")),
-            calendars: Some(vec![CalendarId::new("cal-1")]),
+            calendars: Some(vec![CalendarId::new("cal")]),
         };
         let status = |i: &EventInstance| match i.event_id.as_str() {
             "declined" => Some(ParticipationStatus::Declined),

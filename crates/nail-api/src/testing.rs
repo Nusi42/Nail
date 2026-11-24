@@ -11,7 +11,8 @@ use crate::agents::{
     ActionAttribution, ActionKind, ActionTarget, ActionTargetKind, NewConfirmation,
 };
 use crate::domain::{Account, AccountKind, Flags, Folder, FolderRole, MessageSummary};
-use crate::pim::{PimTime, Reminder, ReminderState, ReminderTarget};
+use crate::pim::calendar::{EventStatus, Transparency};
+use crate::pim::{EventInstance, PimTime, Reminder, ReminderState, ReminderTarget};
 
 /// A fixed instant tests start their clocks at (2026-09-21 14:13:20 UTC).
 pub const T0: i64 = 1_790_000_000;
@@ -117,6 +118,33 @@ pub fn reminder(id: &str) -> Reminder {
         fire_at: "2026-10-01T08:45:00Z".into(),
         state: ReminderState::Fired,
         snoozed_until: None,
+    }
+}
+
+/// A plain busy occurrence `id` (its title too) of calendar `cal` from
+/// `start` to `end` (RFC 3339 UTC, `…Z`), stored in UTC: confirmed, busy,
+/// not recurring, no attendees or alarms, writable.
+pub fn busy_instance(id: &str, start: &str, end: &str) -> EventInstance {
+    EventInstance {
+        event_id: id.into(),
+        calendar_id: "cal".into(),
+        recurrence_id: None,
+        start: PimTime::utc(start.trim_end_matches('Z')),
+        end: PimTime::utc(end.trim_end_matches('Z')),
+        start_utc: start.into(),
+        end_utc: end.into(),
+        all_day: false,
+        title: id.into(),
+        location: None,
+        status: EventStatus::Confirmed,
+        transparency: Transparency::Busy,
+        color: None,
+        recurring: false,
+        overridden: false,
+        has_attendees: false,
+        has_alarms: false,
+        read_only: false,
+        my_status: None,
     }
 }
 

@@ -45,6 +45,7 @@ import {
 import { openNewEvent, openNewTask } from "./newEvent";
 import { pimKeys } from "./queries";
 import { PimToasts } from "./Reminders";
+import { EventPopoverHost } from "./EventPopover";
 import { ScopeDialog } from "./ScopeDialog";
 import { Agenda, MiniMonth } from "./SmallWidgets";
 import { CalendarList } from "./CalendarList";
@@ -88,6 +89,8 @@ export const PIM_EVENTS = [
   "ReminderDue",
   "RemindersChanged",
   "PimOpStatus",
+  // R7: the calendar preferences (refetched under `pimKeys.all`).
+  "CalendarPreferencesChanged",
 ] as const satisfies readonly NailEvent["type"][];
 
 /** Layout widget kinds → components. */
@@ -304,5 +307,5 @@ export const handlePimEvent: FeatureEventHandler = (event, { queryClient, store 
 
 /** Handlers for the core's events. */
 export const events: NonNullable<Feature["events"]> = [handlePimEvent];
-/** Background components: the reminder toasts. */
-export const effects: NonNullable<Feature["effects"]> = [PimToasts];
+/** Background components: the reminder toasts and the quick look (R7). */
+export const effects: NonNullable<Feature["effects"]> = [PimToasts, EventPopoverHost];

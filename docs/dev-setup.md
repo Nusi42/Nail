@@ -309,6 +309,16 @@ Where shared things live (Q2, ADRs 0172–0177):
   `TagDialogFooter`) are in `ui/src/widgets/DialogStates.tsx` (ADR 0240);
   demo-multi's work folders in e2e: `workFolderRow` / `folderMenuItem`
   (`e2e/support/views.ts`).
+- A popover next to something on screen (a quick look, an inline form,
+  results under a field) is `ui/src/widgets/Popover.tsx` (`Popover`;
+  `placePopover` for a hand-made popup). Calendar views read the calendar
+  preferences, working time, ISO week numbers, the view zones and tasks due
+  through `ui/src/features/pim/prefs.ts` (R7, ADR 0246); an event's colour
+  is `colorOf` (`features/pim/common.tsx`). Mock-core tests of the PIM
+  feature send requests with `mockOk` (`features/pim/testing.tsx`); Rust
+  tests build an `EventInstance` with `nail_api::testing::busy_instance`,
+  and the core's service tests expect an error code with
+  `common::error`.
 - Settings widgets (ADR 0242) keep their edits in `useSettingsForm`
   (`ui/src/features/settings/draft.ts`; `useLeaveDrafts` before another
   item of a section) and ask with `askSettingsQuestion`

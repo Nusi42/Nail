@@ -345,6 +345,10 @@ crates/nail-ical       iCalendar / vCard (own lossless content-line layer + patc
                        matching), alarm.rs, feed.rs (webcal), import.rs previews, issues.rs (ical-*/vcard-*
                        in core-ical.ftl); tests/corpus (synthesized Google/Outlook/Apple/Thunderbird exports,
                        nested .gitattributes -text: edit byte-preserving) (ADR 0059)
+crates/nail-event-text Quick create from text (R7, ADR 0246): parse(text, Context { now, tz, locale }) reads a
+                       sentence as nail_api::pim::ParsedEventText (title, start / end, place, repetition,
+                       UTF-16 spans); keywords in a per-language table (English first); the core's
+                       ParseEventText calls it
 crates/nail-dav        CalDAV / CardDAV client (M3a WP72): DavClient (Basic over TLS / OAuth2 bearer with one
                        refresh, https-or-loopback URL policy, own redirect handling), discovery (configured
                        URL, _caldavs/_carddavs SRV via DnsLookup, /.well-known/, principal + home sets, Google
@@ -763,6 +767,12 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        (sameJson, the one plain-data equality), layout/closeGuard.ts (the window
                        layer's close guard: useCloseGuard, askToLeave, closeWindowNow, prompt window
                        `unsaved-changes:<key>`; installed by features/windows CloseGuardEffect),
+                       R7 (ADR 0246): widgets/Popover.tsx (Popover anchored beside / below a rectangle, portalled,
+                       placePopover / anchorOf / usePopoverPosition; PimMenu places its menu with it),
+                       features/pim/prefs.ts (calendar preferences hooks, working time, ISO weeks, view zones,
+                       tasks due, the task drag payload, parseEventText), EventPopover.tsx (the quick look host,
+                       PimState.quickLook), mockCalendarView.ts (the mock's R7 answers), gridStyle.ts /
+                       lookStyle.ts / viewsStyle.ts (per-package style slots),
                        widgets/ReaderLinks.tsx (status overlay, OpenLink, the `mail-open-link` confirmation);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
@@ -1721,3 +1731,14 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   (`exchange-server-rule-delete` asks). `popOutWindow` / the pop-out page's return await `mayMoveWindow` →
   `confirmLeave` (`layout/closeGuard.ts`) unless the preparer was registered with `handsOverChanges` (the composer).
   `SettingsSaveBar` has a polite `settings-save-bar.status` and `focusAfter`. E2e `r6-review-dialogs.spec.ts`.
+
+### R7
+
+- Contract (ADR 0246): `nail_api::pim::calendar_view` holds the calendar palette (`CalendarColor`,
+  `calendar_palette`, `next_calendar_color`), `CalendarPreferences` / `WorkHours` and the quick-create result
+  (`ParsedEventText`, `ParsedSpan`, `ParsedPart`); `EventInstance.my_status` is the user's `PARTSTAT`. The core
+  answers `GetCalendarPreferences` / `SetCalendarPreferences` (app-settings key `calendar-preferences`,
+  `crates/nail-core/src/pim/calendar_view.rs`, checked on restore in `portability/backup.rs`), `ListTasksDue`
+  (`pim/events.rs` `tasks_due`) and `ParseEventText` (`nail-event-text`). `nail_api::testing::busy_instance` is the
+  shared `EventInstance` of tests; `crates/nail-core/tests/common` has `error`. The UI derives `CALENDAR_COLORS`
+  from the generated `CALENDAR_PALETTE`; the mock's user addresses are `userAddresses` (`api/mockAccounts.ts`).

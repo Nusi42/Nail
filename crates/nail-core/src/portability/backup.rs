@@ -67,6 +67,13 @@ fn check_restored_setting(key: &str, value: &serde_json::Value) -> Result<(), St
         nail_store::scheduling::SCHEDULING_SETTINGS_KEY => {
             parse::<nail_api::scheduling::SchedulingSettings>(value).map(drop)
         }
+        crate::pim::CALENDAR_PREFERENCES_KEY => {
+            let preferences = parse::<nail_api::pim::CalendarPreferences>(value)?;
+            match preferences.issues().first() {
+                Some(issue) => Err(issue.message_id().to_owned()),
+                None => Ok(()),
+            }
+        }
         nail_store::NOTIFICATION_SETTINGS_KEY => {
             nail_store::check_stored_notification_settings(value)
         }

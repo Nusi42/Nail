@@ -212,6 +212,22 @@ export function endFor(fields: EventFields, start: PimTime): PimTime {
   return likeAt(start, frame);
 }
 
+/**
+ * The user's own participation in an occurrence (`EventInstance.my_status`,
+ * ADR 0246): the `PARTSTAT` of the attendee with one of the user's
+ * addresses (`mine`, lower case); `null` when the user organizes the event
+ * or is not an attendee.
+ */
+export function myStatusOf(
+  fields: EventFields,
+  mine: readonly string[],
+): EventInstance["my_status"] {
+  const own = (email: string | undefined) =>
+    email !== undefined && mine.includes(email.toLowerCase());
+  if (own(fields.organizer?.email)) return null;
+  return fields.attendees.find((a) => own(a.email))?.status ?? null;
+}
+
 /** The instances of one series overlapping `[fromMs, toMs)` for a viewer in `tz`. */
 export function expandEvent(
   event: CalendarEvent,
@@ -219,6 +235,7 @@ export function expandEvent(
   toMs: number,
   tz: string,
   calendarReadOnly: boolean,
+  mine: readonly string[] = [],
 ): EventInstance[] {
   const recurring = event.recurrence !== null;
   const instances: EventInstance[] = [];
@@ -246,6 +263,7 @@ export function expandEvent(
       has_attendees: fields.attendees.length > 0,
       has_alarms: fields.alarms.length > 0,
       read_only: event.read_only || calendarReadOnly,
+      my_status: myStatusOf(fields, mine),
     });
   };
   if (!recurring) {

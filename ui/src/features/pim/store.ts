@@ -23,6 +23,7 @@ import type {
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
 import type { ViewKind } from "./time";
 import { pushBounded } from "../../state/bounded";
+import type { AnchorRect } from "../../widgets/Popover";
 
 /**
  * Reminder and problem toasts kept at most (the oldest go first): a window
@@ -69,6 +70,16 @@ export interface NewCalendarTarget {
   component: CalendarComponent;
 }
 
+/**
+ * The quick look (R7, ADR 0246): the occurrence a click on an event card
+ * opened, and where its card is on screen. The time grid, month and agenda
+ * views open it; `EventPopover` shows it; Enter there opens the editor.
+ */
+export interface QuickLook {
+  instance: EventInstance;
+  anchor: AnchorRect;
+}
+
 /** A toast: a fired reminder, or a PIM write the server refused. */
 export type PimToast =
   | { kind: "reminder"; id: string; reminder: Reminder }
@@ -106,6 +117,8 @@ export interface PimState {
   newCalendar: NewCalendarTarget | null;
   /** The calendar the remove dialog asks about (M5b). */
   removeCalendarId: CalendarId | null;
+  /** The open quick look (R7), `null` = none. */
+  quickLook: QuickLook | null;
 
   setAnchor: (anchor: string | null) => void;
   setView: (view: ViewKind | null) => void;
@@ -126,6 +139,7 @@ export interface PimState {
   editCalendar: (id: CalendarId | null) => void;
   setNewCalendar: (target: NewCalendarTarget | null) => void;
   setRemoveCalendar: (id: CalendarId | null) => void;
+  setQuickLook: (quickLook: QuickLook | null) => void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PimState>>();
@@ -152,6 +166,7 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
     calendarSettingsId: null,
     newCalendar: null,
     removeCalendarId: null,
+    quickLook: null,
     setAnchor: (anchor) => {
       set({ anchor });
     },
@@ -208,6 +223,9 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
     },
     setRemoveCalendar: (removeCalendarId) => {
       set({ removeCalendarId });
+    },
+    setQuickLook: (quickLook) => {
+      set({ quickLook });
     },
   }));
   stores.set(ui, store);

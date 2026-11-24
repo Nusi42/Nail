@@ -5,4 +5,4 @@
  * core answers such requests with `invalid_request` and the issue's
  * Fluent id as `localized`.
  */
-export type PimIssue = "invalid-date" | "invalid-time" | "invalid-time-zone" | "end-before-start" | "mixed-all-day" | "invalid-recurrence" | "invalid-scope" | "invalid-email" | "missing-name" | "invalid-priority" | "invalid-color" | "invalid-alarm" | "invalid-url" | "task-cycle" | "too-many";
+export type PimIssue = "invalid-date" | "invalid-time" | "invalid-time-zone" | "end-before-start" | "mixed-all-day" | "invalid-recurrence" | "invalid-scope" | "invalid-email" | "missing-name" | "invalid-priority" | "invalid-color" | "invalid-alarm" | "invalid-url" | "task-cycle" | "too-many" | "invalid-work-hours";

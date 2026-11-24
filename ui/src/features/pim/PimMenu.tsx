@@ -21,6 +21,7 @@ import {
 } from "react";
 import { useGeometry } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
+import { anchorOf, placePopover } from "../../widgets/Popover";
 import { Swatch } from "./common";
 
 /** One entry of a menu. Texts come in localized. */
@@ -85,14 +86,15 @@ export function PimMenu({
   // Place the popup under the button, inside the window.
   useLayoutEffect(() => {
     if (open === null) return;
-    const button = buttonRef.current?.getBoundingClientRect();
-    const popup = popupRef.current?.getBoundingClientRect();
+    const button = buttonRef.current;
     if (!button) return;
-    const width = popup?.width ?? 0;
-    const height = popup?.height ?? 0;
-    const x = Math.max(0, Math.min(button.left, window.innerWidth - width));
-    const below = button.bottom + 4;
-    const y = below + height > window.innerHeight ? Math.max(0, button.top - height - 4) : below;
+    const popup = popupRef.current?.getBoundingClientRect();
+    const { x, y } = placePopover(
+      anchorOf(button),
+      { width: popup?.width ?? 0, height: popup?.height ?? 0 },
+      { width: window.innerWidth, height: window.innerHeight },
+      "below",
+    );
     setPosition((p) => (p.x === x && p.y === y ? p : { x, y }));
   }, [open]);
 

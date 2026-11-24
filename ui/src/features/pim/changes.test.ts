@@ -41,6 +41,7 @@ function instanceOf(over: Partial<EventInstance>): EventInstance {
     has_attendees: false,
     has_alarms: false,
     read_only: false,
+    my_status: null,
     ...over,
   };
 }

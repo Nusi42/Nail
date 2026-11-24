@@ -65,6 +65,7 @@ nail-sieve.workspace = true
 nail-triage.workspace = true
 # M3a: iCalendar / vCard and the CalDAV / CardDAV client (ADRs 0059, 0060, 0063).
 nail-ical.workspace = true
+nail-event-text.workspace = true
 nail-dav.workspace = true
 # M3b: iTIP / iMIP and the Gmail API engine (ADRs 0066, 0067, 0070).
 nail-itip.workspace = true
