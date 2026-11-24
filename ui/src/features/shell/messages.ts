@@ -15,5 +15,11 @@ export const notMessages: readonly string[] = [];
 
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
-  return [...BADGE_SOURCES.map(badgeLabelId), "shell-rail-badge-count", "shell-rail-badge-many"];
+  return [
+    ...BADGE_SOURCES.map(badgeLabelId),
+    "shell-rail-badge-count",
+    "shell-rail-badge-many",
+    // The account menu's "@shell.account-menu.all" (R8).
+    "shell-account-menu-all",
+  ];
 }

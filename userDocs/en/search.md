@@ -89,7 +89,9 @@ closes when you click anywhere else.
 When the search bar holds a search and you pick another folder, Nail
 searches the same text in that folder. Changing the text keeps searching
 there; clear the search (the × in the search bar, or Escape) to see the
-whole folder again.
+whole folder again. While a search runs in one folder, the folder pane marks
+that folder with a search icon (screen readers hear "The search runs in this
+folder").
 
 If a query has a mistake, Nail does not search it: the list keeps showing
 the results of the last query that worked, and the search bar turns red and

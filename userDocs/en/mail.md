@@ -9,10 +9,13 @@ while the computer has no network, and a failure shows in the status bar.
 Below them:
 
 - **Favorites** — the same folders of all accounts together: **All
-  inboxes**, **Flagged** and **Unread** (searches across every account),
-  **Snoozed**, **Drafts**, **Sent** and the **Outbox** (shown only while
-  messages wait there; which favorites you see is the `favorites` option of
-  the `folder-tree`, see the [layout reference](layout-reference.md#widgets)).
+  inboxes**, **Flagged** and **Unread** (searches across every account,
+  leaving out Trash and Junk), **Snoozed**, **Drafts**, **Sent** and the
+  **Outbox** (shown only while messages wait there; which favorites you see
+  is the `favorites` option of the `folder-tree`, see the
+  [layout reference](layout-reference.md#widgets)). **Snoozed** and the
+  **Outbox** open a window of their own; the favorite is shown selected
+  while that window is in front.
 - **One section per account**, in your account order, with the account's
   colour (the same colour marks its messages in the list) and its folders.
   The special folders come first, named in your language — Inbox, Drafts,
@@ -440,4 +443,5 @@ changes wait and are sent when the connection is back. If changes cannot be
 saved, the status bar names the reason (also after a restart) and, when
 several failed, how many; **Retry** sends all of them again and **Dismiss**
 gives them up: a message you moved or deleted shows again where the server
-still has it.
+still has it. If Retry or Dismiss itself does not work, the status bar says
+so next to the reason of the failure.

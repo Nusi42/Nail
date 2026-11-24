@@ -32,6 +32,28 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   drawing events with a held finger on touch screens; place and call icons.
 - The free-time view asks the core for the working hours (`FindFreeTime`
   `hours`) and no longer cuts free time per day itself.
+### Added — mail, composer, rules, settings and windows
+
+- Favorites that open windows (Snoozed, Outbox) are selected while their
+  window is in front; Unread and Flagged leave out Trash and Junk.
+- The folder pane marks the folder a search runs in.
+- "Run rule" after select all runs on the whole list (`RunRules.list`) and
+  is undone in one step.
+- The rail's account avatar opens an account menu.
+- Several unsaved windows closing at once are asked about in one prompt.
+- The Markdown preview grows with its content, up to a limit.
+- Layout presets in Settings save with the settings bar; the settings
+  navigation marks a section with unsaved changes.
+- The toolbar customizer lists every action, grouped by where it applies.
+- `DialogFooter` takes several secondary buttons; plug-in dialogs use it.
+
+### Fixed — mail, composer, settings and windows
+
+- The toolbar's More menu opens aligned to its button's end.
+- A failed bulk Retry / Dismiss shows its own text beside the failure.
+- A background composer keeps its sign / encrypt report current.
+- The plug-in manager window has drafts of its own, apart from Settings.
+- Settings → Appearance no longer repeats the section title.
 
 ### Fixed — calendar agenda contrast
 

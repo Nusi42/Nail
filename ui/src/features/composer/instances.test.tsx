@@ -12,6 +12,7 @@ import type { ActionContext } from "../../actions/registry";
 import { NodeView } from "../../layout/LayoutRenderer";
 import type { ComposeContext } from "../../state/compose";
 import { emptyComposer } from "../../state/compose";
+import type { RecipientKeysReport } from "../../api/generated";
 import { useUi, type UiState } from "../../state/uiStore";
 import {
   CONFIRMATION_WINDOW_SPEC,
@@ -182,6 +183,38 @@ describe("composer windows", () => {
     });
     expect(composerTarget(ui(env))).toBe("composer:w1");
     expect(ui(env).composer?.subject).toBe("First");
+  });
+
+  it("keeps a background composer's sign / encrypt report for its focus (R8)", async () => {
+    const env = setup();
+    await startRichCompose(env.ctx);
+    await startRichCompose(env.ctx);
+    const report = (own: boolean): RecipientKeysReport => ({
+      recipients: [],
+      openpgp: { own_key: own, all_recipients: false },
+      smime: { own_key: false, all_recipients: false },
+      autocrypt: "disable",
+      suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
+    });
+    const store = () => composerCryptoStore.getState();
+    // The background composer (w1) reports for itself; the focused one's stays.
+    const background = report(true);
+    const focused = report(false);
+    act(() => {
+      store().setReportOf("composer:w2", focused, "auto");
+      store().setReportOf("composer:w1", background, "openpgp");
+    });
+    expect(store().report).toBe(focused);
+    // Its focus shows its kept report at once (no new check needed).
+    act(() => {
+      ui(env).focusWindow("composer:w1");
+    });
+    expect(store().report).toBe(background);
+    expect(store().preference).toBe("openpgp");
+    act(() => {
+      ui(env).focusWindow("composer:w2");
+    });
+    expect(store().report).toBe(focused);
   });
 
   it("keys windows by draft id and finds an open draft", () => {

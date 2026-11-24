@@ -69,6 +69,10 @@ something, a bar appears at the bottom of the section: **Unsaved changes to
 “…”** with **Save** and **Discard**. Save keeps every change of the section;
 Discard puts the saved values back.
 
+While a section has unsaved changes, its entry in the settings navigation
+shows a dot (screen readers hear "Unsaved changes"). The plug-in manager
+window keeps its unsaved changes to itself, apart from the Settings page.
+
 If you open another section or close Settings with unsaved changes, Nail
 asks first: **Save changes to “…”?** with **Save**, **Don't save** and
 **Cancel** (stay in the section). The same question comes when you pick

@@ -11,6 +11,7 @@ settings-keywords-search = find preferences options configure
 settings-page-nav = Settings sections
 settings-page-empty = This layout's settings page has no sections.
 settings-page-section-missing = This section is not on the settings page.
+settings-page-unsaved = { common-unsaved-changes }
 
 ## Search
 

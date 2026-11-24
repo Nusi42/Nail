@@ -137,6 +137,10 @@ describe("Run on", () => {
     const searching = runOnChoices(facts({ searching: true, selected: 2 }), t);
     expect(searching.map((c) => c.why)).toEqual([null, "rules-target-searching", null]);
     expect(runOnChoices(facts({ folderName: null }), t)[1]?.why).toBe("rules-target-no-folder");
+    // R8: "select all" runs from the list's menu, not here.
+    expect(runOnChoices(facts({ selected: 1, wholeList: true }), t)[0]?.why).toBe(
+      "rules-target-whole-list",
+    );
   });
 
   it("starts on the current folder when opened from a message", () => {

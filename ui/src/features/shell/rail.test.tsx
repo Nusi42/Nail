@@ -23,7 +23,9 @@ describe("nav-rail", () => {
     await settleQueries(env);
     const buttons = within(rail()).getAllByRole("button");
     expect(
-      buttons.map((b) => b.getAttribute("data-view") ?? b.getAttribute("data-action")),
+      buttons.map(
+        (b) => b.getAttribute("data-view") ?? b.getAttribute("data-action") ?? b.dataset.part,
+      ),
     ).toEqual([
       "mail",
       "calendar",
@@ -32,6 +34,7 @@ describe("nav-rail", () => {
       "palette.open",
       "agents.open-center",
       "settings",
+      "nav-rail.account",
     ]);
     // The command palette has a visible entry point, its key in the tooltip
     // (M5b review).
@@ -43,7 +46,10 @@ describe("nav-rail", () => {
     const nav = rail();
     expect(nav.querySelector('[data-part="nav-rail.logo"]')).toHaveAttribute("aria-hidden", "true");
     expect(nav.querySelector('[data-part="nav-rail.spacer"]')).not.toBeNull();
-    expect(within(nav).getByRole("img", { name: /^Account: / })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: /^Account: / })).toHaveAttribute(
+      "aria-haspopup",
+      "menu",
+    );
     expect(nav).toHaveAttribute("data-labels", "hidden");
     expect(nav).toHaveAttribute("data-key-context", "global");
   });
@@ -124,12 +130,16 @@ describe("nav-rail", () => {
     });
     fireEvent.keyDown(mail, { key: "ArrowDown" });
     expect(document.activeElement).toBe(item(/^Calendar/));
+    // The account button is the last stop (R8).
     fireEvent.keyDown(must(document.activeElement), { key: "End" });
+    expect(document.activeElement).toBe(item(/^Account: /));
+    fireEvent.keyDown(must(document.activeElement), { key: "ArrowUp" });
     expect(document.activeElement).toBe(item(/^Settings/));
+    fireEvent.keyDown(must(document.activeElement), { key: "End" });
     fireEvent.keyDown(must(document.activeElement), { key: "ArrowDown" });
     expect(document.activeElement).toBe(mail);
     fireEvent.keyDown(mail, { key: "ArrowUp" });
-    expect(document.activeElement).toBe(item(/^Settings/));
+    expect(document.activeElement).toBe(item(/^Account: /));
     fireEvent.keyDown(must(document.activeElement), { key: "Home" });
     expect(document.activeElement).toBe(mail);
     // Other keys are left alone.
@@ -158,15 +168,37 @@ describe("nav-rail", () => {
     const first = accounts[0];
     const second = accounts[1];
     if (!first || !second) throw new Error("the mock needs two accounts");
-    expect(within(rail()).getByRole("img")).toHaveAccessibleName(
+    expect(within(rail()).getByRole("button", { name: /^Account: / })).toHaveAccessibleName(
       `Account: ${first.name || first.email}`,
     );
     act(() => {
       env.store.getState().selectAccount(second.id);
     });
-    expect(within(rail()).getByRole("img")).toHaveAccessibleName(
+    expect(within(rail()).getByRole("button", { name: /^Account: / })).toHaveAccessibleName(
       `Account: ${second.name || second.email}`,
     );
+  });
+
+  it("opens the account menu from the avatar and shows the chosen account in Mail (R8)", async () => {
+    const env = createEnv({ state: { activeAccountId: "acc-personal", activeView: "tasks" } });
+    renderRail(env, hostLayout());
+    await settleQueries(env);
+    const avatar = within(rail()).getByRole("button", { name: /^Account: / });
+    fireEvent.click(avatar);
+    const menu = await screen.findByRole("menu", { name: "Accounts" });
+    expect(avatar).toHaveAttribute("aria-expanded", "true");
+    const labels = within(menu)
+      .getAllByRole("menuitem")
+      .map((i) => i.textContent);
+    expect(labels).toContain("All accounts");
+    expect(labels.at(-1)).toMatch(/^Add account/);
+    const work = env.transport.data.accounts.find((a) => a.id === "acc-work");
+    fireEvent.click(within(menu).getByRole("menuitem", { name: must(work).name }));
+    await waitFor(() => {
+      expect(env.store.getState().activeAccountId).toBe("acc-work");
+    });
+    expect(env.store.getState().activeView).toBe("mail");
+    expect(screen.queryByRole("menu", { name: "Accounts" })).toBeNull();
   });
 
   it("drops separators that separate nothing and renders the rest", async () => {
@@ -183,6 +215,7 @@ describe("nav-rail", () => {
     renderRail(env, layout);
     await settleQueries(env);
     expect(within(rail()).getAllByRole("separator")).toHaveLength(1);
-    expect(within(rail()).getAllByRole("button")).toHaveLength(2);
+    // The two views and the account.
+    expect(within(rail()).getAllByRole("button")).toHaveLength(3);
   });
 });

@@ -16,6 +16,12 @@
  * Leaving something inside a window (another settings section, another
  * rule) asks the same way: `askToLeave(ui, window, proceed)`.
  *
+ * When several guarded windows with unsaved changes leave at once (another
+ * view closes every window), one prompt asks about all of them (R8): it
+ * lists their names; Save saves each in turn (the first that fails stays
+ * open), Don't save drops every change (`SEVERAL_GUARD`, the question's
+ * `several`).
+ *
  * A window that closes itself after saving uses `closeWindowNow` (or is no
  * longer dirty by then). Guards are kept per UI store and window id; a
  * guard outside any window is keyed `MAIN_GUARD`.
@@ -57,12 +63,20 @@ export const UNSAVED_PROMPT = "unsaved-changes";
 /** The key of a guard outside any secondary window (the main window). */
 export const MAIN_GUARD = "main";
 
+/**
+ * The prompt key of one question about several windows at once (R8). Never
+ * a window of its own; its question names the windows (`several`).
+ */
+export const SEVERAL_GUARD = "several-windows";
+
 /** What the open prompt asks about. */
 export interface UnsavedQuestion {
-  /** The guarded window (or `MAIN_GUARD`). */
+  /** The guarded window (or `MAIN_GUARD`, or `SEVERAL_GUARD`). */
   window: string;
   /** What happens after Save or Don't save: the window closes, or the move on. */
   proceed: () => void;
+  /** `SEVERAL_GUARD`'s question: the guarded windows it asks about, in order. */
+  several?: readonly string[];
 }
 
 interface GuardState {
@@ -198,13 +212,25 @@ export function installCloseGuard(ui: UiStore): (() => void) | null {
         state.guards.get(w)?.isDirty() === true,
     );
     if (closed.length === 0) return;
-    // Back on top, and ask about each.
+    // Back on top, and ask: about the one, or once about all of them (R8).
     ui.setState({ windows: [...next.windows, ...closed] });
-    for (const w of closed) {
-      ask(ui, w, () => {
-        closeWindowNow(ui, w);
-      });
+    if (closed.length === 1) {
+      const [w] = closed;
+      if (w !== undefined) {
+        ask(ui, w, () => {
+          closeWindowNow(ui, w);
+        });
+      }
+      return;
     }
+    state.questions.set(SEVERAL_GUARD, {
+      window: SEVERAL_GUARD,
+      several: closed,
+      proceed: () => {
+        for (const w of closed) closeWindowNow(ui, w);
+      },
+    });
+    ui.getState().openWindow(promptWindowFor(SEVERAL_GUARD));
   });
   return () => {
     state.installed = false;

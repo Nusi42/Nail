@@ -29,6 +29,7 @@ import { comboFromEvent } from "../actions/keys";
 import { keyLabel } from "../features/menus";
 import { ContextMenu } from "../features/menus/ContextMenu";
 import { ariaShortcut } from "../features/menus/keyLabels";
+import { useMenuButton } from "../features/menus/MenuButton";
 import { customizerWindow } from "../features/toolbar-editor/ids";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { useLayoutConfig } from "../layout/LayoutContext";
@@ -126,71 +127,30 @@ interface MoreProps {
 /** The "More" button and its menu (a context menu under the button). */
 function MoreButton({ index, labelOverride, icon, entries, measuring }: MoreProps) {
   const label = useLabel();
-  const { dispatch } = useActions();
-  const button = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState<{ x: number; y: number; keyboard: boolean } | null>(null);
-  const wasOpen = useRef(false);
   const text = label(labelOverride ?? "@toolbar.more");
   const empty = entries.length === 0;
-
-  const show = (keyboard: boolean) => {
-    const rect = button.current?.getBoundingClientRect();
-    setOpen({ x: rect?.left ?? 0, y: rect?.bottom ?? 0, keyboard });
-  };
-  const close = (restoreFocus: boolean) => {
-    setOpen(null);
-    if (restoreFocus) button.current?.focus();
-  };
+  // The menu opens under the button, its end edge at the button's end edge
+  // (R8: the More button sits at the bar's end, so the menu grows inwards).
+  const { open, buttonProps, menu } = useMenuButton((button) => {
+    const rect = button.getBoundingClientRect();
+    const rtl = getComputedStyle(button).direction === "rtl";
+    return { x: rtl ? rect.left : rect.right, y: rect.bottom, alignRight: !rtl };
+  }, "ArrowDown");
 
   return (
     <>
       <button
-        ref={button}
+        {...buttonProps}
         type="button"
         data-part="toolbar.more"
         data-item={index ?? undefined}
-        data-state={open ? "expanded" : undefined}
-        aria-haspopup="menu"
-        aria-expanded={open !== null}
         disabled={empty && !measuring}
         title={text}
-        // A click on the button while the menu is open closes it (the
-        // menu's outside-click handler already did; do not reopen).
-        onPointerDown={() => {
-          wasOpen.current = open !== null;
-        }}
-        onClick={(event) => {
-          if (wasOpen.current) {
-            wasOpen.current = false;
-            return;
-          }
-          if (open) close(false);
-          else show(event.detail === 0);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" && !open) {
-            event.preventDefault();
-            show(true);
-          }
-        }}
       >
         <Icon name={icon ?? "ellipsis"} part="toolbar.more.icon" />
         <span data-part="toolbar.more.label">{text}</span>
       </button>
-      {open && !empty && (
-        <ContextMenu
-          items={entries}
-          label={text}
-          x={open.x}
-          y={open.y}
-          focusOnOpen={open.keyboard}
-          onRun={(action, args) => {
-            close(true);
-            void dispatch(action, args);
-          }}
-          onClose={close}
-        />
-      )}
+      {open && !empty && menu(entries, text)}
     </>
   );
 }

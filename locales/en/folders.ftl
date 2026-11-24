@@ -31,3 +31,4 @@ folders-delete-empty-intro = The folder is empty. It is deleted on the server to
 folders-delete-confirm = { folders-action-delete }
 folders-waiting = The server cannot be reached right now. Nail makes the change as soon as it can.
 folders-gone = This folder is no longer there.
+folders-searched-here = The search runs in this folder

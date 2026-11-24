@@ -2,7 +2,12 @@
  * Settings → Look & feel → Layout & toolbars: the layout card (widget
  * `layout-editor-settings`, M5d WP181). Pick a window (Mail, Calendar, …),
  * then "Customize layout" (shows the view and turns on customize mode),
- * apply one of its presets directly, or reset it to the default.
+ * choose one of its presets, or reset it to the default.
+ *
+ * A chosen preset is a settings draft (R8, ADR 0242): it shows as chosen
+ * and is written with the settings bar's Save like every other setting
+ * (Discard forgets it). "Reset to default" and the customize mode stay
+ * actions of their own with Undo.
  */
 import { useId, useState } from "react";
 import { useT } from "../../i18n/I18nProvider";
@@ -17,6 +22,7 @@ import { usePresetName, useWindowName } from "./names";
 import { PresetPreview } from "./Palette";
 import { startCustomizing } from "./start";
 import { useEditor } from "./store";
+import { useSettingsForm } from "../settings/draft";
 
 export function LayoutEditorSettings({ node }: WidgetProps) {
   const t = useT();
@@ -35,6 +41,31 @@ export function LayoutEditorSettings({ node }: WidgetProps) {
   const breakpoint = window === null ? -1 : shownBreakpoint(layout, window, width);
   const root = window === null ? null : (layout.windows[window]?.[breakpoint]?.root ?? null);
   const presets = window === null ? [] : presetsOf(layout, window);
+  // The preset waiting for the bar's Save (`null`: none chosen), with where it goes.
+  const chosenPreset = useSettingsForm<{
+    preset: string;
+    window: string;
+    breakpoint: number;
+  } | null>(null, {
+    save: async (choice) => {
+      if (choice === null) return true;
+      const preset = presetsOf(layout, choice.window).find((p) => p.id === choice.preset);
+      return edit(
+        [
+          {
+            op: "apply-preset",
+            preset: choice.preset,
+            target: { window: choice.window, breakpoint: choice.breakpoint, path: [] },
+          },
+        ],
+        {
+          id: "layout-editor-preset-applied",
+          args: { preset: preset ? presetName(preset) : choice.preset },
+        },
+      );
+    },
+  });
+  const pending = chosenPreset.value?.window === window ? chosenPreset.value.preset : null;
 
   return (
     <section
@@ -84,21 +115,18 @@ export function LayoutEditorSettings({ node }: WidgetProps) {
                     type="button"
                     data-part="layout-editor.preset"
                     data-preset={preset.id}
-                    aria-pressed={fits && presetActive(preset, root)}
+                    aria-pressed={
+                      fits &&
+                      (pending === null ? presetActive(preset, root) : pending === preset.id)
+                    }
+                    data-state={pending === preset.id ? "chosen" : undefined}
                     disabled={busy || !fits}
                     onClick={() => {
-                      void edit(
-                        [
-                          {
-                            op: "apply-preset",
-                            preset: preset.id,
-                            target: { window, breakpoint, path: [] },
-                          },
-                        ],
-                        {
-                          id: "layout-editor-preset-applied",
-                          args: { preset: presetName(preset) },
-                        },
+                      // Choosing the preset the view already has drops the choice.
+                      chosenPreset.set(
+                        presetActive(preset, root)
+                          ? null
+                          : { preset: preset.id, window, breakpoint },
                       );
                     }}
                   >
@@ -128,6 +156,7 @@ export function LayoutEditorSettings({ node }: WidgetProps) {
               data-action="reset"
               disabled={busy}
               onClick={() => {
+                chosenPreset.discard();
                 void edit([{ op: "reset-window", window }], {
                   id: "layout-editor-reset-done",
                   args: { window: windowName(window) },

@@ -289,11 +289,13 @@ export function ComposerSecurityWidget({ node }: WidgetProps) {
   const identity = (useIdentities(null).data ?? []).find((i) => i.id === identityId) ?? null;
   const preference = (identity?.crypto ?? defaultIdentityCrypto()).technology;
   const open = composer !== null;
+  // Every composer reports for its own window, focused or not (R8): a
+  // background composer's report follows its recipients, ready for its focus.
   const onReport = useCallback(
     (r: RecipientKeysReport | null) => {
-      composerCryptoStore.getState().setReport(r, preference);
+      composerCryptoStore.getState().setReportOf(window, r, preference);
     },
-    [preference],
+    [preference, window],
   );
   const onChoice = useCallback((c: SendCrypto | null) => {
     composerCryptoStore.getState().setChoice(c);

@@ -29,12 +29,14 @@ import {
   type KeyboardEvent,
 } from "react";
 import { NailError, errorMessageOf } from "../../api/client";
-import type {
-  LayoutPatch,
-  LocalizedMessage,
-  ToolbarArea,
-  ToolbarItem,
-  ToolbarSlot,
+import {
+  ACTION_AVAILABILITY_MESSAGE_IDS,
+  type ActionAvailability,
+  type LayoutPatch,
+  type LocalizedMessage,
+  type ToolbarArea,
+  type ToolbarItem,
+  type ToolbarSlot,
 } from "../../api/generated";
 import { buildPalette } from "../../actions/palette";
 import { useLabel, useT } from "../../i18n/I18nProvider";
@@ -71,10 +73,38 @@ import { toolbarTitleId } from "./names";
 export const DRAG_TYPE = "application/x-nail-toolbar-item";
 
 /**
- * How many available actions the list shows at once; the search finds the
- * rest (a list of every action would be hundreds of rows).
+ * The groups of the available actions, in the order the list shows them
+ * (R8): Separator and Flexible space, then the actions by where they apply
+ * (their palette availability), then the plug-ins' commands. The search
+ * field narrows every group at once; the whole list stays reachable.
  */
-export const PALETTE_LIMIT = 30;
+export const AVAILABLE_GROUPS = [
+  "spacing",
+  "global",
+  "list",
+  "reader",
+  "composer",
+  "calendar",
+  "contacts",
+  "tasks",
+  "desktop",
+  "plugin",
+] as const satisfies readonly ("spacing" | "plugin" | ActionAvailability)[];
+export type AvailableGroup = (typeof AVAILABLE_GROUPS)[number];
+
+/** The Fluent id of a group's heading. */
+export function availableGroupTitle(group: AvailableGroup): string {
+  switch (group) {
+    case "spacing":
+      return "toolbar-editor-group-spacing";
+    case "global":
+      return "toolbar-editor-group-global";
+    case "plugin":
+      return "toolbar-editor-group-plugin";
+    default:
+      return ACTION_AVAILABILITY_MESSAGE_IDS[group];
+  }
+}
 
 /** One available action (or Separator / Flexible space). */
 export interface AvailableEntry {
@@ -85,6 +115,22 @@ export interface AvailableEntry {
   title: string;
   icon: string | null;
   plugin: boolean;
+  /** The group it is listed in. */
+  group: AvailableGroup;
+}
+
+/** Consecutive runs of `entries` by group, in `AVAILABLE_GROUPS` order, with each entry's list index. */
+export function groupAvailable(
+  entries: readonly AvailableEntry[],
+): { group: AvailableGroup; entries: { entry: AvailableEntry; index: number }[] }[] {
+  const out: { group: AvailableGroup; entries: { entry: AvailableEntry; index: number }[] }[] = [];
+  let index = 0;
+  for (const group of AVAILABLE_GROUPS) {
+    const members = entries.filter((e) => e.group === group);
+    if (members.length === 0) continue;
+    out.push({ group, entries: members.map((entry) => ({ entry, index: index++ })) });
+  }
+  return out;
 }
 
 /** Where a drag started. */
@@ -149,7 +195,7 @@ function useItemText() {
   };
 }
 
-/** The available actions: Separator, Flexible space, then every action by title. */
+/** The available actions: Separator, Flexible space, then every action by title (each with its group). */
 export function useAvailable(): AvailableEntry[] {
   const t = useT();
   const layout = useLayoutConfig();
@@ -174,6 +220,11 @@ export function useAvailable(): AvailableEntry[] {
         infos[entry.id]?.icon ??
         null,
       plugin: entry.source === "plugin",
+      group:
+        entry.source === "plugin"
+          ? "plugin"
+          : ((Object.hasOwn(infos, entry.id) ? infos[entry.id]?.availability?.[0] : undefined) ??
+            "global"),
     }));
     return [
       {
@@ -182,6 +233,7 @@ export function useAvailable(): AvailableEntry[] {
         title: t("customize-toolbar-separator"),
         icon: "minus",
         plugin: false,
+        group: "spacing",
       },
       {
         key: "spacer",
@@ -189,6 +241,7 @@ export function useAvailable(): AvailableEntry[] {
         title: t("customize-toolbar-spacer"),
         icon: "arrow-left-right",
         plugin: false,
+        group: "spacing",
       },
       ...actions,
     ];
@@ -302,8 +355,9 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
   const more = areaItems(items, "more");
   const used = usedActions(items);
   const [query, setQuery] = useState("");
-  const matching = filterAvailable(available, query);
-  const shownAvailable = matching.slice(0, PALETTE_LIMIT);
+  const groups = groupAvailable(filterAvailable(available, query));
+  // The list's order (the keyboard moves through it across the groups).
+  const shownAvailable = groups.flatMap((g) => g.entries.map((e) => e.entry));
   const lists: Record<ListName, number> = {
     bar: bar.length,
     more: more.length,
@@ -787,63 +841,73 @@ export function ToolbarCustomizer({ name, close }: DialogProps) {
                 {t("toolbar-editor-no-match")}
               </li>
             )}
-            {shownAvailable.map((entry, index) => {
-              const isSelected = current?.list === "palette" && current.index === index;
-              const inUse = entry.item.type === "action" && used.has(entry.item.action);
-              return (
-                <li
-                  key={entry.key}
-                  data-part="toolbar-customizer.item"
-                  data-kind={entry.item.type}
-                  data-action={entry.item.type === "action" ? entry.item.action : undefined}
-                  data-index={index}
-                  data-state={isSelected ? "selected" : undefined}
-                  data-source={entry.plugin ? "plugin" : undefined}
-                  role="option"
-                  aria-selected={isSelected}
-                  tabIndex={index === paletteStop ? 0 : -1}
-                  draggable={!busy}
-                  onFocus={() => {
-                    if (!isSelected) choose({ list: "palette", index }, false);
-                  }}
-                  onClick={() => {
-                    choose({ list: "palette", index }, false);
-                  }}
-                  onDoubleClick={() => {
-                    void add(entry, endOf("bar"));
-                  }}
-                  onKeyDown={(event) => {
-                    onItemKeyDown(event, "palette", index);
-                  }}
-                  onDragStart={(event) => {
-                    startDrag(event, { kind: "palette", entry });
-                  }}
-                  onDragEnd={endDrag}
+            {groups.map(({ group, entries }) => (
+              <li
+                key={group}
+                role="presentation"
+                data-part="toolbar-customizer.group"
+                data-group={group}
+              >
+                <span data-part="toolbar-customizer.group.title" id={`${base}-group-${group}`}>
+                  {t(availableGroupTitle(group))}
+                </span>
+                <ul
+                  role="group"
+                  data-part="toolbar-customizer.group.list"
+                  aria-labelledby={`${base}-group-${group}`}
                 >
-                  <Icon name={entry.icon} part="toolbar-customizer.item.icon" />
-                  <span data-part="toolbar-customizer.item.label">{entry.title}</span>
-                  {entry.plugin && (
-                    <span data-part="toolbar-customizer.item.badge" data-badge="plugin">
-                      {t("plugin-log-source-plugin")}
-                    </span>
-                  )}
-                  {inUse && (
-                    <span data-part="toolbar-customizer.item.badge" data-badge="used">
-                      {t("toolbar-editor-badge-used")}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
+                  {entries.map(({ entry, index }) => {
+                    const isSelected = current?.list === "palette" && current.index === index;
+                    const inUse = entry.item.type === "action" && used.has(entry.item.action);
+                    return (
+                      <li
+                        key={entry.key}
+                        data-part="toolbar-customizer.item"
+                        data-kind={entry.item.type}
+                        data-action={entry.item.type === "action" ? entry.item.action : undefined}
+                        data-index={index}
+                        data-state={isSelected ? "selected" : undefined}
+                        data-source={entry.plugin ? "plugin" : undefined}
+                        role="option"
+                        aria-selected={isSelected}
+                        tabIndex={index === paletteStop ? 0 : -1}
+                        draggable={!busy}
+                        onFocus={() => {
+                          if (!isSelected) choose({ list: "palette", index }, false);
+                        }}
+                        onClick={() => {
+                          choose({ list: "palette", index }, false);
+                        }}
+                        onDoubleClick={() => {
+                          void add(entry, endOf("bar"));
+                        }}
+                        onKeyDown={(event) => {
+                          onItemKeyDown(event, "palette", index);
+                        }}
+                        onDragStart={(event) => {
+                          startDrag(event, { kind: "palette", entry });
+                        }}
+                        onDragEnd={endDrag}
+                      >
+                        <Icon name={entry.icon} part="toolbar-customizer.item.icon" />
+                        <span data-part="toolbar-customizer.item.label">{entry.title}</span>
+                        {entry.plugin && (
+                          <span data-part="toolbar-customizer.item.badge" data-badge="plugin">
+                            {t("plugin-log-source-plugin")}
+                          </span>
+                        )}
+                        {inUse && (
+                          <span data-part="toolbar-customizer.item.badge" data-badge="used">
+                            {t("toolbar-editor-badge-used")}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))}
           </ul>
-          {matching.length > shownAvailable.length && (
-            <p data-part="toolbar-customizer.more-matches">
-              {t("toolbar-editor-more-matches", {
-                shown: shownAvailable.length,
-                total: matching.length,
-              })}
-            </p>
-          )}
         </section>
       </div>
 

@@ -1,4 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { FRAME_SCRIPT } from "../../api/generated";
+import { FRAME_HEIGHT_MESSAGE, MAIL_FRAME_SANDBOX, OPAQUE_ORIGIN } from "../../theme/frameHeight";
 import userEvent from "@testing-library/user-event";
 import { emptyComposer } from "../../state/compose";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
@@ -73,7 +75,20 @@ describe("rich composer", () => {
     await waitFor(() => {
       expect(frame.getAttribute("srcdoc")).toContain("<p>Hello <em>there</em></p>");
     });
-    expect(frame).toHaveAttribute("sandbox", "");
+    // R8: a mail frame's sandbox and script, so it grows with its content.
+    expect(frame).toHaveAttribute("sandbox", MAIL_FRAME_SANDBOX);
+    expect(frame.getAttribute("srcdoc")).toContain(FRAME_SCRIPT);
+    expect(frame).not.toHaveAttribute("data-state");
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { type: FRAME_HEIGHT_MESSAGE, height: 420 },
+          source: (frame as HTMLIFrameElement).contentWindow,
+          origin: OPAQUE_ORIGIN,
+        }),
+      );
+    });
+    expect(frame).toHaveAttribute("data-state", "measured");
 
     act(() => view?.dispatch({ changes: { from: 0, insert: "# Title\n\n" } }));
     expect(rich(env).markdown).toBe("# Title\n\nHello *there*");

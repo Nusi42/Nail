@@ -22,6 +22,8 @@ export const DIALOG_SKIN_CSS = `${p("dialog.confirm")} { display: flex; flex-dir
 ${p("dialog.question")} { margin: 0; overflow-wrap: anywhere; }
 ${p("dialog.detail")} { display: grid; gap: ${T.sm}; }
 ${p("dialog.note")} { margin: 0; color: ${T.muted}; overflow-wrap: anywhere; }
+${p("dialog.list")} { display: grid; gap: ${T.xxs}; margin: 0; padding-inline-start: ${T.lg}; }
+${p("dialog.list.item")} { overflow-wrap: anywhere; }
 ${p("dialog.footer")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; margin-block-start: auto; }
 ${p("dialog.footer.start")} { display: flex; flex-wrap: wrap; gap: ${T.sm}; margin-inline-end: auto; }
 ${p("dialog.footer.end")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; margin-inline-start: auto; }

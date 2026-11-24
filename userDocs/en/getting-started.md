@@ -39,7 +39,9 @@ The **navigation rail** on the left switches between Nail's views: **Mail**,
 **Calendar**, **Contacts**, **Tasks** and, at the bottom, **Settings**. The
 number on Mail is your unread mail in all inboxes; the shield button shows
 how many changes by AI agents or plug-ins wait for your approval. Your
-account's avatar sits at the very bottom. Nail opens the view you used last.
+account's avatar sits at the very bottom; click it (or press `Enter` or `→`
+on it) for the account menu: show an account, or all of them, in Mail, open
+the account settings, or add an account. Nail opens the view you used last.
 
 The Mail view has three panes:
 

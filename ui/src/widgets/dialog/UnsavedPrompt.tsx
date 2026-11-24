@@ -12,11 +12,18 @@
  * Save that fails leaves the window open with its inline error; Cancel
  * while Save runs keeps the window too (it does not close or move on when
  * the save ends).
+ *
+ * Several windows at once (`SEVERAL_GUARD`, R8): "Save changes to 3
+ * items?" with their names listed (`dialog.list`); Save saves each in turn
+ * and stops at the first that fails (that window comes to the front with
+ * its error), Don't save drops all; when one of them cannot be saved, only
+ * Discard all and Keep editing.
  */
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import {
   MAIN_GUARD,
+  SEVERAL_GUARD,
   closeGuardOf,
   forgetUnsavedQuestion,
   guardedWindowOf,
@@ -29,20 +36,139 @@ import { ConfirmDialog, ConfirmGone } from "./ConfirmDialog";
 
 /** Window `unsaved-changes:<key>`. */
 export function UnsavedPrompt({ name, close }: DialogProps) {
-  const t = useT();
-  const ui = useUiStoreApi();
   const target = guardedWindowOf(name) ?? MAIN_GUARD;
+  return target === SEVERAL_GUARD ? (
+    <SeveralPrompt close={close} />
+  ) : (
+    <OnePrompt target={target} close={close} />
+  );
+}
+
+/** The answer's state shared by both prompts: forgets the question when the prompt goes. */
+function useQuestion(target: string) {
+  const ui = useUiStoreApi();
   const [question] = useState(() => unsavedQuestionOf(ui, target));
-  const guard = closeGuardOf(ui, target);
-  const [busy, setBusy] = useState(false);
-  /** Cancel (or ×, Esc) was chosen: a save still running must not move on. */
-  const cancelled = useRef(false);
   useEffect(
     () => () => {
       if (question) forgetUnsavedQuestion(ui, question);
     },
     [ui, question],
   );
+  return question;
+}
+
+/** The prompt about several windows (R8). */
+function SeveralPrompt({ close }: { close: () => void }) {
+  const t = useT();
+  const ui = useUiStoreApi();
+  const question = useQuestion(SEVERAL_GUARD);
+  const [busy, setBusy] = useState(false);
+  const cancelled = useRef(false);
+  const guarded = (question?.several ?? []).flatMap((window) => {
+    const guard = closeGuardOf(ui, window);
+    return guard?.isDirty() === true ? [{ window, guard }] : [];
+  });
+  if (question === null || guarded.length === 0) {
+    return <ConfirmGone kind="unsaved" text={t("dialog-unsaved-gone")} close={close} />;
+  }
+  const keepEditing = (window = guarded[0]?.window) => {
+    cancelled.current = true;
+    close();
+    if (window !== undefined) ui.getState().focusWindow(window);
+  };
+  const goOn = () => {
+    close();
+    question.proceed();
+  };
+  const dropChanges = () => {
+    for (const { guard } of guarded) guard.discard?.();
+    goOn();
+  };
+  const names = (
+    <ul data-part="dialog.list">
+      {guarded.map(({ window, guard }) => (
+        <li key={window} data-part="dialog.list.item">
+          {nonEmpty(guard.name().trim()) ?? t("dialog-untitled")}
+        </li>
+      ))}
+    </ul>
+  );
+  if (guarded.some(({ guard }) => guard.canSave?.() !== true)) {
+    return (
+      <ConfirmDialog
+        kind="unsaved"
+        risk="destructive"
+        question={t("dialog-unsaved-many-invalid-question", { count: guarded.length })}
+        detail={
+          <>
+            {names}
+            <p data-part="dialog.note">{t("dialog-unsaved-invalid-detail")}</p>
+          </>
+        }
+        action={t("common-discard-changes")}
+        onConfirm={dropChanges}
+        cancel={{
+          label: t("common-keep-editing"),
+          onClick: () => {
+            keepEditing();
+          },
+        }}
+      />
+    );
+  }
+  const save = async () => {
+    setBusy(true);
+    for (const { window, guard } of guarded) {
+      const saved = await Promise.resolve()
+        .then(() => guard.save?.() ?? false)
+        .catch(() => false);
+      if (cancelled.current) return;
+      if (!saved) {
+        setBusy(false);
+        keepEditing(window);
+        return;
+      }
+    }
+    setBusy(false);
+    goOn();
+  };
+  return (
+    <ConfirmDialog
+      kind="unsaved"
+      question={t("dialog-unsaved-many-question", { count: guarded.length })}
+      detail={
+        <>
+          {names}
+          <p data-part="dialog.note">{t("dialog-unsaved-detail")}</p>
+        </>
+      }
+      action={t("common-save")}
+      onConfirm={() => void save()}
+      secondary={{
+        label: t("dialog-dont-save"),
+        destructive: true,
+        onClick: dropChanges,
+        action: "dont-save",
+      }}
+      cancel={{
+        onClick: () => {
+          keepEditing();
+        },
+      }}
+      busy={busy}
+    />
+  );
+}
+
+/** The prompt about one window. */
+function OnePrompt({ target, close }: { target: string; close: () => void }) {
+  const t = useT();
+  const ui = useUiStoreApi();
+  const question = useQuestion(target);
+  const guard = closeGuardOf(ui, target);
+  const [busy, setBusy] = useState(false);
+  /** Cancel (or ×, Esc) was chosen: a save still running must not move on. */
+  const cancelled = useRef(false);
   if (question === null || guard === null) {
     return <ConfirmGone kind="unsaved" text={t("dialog-unsaved-gone")} close={close} />;
   }

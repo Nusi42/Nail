@@ -39,7 +39,7 @@ import { UI_STATE_SETTINGS_SECTION, useSetUiState, useUiStateValue } from "../..
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
 import { askToLeave, useGuardKey } from "../../layout/closeGuard";
-import { SettingsSaveBar } from "../../widgets/dialog";
+import { SettingsSaveBar, useSettingsDrafts } from "../../widgets/dialog";
 import { useSettingsGuard } from "./draft";
 import { appRegistry } from "../registry";
 import { currentSection, findSection, highlightText, rankSettingsHits } from "./model";
@@ -74,6 +74,15 @@ function Highlight({ text, query }: { text: string; query: string }) {
 const sectionLabelOf = (section: SettingsSection) =>
   section.label ?? `@settings.section.${section.id}`;
 const groupLabelOf = (group: SettingsGroup) => group.label ?? `@settings.group.${group.id}`;
+
+/**
+ * The mark of a navigation entry whose section has unsaved changes (R8): a
+ * dot; the entry's description (`unsavedNote`) says it, so the entry keeps
+ * its name.
+ */
+function UnsavedMark({ title }: { title: string }) {
+  return <span data-part="settings-page.nav.unsaved" title={title} aria-hidden="true" />;
+}
 
 const FOCUSABLE =
   'input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex="-1"])';
@@ -285,6 +294,9 @@ export function SettingsPage({ node }: WidgetProps) {
   }, [settingsStore, guardKey]);
   const sectionName = section ? label(sectionLabelOf(section)) : "";
   useSettingsGuard(sectionName);
+  // R8: the shown section's entry says when it has unsaved changes.
+  const unsaved = useSettingsDrafts().dirty;
+  const unsavedNote = useId();
   const go = (id: string) => {
     if (id === sectionId) return;
     askToLeave(uiStore, guardKey, () => {
@@ -375,6 +387,7 @@ export function SettingsPage({ node }: WidgetProps) {
                   type="button"
                   data-part="settings-page.result.section"
                   aria-current={hit.section === sectionId ? "page" : undefined}
+                  aria-describedby={hit.section === sectionId && unsaved ? unsavedNote : undefined}
                   onClick={() => {
                     open(hit.section, null);
                   }}
@@ -383,6 +396,9 @@ export function SettingsPage({ node }: WidgetProps) {
                   <span data-part="settings-page.nav.label">
                     <Highlight text={sectionText(s)} query={query} />
                   </span>
+                  {hit.section === sectionId && unsaved && (
+                    <UnsavedMark title={t("settings-page-unsaved")} />
+                  )}
                 </button>
                 {settings.length > 0 && (
                   <ul data-part="settings-page.result.settings">
@@ -430,12 +446,16 @@ export function SettingsPage({ node }: WidgetProps) {
                 data-part="settings-page.nav.item"
                 data-section={s.id}
                 aria-current={s.id === sectionId ? "page" : undefined}
+                aria-describedby={s.id === sectionId && unsaved ? unsavedNote : undefined}
                 onClick={() => {
                   go(s.id);
                 }}
               >
                 <Icon name={s.icon} part="settings-page.nav.icon" />
                 <span data-part="settings-page.nav.label">{sectionText(s)}</span>
+                {s.id === sectionId && unsaved && (
+                  <UnsavedMark title={t("settings-page-unsaved")} />
+                )}
               </button>
             </li>
           ))}
@@ -447,6 +467,10 @@ export function SettingsPage({ node }: WidgetProps) {
   return (
     <div data-part="settings-page" data-node-id={node.id ?? undefined}>
       <nav data-part="settings-page.nav" aria-label={t("settings-page-nav")}>
+        {/* Hidden: only the shown section's entry refers to it (its description). */}
+        <span data-part="settings-page.nav.unsaved.text" id={unsavedNote} hidden>
+          {t("settings-page-unsaved")}
+        </span>
         {showSearch && (
           <SearchBox
             query={query}

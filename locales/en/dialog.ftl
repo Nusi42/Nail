@@ -13,6 +13,10 @@ dialog-dont-save = Don't save
 # The changes cannot be saved (they have problems).
 dialog-unsaved-invalid-question = Discard changes to “{ $name }”?
 dialog-unsaved-invalid-detail = The changes have problems and cannot be saved. Keep editing to fix them.
+# Several windows with unsaved changes close at once (another view, R8);
+# their names are listed below the question.
+dialog-unsaved-many-question = Save changes to { $count } items?
+dialog-unsaved-many-invalid-question = Discard changes to { $count } items?
 # What is being edited has no name yet.
 dialog-untitled = Untitled
 # The prompt opened for a window that has closed meanwhile.

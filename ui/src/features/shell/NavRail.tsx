@@ -26,6 +26,8 @@ import { useUi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
 import { Avatar } from "../../widgets/primitives";
 import { ariaShortcut, keyLabel } from "../menus/keyLabels";
+import { useMenuButton } from "../menus/MenuButton";
+import { accountMenuItems } from "./accountMenu";
 import { useBadgeCounts, type BadgeCounts } from "./badges";
 import {
   actionShortcuts,
@@ -37,7 +39,7 @@ import {
 } from "./model";
 import { VERTICAL, moveRovingFocus } from "../../widgets/rovingFocus";
 
-const ITEM_SELECTOR = '[data-part="nav-rail.item"]:not(:disabled)';
+const ITEM_SELECTOR = '[data-part="nav-rail.item"]:not(:disabled), [data-part="nav-rail.account"]';
 
 /** Up / Down / Home / End move focus between the rail's enabled buttons. */
 export function onRailKeyDown(event: KeyboardEvent<HTMLElement>): void {
@@ -167,19 +169,37 @@ function ActionItem({
 /**
  * The account at the bottom of the rail: the selected account, or the
  * first real one while "All accounts" (or a virtual account) is selected.
+ * A button (R8): it opens the account menu (`accountMenuItems`: switch the
+ * mail view to an account, account settings, add an account) under it.
  */
 function RailAccount() {
   const t = useT();
   const accounts = useAccounts();
   const activeId = useUi((s) => s.activeAccountId);
-  const real = (accounts.data ?? []).filter((a) => a.kind !== "virtual");
+  const layout = useLayoutConfig();
+  // Beside the rail, its top at the avatar's (the menu moves up to fit).
+  const { buttonProps, menu } = useMenuButton((button) => {
+    const rect = button.getBoundingClientRect();
+    return { x: rect.right, y: rect.top };
+  }, "ArrowRight");
+  const all = accounts.data ?? [];
+  const real = all.filter((a) => a.kind !== "virtual");
   const account = real.find((a) => a.id === activeId) ?? real[0];
   if (account === undefined) return null;
   const name = t("shell-rail-account", { name: account.name || account.email });
   return (
-    <span data-part="nav-rail.account" role="img" aria-label={name} title={name}>
-      <Avatar name={account.name} email={account.email} />
-    </span>
+    <>
+      <button
+        {...buttonProps}
+        type="button"
+        data-part="nav-rail.account"
+        aria-label={name}
+        title={name}
+      >
+        <Avatar name={account.name} email={account.email} />
+      </button>
+      {menu(accountMenuItems(layout, all, activeId), t("shell-account-menu"))}
+    </>
   );
 }
 

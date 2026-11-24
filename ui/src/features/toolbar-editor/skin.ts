@@ -16,7 +16,9 @@
  *   `data-drop="before"`, `data-source="plugin"`) with `.item.icon`,
  *   `.item.label`, `.item.badge` (`data-badge` = `plugin` / `used`),
  *   `.empty`, `.commands`, `.palette` (`data-drop="remove"` while a bar
- *   item is dragged over it), `.drop-hint`, `.more-matches`, `.status`
+ *   item is dragged over it), `.drop-hint`, `.group` (`data-group`: the
+ *   available actions by where they apply, R8) with `.group.title` and
+ *   `.group.list`, `.status`
  *   (`data-tone` = `done` / `error`), `.footer`, `.footer.spacer`
  * - `toolbar-customizer-settings` (the settings card): `.title`, `.intro`,
  *   `.empty`, `.list`, `.item`, `.name`, `.count`
@@ -51,7 +53,7 @@ const FRAME = `${p(CUSTOMIZER_PART)} {
 }
 ${p(CUSTOMIZER_PART)}[aria-busy="true"] ${c("list")} { cursor: progress; }
 ${c("header")} { display: flex; flex-wrap: wrap; align-items: end; gap: ${T.sm} ${T.lg}; }
-${c("intro")}, ${c("drop-hint")}, ${c("more-matches")} { margin: 0; color: ${T.muted}; font-size: ${T.small}; max-width: 70ch; }
+${c("intro")}, ${c("drop-hint")} { margin: 0; color: ${T.muted}; font-size: ${T.small}; max-width: 70ch; }
 /* P1 (WP192): in a tall window the lists share the height and scroll inside; in a short one (a
    container query on the customizer, not the page) they keep their natural height and the body
    scrolls instead of letting them run into each other (the header and footer stay). In a narrow
@@ -70,7 +72,7 @@ ${c("area")}, ${c("palette")} { display: flex; flex-direction: column; gap: ${T.
   ${c("areas")}, ${c("area")}, ${c("palette")} { min-height: auto; }
   ${c("list")}[data-orientation="vertical"] { flex: none; max-height: calc(6 * ${T.control}); }
 }
-${c("heading")} {
+${c("heading")}, ${c("group.title")} {
   margin: 0; font-size: ${T.label}; font-weight: ${T.semibold}; ${CAPS_TIGHT}
   color: ${T.muted};
 }`;
@@ -117,6 +119,10 @@ ${c("item.badge")} {
 }
 ${c("item")}[data-state="selected"] ${c("item.badge")} { color: inherit; border-color: currentColor; }
 ${c("empty")} { padding: ${T.xs} ${T.sm}; color: ${T.muted}; font-size: ${T.small}; }
+${c("group.title")} { padding: ${T.xxs} ${T.xs} 0; }
+${c("group")}, ${c("group.list")} { display: flex; flex-direction: column; gap: ${T.xxs}; }
+${c("group.list")} { margin: 0; padding: 0; list-style: none; }
+${c("group")} + ${c("group")} { margin-top: ${T.xs}; }
 ${c("palette")}[data-drop="remove"] ${c("list")} { border-color: ${T.danger}; border-style: dashed; }`;
 
 const CONTROLS = `${c("commands")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; }

@@ -66,20 +66,34 @@ import {
   FAVORITE_ICONS,
   FAVORITE_TARGETS,
   favoriteCount,
+  favoriteWindowView,
   toggleCollapsedSection,
   unifiedFolder,
 } from "./folderPaneState";
 import { ALL_ACCOUNTS } from "../api/contract";
 
 /** Folders in tree order (parents before children) with their depth. */
-/** What a folder pane section reads and changes: the selected account, folder and search. */
+/**
+ * What a folder pane section reads and changes: the selected account,
+ * folder and search. While a favorite's window (Snoozed, Outbox) is the
+ * active view, `windowView` names it and no folder or search is shown as
+ * selected (the favorite is; R8).
+ */
 function useFolderSelection() {
   const activeAccountId = useUi((s) => s.activeAccountId);
   const activeFolderId = useUi((s) => s.activeFolderId);
   const search = useUi((s) => s.search);
+  const windowView = useUi((s) => favoriteWindowView(s.windows));
   const selectAccount = useUi((s) => s.selectAccount);
   const selectFolder = useUi((s) => s.selectFolder);
-  return { activeAccountId, activeFolderId, search, selectAccount, selectFolder };
+  return {
+    activeAccountId,
+    activeFolderId: windowView === null ? activeFolderId : null,
+    search,
+    windowView,
+    selectAccount,
+    selectFolder,
+  };
 }
 
 export function flattenFolders(
@@ -125,6 +139,8 @@ interface FolderRowProps {
   /** ARIA level of the row (one deeper inside a section). */
   level: number;
   selected: boolean;
+  /** A search runs in this folder (R8: the tree marks where the results come from). */
+  searched: boolean;
   tabbable: boolean;
   showUnread: boolean;
   onChoose: () => void;
@@ -137,6 +153,7 @@ function FolderRow({
   depth,
   level,
   selected,
+  searched,
   tabbable,
   showUnread,
   onChoose,
@@ -144,6 +161,7 @@ function FolderRow({
 }: FolderRowProps) {
   const t = useT();
   const roleLabel = folderRoleLabelId(folder);
+  const searchedNote = useId();
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the tree handles the keyboard for its items (roving tabindex, Enter / Space).
     <li
@@ -153,7 +171,8 @@ function FolderRow({
       aria-selected={selected}
       tabIndex={tabbable ? 0 : -1}
       data-part="folder-tree.item"
-      data-state={selected ? "selected" : undefined}
+      data-state={selected ? "selected" : searched ? "searched" : undefined}
+      aria-describedby={searched ? searchedNote : undefined}
       data-role={folder.role}
       data-depth={depth}
       data-folder={folder.id}
@@ -166,6 +185,14 @@ function FolderRow({
         {roleLabel ? t(roleLabel) : folder.name}
       </span>
       <MailboxFolderBadge folder={folder} />
+      {searched && (
+        <span data-part="folder-tree.item.searched">
+          <Icon name="search" part="folder-tree.item.searched.icon" />
+          <span id={searchedNote} hidden>
+            {t("folders-searched-here")}
+          </span>
+        </span>
+      )}
       {showUnread && folder.unread > 0 && (
         <span
           data-part="folder-tree.item.unread-count"
@@ -184,6 +211,7 @@ function AccountFolderTree({ node }: WidgetProps) {
   const label = useLabel();
   const accountId = useUi((s) => s.activeAccountId);
   const activeFolderId = useUi((s) => s.activeFolderId);
+  const search = useUi((s) => s.search);
   const selectFolder = useUi((s) => s.selectFolder);
   const folders = useFolders(accountId);
   const showUnread = optionBool(node, "show-unread", true);
@@ -230,7 +258,8 @@ function AccountFolderTree({ node }: WidgetProps) {
             folder={folder}
             depth={depth}
             level={depth + 1}
-            selected={folder.id === activeFolderId}
+            selected={search === null && folder.id === activeFolderId}
+            searched={search !== null && search.folderId === folder.id}
             tabbable={folder.id === focusable}
             showUnread={showUnread}
             onChoose={() => {
@@ -389,7 +418,7 @@ function FavoritesSection({
   const t = useT();
   const { dispatch } = useActions();
   const folders = useFolders(ALL_ACCOUNTS).data ?? [];
-  const { activeAccountId, activeFolderId, search, selectAccount, selectFolder } =
+  const { activeAccountId, activeFolderId, search, windowView, selectAccount, selectFolder } =
     useFolderSelection();
   const setSearch = useUi((s) => s.setSearch);
   const setSearchInput = useUi((s) => s.setSearchInput);
@@ -405,16 +434,19 @@ function FavoritesSection({
     const folder = target.kind === "folder" ? unifiedFolder(folders, target.role) : null;
     // A unified folder no account has (no Sent anywhere) is left out.
     if (target.kind === "folder" && folder === null) return [];
-    let selected = false;
+    let selected: boolean;
     if (target.kind === "folder") {
       selected =
         search === null && activeAccountId === ALL_ACCOUNTS && activeFolderId === folder?.id;
     } else if (target.kind === "search") {
       selected =
+        windowView === null &&
         search !== null &&
         search.text === target.text &&
         search.accountId === null &&
         search.folderId === null;
+    } else {
+      selected = windowView === target.window;
     }
     const choose = () => {
       if (target.kind === "folder" && folder) {
@@ -497,7 +529,7 @@ function AccountSection({
   const nameOf = useAccountName();
   const folders = useFolders(account.id);
   const status = useAccountStatuses().data?.find((s) => s.account_id === account.id);
-  const { activeAccountId, activeFolderId, search, selectAccount, selectFolder } =
+  const { activeAccountId, activeFolderId, search, windowView, selectAccount, selectFolder } =
     useFolderSelection();
   const rows = flattenFolders(folders.data ?? [], { rolesFirst: true });
   const name = nameOf(account);
@@ -531,6 +563,7 @@ function AccountSection({
           selected={
             search === null && activeAccountId === account.id && activeFolderId === folder.id
           }
+          searched={windowView === null && search !== null && search.folderId === folder.id}
           tabbable={pane.focusKey === `folder:${folder.id}`}
           showUnread={pane.showUnread}
           onChoose={() => {
@@ -553,7 +586,7 @@ function SmartFoldersSection({
   saved: readonly SavedSearch[];
 }) {
   const t = useT();
-  const search = useUi((s) => s.search);
+  const { search, windowView } = useFolderSelection();
   const setSearch = useUi((s) => s.setSearch);
   const setSearchInput = useUi((s) => s.setSearchInput);
   return (
@@ -568,7 +601,7 @@ function SmartFoldersSection({
       {saved.map((s, index) => {
         const id = s.id ?? `saved-${String(index)}`;
         const key = `smart:${id}`;
-        const selected = isActiveSearch(s, search);
+        const selected = windowView === null && isActiveSearch(s, search);
         return (
           // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- the tree handles the keyboard for its items (roving tabindex, Enter / Space).
           <li

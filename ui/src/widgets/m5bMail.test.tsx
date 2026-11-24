@@ -140,18 +140,65 @@ describe("grouped folder pane (M5b)", () => {
 
     // Flagged: a search over every account.
     fireEvent.click(within(section("favorites")).getByRole("treeitem", { name: /Flagged/ }));
+    // Flagged: a search over every account, without Trash and Junk (R8).
+    const flagged = within(section("favorites")).getByRole("treeitem", { name: /Flagged/ });
     expect(env.store.getState().search).toEqual({
-      text: "is:flagged",
+      text: "is:flagged NOT folder:trash NOT folder:junk",
       accountId: null,
       folderId: null,
       error: null,
     });
-    expect(env.store.getState().searchInput).toBe("is:flagged");
-    // Snoozed: its own window.
-    fireEvent.click(within(section("favorites")).getByRole("treeitem", { name: /Snoozed/ }));
+    expect(env.store.getState().searchInput).toBe("is:flagged NOT folder:trash NOT folder:junk");
+    expect(flagged).toHaveAttribute("aria-selected", "true");
+    // Snoozed: its own window, selected while that window is the active view (R8).
+    const snoozed = within(section("favorites")).getByRole("treeitem", { name: /Snoozed/ });
+    fireEvent.click(snoozed);
     await waitFor(() => {
       expect(env.store.getState().windows).toContain("snoozed");
     });
+    await waitFor(() => expect(snoozed).toHaveAttribute("aria-selected", "true"));
+    expect(flagged).toHaveAttribute("aria-selected", "false");
+    expect(
+      document.querySelectorAll('[data-part^="folder-tree."][aria-selected="true"]'),
+    ).toHaveLength(1);
+    // Another window on top: Snoozed is no longer the active view.
+    act(() => {
+      env.store.getState().openWindow("rules");
+    });
+    expect(snoozed).toHaveAttribute("aria-selected", "false");
+    act(() => {
+      env.store.getState().closeWindow("rules");
+      env.store.getState().closeWindow("snoozed");
+    });
+    expect(flagged).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("marks the folder a search runs in (R8)", async () => {
+    const env = paneEnv();
+    renderNode(PANE, env);
+    await screen.findByText("Personal · ada@example.org");
+    const inbox = await within(section("account:acc-personal")).findByRole("treeitem", {
+      name: /Inbox/,
+    });
+    expect(inbox).not.toHaveAttribute("data-state", "searched");
+    act(() => {
+      env.store
+        .getState()
+        .setSearch({ text: "from:grace", accountId: "acc-personal", folderId: INBOX, error: null });
+    });
+    expect(inbox).toHaveAttribute("data-state", "searched");
+    expect(inbox).toHaveAttribute("aria-selected", "false");
+    expect(inbox).toHaveAccessibleDescription("The search runs in this folder");
+    expect(
+      document.querySelectorAll('[data-part="folder-tree.item"][data-state="searched"]'),
+    ).toHaveLength(1);
+    // A search everywhere marks no folder.
+    act(() => {
+      env.store
+        .getState()
+        .setSearch({ text: "from:grace", accountId: null, folderId: null, error: null });
+    });
+    expect(document.querySelector('[data-state="searched"]')).toBeNull();
   });
 
   it("collapses a section, remembers it in the UI state and shows its unread mail", async () => {

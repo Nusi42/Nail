@@ -103,7 +103,10 @@ Every dialog works the same way:
   anything. If you changed something, Nail asks first: **Save changes to
   “…”?** with **Save**, **Don't save** and **Cancel** (back to the window).
   When what you entered cannot be saved yet, it offers **Discard changes** and
-  **Keep editing** instead.
+  **Keep editing** instead. When several windows with unsaved changes would
+  close at once (switching views in a layout of your own whose Mail view is
+  the main window), Nail asks once and lists them: **Save** saves each in
+  turn, **Don't save** drops every change.
 - **`Enter`** runs the main button — unless that button deletes or removes
   something. In a text field with several lines, `Enter` starts a new line and
   `Ctrl+Enter` runs the main button.

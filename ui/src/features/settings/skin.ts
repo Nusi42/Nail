@@ -32,6 +32,7 @@ import {
   QUIET_BUTTON,
   QUIET_HOVER,
   SECTION_LABEL,
+  VISUALLY_HIDDEN,
 } from "../../theme/declarations";
 import { T } from "../../theme/tokens";
 
@@ -113,6 +114,9 @@ ${p("settings-page.nav.item")}[aria-current="page"], ${p("settings-page.result.s
 ${p("settings-page.nav.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
 ${p("settings-page.nav.item")}[aria-current="page"] ${p("settings-page.nav.icon")}, ${p("settings-page.result.section")}[aria-current="page"] ${p("settings-page.nav.icon")} { color: inherit; }
 ${p("settings-page.nav.label")} { ${ONE_LINE} }
+${p("settings-page.nav.unsaved")} {
+  flex: 0 0 auto; width: 0; height: 0; margin-inline-start: auto; border: ${T.xs} solid currentColor; border-radius: 50%;
+}
 ${p("settings-page.result.setting")} {
   min-height: calc(${T.control} - ${T.xs}); padding-inline-start: calc(${T.icon} + 2 * ${T.md});
   font-size: ${T.small}; color: ${T.muted};
@@ -165,6 +169,10 @@ ${inCard("form.check")} + ${p("form.field")}, ${inCard("form.check")} + ${p("swi
 ${inCard("card")}, ${inCard("form.section")} { padding: ${T.md} 0 0; border: none; border-radius: 0; background-color: transparent; }
 ${inCard("card")} + ${p("card")}, ${inCard("form.section")} + ${p("form.section")} { margin-top: ${T.sm}; border-top: 1px solid ${T.border}; }
 ${p("settings-page.card")} > ${p("appearance")} { max-width: none; padding: 0; overflow: visible; }
+/* R8: the page's title already names the section; Appearance's own heading stays for screen
+   readers (it labels the region) and its Undo / Redo keep their place at the end of the row. */
+${p("settings-page.card")} > ${p("appearance")} > ${p("appearance.header")} > ${p("form.section.title")} { ${VISUALLY_HIDDEN} }
+${p("settings-page.card")} > ${p("appearance")} > ${p("appearance.header")} { justify-content: flex-end; }
 [data-settings-found] {
   border-radius: ${T.rSm}; outline: 2px solid ${T.accent}; outline-offset: 2px;
   background-color: ${T.accentSoft}; transition: background-color ${T.fast} ${T.ease};

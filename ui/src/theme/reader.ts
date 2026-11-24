@@ -206,5 +206,32 @@ export function readerDocument(
   const usesProxy = proxy !== null && sanitizedHtml.includes(PROXY_URL_SCHEME);
   const body = usesProxy ? sanitizedHtml.replaceAll(PROXY_URL_SCHEME, proxy) : sanitizedHtml;
   const csp = readerCsp(usesProxy ? originOf(proxy) : null);
-  return `<!doctype html><html ${FRAME_PARENT_ATTRIBUTE}="${attributeValue(parent)}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><style>${css.replaceAll("</", "<\\/")}</style><script>${FRAME_SCRIPT}</script></head><body>${body}</body></html>`;
+  return `<!doctype html><html ${parentAttribute(parent)}><head>${frameHead(csp)}<style>${css.replaceAll("</", "<\\/")}</style></head><body>${body}</body></html>`;
+}
+
+/** The root's attribute naming the frame script's parent origin. */
+function parentAttribute(parent: string): string {
+  return `${FRAME_PARENT_ATTRIBUTE}="${attributeValue(parent)}"`;
+}
+
+/** What a frame document's head starts with: charset, its policy, no referrer, the frame script. */
+function frameHead(csp: string): string {
+  return `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><script>${FRAME_SCRIPT}</script>`;
+}
+
+/**
+ * A whole document of Nail's own (the composer's preview, R8: the core's
+ * `RenderPreview`) made a frame document: the reader's policy and the frame
+ * script go first in its head and its root names `parent`, so the frame
+ * reports its height like a mail frame. Nothing remote loads.
+ */
+export function framedDocument(html: string, parent: string = window.location.origin): string {
+  const head = /<head(\s[^>]*)?>/i;
+  const root = /<html(\s[^>]*)?>/i;
+  if (!head.test(html) || !root.test(html)) {
+    return `<!doctype html><html ${parentAttribute(parent)}><head>${frameHead(READER_CSP)}</head><body>${html}</body></html>`;
+  }
+  return html
+    .replace(root, (tag) => `${tag.slice(0, -1)} ${parentAttribute(parent)}>`)
+    .replace(head, (tag) => `${tag}${frameHead(READER_CSP)}`);
 }

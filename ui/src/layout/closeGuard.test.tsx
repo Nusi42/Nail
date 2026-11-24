@@ -16,6 +16,7 @@ import { DialogFooter, DialogForm } from "../widgets/dialog";
 import { UnsavedPrompt } from "../widgets/dialog/UnsavedPrompt";
 import {
   MAIN_GUARD,
+  SEVERAL_GUARD,
   UNSAVED_PROMPT,
   askToLeave,
   closeGuardOf,
@@ -267,6 +268,82 @@ describe("the close guard (R6)", () => {
       true,
     );
     await settleQueries(env);
+  });
+});
+
+describe("several windows at once (R8)", () => {
+  const A = `${EDITOR}:a`;
+  const B = `${EDITOR}:b`;
+  const ALSO = `${EDITOR}:c`;
+
+  /** Both editors get a change, then every window goes at once (another view). */
+  async function closeAll(env: Env, value = "Releases") {
+    const user = userEvent.setup();
+    const editors = screen.getAllByRole("dialog", { name: "Rule editor" });
+    for (const one of editors.slice(0, 2)) {
+      await user.type(within(one).getByRole("textbox", { name: "Rule name" }), value);
+    }
+    await act(async () => {
+      env.store.setState({ windows: [] });
+      await Promise.resolve();
+    });
+    const question = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    await waitFor(() => {
+      expect(within(question).getAllByRole("button")[0]).toBeInTheDocument();
+    });
+    return user;
+  }
+
+  it("asks once, listing them, and Save saves each", async () => {
+    const env = setup([A, B, ALSO]);
+    const user = await closeAll(env);
+    // The clean window went; the two with changes stay behind one prompt.
+    expect(env.store.getState().windows).toEqual([A, B, promptWindowFor(SEVERAL_GUARD)]);
+    const question = prompt();
+    expect(question).toHaveTextContent("Save changes to 2 items?");
+    expect(
+      within(question)
+        .getAllByRole("listitem")
+        .map((i) => i.textContent),
+    ).toEqual(["Flag releases", "Flag releases"]);
+    expect(await violations(question)).toEqual([]);
+    await user.click(within(question).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+  });
+
+  it("Don't save drops every change; a failed save keeps that window", async () => {
+    const env = setup([A, B]);
+    const user = await closeAll(env);
+    await user.click(within(prompt()).getByRole("button", { name: "Don't save" }));
+    await waitFor(() => {
+      expect(env.store.getState().windows).toEqual([]);
+    });
+    expect(closeGuardOf(env.store, A)).toBeNull();
+  });
+
+  it("stops at the first save that fails, with that window in front", async () => {
+    saveResult = () => false;
+    const env = setup([A, B]);
+    const user = await closeAll(env);
+    await user.click(within(prompt()).getByRole("button", { name: "Save" }));
+    // Both stay, with their changes; no prompt is left.
+    await waitFor(() => {
+      expect([...env.store.getState().windows].sort()).toEqual([A, B]);
+    });
+    expect(closeGuardOf(env.store, A)?.isDirty()).toBe(true);
+  });
+
+  it("offers only Discard when one of them cannot be saved", async () => {
+    const env = setup([A, B]);
+    const user = await closeAll(env, "Releases!");
+    const question = prompt();
+    expect(question).toHaveTextContent("Discard changes to 2 items?");
+    await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => {
+      expect([...env.store.getState().windows].sort()).toEqual([A, B]);
+    });
   });
 });
 

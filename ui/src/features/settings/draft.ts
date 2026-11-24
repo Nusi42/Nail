@@ -25,6 +25,7 @@ import {
   saveSettingsDrafts,
   settingsCanSave,
   settingsDirty,
+  useDraftScope,
   useSettingsDraft,
 } from "../../widgets/dialog";
 
@@ -158,14 +159,14 @@ export function useLeaveDrafts(): (proceed: () => void) => void {
  * changes; Save saves every draft, Don't save discards them.
  */
 export function useSettingsGuard(sectionName: string): void {
-  const ui = useUiStoreApi();
+  const drafts = useDraftScope();
   useCloseGuard({
     name: () => sectionName,
-    isDirty: () => settingsDirty(ui),
-    save: () => saveSettingsDrafts(ui),
-    canSave: () => settingsCanSave(ui),
+    isDirty: () => settingsDirty(drafts),
+    save: () => saveSettingsDrafts(drafts),
+    canSave: () => settingsCanSave(drafts),
     discard: () => {
-      discardSettingsDrafts(ui);
+      discardSettingsDrafts(drafts);
     },
   });
 }

@@ -41,6 +41,7 @@ import {
   askInWindow,
   ConfirmDialog,
   pendingSlot,
+  SettingsDraftScope,
   SettingsSaveBar,
   usePendingQuestion,
 } from "../../widgets/dialog";
@@ -380,11 +381,20 @@ export function PluginManager({ node }: WidgetProps) {
 }
 
 /**
- * Dialog `plugin-manager`: the same drafts as the settings section (R6), so
- * the window has the section's save bar and asks before it closes with
- * unsaved changes.
+ * Dialog `plugin-manager`: drafts like the settings section (R6), so the
+ * window has the section's save bar and asks before it closes with unsaved
+ * changes. Its drafts are its own (R8): an edit here is not one of the
+ * Settings page's, nor another plug-in manager window's.
  */
 export function PluginManagerDialog() {
+  return (
+    <SettingsDraftScope>
+      <PluginManagerWindow />
+    </SettingsDraftScope>
+  );
+}
+
+function PluginManagerWindow() {
   const t = useT();
   const name = t("plugin-manager-label");
   useSettingsGuard(name);

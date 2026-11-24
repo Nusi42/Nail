@@ -32,6 +32,7 @@ import {
 } from "../../layout/views";
 import type { ActionContext } from "../../actions/registry";
 import type { Feature } from "../types";
+import { SHOW_ACCOUNT_ACTION, accountView } from "./accountMenu";
 import { NavRail } from "./NavRail";
 import { ViewHost } from "./ViewHost";
 
@@ -47,8 +48,9 @@ export function showView(ctx: ActionContext, view: string): void {
     return;
   }
   if (def.window === "main") {
-    // The main window is the view: close what covers it.
-    for (const window of [...store.windows].reverse()) store.closeWindow(window);
+    // The main window is the view: close what covers it, all in one step,
+    // so windows with unsaved changes are asked about in one prompt (R8).
+    ctx.store.setState({ windows: [] });
   } else {
     store.openWindow(def.window);
   }
@@ -86,6 +88,17 @@ export const actions: Feature["actions"] = {
   },
   [VIEW_NEXT_ACTION]: step(1),
   [VIEW_PREVIOUS_ACTION]: step(-1),
+  // The rail's account menu (R8): show an account in the mail view.
+  [SHOW_ACCOUNT_ACTION]: {
+    run: (ctx, args) => {
+      const [id] = args;
+      if (typeof id !== "string") return;
+      ctx.store.getState().selectAccount(id);
+      const view = accountView(ctx.layout);
+      if (view !== null) showView(ctx, view);
+    },
+    enabled: (_ctx, args) => typeof args[0] === "string",
+  },
 };
 
 /** Command-palette descriptions (the per-view aliases are listed instead of `view.show`). */
@@ -93,4 +106,5 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
   [VIEW_SHOW_ACTION]: { title: "view-action-show", hidden: true },
   [VIEW_NEXT_ACTION]: { title: "view-action-next" },
   [VIEW_PREVIOUS_ACTION]: { title: "view-action-previous" },
+  [SHOW_ACCOUNT_ACTION]: { title: "shell-account-menu", hidden: true, icon: "user-round" },
 };

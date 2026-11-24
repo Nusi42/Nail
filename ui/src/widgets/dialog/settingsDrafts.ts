@@ -6,10 +6,22 @@
  * or discards them all, and asks with the shared prompt before the section
  * is left or Settings is closed (`../../layout/closeGuard.ts`).
  *
- * Drafts are kept per UI store, by a key unique on the page (the widget's
- * node id or kind).
+ * Drafts are kept per draft scope, by a key unique in it (the widget's
+ * node id or kind). The settings page uses the UI store's own scope; a
+ * window that shows settings widgets of its own (the plug-in manager
+ * window) wraps them in `SettingsDraftScope`, so each window instance has
+ * its own drafts, bar and question (R8).
  */
-import { useEffect, useLayoutEffect, useRef } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
@@ -38,27 +50,46 @@ interface DraftsState {
   saving: boolean;
 }
 
-interface Drafts {
-  store: StoreApi<DraftsState>;
-  actions: Map<string, () => SettingsDraft>;
+/** The drafts of one settings page or window (see the module comment). */
+export class DraftScope {
+  readonly store: StoreApi<DraftsState> = createStore<DraftsState>()(() => ({
+    flags: {},
+    saving: false,
+  }));
+  readonly actions = new Map<string, () => SettingsDraft>();
 }
 
-const all = new WeakMap<UiStore, Drafts>();
+const all = new WeakMap<UiStore, DraftScope>();
 
-function draftsOf(ui: UiStore): Drafts {
-  let drafts = all.get(ui);
+/** Where drafts live: a scope, or a UI store (its own scope, the settings page's). */
+export type DraftOwner = UiStore | DraftScope;
+
+function draftsOf(owner: DraftOwner): DraftScope {
+  if (owner instanceof DraftScope) return owner;
+  let drafts = all.get(owner);
   if (!drafts) {
-    drafts = {
-      store: createStore<DraftsState>()(() => ({ flags: {}, saving: false })),
-      actions: new Map(),
-    };
-    all.set(ui, drafts);
+    drafts = new DraftScope();
+    all.set(owner, drafts);
   }
   return drafts;
 }
 
-function setFlags(ui: UiStore, key: string, flags: DraftFlags | null): void {
-  const { store } = draftsOf(ui);
+const DraftScopeContext = createContext<DraftScope | null>(null);
+
+/** Gives the settings widgets inside their own drafts (one scope per mount). */
+export function SettingsDraftScope({ children }: { children: ReactNode }) {
+  const [scope] = useState(() => new DraftScope());
+  return createElement(DraftScopeContext.Provider, { value: scope }, children);
+}
+
+/** The drafts the calling component belongs to. */
+export function useDraftScope(): DraftScope {
+  const ui = useUiStoreApi();
+  return useContext(DraftScopeContext) ?? draftsOf(ui);
+}
+
+function setFlags(owner: DraftOwner, key: string, flags: DraftFlags | null): void {
+  const { store } = draftsOf(owner);
   const current = store.getState().flags[key];
   if (flags === null) {
     if (current === undefined) return;
@@ -77,18 +108,18 @@ const anyDirty = (s: DraftsState) => Object.values(s.flags).some((f) => f.dirty)
 const allSavable = (s: DraftsState) => Object.values(s.flags).every((f) => !f.dirty || f.canSave);
 
 /** Whether a shown settings widget has unsaved changes. */
-export function settingsDirty(ui: UiStore): boolean {
-  return anyDirty(draftsOf(ui).store.getState());
+export function settingsDirty(owner: DraftOwner): boolean {
+  return anyDirty(draftsOf(owner).store.getState());
 }
 
 /** Whether every unsaved change can be saved. */
-export function settingsCanSave(ui: UiStore): boolean {
-  return allSavable(draftsOf(ui).store.getState());
+export function settingsCanSave(owner: DraftOwner): boolean {
+  return allSavable(draftsOf(owner).store.getState());
 }
 
 /** Saves every dirty draft in turn; `false` at the first that fails (the rest stay unsaved). */
-export async function saveSettingsDrafts(ui: UiStore): Promise<boolean> {
-  const { store, actions } = draftsOf(ui);
+export async function saveSettingsDrafts(owner: DraftOwner): Promise<boolean> {
+  const { store, actions } = draftsOf(owner);
   store.setState({ saving: true });
   try {
     for (const [key, flags] of Object.entries(store.getState().flags)) {
@@ -107,8 +138,8 @@ export async function saveSettingsDrafts(ui: UiStore): Promise<boolean> {
 }
 
 /** Drops every unsaved change. */
-export function discardSettingsDrafts(ui: UiStore): void {
-  const { store, actions } = draftsOf(ui);
+export function discardSettingsDrafts(owner: DraftOwner): void {
+  const { store, actions } = draftsOf(owner);
   for (const [key, flags] of Object.entries(store.getState().flags)) {
     if (flags.dirty) actions.get(key)?.().discard();
   }
@@ -116,8 +147,7 @@ export function discardSettingsDrafts(ui: UiStore): void {
 
 /** The page's view of the drafts: dirty, savable, saving. */
 export function useSettingsDrafts(): { dirty: boolean; canSave: boolean; saving: boolean } {
-  const ui = useUiStoreApi();
-  const { store } = draftsOf(ui);
+  const { store } = useDraftScope();
   const dirty = useStore(store, anyDirty);
   const canSave = useStore(store, allSavable);
   const saving = useStore(store, (s) => s.saving);
@@ -129,7 +159,7 @@ export function useSettingsDrafts(): { dirty: boolean; canSave: boolean; saving:
  * is mounted; the page's save bar saves or discards them.
  */
 export function useSettingsDraft(key: string, draft: SettingsDraft): void {
-  const ui = useUiStoreApi();
+  const ui = useDraftScope();
   const current = useRef(draft);
   useLayoutEffect(() => {
     current.current = draft;

@@ -5,13 +5,14 @@
  * - A run acts on the selected mail, on a folder, or on each rule's own
  *   messages (its folders, else the Inboxes) — `RuleRunTarget` of `./api`.
  * - The selected mail comes as mail-action targets (`../../actions/mailTargets`):
- *   a conversation row stands for its messages in the listed folder.
+ *   a conversation row stands for its messages in the listed folder; after
+ *   "select all" the whole list goes to the core as `RunRules.list` (R8).
  * - `RunRules` answers with one run per rule; one click is undone by
  *   undoing each of them.
  */
 import { expandTargets } from "../../actions/mailTargets";
 import type { NailClient } from "../../api/client";
-import type { FolderId, MessageTarget, RuleRun } from "../../api/generated";
+import type { FolderId, ListTarget, MessageTarget, RuleRun } from "../../api/generated";
 import { RULE_SCOPE_TARGET, undoRuleRun, type RuleRunTarget } from "./api";
 
 /** Where the rules window runs rules, in the order "Run on" lists them: the selected mail, a folder, each rule's own messages. */
@@ -24,6 +25,16 @@ export type RunTarget =
   | { kind: "folder"; folderId: FolderId }
   | { kind: "messages"; targets: readonly MessageTarget[] };
 
+/** The list target of a "select all" selection, else `null`. */
+export function wholeListOf(targets: readonly MessageTarget[]): ListTarget | null {
+  for (const target of targets) {
+    if (target.kind === "list") {
+      return { list: target.list, except: target.except, as_of: target.as_of };
+    }
+  }
+  return null;
+}
+
 /** The core's run target of `target`; `null` when it has no messages to act on. */
 export async function ruleRunTargetOf(
   client: NailClient,
@@ -35,6 +46,9 @@ export async function ruleRunTargetOf(
     case "folder":
       return { messageIds: [], folderId: target.folderId };
     case "messages": {
+      // "Select all" (R5): the whole list, resolved by the core (R8, ADR 0251).
+      const list = wholeListOf(target.targets);
+      if (list !== null) return { messageIds: [], folderId: null, list };
       const messageIds = (await expandTargets(client, target.targets)).map((m) => m.id);
       return messageIds.length === 0 ? null : { messageIds, folderId: null };
     }

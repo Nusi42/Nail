@@ -28,9 +28,10 @@ import { WindowLayer } from "../../layout/WindowLayer";
 import { applyEditHistory } from "../../state/editHistory";
 import { createEnv, Providers, settleQueries, widget, type Env } from "../../test/harness";
 import { must } from "../../test/must";
+import { ACTION_AVAILABILITY_MESSAGE_IDS } from "../../api/generated";
+import { AVAILABLE_GROUPS, groupAvailable, type AvailableEntry } from "./ToolbarCustomizer";
 import { followUpManifest } from "../plugins/mockHost";
 import { barItems, moreItems } from "./model";
-import { PALETTE_LIMIT } from "./ToolbarCustomizer";
 import { toolbarToCustomize } from "./index";
 import { staleLayoutRevision } from "../../test/env";
 
@@ -238,6 +239,40 @@ describe("toolbar context menu (M5d)", () => {
   });
 });
 
+describe("the available actions' groups (R8)", () => {
+  it("has a group for every place an action applies, plus spacing and plug-ins", () => {
+    for (const availability of Object.keys(ACTION_AVAILABILITY_MESSAGE_IDS)) {
+      expect(AVAILABLE_GROUPS).toContain(availability);
+    }
+    expect(AVAILABLE_GROUPS[0]).toBe("spacing");
+    expect(AVAILABLE_GROUPS.at(-1)).toBe("plugin");
+  });
+
+  it("lists the groups in their order with one running index", () => {
+    const entry = (key: string, group: AvailableEntry["group"]): AvailableEntry => ({
+      key,
+      item: { type: "separator" },
+      title: key,
+      icon: null,
+      plugin: false,
+      group,
+    });
+    const grouped = groupAvailable([
+      entry("p", "plugin"),
+      entry("a", "list"),
+      entry("s", "spacing"),
+      entry("b", "list"),
+    ]);
+    expect(
+      grouped.map((g) => [g.group, g.entries.map((e) => `${e.entry.key}${String(e.index)}`)]),
+    ).toEqual([
+      ["spacing", ["s0"]],
+      ["list", ["a1", "b2"]],
+      ["plugin", ["p3"]],
+    ]);
+  });
+});
+
 describe("toolbar customizer window (M5d)", () => {
   it("lists the bar, More and the available actions", async () => {
     const { env } = renderReader();
@@ -250,11 +285,23 @@ describe("toolbar customizer window (M5d)", () => {
     expect(bar).toHaveLength(barItems(reader(env)).length);
     expect(options(list(dialog, "More menu"))).toHaveLength(moreItems(reader(env)).length);
     expect(option(dialog, "Available actions", "Separator")).toBeInTheDocument();
-    // A long list shows its first rows; the search finds the rest.
-    expect(options(list(dialog, "Available actions"))).toHaveLength(PALETTE_LIMIT);
-    expect(within(dialog).getByText(/^Showing 30 of \d+ actions/)).toBeInTheDocument();
+    // R8: every action, grouped by where it applies; the search narrows every group.
+    const palette = list(dialog, "Available actions");
+    const groupTitle = (group: string) => {
+      const el = must(palette.querySelector(`[data-group="${group}"] [role="group"]`));
+      return document.getElementById(must(el.getAttribute("aria-labelledby")))?.textContent;
+    };
+    expect(groupTitle("spacing")).toBe("Spacing");
+    expect(groupTitle("list")).toBe("Message list");
+    expect(
+      options(must(palette.querySelector<HTMLElement>('[data-group="list"]'))).map(
+        (o) => o.dataset.action,
+      ),
+    ).toContain("mail.archive");
+    expect(options(palette).length).toBeGreaterThan(30);
     search(dialog, "reply all");
-    expect(within(dialog).queryByText(/^Showing/)).toBeNull();
+    expect(palette.querySelector('[data-group="spacing"]')).toBeNull();
+    expect(within(palette).queryByRole("group", { name: "Spacing" })).toBeNull();
     // Actions already on the toolbar are marked.
     expect(option(dialog, "Available actions", "Reply all")).toHaveTextContent("On toolbar");
     await settleQueries(env);

@@ -15,30 +15,74 @@ import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import type { CryptoPreference, RecipientKeysReport, SendCrypto } from "../../api/generated";
 import { sendBlock, type SendBlock } from "./model";
+import { COMPOSER_KIND } from "../composer/store";
+
+/** One composer's latest recipient report and its identity's preference. */
+export interface ComposerReport {
+  report: RecipientKeysReport | null;
+  preference: CryptoPreference;
+}
 
 export interface ComposerCryptoState {
   /** Explicit choice, `null` = follow the suggestion. */
   choice: SendCrypto | null;
-  /** The latest recipient report (for the send guard). */
+  /** The focused composer's latest recipient report (for the send guard). */
   report: RecipientKeysReport | null;
   /** The sending identity's technology preference. */
   preference: CryptoPreference;
+  /**
+   * Every open composer's latest report by window (R8): a composer in the
+   * background keeps its report current as its recipients change, so the
+   * report is right the moment it gets the focus (`activate`).
+   */
+  reports: Readonly<Record<string, ComposerReport>>;
+  /** The focused composer's window (the plain `composer` without several composers). */
+  active: string;
   setChoice: (choice: SendCrypto | null) => void;
+  /** A new report of the focused composer. */
   setReport: (report: RecipientKeysReport | null, preference: CryptoPreference) => void;
+  /** A new report of the composer of `window` (the focused one's becomes `report`). */
+  setReportOf: (
+    window: string,
+    report: RecipientKeysReport | null,
+    preference: CryptoPreference,
+  ) => void;
+  /** The composer of `window` got the focus: its kept report becomes `report`. */
+  activate: (window: string) => void;
+  /** The composer of `window` closed. */
+  forget: (window: string) => void;
   reset: () => void;
 }
 
-export const composerCryptoStore = createStore<ComposerCryptoState>()((set) => ({
+export const composerCryptoStore = createStore<ComposerCryptoState>()((set, get) => ({
   choice: null,
   report: null,
   preference: "auto",
+  reports: {},
+  active: COMPOSER_KIND,
   setChoice: (choice) => {
     set({ choice });
   },
   setReport: (report, preference) => {
-    set({ report, preference });
+    get().setReportOf(get().active, report, preference);
+  },
+  setReportOf: (window, report, preference) => {
+    const reports = { ...get().reports, [window]: { report, preference } };
+    set(window === get().active ? { reports, report, preference } : { reports });
+  },
+  activate: (window) => {
+    const kept = Object.hasOwn(get().reports, window) ? get().reports[window] : undefined;
+    set({ active: window, report: kept?.report ?? null, preference: kept?.preference ?? "auto" });
+  },
+  forget: (window) => {
+    if (!Object.hasOwn(get().reports, window)) return;
+    set({
+      reports: Object.fromEntries(Object.entries(get().reports).filter(([w]) => w !== window)),
+    });
   },
   reset: () => {
+    const { active } = get();
+    get().forget(active);
     set({ choice: null, report: null, preference: "auto" });
   },
 }));

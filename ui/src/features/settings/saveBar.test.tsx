@@ -22,6 +22,7 @@ import {
 } from "../../test/harness";
 import { useSettingsDraft, type SettingsDraft } from "../../widgets/dialog";
 import { actions } from ".";
+import { must } from "../../test/must";
 
 stubElementSizesEachTest();
 
@@ -127,11 +128,26 @@ describe("settings save bar (R6)", () => {
     await settleQueries(env);
   });
 
+  it("marks the shown section's entry while it has unsaved changes (R8)", async () => {
+    const env = await setup();
+    const shown = shownSection() ?? "";
+    const entry = must(
+      nav().querySelector<HTMLElement>(
+        `[data-part="settings-page.nav.item"][data-section="${shown}"]`,
+      ),
+    );
+    expect(entry).toHaveAccessibleDescription("Unsaved changes");
+    expect(entry).not.toHaveAccessibleName(/Unsaved/);
+    expect(nav().querySelectorAll('[data-part="settings-page.nav.unsaved"]')).toHaveLength(1);
+    await settleQueries(env);
+  });
+
   it("moves on at once without unsaved changes", async () => {
     draft = { ...draft, dirty: false };
     const user = userEvent.setup();
     const env = await setup();
     expect(screen.queryByRole("group", { name: /^Unsaved changes to “/ })).toBeNull();
+    expect(nav().querySelector('[data-part="settings-page.nav.unsaved"]')).toBeNull();
     const other = otherSection();
     await user.click(other);
     await waitFor(() => {

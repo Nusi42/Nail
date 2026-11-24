@@ -23,6 +23,7 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import type { JsonValue, ResolvedMenuEntry } from "../../api/generated";
 import { useActions } from "../../actions/ActionsProvider";
@@ -46,6 +47,33 @@ export interface ContextMenuProps {
   onClose: (restoreFocus: boolean) => void;
   /** The dynamic submenus (none: every action item is a plain item). */
   sources?: MenuSourceLoader | undefined;
+  /**
+   * `x` is where the menu's right edge goes (a button's right edge: the
+   * menu opens under the button and grows to the left, R8), not its left.
+   */
+  alignRight?: boolean;
+  /**
+   * The button the menu belongs to (a menu button, R8): a press on it is
+   * the button's own (it closes the menu), not a press outside.
+   */
+  owner?: RefObject<HTMLElement | null>;
+}
+
+/**
+ * The menu's top-left corner: at `x` (or ending at `x` with `alignRight`)
+ * and `y`, moved back inside the viewport.
+ */
+export function menuPosition(
+  anchor: { x: number; y: number },
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  alignRight = false,
+): { x: number; y: number } {
+  const left = alignRight ? anchor.x - size.width : anchor.x;
+  return {
+    x: Math.max(0, Math.min(left, viewport.width - size.width)),
+    y: Math.max(0, Math.min(anchor.y, viewport.height - size.height)),
+  };
 }
 
 type Navigable = Exclude<ResolvedMenuEntry, { type: "separator" } | { type: "header" }>;
@@ -437,6 +465,8 @@ export function ContextMenu({
   onRun,
   onClose,
   sources,
+  alignRight = false,
+  owner,
 }: ContextMenuProps) {
   const geom = useId();
   const ref = useRef<HTMLDivElement>(null);
@@ -448,15 +478,19 @@ export function ContextMenu({
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const maxX = Math.max(0, window.innerWidth - rect.width);
-    const maxY = Math.max(0, window.innerHeight - rect.height);
-    const next = { x: Math.min(x, maxX), y: Math.min(y, maxY) };
+    const next = menuPosition(
+      { x, y },
+      { width: rect.width, height: rect.height },
+      { width: window.innerWidth, height: window.innerHeight },
+      alignRight,
+    );
     if (rect.width > 0 && (next.x !== x || next.y !== y)) setPosition(next);
-  }, [x, y]);
+  }, [x, y, alignRight]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       if (event.target instanceof Node && ref.current?.contains(event.target)) return;
+      if (event.target instanceof Node && owner?.current?.contains(event.target)) return;
       onClose(false);
     };
     const onBlur = () => {
@@ -470,7 +504,7 @@ export function ContextMenu({
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("resize", onBlur);
     };
-  }, [onClose]);
+  }, [onClose, owner]);
 
   return (
     <div

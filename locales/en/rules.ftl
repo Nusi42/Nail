@@ -226,6 +226,7 @@ rules-target-messages = { $count ->
    *[other] Selected messages ({ $count })
 }
 rules-target-no-messages = Select messages in the list first.
+rules-target-whole-list = Every message of the list is selected: run rules on them from the list’s “Run rule” menu.
 rules-save-and-run = Save and run
 rules-run-many = { $count ->
     [one] { rules-run }

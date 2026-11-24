@@ -176,7 +176,9 @@ rules that are on** (when you have several), your rules that are on (each
 name exactly as you wrote it), and
 under **Off** the rules that are off — running a rule by hand works for
 those too. The rule runs on the message, or on all selected messages when
-you right-click one of them. **From the folder pane**: right-click a folder
+you right-click one of them. After **Ctrl+A** in the list (every message
+selected), it runs on every message of the list — the rows you left out
+with Ctrl+click excepted — and **Undo** takes the whole run back. **From the folder pane**: right-click a folder
 and choose **Run rule** to run a rule on every message in that folder.
 
 A small message then says what the run did, with **Undo** for all of it;

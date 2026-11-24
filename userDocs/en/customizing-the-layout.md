@@ -78,7 +78,9 @@ The palette on the right starts with presets for the mail view:
 The preset that matches the current arrangement is shown pressed. A preset
 is unavailable when the view no longer has a pane it needs (because you
 removed it); **Reset to default** brings the panes back. Presets are also on
-the **Window layout** card in Settings, without starting the editor.
+the **Window layout** card in Settings, without starting the editor; there a
+chosen preset is applied when you press **Save** in the settings bar, like
+every other setting, and **Discard** forgets it.
 
 Presets are defined in the `presets` section of `layout.kdl` (see the
 [layout reference](layout-reference.md#layout-presets)); you can add your
@@ -123,8 +125,9 @@ The window has three lists:
 - **More menu**: the entries of the bar's **More** menu, with its headings.
 - **Available actions**: separator, flexible space, then every action Nail
   has, including plug-in commands (marked **Plug-in**). Actions already on
-  the toolbar are marked **On toolbar**. Type in **Find an action** to search;
-  the list shows the first 30 matches.
+  the toolbar are marked **On toolbar**. The actions are grouped by where
+  they apply (General, Message list, Reader, Composer, Calendar, …, then
+  plug-in commands); type in **Find an action** to narrow every group.
 
 Drag an entry between the lists: dropping on an entry puts it before or
 after that entry, dropping on a list's empty space adds it at the end, and

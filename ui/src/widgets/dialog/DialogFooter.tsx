@@ -3,7 +3,10 @@
  * A dialog names its buttons by role; the footer orders them for the
  * viewer's system (`./order.ts`): Windows and Linux primary, secondary,
  * Cancel; macOS Cancel, secondary, primary — right-aligned in
- * `dialog.footer.end`. An editor's `Delete…` sits alone at the start
+ * `dialog.footer.end`. A dialog may have several secondary buttons (R8,
+ * a plug-in's dialog): they keep the secondary place as one group, in the
+ * order given on Windows and Linux and mirrored on macOS
+ * (`secondaryOrder`). An editor's `Delete…` sits alone at the start
  * (`dialog.footer.start`). A finished task shows only Done (`done`).
  *
  * - Labels are verbs ("Save", "Create", "Delete folder"); Cancel is
@@ -25,7 +28,7 @@
 import { Fragment, type ReactNode } from "react";
 import { useT } from "../../i18n/I18nProvider";
 import { useDialogOs } from "./dialogOs";
-import { footerOrder, type FooterRole } from "./order";
+import { footerOrder, secondaryOrder, type FooterRole } from "./order";
 
 /** A button of the footer. */
 export interface FooterButton {
@@ -61,7 +64,8 @@ export interface FooterCancel {
 
 export interface DialogFooterProps {
   primary?: FooterButton;
-  secondary?: FooterButton;
+  /** One secondary button, or several (one group in the secondary place). */
+  secondary?: FooterButton | readonly FooterButton[];
   /** The cancel role (× and Esc do the same); left out only in a picker. */
   cancel?: FooterCancel;
   /** An editor's `Delete…`, alone at the start. */
@@ -105,6 +109,18 @@ function Button({
   );
 }
 
+/** One secondary button or several, as a list. */
+function secondaryList(secondary: DialogFooterProps["secondary"]): readonly FooterButton[] {
+  if (secondary === undefined) return [];
+  return isButtonList(secondary) ? secondary : [secondary];
+}
+
+function isButtonList(
+  secondary: FooterButton | readonly FooterButton[],
+): secondary is readonly FooterButton[] {
+  return Array.isArray(secondary);
+}
+
 /** The footer of a dialog: its buttons by role, in the order of the viewer's system. */
 export function DialogFooter({
   primary,
@@ -131,9 +147,12 @@ export function DialogFooter({
       </div>
     );
   }
+  const secondaries = secondaryOrder(os, secondaryList(secondary));
   const byRole: Partial<Record<FooterRole, ReactNode>> = {
     primary: primary && <Button kind="primary" button={primary} busy={busy} />,
-    secondary: secondary && <Button kind="secondary" button={secondary} busy={busy} />,
+    secondary: secondaries.map((button, index) => (
+      <Button key={button.action ?? index} kind="secondary" button={button} busy={busy} />
+    )),
     cancel: cancel && (
       <Button
         kind="cancel"

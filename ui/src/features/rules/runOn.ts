@@ -11,7 +11,7 @@ import { useT } from "../../i18n/I18nProvider";
 import { useFolders } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { listTitle } from "../../widgets/ListHeader";
-import { RUN_TARGET_KINDS, type RunTarget, type RunTargetKind } from "./runTargets";
+import { RUN_TARGET_KINDS, wholeListOf, type RunTarget, type RunTargetKind } from "./runTargets";
 import { useRulesUi } from "./store";
 
 /** One choice of the "Run on" select. */
@@ -33,6 +33,12 @@ export interface ListFacts {
   searching: boolean;
   /** The window was opened from a message. */
   fromMessage: boolean;
+  /**
+   * "Select all" is on in the list: the whole list runs from the list's
+   * "Run rule" menu (R8), not here (Test and the count before a run name
+   * messages one by one).
+   */
+  wholeList?: boolean;
 }
 
 /** The choices in the order the select lists them, with why each is unavailable. */
@@ -51,7 +57,12 @@ export function runOnChoices(
         return {
           kind,
           label: t("rules-target-messages", { count: facts.selected }),
-          why: facts.selected > 0 ? null : t("rules-target-no-messages"),
+          why:
+            facts.wholeList === true
+              ? t("rules-target-whole-list")
+              : facts.selected > 0
+                ? null
+                : t("rules-target-no-messages"),
         };
       case "folder":
         return {
@@ -85,10 +96,13 @@ export function useRunOn() {
   useUi((s) => s.selectedMessageId);
   useUi((s) => s.selectedThreadId);
   useListSelection((s) => s.picked);
+  useListSelection((s) => s.all);
   const folder = useFolders(accountId).data?.find((f) => f.id === folderId);
   const listed = search === null ? listTitle(null, folder, accountId) : null;
+  const { targets } = currentTargets(ui);
   const facts: ListFacts = {
-    selected: currentTargets(ui).targets.length,
+    selected: targets.length,
+    wholeList: wholeListOf(targets) !== null,
     folderName:
       folderId === null || listed === null ? null : "id" in listed ? t(listed.id) : listed.text,
     searching: search !== null,

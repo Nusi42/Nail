@@ -7,11 +7,13 @@ import {
   widget,
   stubElementSizesEachTest,
   renderMainToolbar,
+  type Env,
 } from "../test/harness";
 import { flattenFolders } from "./FolderTree";
 import { compileRows, rowStates } from "./MessageList";
 import { must } from "../test/must";
 import { opsSummaryOf } from "../api/mockOps";
+import { errorResponse } from "../api/mockMail";
 import { INBOX } from "../test/mockIds";
 
 stubElementSizesEachTest();
@@ -376,25 +378,30 @@ describe("toolbar", () => {
   });
 });
 
+/** The status bar's `ops` item over `env`'s failed writes (`[op id, failed at]`). */
+function failedOpsBar(env: Env, failed: readonly (readonly [string, string])[]): HTMLElement {
+  for (const [opId, failedAt] of failed) {
+    env.transport.data.opQueue.set(opId, {
+      accountId: "acc-personal",
+      state: "failed",
+      error: "unavailable",
+      failedAt,
+    });
+  }
+  renderNode(widget("status-bar", { options: { items: "ops" } }), env);
+  act(() => {
+    env.store.getState().setOpsSummary(opsSummaryOf(env.transport.data.opQueue));
+  });
+  return screen.getByRole("status", { name: "Status" });
+}
+
 describe("status-bar", () => {
   it("names the failed writes and retries or dismisses them all", async () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });
-    for (const [opId, failedAt] of [
+    const status = failedOpsBar(env, [
       ["op-8", "2026-11-21T10:00:00Z"],
       ["op-9", "2026-11-21T10:05:00Z"],
-    ] as const) {
-      env.transport.data.opQueue.set(opId, {
-        accountId: "acc-personal",
-        state: "failed",
-        error: "unavailable",
-        failedAt,
-      });
-    }
-    renderNode(widget("status-bar", { options: { items: "ops" } }), env);
-    act(() => {
-      env.store.getState().setOpsSummary(opsSummaryOf(env.transport.data.opQueue));
-    });
-    const status = screen.getByRole("status", { name: "Status" });
+    ]);
     expect(within(status).getByText(/^2 changes could not be saved: /)).toBeInTheDocument();
     fireEvent.click(within(status).getByRole("button", { name: "Retry" }));
     await waitFor(() => {
@@ -413,6 +420,29 @@ describe("status-bar", () => {
       env.store.getState().setOpsSummary(opsSummaryOf(env.transport.data.opQueue));
     });
     expect(within(status).queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("shows a failed Retry / Dismiss in its own words beside the failure (R8)", async () => {
+    const env = createEnv({ state: { activeAccountId: "acc-personal" } });
+    const original = env.transport.send.bind(env.transport);
+    vi.spyOn(env.transport, "send").mockImplementation((request) =>
+      request.type === "RetryFailedOps" || request.type === "DismissFailedOps"
+        ? Promise.resolve(errorResponse("unavailable", "no answer"))
+        : original(request),
+    );
+    const status = failedOpsBar(env, [["op-8", "2026-11-21T10:00:00Z"]]);
+    const failure = within(status).getByText(/^A change could not be saved: /);
+    const reason = failure.textContent;
+    fireEvent.click(within(status).getByRole("button", { name: "Retry" }));
+    const retry = await within(status).findByRole("alert");
+    expect(retry).toHaveTextContent(/^Retrying did not work: /);
+    // The failure keeps its own reason.
+    expect(failure.textContent).toBe(reason);
+    fireEvent.click(within(status).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => {
+      expect(within(status).getByRole("alert")).toHaveTextContent(/^Dismissing did not work: /);
+    });
+    expect(failure.textContent).toBe(reason);
   });
 
   it("shows the core's localized reason of a single failed write", () => {

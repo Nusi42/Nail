@@ -18,7 +18,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Tag line facts in the list | `MessageSummary` has no attachment count, invitation or warning fields for the row's tag line (needs a store migration). | plan.md M5a, M5b follow-ups | M |
 | Printing HTML mail | Print to PDF handles plain text only; HTML mail needs a measurable same-origin render. | plan.md M4c follow-ups (ADR 0099) | M |
 | Tag states for a whole list | The label window shows no tag states when the whole list is selected. | plan.md R5 follow-ups (ADR 0237) | M |
-| Favorites as views | Favorites that open windows (Snoozed, Outbox) are not marked selected; Flagged / Unread search every folder including Trash. | plan.md M5b follow-ups | S |
 | Unified list order | A conversation answered from another account is ordered by the receiving account's activity. | plan.md P3 deferrals | S |
 | Snooze across installations | Snoozes are per installation: two installations on one account whose hidden folders share a name return each other's snoozed mail to the Inbox. | plan.md M2c follow-ups | M |
 | Link actions in the reader | No `LinkActionMenu` in the reader: links live in the sandboxed frame (documented). | plan.md M4a follow-ups (ADR 0084) | M |
@@ -30,19 +29,12 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
 | Partial sends | When a Bcc copy fails after the visible copy went out, a retry sends the visible copy again. | plan.md M2a follow-ups (ADR 0034) | M |
-| Several unsaved composers | Several unsaved composers open one prompt each when the view changes. | plan.md R6 follow-ups (ADR 0244) | S |
-| Background composer report | A background composer's sign / encrypt report is not refreshed until it gets the focus. | plan.md M5c follow-ups (ADR 0122) | S |
-| Composer preview height | The composer's preview frame keeps a fixed height. | plan.md P3 deferrals | S |
-| Monospace text areas | Composer, rules and merge-dialog text areas still use the monospace face. (check) | plan.md M5a follow-ups | S |
 
 ## Rules, search and junk
 
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
-| Run rules on a whole list | "Run rules on selected" with a list target: `RunRules` has no list form. | plan.md R5 follow-ups (ADR 0237) | M |
 | Other headers as rule values | `MessageFacts` offers no values of other headers. | plan.md R2 deferrals (ADR 0225) | M |
-| Run selected rules from the menu | "Run selected rules" in the rule list's menu (Run in the footer already runs the selection). (check) | plan.md R2 deferrals | S |
-| Searched folder in the tree | The folder a search runs in is not marked in the folder tree. | plan.md R2 deferrals | S |
 | Rule text issues | A draft `RuleFromText` reports an empty tag / recipient / folder twice. | plan.md R2 review fixes (deferred, low) | S |
 | Sieve status after a restart | The Sieve status digest is in memory: an account shows `pending` after a restart until the start-up upload. | plan.md M2c follow-ups | S |
 | Sieve while uploads fail | A rule edited while uploads fail runs in its old form on the server. | plan.md M2c follow-ups | M |
@@ -92,7 +84,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | --- | --- | --- | --- |
 | Other write failures in the summary | Failures of folder, Gmail label and Exchange writes are not in `OpsSummary.failed`; bulk Retry / Dismiss act on message writes only. | plan.md R4 follow-ups (ADR 0231) | M |
 | Mass failure logging | A mass permanent failure still logs one WARN per operation. | plan.md R4 follow-ups | S |
-| Retry / Dismiss errors | Retry / Dismiss errors show in place of the failure reason (needs a text of their own). | plan.md R4 follow-ups (ADR 0232) | S |
 | Replay and sync loop | Replay and sync stay sequenced in one loop (the replay connection only keeps the main connection's mailbox). | plan.md M2c follow-ups (ADR 0048) | M |
 
 ## Windows, dialogs, settings and layout
@@ -101,23 +92,18 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | --- | --- | --- | --- |
 | Remaining fields on the shared picker | Plug-in folder-picker nodes, Gmail's parent label, Exchange shared-mailbox address and room lists, the composer's From and the scheduling attendee field. | plan.md R3 deferrals (ADR 0228) | M |
 | Ungranted account in a picker | A hidden folder of an MCP account that is no longer granted shows its id as the chip. | plan.md R3 deferrals | S |
-| Layout presets | The layout card's presets (Settings → Layout & toolbars) apply at once with Undo instead of saving with the bar. | plan.md R6 follow-ups (ADR 0242) | S |
-| Dialog footer | `DialogFooter` takes one secondary button (a plug-in dialog's further buttons sit between the groups). | plan.md R6 follow-ups (ADR 0239) | S |
 | Appearance preview | Appearance has no live preview before Save. | plan.md R6 follow-ups (ADR 0242) | M |
-| Settings drafts | Settings drafts are per UI store (the plug-in manager window and Settings share them); no navigation marker for a section with unsaved changes; the "New group" name is not guarded. | plan.md R6 follow-ups (ADR 0244) | S |
+| Settings drafts | The "New group" name of the contact groups window is not guarded (the window registers one close guard, the group editor's). | plan.md R6 follow-ups (ADR 0244) | S |
 | Window close hook | A `beforeClose` hook in the window layer instead of the composer's session-sync close guard; a time-out for a pop-out page that never answers the OS close request. (check) | plan.md M5c follow-ups (ADR 0122) | M |
 | Pop-out preparers | Pop-out preparers for the remaining stateful editors so they can opt in (the rules window has one). | plan.md M5c follow-ups (ADR 0119) | M |
 | Pop-out key bindings | No default key bindings for `popout.open` / `popout.return`. | plan.md M5c follow-ups | S |
 | Window manager | Resize handles outside the frame (they sit over the body's scrollbar); snapping to the top edge / quarters; a backwards window cycle; per-session geometry for remote browsers. | plan.md M5c follow-ups (ADR 0117) | M |
 | Shell and views | Restoring the remembered view needs a view host (the fallback opens nothing); hidden views stay mounted; the UI state (last view, settings section) is shared between desktop and remote sessions. | plan.md M5b follow-ups (ADR 0110) | M |
-| Rail | The rail's account avatar is not interactive; the unread badge relies on the "All accounts" virtual account; no visible "View" affordance on the rail (a rail button changes every visual baseline). | plan.md M5b, M5d follow-ups | S |
-| Menus and settings page | The More menu opens at the button's left edge; widgets on the settings page repeat the section title; the remote-access section shows "Pair a device" twice. (check) | plan.md M5b follow-ups | S |
-| Search hint key | The Ctrl+K search hint stays `/` (Ctrl+K is the palette). (check) | plan.md M5b follow-ups | S |
+| Rail | The unread badge relies on the "All accounts" virtual account; no visible "View" affordance on the rail (a rail button changes every visual baseline). | plan.md M5b, M5d follow-ups | S |
 | Application menu | The application menu (`menu "app"`) is unused in the web UI. (check) | plan.md M2c follow-ups (ADR 0092) | S |
 | Customize mode | Remembered collapse of panes; focus on a widget just added; hidden nodes nested in a pane are not shown; the main window's rail / view host is not customizable; docking above / below inside a stack wraps it in a new split. | plan.md M5d follow-ups (ADR 0133) | M |
 | Theme editor | User theme files are not backed up before edits; the preview shows tokens, not part rules; a user theme's preview in the list shows its base palette, not its overrides. | plan.md M5a, M5d follow-ups (ADR 0135) | M |
 | Theme files | A `theme.kdl` that no longer resolves on a newly active theme only logs a warning (no `ConfigErrors`); old user files with `mode=` mix palettes (offer a migration). (check) | plan.md M5a follow-ups (ADR 0104) | S |
-| Toolbar customizer | Its available actions show 30 rows (search for more); a grouped or virtualized list. | plan.md M5d follow-ups (ADR 0134) | S |
 
 ## Plug-ins
 

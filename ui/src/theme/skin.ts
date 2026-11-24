@@ -554,6 +554,9 @@ ${p("folder-tree.item")}[data-state~="selected"] ${p("folder-tree.item.icon")} {
 ${p("folder-tree.item.name")} { ${ONE_LINE} }
 ${p("folder-tree.item.unread-count")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
 ${p("folder-tree.item")}[data-state~="selected"] ${p("folder-tree.item.unread-count")} { color: ${T.accent}; font-weight: ${T.semibold}; }
+${p("folder-tree.item")}[data-state~="searched"] { box-shadow: inset ${ACCENT_BAR} 0 0 ${T.accent}; }
+${p("folder-tree.item.searched")} { display: inline-flex; flex: 0 0 auto; color: ${T.accent}; }
+${p("folder-tree.item.searched.icon")} { width: ${T.icon}; height: ${T.icon}; }
 ${p("folder-tree")}[data-mode="sections"] { display: flex; flex-direction: column; gap: ${T.md}; padding: ${T.md} ${T.sm}; }
 ${p("folder-tree.compose")} {
   display: inline-flex; align-items: center; justify-content: center; gap: ${T.sm}; flex: 0 0 auto;

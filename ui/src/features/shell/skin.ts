@@ -10,7 +10,7 @@
  *   active view, `data-view` / `data-action`), `nav-rail.icon`,
  *   `nav-rail.label`, `nav-rail.badge` (`data-badge` = `unread` /
  *   `confirmations`), `nav-rail.spacer`, `nav-rail.separator`,
- *   `nav-rail.account` (holds the shared `avatar` part, coloured by the
+ *   `nav-rail.account` (a button that opens the account menu, R8; holds the shared `avatar` part, coloured by the
  *   avatar palette like every other avatar)
  * - `view-host` (`data-view`), `view-host.view` (`data-view`,
  *   `data-window`), `view-host.missing`
@@ -86,7 +86,12 @@ ${p("nav-rail.separator")} {
   flex: 0 0 auto; width: calc(${ITEM} - 2 * ${T.sm}); height: 1px; margin: ${T.xs} 0;
   background-color: ${T.border};
 }
-${p("nav-rail.account")} { display: grid; place-items: center; flex: 0 0 auto; margin-top: ${T.sm}; }
+${p("nav-rail.account")} {
+  display: grid; place-items: center; flex: 0 0 auto; margin-top: ${T.sm}; padding: 0;
+  border: none; border-radius: 50%; font: inherit; color: inherit; background-color: transparent; cursor: pointer;
+}
+${p("nav-rail.account")}:hover, ${p("nav-rail.account")}[data-state="expanded"] { ${QUIET_HOVER} }
+${p("nav-rail.account")}:focus-visible { ${FOCUS_RING} }
 ${p("nav-rail.account")} > ${p("avatar")} { ${initialsAvatar(T.control, T.small)} }`;
 
 /** A grid that hands its one cell's whole room to its child. */

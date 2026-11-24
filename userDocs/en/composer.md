@@ -75,7 +75,8 @@ see [Windows](windows.md).
   Recipients get the formatted message and a plain-text version of it.
 - **Markdown** is text with light markup (`**bold**`, `# Heading`,
   `- lists`, tables, code blocks). The preview next to the text shows
-  exactly what will be sent; **Preview** turns it off and on. See
+  exactly what will be sent and grows with it, up to a limit (then it
+  scrolls); **Preview** turns it off and on. See
   [Markdown mail](markdown-mail.md).
 
 Switching the format converts the message. Plain text to HTML or Markdown,

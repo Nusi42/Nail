@@ -14,7 +14,9 @@ import { accountCount, folderTitle, searchShortcut } from "./ListHeader";
 import { accountTags } from "./MessageList";
 import {
   FAVORITE_TARGETS,
+  OUTBOX_WINDOW,
   favoriteCount,
+  favoriteWindowView,
   toggleCollapsedSection,
   toggledSections,
   unifiedFolder,
@@ -31,6 +33,7 @@ import {
   wrapEdges,
 } from "./toolbarModel";
 import { must } from "../test/must";
+import { defaultLayout } from "../test/vectors";
 
 function layoutWith(extra: Record<string, unknown>): ResolvedLayout {
   return normalizeLayout({ ...createMockData(1).layout, ...extra });
@@ -201,8 +204,19 @@ describe("folder pane state", () => {
   it("gives every favorite a target, and counts inboxes (unread) and drafts (all)", () => {
     for (const favorite of FAVORITE_FOLDERS) expect(FAVORITE_TARGETS[favorite]).toBeDefined();
     expect(FAVORITE_TARGETS["all-inboxes"]).toEqual({ kind: "folder", role: "inbox" });
-    expect(FAVORITE_TARGETS.flagged).toEqual({ kind: "search", text: "is:flagged" });
-    expect(FAVORITE_TARGETS.snoozed).toEqual({ kind: "action", action: "snooze.list" });
+    expect(FAVORITE_TARGETS.flagged).toEqual({
+      kind: "search",
+      text: "is:flagged NOT folder:trash NOT folder:junk",
+    });
+    expect(FAVORITE_TARGETS.unread).toEqual({
+      kind: "search",
+      text: "is:unread NOT folder:trash NOT folder:junk",
+    });
+    expect(FAVORITE_TARGETS.snoozed).toEqual({
+      kind: "action",
+      action: "snooze.list",
+      window: "snoozed",
+    });
     const folders = [
       folder("all/inbox", "inbox", { unread: 7, total: 30 }),
       folder("all/drafts", "drafts", { unread: 0, total: 2 }),
@@ -324,6 +338,23 @@ describe("list header rules", () => {
     ).toBe("ctrl+k");
     expect(searchShortcut(keys([["/", "search.focus"]]))).toBe("/");
     expect(searchShortcut(keys([["ctrl+k", "palette.open"]]))).toBeNull();
+  });
+
+  it("hints `/` for the search in the default layout: Ctrl+K is the palette (R8 check)", () => {
+    const layout = defaultLayout();
+    expect(searchShortcut(layout)).toBe("/");
+    expect(layout.keys.some((k) => k.key === "ctrl+k" && k.action === "palette.open")).toBe(true);
+  });
+
+  it("names the window of the favorites that open one (R8)", () => {
+    // The Outbox's window is the default layout's `outbox.open` alias.
+    const outbox = must(defaultLayout().actions["outbox.open"]);
+    expect(outbox.alias_of).toBe("window.open");
+    expect(outbox.args).toEqual([OUTBOX_WINDOW]);
+    expect(favoriteWindowView([])).toBeNull();
+    expect(favoriteWindowView(["snoozed"])).toBe("snoozed");
+    expect(favoriteWindowView(["outbox", "rules"])).toBeNull();
+    expect(favoriteWindowView(["rules", "outbox"])).toBe("outbox");
   });
 
   it("colours accounts by their order, like the folder pane", () => {

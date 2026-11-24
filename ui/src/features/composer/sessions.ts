@@ -246,6 +246,7 @@ function reconcile(
     composers = withoutKey(composers, id);
     dropRichStore(ui, id);
     session.crypto.delete(id);
+    composerCryptoStore.getState().forget(id);
     session.closing.delete(id);
     // Its questions have nothing left to ask about.
     const questions = [confirmWindowFor(DISCARD_CONFIRM_KIND, id), promptWindowFor(id)];
@@ -283,6 +284,8 @@ function reconcile(
       session.crypto.set(before, composerCryptoStore.getState().choice);
     }
     if (active !== null) loadComposerCrypto(session.crypto.get(active) ?? null);
+    // Its report is the one it kept current in the background (R8).
+    composerCryptoStore.getState().activate(active ?? COMPOSER_KIND);
     session.active = active;
     if (active !== null) composer = composers[active] ?? null;
     else if (before !== null) composer = windows.includes(COMPOSER_KIND) ? composer : null;
@@ -296,6 +299,7 @@ function reconcile(
         const now = activeComposer(windows);
         session.active = now;
         if (now !== null) loadComposerCrypto(session.crypto.get(now) ?? null);
+        composerCryptoStore.getState().activate(now ?? COMPOSER_KIND);
         composer = now !== null ? (composers[now] ?? null) : null;
       } else {
         composers = { ...composers, [active]: next.composer };

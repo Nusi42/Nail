@@ -34,6 +34,9 @@ const BODY_MIN_HEIGHT = "9rem";
 
 const inComposer = (part: string) => `${p("composer")} ${p(part)}`;
 
+/** The Markdown preview grows with its content up to this height, then scrolls (R8). */
+export const PREVIEW_MAX_HEIGHT = "32rem";
+
 /** The container the queries below measure. */
 export const COMPOSER_CONTAINER = "nail-composer";
 /** Below this width labels go above their fields. */
@@ -51,6 +54,12 @@ ${p("composer")} > ${p("composer.footer")} {
    library's wrapper element between composer.html.editor and the content carries no part). */
 ${inComposer("composer.html.editor")} > * { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 ${inComposer("composer.html.content")}, ${inComposer("composer.html.source")} { flex: 1 1 auto; }
+/* R8: the preview frame is as tall as its content (a geometry rule), between the editors'
+   minimum and PREVIEW_MAX_HEIGHT; a longer preview scrolls inside it. */
+${inComposer("composer.preview.frame")}[data-state~="measured"] {
+  box-sizing: border-box; min-height: ${BODY_MIN_HEIGHT}; max-height: ${PREVIEW_MAX_HEIGHT};
+}
+${inComposer("composer.preview")} { align-items: flex-start; min-height: 0; }
 ${inComposer("composer.actions")} { flex-wrap: wrap; }
 ${inComposer("composer.toolbar")} { flex-wrap: wrap; min-width: 0; }
 ${inComposer("composer.send-later")} { flex-wrap: wrap; }

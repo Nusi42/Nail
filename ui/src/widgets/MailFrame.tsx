@@ -124,6 +124,28 @@ function useFrameMessages(
   }, [frame, origin, apply, report]);
 }
 
+/**
+ * A `srcdoc` frame document with the frame script (`readerDocument`,
+ * `framedDocument`): shows `srcDoc` in `frame` and returns the height its
+ * script reports (`null` until measured). Shared by the reader's local
+ * frame and the composer's preview (R8).
+ */
+export function useLocalFrame(
+  frame: React.RefObject<HTMLIFrameElement | null>,
+  srcDoc: string,
+  onLink: (report: MailLinkReport) => void,
+): number | null {
+  const { height, guard, apply } = useMeasuredHeight(frame);
+  const report = useLinkReporter(onLink);
+  useLayoutEffect(() => {
+    // A new document (the first, a theme switch, remote content allowed) starts over.
+    guard.reset();
+    if (frame.current) setSrcdoc(frame.current, srcDoc);
+  }, [frame, srcDoc, guard]);
+  useFrameMessages(frame, OPAQUE_ORIGIN, apply, report);
+  return height;
+}
+
 /** A local (`srcdoc`) mail frame; its document's script posts the height and links. */
 export function LocalMailFrame({
   srcDoc,
@@ -132,14 +154,7 @@ export function LocalMailFrame({
   onLink,
 }: FrameProps & { srcDoc: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const { height, guard, apply } = useMeasuredHeight(frame);
-  const report = useLinkReporter(onLink);
-  useLayoutEffect(() => {
-    // A new document (the first, a theme switch, remote content allowed) starts over.
-    guard.reset();
-    if (frame.current) setSrcdoc(frame.current, srcDoc);
-  }, [srcDoc, guard]);
-  useFrameMessages(frame, OPAQUE_ORIGIN, apply, report);
+  const height = useLocalFrame(frame, srcDoc, onLink);
   const { geom, state } = useFrameGeometry(height, designed);
   return (
     <iframe

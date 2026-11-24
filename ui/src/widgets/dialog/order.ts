@@ -26,6 +26,14 @@ export function footerOrder(os: Os): readonly FooterRole[] {
   return os === "macos" ? PRIMARY_LAST : PRIMARY_FIRST;
 }
 
+/**
+ * Several secondary buttons (R8), left to right on `os`: as given on
+ * Windows and Linux, mirrored on macOS like the whole end group.
+ */
+export function secondaryOrder<T>(os: Os, buttons: readonly T[]): readonly T[] {
+  return os === "macos" ? buttons.toReversed() : buttons;
+}
+
 /** What the browser says about its system (`navigator` or a stand-in). */
 export interface NavigatorFacts {
   userAgentData?: { platform?: string } | undefined;

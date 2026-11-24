@@ -19,9 +19,13 @@
  */
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { useT } from "../../i18n/I18nProvider";
-import { useUiStoreApi } from "../../state/uiStore";
 import { DialogFooter } from "./DialogFooter";
-import { discardSettingsDrafts, saveSettingsDrafts, useSettingsDrafts } from "./settingsDrafts";
+import {
+  discardSettingsDrafts,
+  saveSettingsDrafts,
+  useDraftScope,
+  useSettingsDrafts,
+} from "./settingsDrafts";
 
 /** What the bar did last (what the status says once the bar goes). */
 type Pressed = "save" | "discard" | null;
@@ -37,7 +41,7 @@ export function SettingsSaveBar({
 }) {
   const t = useT();
   const id = useId();
-  const ui = useUiStoreApi();
+  const drafts = useDraftScope();
   const { dirty, canSave, saving } = useSettingsDrafts();
   const bar = useRef<HTMLDivElement>(null);
   /** Save or Discard was pressed here: the focus moves once the bar goes. */
@@ -79,7 +83,7 @@ export function SettingsSaveBar({
               onClick: () => {
                 pressed.current = "save";
                 setOutcome("save");
-                void saveSettingsDrafts(ui).then((ok) => {
+                void saveSettingsDrafts(drafts).then((ok) => {
                   if (ok) return;
                   pressed.current = null;
                   setFailures((n) => n + 1);
@@ -93,7 +97,7 @@ export function SettingsSaveBar({
               onClick: () => {
                 pressed.current = "discard";
                 setOutcome("discard");
-                discardSettingsDrafts(ui);
+                discardSettingsDrafts(drafts);
               },
             }}
             busy={saving}

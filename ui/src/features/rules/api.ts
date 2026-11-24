@@ -8,6 +8,7 @@ import type { NailClient } from "../../api/client";
 import type {
   Event as NailEvent,
   FolderId,
+  ListTarget,
   MessageId,
   Rule,
   RuleId,
@@ -92,6 +93,12 @@ export async function testRule(
 export interface RuleRunTarget {
   messageIds: readonly MessageId[];
   folderId: FolderId | null;
+  /**
+   * A whole message list after "select all" (R8, ADR 0251): the run acts on
+   * its rows (minus the rows left out); `messageIds` and `folderId` are then
+   * empty. Only `RunRules` takes it.
+   */
+  list?: ListTarget | null;
 }
 
 /** Each rule's own messages. */
@@ -132,7 +139,7 @@ export async function runRules(
         rule_ids: [...ruleIds],
         message_ids: [...target.messageIds],
         folder_id: target.folderId,
-        list: null,
+        list: target.list ?? null,
       },
       "RulesRan",
     )

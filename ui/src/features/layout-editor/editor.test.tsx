@@ -24,6 +24,7 @@ import {
 } from "../../test/harness";
 import { render } from "@testing-library/react";
 import { must } from "../../test/must";
+import { SettingsSaveBar } from "../../widgets/dialog";
 import { LAYOUT_EDITOR_SKIN_CSS, actions, widgets } from "./index";
 import { resetEditor, startEditing, editorStore } from "./store";
 import { CustomizeViewWatcher } from "./ViewWatcher";
@@ -557,6 +558,7 @@ describe("layout.customize and the settings card", () => {
         {(layout) => (
           <>
             <Card node={widget("layout-editor-settings")} nodeKey="card" />
+            <SettingsSaveBar name="Layout" />
             <WindowView layout={layout} name="mail" />
           </>
         )}
@@ -564,6 +566,7 @@ describe("layout.customize and the settings card", () => {
     );
     await settleQueries(env);
     const card = screen.getByRole("region", { name: "Window layout" });
+    const bar = () => screen.queryByRole("group", { name: "Unsaved changes to “Layout”" });
     const select = within(card).getByRole("combobox", { name: "View" });
     expect(
       within(select)
@@ -571,7 +574,32 @@ describe("layout.customize and the settings card", () => {
         .map((o) => o.textContent),
     ).toEqual(["Mail", "Calendar", "Contacts", "Tasks", "Settings"]);
     expect(await violations(card)).toEqual([]);
+    // R8 (ADR 0242): a preset is chosen first and written with the bar's Save.
+    const writes = () => env.transport.requests.filter((r) => r.type === "UpdateLayout").length;
+    const before = writes();
     fireEvent.click(within(card).getByRole("button", { name: /Wide reader/ }));
+    expect(within(card).getByRole("button", { name: /Wide reader/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(card).getByRole("button", { name: /Three panes/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(writes()).toBe(before);
+    // Discard forgets the choice.
+    fireEvent.click(within(must(bar())).getByRole("button", { name: "Discard" }));
+    expect(within(card).getByRole("button", { name: /Three panes/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(bar()).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: /Wide reader/ }));
+    fireEvent.click(within(must(bar())).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(bar()).toBeNull();
+    });
+    expect(writes()).toBe(before + 1);
     await waitFor(() => {
       expect(within(card).getByRole("button", { name: /Wide reader/ })).toHaveAttribute(
         "aria-pressed",

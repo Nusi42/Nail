@@ -32,6 +32,28 @@ the list of agreed follow-ups, and steadier automated tests.
   drag to draw an event; a finger that moves at once scrolls.
 - **Icons for place and call** — the place field and the quick look show a
   map pin, the quick look's **Join** a camera.
+- **Favorites that act like views** — **Snoozed** and **Outbox** are shown
+  as selected while their window is in front, and **Unread** and **Flagged**
+  leave out the mail in Trash and Junk.
+- **The searched folder in the folder pane** — when a search runs in one
+  folder, the folder pane marks that folder with a search icon.
+- **Rules on a whole list** — after **Ctrl+A** in the message list, **Run
+  rule** in a row's menu runs the rule on every message of the list, and
+  **Undo** takes the whole run back.
+- **An account menu on the rail** — the account picture at the bottom of
+  the navigation rail opens a menu: show an account (or all of them) in Mail,
+  the account settings, or **Add account**.
+- **One question for several unsaved messages** — when several messages
+  with unsaved changes would close at once, Nail asks once and lists them.
+- **A preview as tall as your message** — the Markdown preview grows with
+  what you write, up to a limit, then scrolls.
+- **Layout presets save with the settings bar** — a preset chosen in
+  Settings → Layout & toolbars is applied with **Save** like every other
+  setting, and **Discard** forgets it; the settings navigation marks the
+  section you have unsaved changes in.
+- **A grouped list of actions to add to a toolbar** — the toolbar
+  customizer lists every action, grouped by where it applies; the search
+  narrows the groups.
 
 ### Fixed in 0.8.12
 
@@ -43,6 +65,16 @@ the list of agreed follow-ups, and steadier automated tests.
 - The title of a short meeting in the week view is no longer hidden behind
   its small icons when the event has room for it; the icons sit at the end
   of the time line.
+- A toolbar's **More** menu opens under the button, ending at its right edge.
+- When **Retry** or **Dismiss** of failed changes does not work, the status
+  bar says so beside the reason of the failure instead of replacing it.
+- A plug-in's dialog with several buttons shows them together, in the order
+  of your system.
+- A sign / encrypt check of a message in the background stays up to date, so
+  it is right as soon as you switch to that message.
+- The plug-in manager window keeps its unsaved changes apart from the
+  Settings page.
+- Settings → Appearance no longer repeats the section's title.
 
 ## Nail 0.8.11 (`0.8.11`)
 

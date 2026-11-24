@@ -132,18 +132,20 @@ function OpsItem() {
   const requestError = useUi((s) => s.opError);
   const dismissRequestError = useUi((s) => s.dismissOpError);
   const client = useClient();
-  const [actionError, setActionError] = useState<string | null>(null);
+  // A bulk Retry / Dismiss that did not work: its own text beside the
+  // failure's reason, never in its place (R8, `status-*-failed`).
+  const [actionError, setActionError] = useState<{ text: string; reason: string } | null>(null);
   // The core follows a retry or dismissal with `OpsChanged`.
-  const send = (request: Promise<unknown>) => {
+  const send = (text: string, request: Promise<unknown>) => {
     setActionError(null);
     request.catch((error: unknown) => {
-      setActionError(errorMessageIdOf(error));
+      setActionError({ text, reason: errorMessageIdOf(error) });
     });
   };
   const failure = summary !== null && summary.failed > 0 ? summary.newest_failure : null;
   if (failure) {
     const why = errorReason(failure);
-    const reason = actionError ? t(actionError) : t(why.id, why.args);
+    const reason = t(why.id, why.args);
     return (
       <span data-part="status-bar.item" data-item="ops" data-state="error">
         <span data-part="status-bar.text">
@@ -151,11 +153,19 @@ function OpsItem() {
             ? t("status-ops-failed-many", { count: summary.failed, reason })
             : t("status-op-failed", { reason })}
         </span>
+        {actionError && (
+          <span data-part="status-bar.text" role="alert">
+            {t(actionError.text, { reason: t(actionError.reason) })}
+          </span>
+        )}
         <button
           type="button"
           data-part="status-bar.button"
           onClick={() => {
-            send(client.request({ type: "RetryFailedOps", account_id: null }, "Queued"));
+            send(
+              "status-retry-failed",
+              client.request({ type: "RetryFailedOps", account_id: null }, "Queued"),
+            );
           }}
         >
           {t("status-retry")}
@@ -164,7 +174,10 @@ function OpsItem() {
           type="button"
           data-part="status-bar.button"
           onClick={() => {
-            send(client.request({ type: "DismissFailedOps", account_id: null }, "Done"));
+            send(
+              "status-dismiss-failed",
+              client.request({ type: "DismissFailedOps", account_id: null }, "Done"),
+            );
           }}
         >
           {t("common-dismiss")}

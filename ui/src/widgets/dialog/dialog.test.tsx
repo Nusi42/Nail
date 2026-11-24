@@ -24,6 +24,7 @@ import {
   saveSettingsDrafts,
   settingsCanSave,
   settingsDirty,
+  SettingsDraftScope,
   useSettingsDraft,
   type SettingsDraft,
 } from "./settingsDrafts";
@@ -94,6 +95,27 @@ describe("DialogFooter (R6)", () => {
     // Delete… stays alone at the start on every system.
     const start = must(footer.querySelector('[data-part="dialog.footer.start"]'));
     expect(within(start as HTMLElement).getByRole("button")).toHaveTextContent("Delete…");
+  });
+
+  it("places several secondary buttons as one group by role (R8)", () => {
+    const several = (
+      <DialogFooter
+        primary={{ label: "Go" }}
+        secondary={[
+          { label: "Later", action: "later" },
+          { label: "Skip", action: "skip" },
+        ]}
+        cancel={{ onClick: () => undefined }}
+      />
+    );
+    const win = renderOn("windows", several);
+    expect(endLabels(win.container)).toEqual(["Go", "Later", "Skip", "Cancel"]);
+    expect(
+      [...win.container.querySelectorAll('[data-role="secondary"]')].map((b) => b.textContent),
+    ).toEqual(["Later", "Skip"]);
+    win.unmount();
+    const mac = renderOn("macos", several);
+    expect(endLabels(mac.container)).toEqual(["Cancel", "Skip", "Later", "Go"]);
   });
 
   it("marks each button's role and variant; Cancel runs the dialog's close", async () => {
@@ -416,6 +438,40 @@ describe("SettingsSaveBar (R6)", () => {
     expect(sync).toHaveBeenCalledOnce();
     expect(junk).toHaveBeenCalledOnce();
     expect(settingsDirty(env.store)).toBe(false);
+  });
+
+  it("keeps the drafts of a draft scope apart from the page's (R8)", async () => {
+    const user = userEvent.setup();
+    const sync = vi.fn(() => true);
+    const plugin = vi.fn(() => true);
+    const { env } = renderOn(
+      "windows",
+      <>
+        <Page saves={{ sync }} />
+        <SettingsDraftScope>
+          <Widget id="plugin" save={plugin} />
+          <SettingsSaveBar name="Plug-ins" />
+        </SettingsDraftScope>
+      </>,
+    );
+    await user.type(screen.getByRole("textbox", { name: "plugin" }), "b");
+    const scoped = await screen.findByRole("group", { name: "Unsaved changes to “Plug-ins”" });
+    // The page's bar and drafts do not see the window's change.
+    expect(screen.queryByRole("group", { name: "Unsaved changes to “Mail”" })).toBeNull();
+    expect(settingsDirty(env.store)).toBe(false);
+    await user.type(screen.getByRole("textbox", { name: "sync" }), "c");
+    const page = await screen.findByRole("group", { name: "Unsaved changes to “Mail”" });
+    await user.click(within(page).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("group", { name: "Unsaved changes to “Mail”" })).toBeNull();
+    });
+    expect(sync).toHaveBeenCalledOnce();
+    expect(plugin).not.toHaveBeenCalled();
+    expect(scoped).toBeInTheDocument();
+    await user.click(within(scoped).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(plugin).toHaveBeenCalledOnce();
+    });
   });
 
   it("stays while a save fails, and Discard drops the changes", async () => {

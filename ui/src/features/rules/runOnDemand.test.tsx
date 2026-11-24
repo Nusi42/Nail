@@ -17,7 +17,7 @@ import { literalMenuLabel, menuStoreFor, type ContextTarget } from "../menus";
 import { actions } from "./index";
 import { Issues } from "./Issues";
 import { ALL_RULES, runMenuItems, runMenuSource } from "./runMenu";
-import { mayUndo, outcomeOf } from "./runTargets";
+import { mayUndo, outcomeOf, undoRuns } from "./runTargets";
 import { RunToast } from "./RunToast";
 import { rulesStore } from "./store";
 import { addTagAllRule, runsFinished, setup } from "./testing";
@@ -125,6 +125,47 @@ describe("the Run rule menus", () => {
     const inInbox = added.filter((m) => m.folder_id === INBOX).map((m) => m.id);
     expect(request?.message_ids).toEqual(expect.arrayContaining(inInbox));
     expect(request?.folder_id).toBeNull();
+  });
+
+  it("runs on the whole list after select all, and undoes it in one step (R8)", async () => {
+    const env = setup();
+    addTagAllRule(env);
+    const inbox = env.transport.data.messages.filter((m) => m.folder_id === INBOX);
+    const left = must(inbox[0]);
+    const selection = listSelectionFor(env.store).getState();
+    selection.setScope({ conversations: false, folderId: INBOX });
+    const list = { source: "messages", folder_id: INBOX } as const;
+    selection.setList(list);
+    selection.selectAll();
+    listSelectionFor(env.store)
+      .getState()
+      .setExcept([{ key: left.id, messageId: left.id, threadId: left.thread_id, child: false }]);
+    const row = must(inbox[1]);
+    openMenu(env, target("message-list.row", { messageId: row.id, threadId: row.thread_id }));
+    await run.run(ctxOf(env), ["tag-all"]);
+    expect(requestsOf(env, "RunRules")).toEqual([
+      {
+        type: "RunRules",
+        rule_ids: ["tag-all"],
+        message_ids: [],
+        folder_id: null,
+        list: {
+          list,
+          except: [{ kind: "message", message_id: left.id }],
+          as_of: null,
+        },
+      },
+    ]);
+    const tagged = () =>
+      env.transport.data.messages.filter((m) => m.folder_id === INBOX && m.tags.includes("picked"));
+    expect(tagged()).toHaveLength(inbox.length - 1);
+    expect(tagged().some((m) => m.id === left.id)).toBe(false);
+    // The toast's Undo takes the whole list run back.
+    const toast = rulesStore(env.client).getState().toast;
+    if (toast?.kind !== "ran") throw new Error("no run");
+    await runsFinished(env);
+    await undoRuns(env.client, toast.runs);
+    expect(tagged()).toEqual([]);
   });
 
   it("shows the core's refusal in the toast", async () => {

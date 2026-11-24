@@ -312,7 +312,8 @@ test("customize layout: add a widget and apply presets, Reset to default", async
   await expect.poll(layoutFile).not.toContain("mini-month");
   await editor(page).getByRole("button", { name: "Done" }).click();
 
-  // The settings card applies presets too and starts customize mode.
+  // The settings card applies presets too (with the settings bar's Save,
+  // R8) and starts customize mode.
   const settings = await openSettings(page, "Layout & toolbars");
   const card = settings.getByRole("region", { name: "Window layout" });
   await card.getByRole("button", { name: /Wide reader/ }).click();
@@ -320,6 +321,8 @@ test("customize layout: add a widget and apply presets, Reset to default", async
     "aria-pressed",
     "true",
   );
+  await saveSettings(page);
+  await expect(card.getByRole("status")).toContainText("Wide reader");
   await card.getByRole("button", { name: "Customize layout" }).click();
   await expect(viewRegion(page, "Mail")).toBeVisible();
   await expect(editor(page)).toBeVisible();

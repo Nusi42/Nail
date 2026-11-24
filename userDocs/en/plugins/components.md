@@ -43,7 +43,9 @@ await nail.ui.showDialog({ title: "Follow up", body, buttons: [{ id: "save", lab
 - **Dialog buttons by role.** Nail draws the buttons in its own dialog
   footer and orders them the way the user's system does (Windows and
   Linux: the primary button first, macOS: last). Mark the main button with
-  `primary: true`; the others are secondary. Nail always adds a **Cancel**
+  `primary: true`; the others are secondary and stay together in the
+  secondary place, in the order you list them (mirrored on macOS). Nail
+  always adds a **Cancel**
   that dismisses the dialog (`button: null`, like Escape and ×). A button
   of your own with the id `cancel` takes that place instead: it shows your
   label and answers `"cancel"` — so older plug-ins that list their own

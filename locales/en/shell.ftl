@@ -33,3 +33,6 @@ shell-view-region = { $view } view
 
 # A view whose window cannot be shown (missing, or hosting views itself).
 shell-view-unavailable = { $view } cannot be shown: its window is missing in layout.kdl or contains a view host itself.
+# The menu the avatar opens (R8): the accounts, account settings, add an account.
+shell-account-menu = { common-accounts }
+shell-account-menu-all = { common-all-accounts }

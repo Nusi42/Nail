@@ -511,13 +511,13 @@ describe("plug-in commands, dialogs and notifications", () => {
     const dialog = screen.getByRole("dialog", { name: "Choose" });
     const footer = must(dialog.querySelector<HTMLElement>('[data-part="dialog.footer"]'));
     // Nail orders by role (Windows / Linux: primary, secondary, Cancel);
-    // further secondary buttons sit before the end group.
+    // every secondary button sits in the secondary place (R8).
     const end = must(footer.querySelector<HTMLElement>('[data-part="dialog.footer.end"]'));
     expect(
       within(end)
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["Go", "Later", "Cancel"]);
+    ).toEqual(["Go", "Later", "Skip it", "Cancel"]);
     expect(within(footer).getByRole("button", { name: "Skip it" })).toHaveAttribute(
       "data-role",
       "secondary",

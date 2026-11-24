@@ -25,6 +25,8 @@ export {
   saveSettingsDrafts,
   settingsCanSave,
   settingsDirty,
+  SettingsDraftScope,
+  useDraftScope,
   useSettingsDraft,
   useSettingsDrafts,
   type SettingsDraft,

@@ -20,7 +20,7 @@ import { INBOX } from "../../test/mockIds";
 import { must } from "../../test/must";
 import { expectConsole } from "../../test/console";
 import { appRegistry } from "../registry";
-import { submenuPlace } from "./ContextMenu";
+import { menuPosition, submenuPlace } from "./ContextMenu";
 import { ContextMenuHost } from "./ContextMenuHost";
 import {
   literalMenuLabel,
@@ -69,6 +69,17 @@ function setup(): Env {
   env.transport.data.behaviour.workMs = 0;
   return env;
 }
+
+describe("menu placement (R8)", () => {
+  const viewport = { width: 800, height: 600 };
+  const size = { width: 200, height: 100 };
+  it("starts at the point, or ends there for a button at a bar's end, inside the window", () => {
+    expect(menuPosition({ x: 100, y: 50 }, size, viewport)).toEqual({ x: 100, y: 50 });
+    expect(menuPosition({ x: 700, y: 50 }, size, viewport, true)).toEqual({ x: 500, y: 50 });
+    expect(menuPosition({ x: 750, y: 560 }, size, viewport)).toEqual({ x: 600, y: 500 });
+    expect(menuPosition({ x: 120, y: 50 }, size, viewport, true)).toEqual({ x: 0, y: 50 });
+  });
+});
 
 describe("submenu placement", () => {
   const viewport = { width: 800, height: 600 };

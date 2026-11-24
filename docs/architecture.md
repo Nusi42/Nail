@@ -1808,3 +1808,15 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   answers, `offerReplyUndo` from `scheduling/queries.ts`), `pim/TextToast.tsx`; `pim/common.tsx` `SyncState` (the
   conflict choice of contacts and events); `pim/queries.ts` `useRecentMail` (own key `pimKeys.recentMail`: the mail
   lists treat every `search` entry as theirs); `TimeGrid.tsx` `TOUCH_HOLD_MS` / `TOUCH_SLOP` (touch drawing).
+- Mail and windows UI (ADR 0252): favorites name the window they open (`widgets/folderPaneState.ts`
+  `FAVORITE_TARGETS`, `favoriteWindowView`; `FAVORITE_SEARCH_EXCLUDES`); the folder tree marks a searched folder
+  (`folder-tree.item[data-state~="searched"]`); the close guard asks once about several windows
+  (`layout/closeGuard.ts` `SEVERAL_GUARD`, `UnsavedPrompt`'s `SeveralPrompt`); settings drafts live in a
+  `DraftScope` (`widgets/dialog/settingsDrafts.ts`, `SettingsDraftScope` for a window of its own);
+  `DialogFooter.secondary` takes several buttons (`order.ts` `secondaryOrder`); menu buttons share
+  `features/menus/MenuButton.tsx` `useMenuButton` (`ContextMenu` `alignRight`, `owner`, `menuPosition`); the
+  rail's account menu (`features/shell/accountMenu.ts`); the composer preview is a frame document
+  (`theme/reader.ts` `framedDocument`, `widgets/MailFrame.tsx` `useLocalFrame`); each composer keeps its
+  sign / encrypt report (`features/security/composerStore.ts` `setReportOf` / `activate`); list runs of rules
+  (`features/rules/runTargets.ts` `wholeListOf`); the toolbar customizer's groups
+  (`features/toolbar-editor/ToolbarCustomizer.tsx` `AVAILABLE_GROUPS`).

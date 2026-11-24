@@ -181,9 +181,6 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
   };
 
   const { primary, secondary, cancel } = footerButtons(spec.buttons ?? []);
-  // The footer holds one secondary button; further ones sit between its
-  // start and its end (`dialog.footer` children).
-  const [firstSecondary, ...moreSecondary] = secondary;
   const invalidCount = Object.keys(issues).length;
 
   const frame = (
@@ -237,17 +234,13 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
           {...(primary === null
             ? {}
             : { primary: { label: primary.label, action: primary.id, submit: true } })}
-          {...(firstSecondary === undefined
-            ? {}
-            : {
-                secondary: {
-                  label: firstSecondary.label,
-                  action: firstSecondary.id,
-                  onClick: () => {
-                    submit(firstSecondary.id, false);
-                  },
-                },
-              })}
+          secondary={secondary.map((button) => ({
+            label: button.label,
+            action: button.id,
+            onClick: () => {
+              submit(button.id, false);
+            },
+          }))}
           cancel={
             cancel === null
               ? {
@@ -262,23 +255,7 @@ function DialogView({ dialog }: { dialog: PluginDialog }) {
                 }
           }
           busy={busy}
-        >
-          {moreSecondary.map((button) => (
-            <button
-              key={button.id}
-              type="button"
-              data-part="form.button"
-              data-role="secondary"
-              data-action={button.id}
-              disabled={busy}
-              onClick={() => {
-                submit(button.id, false);
-              }}
-            >
-              {button.label}
-            </button>
-          ))}
-        </DialogFooter>
+        />
       </form>
     </div>
   );

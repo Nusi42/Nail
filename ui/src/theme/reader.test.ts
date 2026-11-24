@@ -3,7 +3,15 @@ import type { HtmlDarkMode, ResolvedTheme } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
 import { resolveTokenRefs } from "./compile";
 import { hexContrastRatio } from "./contrast";
-import { READER_CSP, isDesignedMail, readerCsp, readerCss, readerDocument } from "./reader";
+import { FRAME_PARENT_ATTRIBUTE, FRAME_SCRIPT } from "../api/generated";
+import {
+  READER_CSP,
+  framedDocument,
+  isDesignedMail,
+  readerCsp,
+  readerCss,
+  readerDocument,
+} from "./reader";
 
 /** The default theme with another dark-mode handling of HTML mail. */
 function withDarkMode(mode: HtmlDarkMode): ResolvedTheme {
@@ -145,3 +153,27 @@ describe("designed mail", () => {
 
 /** WCAG contrast ratio of two hex colours. */
 const contrast = (a: string, b: string): number => hexContrastRatio(a, b) ?? 0;
+
+describe("frame documents of Nail's own (R8: the composer's preview)", () => {
+  const PARENT = "https://nail.example";
+
+  it("adds the frame script, the policy and the parent to a whole document", () => {
+    const doc = framedDocument(
+      '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head><body><p>Hi</p></body></html>',
+      PARENT,
+    );
+    expect(doc).toContain(`<html lang="en" ${FRAME_PARENT_ATTRIBUTE}="${PARENT}">`);
+    expect(doc).toContain(`<script>${FRAME_SCRIPT}</script>`);
+    expect(doc).toContain(`content="${READER_CSP}"`);
+    expect(doc.indexOf(FRAME_SCRIPT)).toBeLessThan(doc.indexOf("<p>Hi</p>"));
+    expect(doc.match(/<head/g)).toHaveLength(1);
+  });
+
+  it("wraps a fragment", () => {
+    const doc = framedDocument("<p>Hi</p>", PARENT);
+    expect(doc).toMatch(
+      /^<!doctype html><html [^>]+><head>.*<\/head><body><p>Hi<\/p><\/body><\/html>$/,
+    );
+    expect(doc).toContain(FRAME_SCRIPT);
+  });
+});
