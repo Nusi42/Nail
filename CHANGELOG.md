@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.11] — 2026-11-24
+
 ### Added — a calendar that reads well, contract (ADR 0246)
 
 - The calendar palette is core data (`CalendarColor`, `CALENDAR_PALETTE`)
@@ -708,6 +710,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.11]: https://github.com/Nusi42/Nail/releases/tag/v0.8.11
 [0.8.10]: https://github.com/Nusi42/Nail/releases/tag/v0.8.10
 [0.8.9]: https://github.com/Nusi42/Nail/releases/tag/v0.8.9
 [0.8.8]: https://github.com/Nusi42/Nail/releases/tag/v0.8.8
