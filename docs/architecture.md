@@ -739,9 +739,11 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        rows' latest_message, api/mockConversations.ts addMockConversation (Inbox + Sent + a draft), slots
                        features/conversation-list (WP202) / features/conversation-reader (WP203);
                        P2 packages: widgets/messageListModel.ts (rows, children, selection by row key, thread fallback,
-                       tree moves), MessageListChild.tsx, messageListControl.ts, template filter `then("text")` + field
-                       `latest_from`, `data-fields` per row line (Compact hides preview lines), actions list.expand /
-                       list.collapse (ADR 0150); widgets/ThreadViewFeed.tsx + ThreadViewModel.ts + ThreadViewScope.tsx
+                       tree moves), MessageListChild.tsx, messageListControl.ts, nextPage.ts (useNextPageNearEnd: the
+                       list asks for its next page after every finished fetch, never during one), template filter
+                       `then("text")` + field `latest_from`, `data-fields` per row line (Compact hides preview lines),
+                       actions list.expand / list.collapse (ADR 0150);
+                       widgets/ThreadViewFeed.tsx + ThreadViewModel.ts + ThreadViewScope.tsx
                        (the card feed: per-card scoped UI store renders the reader's per-message widgets, `card=`),
                        features/conversation-reader (conversation.* actions, readerStack.ts + ReaderOffer.tsx = the
                        one-time "Read conversations as cards" offer, UI-state key `conversation-reader.layout-offer`)

@@ -1820,6 +1820,13 @@ for the recorded upload before deleting the account. Visual baselines: the Move 
 toolbar customizer and the high-contrast contacts / tasks. Rows moved out of R8 by decision (scope decisions
 above); new row "Event editor date line".
 
+*Status (flaky bulk-move e2e):* fixed at the cause. `r4-status-bulk` "a lagging event stream" stopped at the
+first 100 rows about once in ten runs: the message list asked for the next page only when "loading the next page"
+changed, and a refetch (new mail during the delivery) that cancelled the request before React rendered it left
+that flag unchanged, so the list never asked again. `ui/src/widgets/nextPage.ts` `useNextPageNearEnd` waits while
+any fetch of the list runs and asks again after every finished fetch (it also no longer cancels a refetch, whose
+new rows were lost); `nextPage.test.tsx` reproduces both races with a real query client.
+
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.

@@ -72,6 +72,7 @@ import { accountColorSlot } from "./folderPane";
 import { filteredScope } from "./listFilter";
 import { Icon } from "./Icon";
 import { ChildRowView } from "./MessageListChild";
+import { useNextPageNearEnd } from "./nextPage";
 import { registerListControl } from "./messageListControl";
 import {
   childKey,
@@ -943,16 +944,7 @@ export function MessageList({ node }: WidgetProps) {
   // (M4c: with only a few rows left, fast scrolling stalled at every page
   // end).
   const lastIndex = last?.index ?? -1;
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
-  useEffect(() => {
-    if (
-      hasNextPage &&
-      !isFetchingNextPage &&
-      lastIndex >= rows.length - Math.max(5, items.length - LIST_OVERSCAN)
-    ) {
-      void fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, rows.length, items.length]);
+  useNextPageNearEnd(query, lastIndex >= rows.length - Math.max(5, items.length - LIST_OVERSCAN));
 
   // Keep the selection visible (keyboard navigation).
   const selectedThreadId = useUi((s) => s.selectedThreadId);
