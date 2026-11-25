@@ -8,6 +8,8 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+## [0.8.12] — 2026-11-25
+
 ### Added — backlog features and stable tests, contract (ADR 0251)
 
 - `FindFreeTime` takes `hours` (`FreeTimeHours`: around the clock, the
@@ -848,6 +850,7 @@ run, the release update key).
   styled by `theme.kdl`, the web mode (`nail serve`) and the Tauri desktop
   shell.
 
+[0.8.12]: https://github.com/Nusi42/Nail/releases/tag/v0.8.12
 [0.8.11]: https://github.com/Nusi42/Nail/releases/tag/v0.8.11
 [0.8.10]: https://github.com/Nusi42/Nail/releases/tag/v0.8.10
 [0.8.9]: https://github.com/Nusi42/Nail/releases/tag/v0.8.9
