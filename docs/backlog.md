@@ -200,6 +200,8 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Flaky: notification texts test | `app/src-tauri` `tests::notification_texts_are_rendered` hung once for 20 minutes under full parallel load. | plan.md R8 follow-ups (ADR 0255) | S |
 | Flaky: Check for new mail (WebKit) | e2e `app-chrome` "Check for new mail" on WebKit missed the POP3 message within 5 s once in a full run. | plan.md R8 follow-ups (ADR 0255) | S |
 | Flaky: Exchange categories test | `nail-core` `tests/exchange.rs` `categories_automatic_replies_and_rooms` failed once on a machine about 5x slower; not reproduced under parallel load in R8 (the other Exchange flakes are fixed, ADR 0255). | memory r5-status | S |
+| Flaky: lost start-up asset | Under full parallel e2e load a start-up module request of `nail serve` (`assets/app-*.js`) failed once with status -1, so the app never started and `openMail` timed out (`m5c`, `m5b`, `r7-p3-views` once each; they pass alone). Check whether the static file server drops requests under load. | plan.md R8 follow-ups | S |
+| Flaky: failed-operations count | e2e `r4-status-failures` (line 86): the operations item stayed at 1 for 30 s once in a full run (passes 20/20 alone). | plan.md R8 follow-ups | S |
 
 ## Performance
 
