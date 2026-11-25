@@ -16,11 +16,10 @@ import type {
   MessageSummary,
   MoveTarget,
   Response,
-  SearchHit,
   ThreadId,
   ThreadSummary,
 } from "../api/generated";
-import { queryKeys } from "./queries";
+import { queryKeys, type SearchPage } from "./queries";
 import type { UiStore } from "./uiStore";
 
 export interface WriteContext {
@@ -33,9 +32,6 @@ type MessagesPage = Extract<Response, { type: "Messages" }>;
 type ThreadResponse = Extract<Response, { type: "Thread" }>;
 /** A page of conversation rows (P2: each carries its newest message). */
 type ThreadsPage = Extract<Response, { type: "Threads" }>;
-interface SearchPage {
-  hits: SearchHit[];
-}
 
 /** Looks a message summary up in any list, search or thread cache. */
 /**
@@ -125,14 +121,16 @@ export function patchSummaries(
     (data) =>
       data && {
         ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          hits: page.hits.flatMap((hit) => {
+        pages: data.pages.map((page) => {
+          const hits = page.hits.flatMap((hit) => {
             if (!wanted.has(hit.message.id)) return [hit];
             const next = patch(hit.message);
             return next ? [{ ...hit, message: next }] : [];
-          }),
-        })),
+          });
+          // Like the lists above: a removed hit leaves the total, or the
+          // search would ask the core for a next page it already has.
+          return { ...page, hits, total: page.total - (page.hits.length - hits.length) };
+        }),
       },
   );
   queryClient.setQueriesData<ThreadResponse>(

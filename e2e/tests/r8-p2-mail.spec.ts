@@ -39,40 +39,46 @@ async function subjectOf(row: Locator): Promise<string> {
   return (text ?? "").trim();
 }
 
-test("favorites act as views: Snoozed while its window is in front; Flagged leaves out Trash", async ({
-  page,
-}) => {
-  await openMail(page, server.url);
-  // Flag the first conversation, then move it to Trash.
-  const row = messageRows(page).first();
-  const subject = await subjectOf(row);
-  await row.click();
-  await messageList(page).focus();
-  await page.keyboard.press("s");
-  await favorite(page, "flagged").click();
-  await expect(favorite(page, "flagged")).toHaveAttribute("aria-selected", "true");
-  const flaggedRow = messageRows(page).filter({ hasText: subject });
-  await expect(flaggedRow.first()).toBeVisible();
-  await flaggedRow.first().click();
-  await page.keyboard.press("Delete");
-  // In Trash it no longer counts as flagged mail to see to.
-  await expect(flaggedRow).toHaveCount(0);
-  await favorite(page, "all-inboxes").click();
-  await favorite(page, "flagged").click();
-  await expect(messageRows(page).first()).toBeVisible();
-  await expect(messageRows(page).filter({ hasText: subject })).toHaveCount(0);
+// The Work account of demo-multi has a Trash (the demo account has none, so
+// Delete fails there and the row comes back).
+test.describe("favorites as views", () => {
+  const multi = nailPerTest({ seed: "demo-multi" });
 
-  // Snoozed opens its window and is the selected favorite while it is in front.
-  await favorite(page, "snoozed").click();
-  const snoozed = windowById(page, "snoozed");
-  await expect(snoozed).toBeVisible();
-  await expect(favorite(page, "snoozed")).toHaveAttribute("aria-selected", "true");
-  await expect(favorite(page, "flagged")).toHaveAttribute("aria-selected", "false");
-  await expect(page.locator('[data-part^="folder-tree."][aria-selected="true"]')).toHaveCount(1);
-  await snoozed.getByRole("button", { name: "Close" }).first().click();
-  await expect(snoozed).toBeHidden();
-  await expect(favorite(page, "flagged")).toHaveAttribute("aria-selected", "true");
-  await expect(favorite(page, "snoozed")).toHaveAttribute("aria-selected", "false");
+  test("favorites act as views: Snoozed while its window is in front; Flagged leaves out Trash", async ({
+    page,
+  }) => {
+    await openWorkInbox(page, multi);
+    // Flag the first conversation, then move it to Trash.
+    const row = messageRows(page).first();
+    const subject = await subjectOf(row);
+    await row.click();
+    await messageList(page).focus();
+    await page.keyboard.press("s");
+    await favorite(page, "flagged").click();
+    await expect(favorite(page, "flagged")).toHaveAttribute("aria-selected", "true");
+    const flaggedRow = messageRows(page).filter({ hasText: subject });
+    await expect(flaggedRow.first()).toBeVisible();
+    await flaggedRow.first().click();
+    await page.keyboard.press("Delete");
+    // In Trash it no longer counts as flagged mail to see to.
+    await expect(flaggedRow).toHaveCount(0);
+    await favorite(page, "all-inboxes").click();
+    await favorite(page, "flagged").click();
+    await expect(messageRows(page).first()).toBeVisible();
+    await expect(messageRows(page).filter({ hasText: subject })).toHaveCount(0);
+
+    // Snoozed opens its window and is the selected favorite while it is in front.
+    await favorite(page, "snoozed").click();
+    const snoozed = windowById(page, "snoozed");
+    await expect(snoozed).toBeVisible();
+    await expect(favorite(page, "snoozed")).toHaveAttribute("aria-selected", "true");
+    await expect(favorite(page, "flagged")).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator('[data-part^="folder-tree."][aria-selected="true"]')).toHaveCount(1);
+    await snoozed.getByRole("button", { name: "Close" }).first().click();
+    await expect(snoozed).toBeHidden();
+    await expect(favorite(page, "flagged")).toHaveAttribute("aria-selected", "true");
+    await expect(favorite(page, "snoozed")).toHaveAttribute("aria-selected", "false");
+  });
 });
 
 test("the folder tree marks the folder a search runs in", async ({ page }) => {

@@ -50,6 +50,9 @@ tests), release notes "Nail 0.8.12":**
   fetch of the list runs and asks again after each finished fetch. Keyed on `isFetchingNextPage` alone, a refetch that
   cancelled the next-page request before React rendered it stopped the list for good (the `r4-status-bulk` lagging
   flake, rows 300..201 only).
+- An optimistic removal (`patchSummaries`) lowers each page's `total` in every list kind (messages, threads, search),
+  or the list asks the core for a next page of rows it already has while the write is queued. The `demo` seed
+  has no Trash: Delete fails there (use demo-multi's Work account in e2e).
 - Four packages each took ADR 0252 and each edited the backlog: on a rebase conflict in `docs/backlog.md` both
   sides removed their own finished rows, so the resolution drops both sides of each block.
 - After rebases that add catalogs or theme files delete `node_modules/.vitest-cache`.

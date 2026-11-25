@@ -1826,6 +1826,10 @@ changed, and a refetch (new mail during the delivery) that cancelled the request
 that flag unchanged, so the list never asked again. `ui/src/widgets/nextPage.ts` `useNextPageNearEnd` waits while
 any fetch of the list runs and asks again after every finished fetch (it also no longer cancels a refetch, whose
 new rows were lost); `nextPage.test.tsx` reproduces both races with a real query client.
+Found by it: a removal from a search list kept the hit in the total, so the list asked the core for a
+"next page" of rows it already had while the write was still queued (`patchSummaries` now lowers a search page's
+total like the other lists'); the `r8-p2-mail` favourites test deletes in demo-multi's Work account, as the demo
+account has no Trash (Delete fails there; the old paging race had hidden the failed delete).
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 
