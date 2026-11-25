@@ -77,12 +77,7 @@ export function createPinStore(): StoreApi<PinUiState> {
 
 /** The PIN store of a UI store. */
 export function pinStoreFor(ui: UiStore): StoreApi<PinUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createPinStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createPinStore());
 }
 
 /** Shows PIN prompts and closes them; refreshes the card list. */

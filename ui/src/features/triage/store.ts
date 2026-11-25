@@ -23,25 +23,24 @@ export interface TriageState {
 const stores = new UiStoreMap<StoreApi<TriageState>>();
 
 export function triageStoreFor(ui: UiStore): StoreApi<TriageState> {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<TriageState>()((set) => ({
-    snoozing: [],
-    targets: null,
-    setSnoozing: (snoozing) => {
-      set({ snoozing, targets: null });
-    },
-    setSnoozeTargets: (targets) => {
-      set({
-        targets,
-        snoozing: targets.targets.flatMap((t) =>
-          t.kind === "message" ? [t.message_id] : t.kind === "conversation" ? [t.thread_id] : [],
-        ),
-      });
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<TriageState>()((set) => ({
+      snoozing: [],
+      targets: null,
+      setSnoozing: (snoozing) => {
+        set({ snoozing, targets: null });
+      },
+      setSnoozeTargets: (targets) => {
+        set({
+          targets,
+          snoozing: targets.targets.flatMap((t) =>
+            t.kind === "message" ? [t.message_id] : t.kind === "conversation" ? [t.thread_id] : [],
+          ),
+        });
+      },
+    }));
+    return store;
+  });
 }
 
 export function useTriage<T>(selector: (state: TriageState) => T): T {

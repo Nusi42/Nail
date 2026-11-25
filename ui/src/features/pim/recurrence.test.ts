@@ -92,6 +92,35 @@ describe("recurrence editor model", () => {
     expect(recurrenceOf({ type: "none" }, START, previous)).toBeNull();
   });
 
+  it("keeps the extra dates and RDATE periods when only the rule changes (R8 review)", () => {
+    const period = {
+      start: { type: "zoned", local: "2026-10-20T14:00:00", tz: "Europe/Berlin" },
+      end: { type: "zoned", local: "2026-10-20T16:30:00", tz: "Europe/Berlin" },
+    } as const;
+    const previous: Recurrence = {
+      rules: [{ ...BASE, freq: "daily" }],
+      dates: [{ type: "zoned", local: "2026-10-15T09:00:00", tz: "Europe/Berlin" }],
+      exceptions: [],
+      periods: [period],
+    };
+    const next = recurrenceOf(
+      { type: "simple", rule: defaultRule("weekly", new CalendarDate(2026, 10, 1)) },
+      START,
+      previous,
+    );
+    expect(next?.periods).toEqual([period]);
+    expect(next?.dates).toEqual(previous.dates);
+    expect(next?.rules[0]?.freq).toBe("weekly");
+    // Without an earlier recurrence there is nothing to keep.
+    const fresh = recurrenceOf(
+      { type: "simple", rule: defaultRule("weekly", new CalendarDate(2026, 10, 1)) },
+      START,
+      null,
+    );
+    expect(fresh).toMatchObject({ dates: [], exceptions: [] });
+    expect(fresh?.periods ?? []).toEqual([]);
+  });
+
   it("writes UNTIL in the kind of the start", () => {
     const day = new CalendarDate(2026, 12, 31);
     expect(untilFor(day, { type: "date", date: "2026-10-01" })).toEqual({

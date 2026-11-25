@@ -1,0 +1,748 @@
+{
+  "cases": [
+    {
+      "args": [
+        [],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 30
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 30
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 0
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 0
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 4294967295
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 4294967295
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 4294967296
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 4294967296
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": -1
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": -1
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 1.5
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 1.5
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00.5Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00.5Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00.1234567891Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00.1234567891Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00.Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00.Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-10-02T10:00:00+02:00"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-10-02T10:00:00+02:00"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "Oct 2 2026"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "Oct 2 2026"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-02-30T08:00:00Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-02-30T08:00:00Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2028-02-29T08:00:00Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2028-02-29T08:00:00Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T24:00:00Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T24:00:00Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T23:59:60Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T23:59:60Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "0000-12-01T08:00:00Z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "0000-12-01T08:00:00Z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01t08:00:00z"
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01t08:00:00z"
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00Z",
+            "minutesBefore": 30
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": "2026-12-01T08:00:00Z",
+            "minutesBefore": 30
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {}
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {}
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutes": 5
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutes": 5
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        "soon",
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        "soon",
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": 5
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "at": 5
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": true
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          }
+        ],
+        true
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    },
+    {
+      "args": [
+        [
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          },
+          {
+            "minutesBefore": 5
+          }
+        ],
+        false
+      ],
+      "fn": "taskRemindersAccepted",
+      "out": false
+    }
+  ]
+}

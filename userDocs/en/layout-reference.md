@@ -331,6 +331,7 @@ Actions in the default layout:
 | `search.focus`, `search.clear` | Jump to the search bar; end the search |
 | `account.add`, `settings.open` | Add an account; open the settings |
 | `window.open`, `window.close` | Open a window by name (argument); close the topmost window |
+| `popout.open`, `popout.return` | Open the window in front (a composer) in its own window; bring a popped-out window back into the main window (default keys `ctrl+shift+o` and `ctrl+shift+m` in windows; see [Windows](windows.md)) |
 | `view.toggle` | Show or hide a pane; argument: its `id`, e.g. `"sidebar"` |
 | `sync.now` | Check for new mail: every account, or the account whose folder pane menu it was chosen from (default keys `f5` and `ctrl+r`; F5, Ctrl+R and the other reload keys never reload Nail by themselves) |
 | `system.reload` | Reload the window, for a window that shows nothing or seems stuck (default key `ctrl+shift+r`). The desktop app also reloads a window whose content stopped working by itself |
@@ -361,7 +362,7 @@ keys {
 keys context="list" {
     bind "j" "mail.next"
     bind "g i" "nav.goto-folder \"Inbox\""
-    bind "ctrl+shift+m" "view.toggle" "sidebar"
+    bind "ctrl+shift+b" "view.toggle" "sidebar"
     unbind "k"
 }
 ```

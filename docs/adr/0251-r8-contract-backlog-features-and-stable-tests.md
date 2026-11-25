@@ -73,6 +73,12 @@ stability) and an integration.
    the integrator.
 10. **Release.** The R8 items go into "Nail 0.8.12" of `userDocs/en/release-notes.md` and `CHANGELOG.md`
     `[Unreleased]` (slots prepared here); the packages add their user-visible items, the integrator merges them.
+11. **Left out at the review.** Rows the packages claimed and could not finish without new mock hooks or a
+    design choice stay in `docs/backlog.md` and leave R8's gates: the contact groups' "New group" guard, the
+    rail's unread badge and "View" affordance, the auto-schedule e2e, the Exchange move race hook, and the flaky
+    rows not reproduced or bound to machine load (connection-log step, Exchange categories test, WebKit specs and
+    the full e2e under load, the notification-texts hang, WebKit "Check for new mail"). The suites are judged at
+    the default workers without other load; the date-dependent specs run at a fixed time or zone.
 
 ### Packages
 

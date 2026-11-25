@@ -31,6 +31,7 @@ snooze-action-list = Snoozed messages
 junk-verdict-label = Junk mail
 junk-verdict-junk = This message is junk.
 junk-verdict-score = This message looks like junk ({ $score } %).
+junk-verdict-unsure = This message might be junk ({ $score } %). It stays where it is.
 
 ## Settings → Junk mail
 

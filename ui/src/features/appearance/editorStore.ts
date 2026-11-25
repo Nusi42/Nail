@@ -48,9 +48,8 @@ const stores = new UiStoreMap<StoreApi<ThemeEditorState>>();
 
 /** The editor state of a UI store. */
 export function themeEditorStoreFor(ui: UiStore): StoreApi<ThemeEditorState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createStore<ThemeEditorState>((set) => ({
+  return stores.obtain(ui, () =>
+    createStore<ThemeEditorState>((set) => ({
       themeId: null,
       part: null,
       jump: 0,
@@ -65,10 +64,8 @@ export function themeEditorStoreFor(ui: UiStore): StoreApi<ThemeEditorState> {
       setSubject: (subject) => {
         set({ subject });
       },
-    }));
-    stores.set(ui, store);
-  }
-  return store;
+    })),
+  );
 }
 
 /** Reads the editor state of the current UI store. */

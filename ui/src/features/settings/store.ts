@@ -69,12 +69,7 @@ export function createSettingsStore(): StoreApi<SettingsUiState> {
 
 /** The settings page store of a UI store. */
 export function settingsStoreFor(ui: UiStore): StoreApi<SettingsUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createSettingsStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createSettingsStore());
 }
 
 export function useSettingsState<T>(selector: (state: SettingsUiState) => T): T {

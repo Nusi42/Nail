@@ -35,7 +35,7 @@ import {
   sameKindAs,
   splitPimTime,
   todayIn,
-  toZoned,
+  wallClockAt,
 } from "../pim/time";
 import { ATTENDEE_ROLES } from "../pim/constants";
 import { emptyEventFields } from "../pim/defaults";
@@ -354,11 +354,11 @@ export function firstStart(
   const next = fromAbsolute(now, tz)
     .add({ hours: 1 })
     .set({ minute: 0, second: 0, millisecond: 0 });
-  const opens = toZoned(today, tz).add({ hours: hourStart });
-  const closes = toZoned(today, tz).add({ hours: hourEnd });
+  const opens = wallClockAt(today, hourStart * 60, tz);
+  const closes = wallClockAt(today, hourEnd * 60, tz);
   const candidate = next.compare(opens) < 0 ? opens : next;
   if (candidate.add({ minutes }).compare(closes) <= 0) return sameKindAs(like, candidate);
-  return sameKindAs(like, toZoned(today.add({ days: 1 }), tz).add({ hours: hourStart }));
+  return sameKindAs(like, wallClockAt(today.add({ days: 1 }), hourStart * 60, tz));
 }
 
 /** Lengths "find a time" offers, minutes. */

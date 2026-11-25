@@ -1154,6 +1154,67 @@ mod tests {
         }
     }
 
+    /// The task-reminder rule as plug-ins meet it (their camel-case input,
+    /// then `task_reminder_alarms`), written as test vectors the SDK's test
+    /// host must answer alike (`packages/plugin-api`, R8 review). Regenerate
+    /// with `NAIL_UPDATE_SNAPSHOTS=1`.
+    #[test]
+    fn task_reminder_vectors() {
+        use nail_api::mcp::tools::task_reminder_alarms;
+        use nail_api::ts_vectors::Vectors;
+        let accepted = |reminders: &Value, due: bool| -> bool {
+            let Ok(PluginWrite::UpsertTask(args)) = p(
+                "tasks.update",
+                &json!({"taskId": "t1", "options": {"reminders": reminders}}),
+            ) else {
+                return false;
+            };
+            task_reminder_alarms(&args.reminders.unwrap_or_default(), due).is_ok()
+        };
+        let at = |text: &str| json!([{ "at": text }]);
+        let many = |n: usize| Value::Array(vec![json!({"minutesBefore": 5}); n]);
+        let cases = [
+            json!([]),
+            json!([{"minutesBefore": 30}]),
+            json!([{"minutesBefore": 0}]),
+            json!([{"minutesBefore": 4_294_967_295_u64}]),
+            json!([{"minutesBefore": 4_294_967_296_u64}]),
+            json!([{"minutesBefore": -1}]),
+            json!([{"minutesBefore": 1.5}]),
+            at("2026-12-01T08:00:00Z"),
+            at("2026-12-01T08:00:00.5Z"),
+            at("2026-12-01T08:00:00.1234567891Z"),
+            at("2026-12-01T08:00:00.Z"),
+            at("2026-12-01T08:00:00"),
+            at("2026-10-02T10:00:00+02:00"),
+            at("Oct 2 2026"),
+            at("2026-02-30T08:00:00Z"),
+            at("2028-02-29T08:00:00Z"),
+            at("2026-12-01T24:00:00Z"),
+            at("2026-12-01T23:59:60Z"),
+            at("0000-12-01T08:00:00Z"),
+            at("2026-12-01t08:00:00z"),
+            json!([{"minutesBefore": 30, "at": "2026-12-01T08:00:00Z"}]),
+            json!([{}]),
+            json!([{"minutes": 5}]),
+            json!("soon"),
+            json!([{"at": 5}]),
+            many(nail_api::mcp::tools::MAX_TASK_REMINDERS),
+            many(nail_api::mcp::tools::MAX_TASK_REMINDERS + 1),
+        ];
+        let mut v = Vectors::default();
+        for reminders in &cases {
+            for due in [true, false] {
+                v.case(
+                    "taskRemindersAccepted",
+                    json!([reminders, due]),
+                    accepted(reminders, due),
+                );
+            }
+        }
+        v.check("task-reminders");
+    }
+
     #[test]
     fn contacts_and_tasks() {
         let c = p(

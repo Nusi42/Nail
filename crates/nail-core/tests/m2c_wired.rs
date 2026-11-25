@@ -376,6 +376,12 @@ async fn the_server_script_is_tracked_across_failures_renames_and_deletion() {
         f.demo.sieve.active().as_deref() == Some("nail")
     })
     .await;
+    // The core has recorded the upload (what deleting the account removes):
+    // the server shows the script a moment before the upload is recorded.
+    eventually("the upload recorded", || async {
+        sieve_status(&f.service).await.state == SieveState::InSync
+    })
+    .await;
     assert!(matches!(
         f.service
             .handle(Request::RemoveAccount {

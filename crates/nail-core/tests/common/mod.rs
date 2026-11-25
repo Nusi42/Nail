@@ -77,7 +77,9 @@ where
 /// fails only when `progress` (e.g. the requests a mock server answered)
 /// stood still for [`TIMEOUT`]. A long listing of hundreds of messages
 /// takes longer than [`TIMEOUT`] on a machine busy with other suites
-/// without being stuck (R8); a stall still fails after [`TIMEOUT`].
+/// without being stuck (R8); a stall still fails after [`TIMEOUT`], and
+/// work that never ends (an engine that requests the same page again and
+/// again) fails after [`PROGRESS_LIMIT`] times [`TIMEOUT`] in all.
 pub(crate) async fn eventually_progressing<F, Fut>(
     what: &str,
     progress: impl Fn() -> usize,
@@ -88,6 +90,7 @@ pub(crate) async fn eventually_progressing<F, Fut>(
 {
     let mut seen = progress();
     let mut deadline = tokio::time::Instant::now() + TIMEOUT;
+    let overall = tokio::time::Instant::now() + TIMEOUT * PROGRESS_LIMIT;
     loop {
         if check().await {
             return;
@@ -101,9 +104,17 @@ pub(crate) async fn eventually_progressing<F, Fut>(
             tokio::time::Instant::now() < deadline,
             "stalled while waiting for: {what} (progress {seen})"
         );
+        assert!(
+            tokio::time::Instant::now() < overall,
+            "still not done after {PROGRESS_LIMIT} × the time-out although progressing: {what}              (progress {seen})"
+        );
         tokio::time::sleep(POLL).await;
     }
 }
+
+/// How many times [`TIMEOUT`] [`eventually_progressing`] waits at most in
+/// all, however much progress it sees.
+pub(crate) const PROGRESS_LIMIT: u32 = 6;
 
 /// Waits until `check` yields a value.
 pub(crate) async fn until_some<T, F, Fut>(what: &str, mut check: F) -> T

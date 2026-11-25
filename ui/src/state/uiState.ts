@@ -9,6 +9,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { JsonValue } from "../api/generated";
 import { useClient } from "./queries";
+import { obtain } from "./uiStore";
 export {
   UI_STATE_COLLAPSED_SECTIONS,
   UI_STATE_SETTINGS_SECTION,
@@ -58,11 +59,7 @@ export function applyUiStateChange(
 const pendingWrites = new WeakMap<QueryClient, Map<string, number>>();
 
 function countPending(queryClient: QueryClient, key: string, by: 1 | -1): void {
-  let pending = pendingWrites.get(queryClient);
-  if (pending === undefined) {
-    pending = new Map();
-    pendingWrites.set(queryClient, pending);
-  }
+  const pending = obtain(pendingWrites, queryClient, () => new Map<string, number>());
   const count = (pending.get(key) ?? 0) + by;
   if (count > 0) pending.set(key, count);
   else pending.delete(key);
@@ -89,11 +86,7 @@ const latestWrites = new WeakMap<QueryClient, Map<string, number>>();
 
 /** Numbers a write of `key`; the number is the newest until the next write of that key. */
 function numberWrite(queryClient: QueryClient, key: string): number {
-  let writes = latestWrites.get(queryClient);
-  if (writes === undefined) {
-    writes = new Map();
-    latestWrites.set(queryClient, writes);
-  }
+  const writes = obtain(latestWrites, queryClient, () => new Map<string, number>());
   const write = (writes.get(key) ?? 0) + 1;
   writes.set(key, write);
   return write;

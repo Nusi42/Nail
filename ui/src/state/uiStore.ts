@@ -244,6 +244,19 @@ export function sendPercent(progress: SendProgressState): number {
 
 export type UiStore = StoreApi<UiState>;
 
+/** A map's entry for `key`, made by `create` and kept the first time it is asked for. */
+export function obtain<K, V>(
+  map: { get(key: K): V | undefined; set(key: K, value: V): unknown },
+  key: K,
+  create: () => V,
+): V {
+  const existing = map.get(key);
+  if (existing !== undefined) return existing;
+  const value = create();
+  map.set(key, value);
+  return value;
+}
+
 /** Views of a store (a reader card's, `scopedUiStore`) and the store they show. */
 const roots = new WeakMap<UiStore, UiStore>();
 
@@ -284,6 +297,11 @@ export class UiStoreMap<T> {
 
   delete(store: UiStore): boolean {
     return this.entries.delete(rootUiStore(store));
+  }
+
+  /** The store's entry, made by `create` and kept the first time it is asked for. */
+  obtain(store: UiStore, create: () => T): T {
+    return obtain(this.entries, rootUiStore(store), create);
   }
 }
 

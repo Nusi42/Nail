@@ -37,22 +37,21 @@ const stores = new UiStoreMap<MenuStore>();
 
 /** The menu store of a UI store (created on first use). */
 export function menuStoreFor(ui: UiStore): MenuStore {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<MenuState>()((set, get) => ({
-    open: null,
-    show: (open) => {
-      set({ open });
-    },
-    close: (restoreFocus) => {
-      const open = get().open;
-      if (!open) return;
-      set({ open: null });
-      if (restoreFocus && open.returnFocus?.isConnected) open.returnFocus.focus();
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<MenuState>()((set, get) => ({
+      open: null,
+      show: (open) => {
+        set({ open });
+      },
+      close: (restoreFocus) => {
+        const open = get().open;
+        if (!open) return;
+        set({ open: null });
+        if (restoreFocus && open.returnFocus?.isConnected) open.returnFocus.focus();
+      },
+    }));
+    return store;
+  });
 }
 
 export function useMenuStoreApi(): MenuStore {

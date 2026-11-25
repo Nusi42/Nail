@@ -22,30 +22,29 @@ export interface SyncState {
 const stores = new UiStoreMap<StoreApi<SyncState>>();
 
 export function syncStoreFor(ui: UiStore): StoreApi<SyncState> {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<SyncState>()((set) => ({
-    folderId: null,
-    fetching: [],
-    failed: [],
-    setFolder: (folderId) => {
-      set({ folderId });
-    },
-    started: (ids) => {
-      set((s) => ({
-        fetching: [...new Set([...s.fetching, ...ids])],
-        failed: s.failed.filter((id) => !ids.includes(id)),
-      }));
-    },
-    finished: (fetched, failed) => {
-      set((s) => ({
-        fetching: s.fetching.filter((id) => !fetched.includes(id) && !failed.includes(id)),
-        failed: [...new Set([...s.failed.filter((id) => !fetched.includes(id)), ...failed])],
-      }));
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<SyncState>()((set) => ({
+      folderId: null,
+      fetching: [],
+      failed: [],
+      setFolder: (folderId) => {
+        set({ folderId });
+      },
+      started: (ids) => {
+        set((s) => ({
+          fetching: [...new Set([...s.fetching, ...ids])],
+          failed: s.failed.filter((id) => !ids.includes(id)),
+        }));
+      },
+      finished: (fetched, failed) => {
+        set((s) => ({
+          fetching: s.fetching.filter((id) => !fetched.includes(id) && !failed.includes(id)),
+          failed: [...new Set([...s.failed.filter((id) => !fetched.includes(id)), ...failed])],
+        }));
+      },
+    }));
+    return store;
+  });
 }
 
 export function useSync<T>(selector: (state: SyncState) => T): T {

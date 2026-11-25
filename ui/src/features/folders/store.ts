@@ -19,17 +19,14 @@ export interface FoldersUiState {
 const stores = new UiStoreMap<StoreApi<FoldersUiState>>();
 
 export function foldersStoreFor(ui: UiStore): StoreApi<FoldersUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createStore<FoldersUiState>()((set) => ({
+  return stores.obtain(ui, () =>
+    createStore<FoldersUiState>()((set) => ({
       task: null,
       setTask: (task) => {
         set({ task });
       },
-    }));
-    stores.set(ui, store);
-  }
-  return store;
+    })),
+  );
 }
 
 export function useFolderTask(): FolderTask | null {

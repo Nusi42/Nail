@@ -58,7 +58,9 @@ pub struct FreeTimeArgs {
     /// Calendars that count; empty = every visible one.
     #[serde(default)]
     pub calendar_ids: Vec<String>,
-    /// IANA zone of `day_start` / `day_end` and of all-day events (default UTC).
+    /// IANA zone of `day_start` / `day_end` and of all-day events (default:
+    /// with `working_hours` the calendar preferences' view zone, else the
+    /// computer's; without it UTC).
     #[serde(default)]
     pub tz: Option<String>,
     /// Earliest time of day for slots, `HH:MM` (e.g. `09:00`).
@@ -483,20 +485,27 @@ impl<D: McpData> Shared<D> {
             .chosen_calendars(access, &args.calendar_ids, false)
             .await?;
         let (from, to) = event_range(Some(&args.from), Some(&args.to))?;
-        let tz = args.tz.unwrap_or_else(|| "UTC".to_owned());
         let (day_start, day_end) = (
             minute_of_day(args.day_start.as_deref())?,
             minute_of_day(args.day_end.as_deref())?,
         );
-        let working = if args.working_hours {
+        // The working hours are the user's wall-clock hours: in the zone the
+        // calendar shows unless the agent names one (R8 review).
+        let (working, tz) = if args.working_hours {
             match self.pim(Request::GetCalendarPreferences).await? {
                 Response::CalendarPreferences { preferences } => {
-                    Some((preferences.work_hours, preferences.work_days))
+                    let zone = args.tz.unwrap_or_else(|| {
+                        preferences
+                            .time_zone
+                            .clone()
+                            .unwrap_or_else(|| self.data.local_zone())
+                    });
+                    (Some((preferences.work_hours, preferences.work_days)), zone)
                 }
                 other => return Err(unexpected(&other)),
             }
         } else {
-            None
+            (None, args.tz.unwrap_or_else(|| "UTC".to_owned()))
         };
         // The core cuts the stretches to the hours (ADR 0251).
         let slots = match self

@@ -54,12 +54,7 @@ export async function prepareComposerPopOut(
  */
 const popped = new UiStoreMap<Map<string, string>>();
 function draftsOf(store: UiStore): Map<string, string> {
-  let map = popped.get(store);
-  if (map === undefined) {
-    map = new Map();
-    popped.set(store, map);
-  }
-  return map;
+  return popped.obtain(store, () => new Map());
 }
 
 /** Registers the composer's pop-out preparer while the app runs. */

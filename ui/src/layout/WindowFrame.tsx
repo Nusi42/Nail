@@ -284,16 +284,31 @@ export function WindowFrame({
   );
 
   // Focus the first field when the window opens on top (of several opening
-  // together only the topmost); give focus back on close.
+  // together only the topmost); give focus back on close. A body whose
+  // content comes later (a window whose code loads on first use, such as
+  // the command palette) holds the focus on the frame until its first field
+  // appears, which then takes it — unless the user moved the focus meanwhile.
   const openedOnTop = useRef(active);
   useEffect(() => {
     if (!openedOnTop.current) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const el = ref.current;
-    const body = el?.querySelector('[data-part="window.body"]');
-    const first = body?.querySelector<HTMLElement>(FOCUSABLE) ?? el;
-    first?.focus();
+    const firstField = () =>
+      el?.querySelector('[data-part="window.body"]')?.querySelector<HTMLElement>(FOCUSABLE) ?? null;
+    const first = firstField();
+    (first ?? el)?.focus();
+    const observer =
+      first === null && el
+        ? new MutationObserver(() => {
+            const field = firstField();
+            if (!field) return;
+            observer?.disconnect();
+            if (document.activeElement === el) field.focus();
+          })
+        : null;
+    if (observer && el) observer.observe(el, { childList: true, subtree: true });
     return () => {
+      observer?.disconnect();
       if (previous?.isConnected) previous.focus();
     };
   }, []);

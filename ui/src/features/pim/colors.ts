@@ -17,7 +17,7 @@
  */
 import { CALENDAR_PALETTE } from "../../api/generated";
 import type { Calendar, CalendarColor, CalendarId, PaletteColor } from "../../api/generated";
-import { parseHex } from "../../theme/contrast";
+import { linearRgb, parseHex } from "../../theme/contrast";
 
 /** Per cent of the calendar colour in an event card's background. */
 export const EVENT_TINT = 20;
@@ -86,10 +86,7 @@ export function oklabOf(value: string | null | undefined): Oklab | null {
   const v = (value ?? "").trim();
   const rgb = parseHex(v.length === 9 ? v.slice(0, 7) : v);
   if (!rgb) return null;
-  const [r, g, b] = rgb.map((c) => {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
+  const [r, g, b] = linearRgb(rgb);
   const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
   const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
   const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);

@@ -386,6 +386,10 @@ pub const MULTI_CALDAV_ID: &str = "work-calendars";
 pub const MULTI_CARDDAV_ID: &str = "work-contacts";
 /// The ICS subscription of `--seed demo-multi` (the mock HTTP server).
 pub const MULTI_HOLIDAYS_ID: &str = "holidays";
+/// The colour of the demo-multi holiday subscription: apart from the
+/// palette and the mock CalDAV server's `personal` calendar (R8, ADR 0252;
+/// the UI's colour tests read it from the `calendar-colors` test vectors).
+pub const MULTI_HOLIDAYS_COLOR: &str = "#a16207";
 /// User name of the mock CalDAV / CardDAV server.
 pub const MULTI_DAV_USER: &str = "ada";
 /// The second principal of the mock CalDAV server (M3b): another person
@@ -968,7 +972,7 @@ impl DemoMulti {
         let ews = self.ews.url();
         let (oauth_auth, oauth_token) = (self.oauth.authorize_url(), self.oauth.token_url());
         format!(
-            r##"{MULTI_CONFIG_MARKER}
+            r#"{MULTI_CONFIG_MARKER}
 undo-send-delay 5
 
 account "{MULTI_WORK_ID}" email="{MULTI_WORK_EMAIL}" name="Work" {{
@@ -1001,7 +1005,7 @@ carddav "{MULTI_CARDDAV_ID}" name="Work contacts" url="http://127.0.0.1:{dav}/" 
     auth "password" username="{MULTI_DAV_USER}"
 }}
 
-calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.1:{http}/holidays.ics" color="#a16207"
+calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.1:{http}/holidays.ics" color="{MULTI_HOLIDAYS_COLOR}"
 
 oauth-provider "{MULTI_GMAIL_PROVIDER}" client-id="nail-test-client" auth-url="{oauth_auth}" token-url="{oauth_token}" {{
     scopes "https://mail.google.com/"
@@ -1037,7 +1041,7 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
     }}
     identity "{MULTI_EWS_EMAIL}" name="Ada Lovelace"
 }}
-"##
+"#
         )
     }
 
@@ -1698,6 +1702,20 @@ pub async fn take_program_draft(
 mod tests {
     use super::*;
     use nail_api::FolderRole;
+
+    /// The colours the demo seeds give calendars, for the UI's colour tests
+    /// (`ui/src/features/pim/colors.test.ts`): written as test vectors so a
+    /// change here reaches them. Regenerate with `NAIL_UPDATE_SNAPSHOTS=1`.
+    #[test]
+    fn calendar_color_vectors() {
+        let mut v = nail_api::ts_vectors::Vectors::default();
+        v.case(
+            "seedCalendarColors",
+            serde_json::json!([]),
+            [nail_testkit_net::SEED_PERSONAL_COLOR, MULTI_HOLIDAYS_COLOR],
+        );
+        v.check("calendar-colors");
+    }
 
     /// An empty in-memory store with blobs in a temporary directory.
     fn empty_store() -> (tempfile::TempDir, Store, BlobStore) {

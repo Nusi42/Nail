@@ -1,6 +1,8 @@
 /**
  * Junk mail: the reader's verdict bar (widget `junk-verdict`: who decided,
- * the classifier's score, "Not junk") and the classifier settings with its
+ * the classifier's score, "Not junk"; an unsure verdict — a score between
+ * the "not junk" limit and the threshold — says so with its score and
+ * offers "Mark as junk" too, R8) and the classifier settings with its
  * training status per account (widget `junk-settings`). Nail never deletes
  * junk; the classifier is optional and off by default.
  */
@@ -37,21 +39,35 @@ export function JunkVerdictBar({ node }: WidgetProps) {
   const selectedId = useUi((s) => s.selectedMessageId);
   const message = useMessage(selectedId).data;
   const verdict = message?.junk;
-  if (!message || !verdict?.junk) return null;
+  const unsure = verdict?.junk === false && verdict.unsure === true;
+  if (!message || !verdict || (!verdict.junk && !unsure)) return null;
   return (
     <div
       data-part="junk-verdict"
       data-source={verdict.source}
+      data-state={unsure ? "unsure" : undefined}
       data-node-id={node.id ?? undefined}
       role="status"
       aria-label={node.label ? label(node.label) : t("junk-verdict-label")}
     >
       <span data-part="junk-verdict.text">
-        {verdict.score === null
-          ? t("junk-verdict-junk")
-          : t("junk-verdict-score", { score: verdict.score })}
+        {unsure
+          ? t("junk-verdict-unsure", { score: verdict.score ?? 0 })
+          : verdict.score === null
+            ? t("junk-verdict-junk")
+            : t("junk-verdict-score", { score: verdict.score })}
       </span>
       <span data-part="junk-verdict.source">{t(`junk-source-${verdict.source}`)}</span>
+      {unsure && (
+        <button
+          type="button"
+          data-part="form.button"
+          data-action="junk.mark"
+          onClick={() => void dispatch("junk.mark", [message.id])}
+        >
+          {t("junk-action-mark")}
+        </button>
+      )}
       <button
         type="button"
         data-part="form.button"

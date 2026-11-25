@@ -90,12 +90,12 @@ interface GuardState {
 const states = new UiStoreMap<GuardState>();
 
 function stateOf(ui: UiStore): GuardState {
-  let state = states.get(ui);
-  if (!state) {
-    state = { guards: new Map(), questions: new Map(), forcing: new Set(), installed: false };
-    states.set(ui, state);
-  }
-  return state;
+  return states.obtain(ui, () => ({
+    guards: new Map(),
+    questions: new Map(),
+    forcing: new Set(),
+    installed: false,
+  }));
 }
 
 /**

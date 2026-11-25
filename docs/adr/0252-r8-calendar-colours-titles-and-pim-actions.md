@@ -51,7 +51,8 @@ invitation answers", "Quick create elsewhere" (the palette command) and "Free ti
    While a finger draws, a non-passive `touchmove` listener keeps the grid from scrolling; the slots use
    `touch-action: manipulation`. Mouse and pen draw at once as before.
 6. **Right-click menus.** `PimMenu` and the new `usePimContextMenu` share one popup (`PimMenuPopup`) with one
-   keyboard model. The menu opens at the pointer (a portal on the page, so containers with container queries
+   keyboard model (since the R8 review the app's one menu, `ContextMenu` with local items, in a portal on the
+   app's themed root). The menu opens at the pointer (a portal, so containers with container queries
    cannot misplace it) or, from the menu key or the layout's `menu.context` keys (Shift+F10), under the item, and
    gives the focus back to it. Events (time grids, month, agenda: `useEventMenu`): Open, Edit, Delete; contacts:
    Open, Edit, Delete…; tasks: Edit, Mark as done / not done, Delete. Read-only items have no Delete. The app's

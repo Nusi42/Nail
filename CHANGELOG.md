@@ -122,6 +122,30 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
   Exchange mailbox, category, automatic-replies and classify dialogs and
   the Outbox's discard question.
 
+### Fixed — review
+
+- Right-click menus of events, contacts and tasks are the app's one menu
+  popup, rendered inside the themed app root (they showed in the browser's
+  default serif); the rail's account menu marks the shown account as a
+  checked choice (`menuitemradio`) and the avatar names that account.
+- A window whose content loads later (the command palette on first use)
+  hands the focus to its first field once it appears.
+- `popout.return` (Ctrl+Shift+M) asks and saves like the pop-out page's
+  "Return to main window" (`returnFromPopOut`); it lost the latest typing.
+- The invitation answer's notice focuses its Undo; the reader shows unsure
+  junk verdicts with their score.
+- Scheduling suggestions use the minute-exact working hours and days on the
+  wall clock (`workWindow`, like the core's `within_hours`); `find_free_time`
+  with `working_hours` reads them in the preferences' zone.
+- Saving a simple repeat rule keeps the series' `RDATE` periods.
+- The plug-in SDK's test host checks task reminders like the host
+  (`task-reminders` test vectors); the UI's seed colour tests read the
+  `calendar-colors` vectors; one sRGB linearisation (`linearRgb`), one
+  unsaved-changes prompt, `UiStoreMap.obtain`.
+- End-to-end: the pop-out keys, the "not junk" limit, the menu font, typing
+  after the first Ctrl+K; no fixed sleeps in the R8 specs; the three
+  date-dependent specs run at a fixed time or zone.
+
 ## [0.8.11] — 2026-11-24
 
 ### Added — a calendar that reads well, contract (ADR 0246)

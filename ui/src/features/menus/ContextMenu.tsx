@@ -11,6 +11,13 @@
  * when the list appears; a source without entries shows its item disabled
  * (or, with `runsWhenEmpty`, as a plain item running its action).
  *
+ * Local items (R8 review): an entry of `type: "item"` runs a command of
+ * the code that opened the menu (`onSelect`) instead of a layout action —
+ * the PIM menus, the rail's account menu. It can be a choice
+ * (`menuitemradio` with `aria-checked`), dangerous (`data-tone`), and show
+ * something of its own in place of the icon (a colour swatch). Every menu
+ * of the app, layout or local, is this one popup with one keyboard model.
+ *
  * The menu is positioned through the theme's stylesheet (`useGeometry`),
  * never with inline styles.
  */
@@ -22,6 +29,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -33,14 +41,35 @@ import { Icon } from "../../widgets/Icon";
 import { ariaShortcut, keyLabel } from "./keyLabels";
 import { menuLabelText, type MenuSourceLoader } from "./sources";
 
+/** A menu entry that runs a command of the code that opened the menu. Texts come in localized. */
+export interface LocalMenuItem {
+  type: "item";
+  /** Stable id (`data-item`). */
+  id: string;
+  label: string;
+  icon?: string | null;
+  /** Shown in place of the icon (a colour swatch). */
+  start?: ReactNode;
+  /** A choice (`menuitemradio`): whether it is the current one. */
+  checked?: boolean;
+  danger?: boolean;
+  onSelect: () => void;
+}
+
+/** An entry of a menu: one of the layout's, or a local item. */
+export type MenuEntry = ResolvedMenuEntry | LocalMenuItem;
+
+/** Which item has the focus when a menu opens: none (opened with the pointer), the first or the last. */
+export type MenuFocus = boolean | "last";
+
 export interface ContextMenuProps {
-  items: readonly ResolvedMenuEntry[];
+  items: readonly MenuEntry[];
   /** Accessible name (the target's kind). */
   label: string;
   x: number;
   y: number;
-  /** Focus the first item at once (opened with the keyboard). */
-  focusOnOpen: boolean;
+  /** Focus the first item (`true`) or the last at once (opened with the keyboard). */
+  focusOnOpen: MenuFocus;
   /** Runs an action, then the host closes the menu. */
   onRun: (action: string, args: readonly JsonValue[]) => void;
   /** Closes the menu; `restoreFocus` for keyboard closing. */
@@ -76,9 +105,10 @@ export function menuPosition(
   };
 }
 
-type Navigable = Exclude<ResolvedMenuEntry, { type: "separator" } | { type: "header" }>;
+type Navigable = Exclude<MenuEntry, { type: "separator" } | { type: "header" }>;
 
 function entryLabel(entry: Navigable, label: (l: string) => string): string {
+  if (entry.type === "item") return entry.label;
   if (entry.type === "submenu") return menuLabelText(entry.label, label);
   return menuLabelText(entry.label ?? entry.action, label);
 }
@@ -91,7 +121,7 @@ type Loaded = readonly ResolvedMenuEntry[] | "loading";
  * loaded when the list appears. Items without a source are not in the map.
  */
 function useSourceEntries(
-  items: readonly ResolvedMenuEntry[],
+  items: readonly MenuEntry[],
   sources: MenuSourceLoader | undefined,
 ): ReadonlyMap<number, Loaded> {
   const [loaded, setLoaded] = useState<ReadonlyMap<number, Loaded>>(() => {
@@ -178,10 +208,10 @@ type SubmenuOf =
   { kind: "static"; items: readonly ResolvedMenuEntry[] } | { kind: "source"; loaded: Loaded };
 
 interface ListProps {
-  items: readonly ResolvedMenuEntry[];
+  items: readonly MenuEntry[];
   label: string;
   level: number;
-  focusOnOpen: boolean;
+  focusOnOpen: MenuFocus;
   onRun: (action: string, args: readonly JsonValue[]) => void;
   onClose: (restoreFocus: boolean) => void;
   /** Closes this submenu and focuses its parent item (level > 0). */
@@ -210,6 +240,7 @@ function MenuList({
 
   /** The submenu an item opens, or `null` for a plain item. */
   const submenuOf = (entry: Navigable, index: number): SubmenuOf | null => {
+    if (entry.type === "item") return null;
     if (entry.type === "submenu") return { kind: "static", items: entry.items };
     const loaded = sourced.get(index);
     if (loaded === undefined) return null;
@@ -238,8 +269,8 @@ function MenuList({
 
   // Only when the list appears (with the items and settings of then).
   const focusFirst = useEffectEvent(() => {
-    if (!focusOnOpen) return;
-    const first = navigable[0];
+    if (focusOnOpen === false) return;
+    const first = focusOnOpen === "last" ? navigable[navigable.length - 1] : navigable[0];
     if (first) refs.current[first.index]?.focus();
   });
   useEffect(() => {
@@ -256,6 +287,11 @@ function MenuList({
   const positionOf = (index: number) => navigable.findIndex((n) => n.index === index);
 
   const activate = (entry: Navigable, index: number, byKeyboard: boolean) => {
+    if (entry.type === "item") {
+      onClose(true);
+      entry.onSelect();
+      return;
+    }
     if (submenuOf(entry, index) !== null) {
       if (emptySource(index)) return;
       setOpenSub(index);
@@ -323,6 +359,26 @@ function MenuList({
       event.stopPropagation();
     }
   };
+
+  /** What every item without a submenu shares: its focus slot, keys, pointer and activation. */
+  const plainItem = (entry: Navigable, index: number) => ({
+    ref: (el: HTMLButtonElement | null) => {
+      refs.current[index] = el;
+    },
+    type: "button" as const,
+    "data-part": "context-menu.item",
+    tabIndex: -1,
+    onClick: () => {
+      activate(entry, index, false);
+    },
+    onPointerEnter: (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.currentTarget.focus();
+      setOpenSub(null);
+    },
+    onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+      onKeyDown(event, entry, index);
+    },
+  });
 
   return (
     <div
@@ -414,32 +470,35 @@ function MenuList({
         }
         // (A layout submenu always has a `submenu` above.)
         if (entry.type === "submenu") return null;
+        if (entry.type === "item") {
+          const radio = entry.checked !== undefined;
+          return (
+            <button
+              key={index}
+              {...plainItem(entry, index)}
+              data-item={entry.id}
+              data-tone={entry.danger === true ? "danger" : undefined}
+              data-state={entry.checked === true ? "checked" : undefined}
+              role={radio ? "menuitemradio" : "menuitem"}
+              aria-checked={radio ? entry.checked : undefined}
+            >
+              {entry.start ?? <Icon name={entry.icon ?? null} part="context-menu.item.icon" />}
+              <span data-part="context-menu.item.label">{text}</span>
+              {entry.checked === true && <Icon name="check" part="context-menu.item.check" />}
+            </button>
+          );
+        }
         const enabled = isEnabled(entry.action, entry.args);
         const shortcut = entry.shortcut;
         return (
           <button
             key={index}
-            ref={(el) => {
-              refs.current[index] = el;
-            }}
-            type="button"
-            data-part="context-menu.item"
+            {...plainItem(entry, index)}
             data-action={entry.action}
             data-state={enabled ? undefined : "disabled"}
             role="menuitem"
-            tabIndex={-1}
             aria-disabled={enabled ? undefined : true}
             aria-keyshortcuts={shortcut ? ariaShortcut(shortcut) : undefined}
-            onClick={() => {
-              activate(entry, index, false);
-            }}
-            onPointerEnter={(event) => {
-              event.currentTarget.focus();
-              setOpenSub(null);
-            }}
-            onKeyDown={(event) => {
-              onKeyDown(event, entry, index);
-            }}
           >
             <Icon name={entry.icon} part="context-menu.item.icon" />
             <span data-part="context-menu.item.label">{text}</span>

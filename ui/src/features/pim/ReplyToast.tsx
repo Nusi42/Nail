@@ -5,8 +5,12 @@
  * out of the outbox (`CancelSend`) and throws its automatic draft away
  * (`DeleteDraft`) — the answer stays in the calendar, only the mail to the
  * organizer is not sent. The toast goes once the mail left the outbox.
+ *
+ * Undo takes the focus when the toast appears (R8 review), so it is one key
+ * away from the keyboard within the undo delay; the focus goes back to
+ * where it was when the toast goes while Undo still holds it.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { errorMessageOf } from "../../api/client";
 import { useT } from "../../i18n/I18nProvider";
 import { queryKeys, useOutbox } from "../../state/queries";
@@ -27,6 +31,23 @@ export function ReplyToast({ toast }: { toast: Extract<PimToast, { kind: "reply"
   const ctx = useChangeContext();
   const dismissToast = usePim((s) => s.dismissToast);
   const outbox = useOutbox();
+  const undoRef = useRef<HTMLButtonElement>(null);
+  /** Where the focus was when the toast appeared. */
+  const back = useRef<HTMLElement | null>(null);
+  /** Gives the focus back when Undo held it (or nothing does any more). */
+  const giveBack = () => {
+    const active = document.activeElement;
+    const lost = active === null || active === undoRef.current || active === document.body;
+    if (lost && back.current?.isConnected === true) back.current.focus();
+  };
+  // Only when the toast appears waiting (with the focus of then).
+  const [waitingAtFirst] = useState(() => toast.state === "waiting");
+  useEffect(() => {
+    if (!waitingAtFirst) return;
+    back.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    undoRef.current?.focus();
+    return giveBack;
+  }, [waitingAtFirst]);
   const entry = outbox.data?.find((e) => e.id === toast.outboxId);
   // Sent (or gone): nothing to undo any more. A list from before the answer does not count.
   const [shownAt] = useState(() => Date.now());
@@ -59,6 +80,8 @@ export function ReplyToast({ toast }: { toast: Extract<PimToast, { kind: "reply"
       );
       await ctx.client.request({ type: "DeleteDraft", draft_id }, "Done");
       pim.pushToast({ ...toast, state: "undone" });
+      // Undo is gone with the waiting state.
+      queueMicrotask(giveBack);
     } catch (error) {
       pim.pushToast({ kind: "problem", id: toast.id, message: errorMessageOf(error) });
     } finally {
@@ -77,6 +100,7 @@ export function ReplyToast({ toast }: { toast: Extract<PimToast, { kind: "reply"
     >
       {waiting && (
         <button
+          ref={undoRef}
           type="button"
           data-part="form.button"
           data-variant="primary"

@@ -48,12 +48,7 @@ export function createPrintStore(): StoreApi<PrintUiState> {
 
 /** The print store of a UI store. */
 export function printStoreFor(ui: UiStore): StoreApi<PrintUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createPrintStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createPrintStore());
 }
 
 export function usePrintState<T>(selector: (state: PrintUiState) => T): T {

@@ -47,12 +47,7 @@ export function createAgentsStore(): StoreApi<AgentsUiState> {
 
 /** The agents store of a UI store. */
 export function agentsStoreFor(ui: UiStore): StoreApi<AgentsUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createAgentsStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createAgentsStore());
 }
 
 export function useAgentsState<T>(selector: (state: AgentsUiState) => T): T {

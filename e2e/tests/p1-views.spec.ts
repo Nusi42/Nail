@@ -96,8 +96,20 @@ async function expectWindowSizes(
   }
 }
 
+/**
+ * The calendar checks run at a fixed time: the demo's events are dated from
+ * its day and the page's clock shows it, so where the events lie (under the
+ * New event button, beside the now line) does not change with the day or
+ * hour the test runs.
+ */
+const CALENDAR_NOW = new Date("2026-09-30T10:00:00Z");
+
 test("the calendar's views and the rail at every size", async ({ page }) => {
-  await open(page, "demo-multi");
+  // The page's time starts there and runs on (layout waits need it to move).
+  await page.clock.install({ time: CALENDAR_NOW });
+  await page.clock.resume();
+  await server.start({ seed: "demo-multi", demoNow: CALENDAR_NOW });
+  await openApp(page, server.url);
   for (const view of CALENDAR_VIEWS) {
     await expectResponsive(page, `views-calendar-${view.toLowerCase().replace(" ", "-")}`, {
       // The all-day row's day cells are the "new all-day event" click

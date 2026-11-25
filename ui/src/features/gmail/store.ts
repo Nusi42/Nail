@@ -26,20 +26,19 @@ export interface GmailState {
 const stores = new UiStoreMap<StoreApi<GmailState>>();
 
 export function gmailStoreFor(ui: UiStore): StoreApi<GmailState> {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<GmailState>()((set) => ({
-    editor: null,
-    deleting: null,
-    editLabel: (editor) => {
-      set({ editor });
-    },
-    deleteLabel: (deleting) => {
-      set({ deleting });
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<GmailState>()((set) => ({
+      editor: null,
+      deleting: null,
+      editLabel: (editor) => {
+        set({ editor });
+      },
+      deleteLabel: (deleting) => {
+        set({ deleting });
+      },
+    }));
+    return store;
+  });
 }
 
 export function useGmail<T>(selector: (state: GmailState) => T): T {

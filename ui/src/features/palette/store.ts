@@ -34,12 +34,7 @@ export function createPaletteStore(): StoreApi<PaletteUiState> {
 
 /** The palette store of a UI store. */
 export function paletteStoreFor(ui: UiStore): StoreApi<PaletteUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createPaletteStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createPaletteStore());
 }
 
 export function usePaletteState<T>(selector: (state: PaletteUiState) => T): T {

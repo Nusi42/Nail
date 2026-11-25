@@ -1694,6 +1694,14 @@ the card has room) and every known flaky test fixed at its cause. Release 0.8.12
   no new crate or feature folder.
 - **Release:** "Nail 0.8.12" in the release notes and `CHANGELOG.md` `[Unreleased]` (slots prepared by the
   contract); packages add their items, the integrator merges them.
+- **Left out of R8 (decided at the review, ADR 0251 item 11):** rows the packages claimed but could not finish
+  without new mock hooks or a design choice stay in `docs/backlog.md` and are not part of R8's gates: the contact
+  groups' "New group" guard ("Settings drafts": one close guard per window, two independent drafts need a design),
+  the rail's unread badge without "All accounts" and a "View" affordance ("Rail": changes every visual baseline;
+  the avatar now names the shown account), "Auto-schedule e2e" and "Exchange move race" (need mock hooks), and the
+  flaky rows that were not reproduced or are load-bound ("connection-log step", "Exchange categories test",
+  "WebKit specs under load", "full e2e beside cargo", "notification texts", "Check for new mail (WebKit)"). The
+  gate "every suite green" is judged at the default workers without other load.
 
 #### Packages of R8
 
@@ -1796,6 +1804,21 @@ picked in Nail, free-time days, recent-mail refresh, the mock's RDATE periods, u
 the full e2e beside cargo and the WebKit specs (still losing a few tests to the 30 s budget in some full runs; they
 pass alone), the notification-texts hang, the WebKit "Check for new mail" step, and three date-dependent specs
 (`r7-p1-grid` cascade, `p1-views` calendar, `p1-windows` pim) that fail on some dates also without R8.
+
+*Status (review fixes):* done. The PIM right-click menus are the app's one menu popup (`ContextMenu` local
+items, `useMenuButton`) rendered inside the themed app root, so they use the theme's font; the rail's avatar names
+the shown account and its menu marks it as a `menuitemradio`; a window whose content loads later focuses its
+first field (the first Ctrl+K); the invitation answer's toast focuses Undo; unsure junk verdicts show in the
+reader with their score; scheduling suggestions use the minute-exact working hours and days on the wall clock
+(`workWindow`); `find_free_time` with `working_hours` defaults to the preferences' zone; a simple rule keeps the
+series' `periods`. SSOT: the plug-in test host's reminder rule pinned by `task-reminders` vectors (Rust
+`task_reminder_alarms`), the seed colours by `calendar-colors` vectors, `linearRgb`, one unsaved prompt,
+`UiStoreMap.obtain`. E2e: pop-out keys, the "not junk" limit, the menu font, typing after the first Ctrl+K; no fixed
+sleeps; the date-dependent specs at a fixed time or zone. Found on the way: `popout.return` (Ctrl+Shift+M) now asks
+and saves like the page's button (`returnFromPopOut`; it lost the latest typing), the `m2c_wired` Sieve test waits
+for the recorded upload before deleting the account. Visual baselines: the Move dialog, error details, the
+toolbar customizer and the high-contrast contacts / tasks. Rows moved out of R8 by decision (scope decisions
+above); new row "Event editor date line".
 
 ## 11. Later milestones (outline; each gets a detailed section before it starts)
 

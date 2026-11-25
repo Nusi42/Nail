@@ -1,0 +1,12 @@
+{
+  "cases": [
+    {
+      "args": [],
+      "fn": "seedCalendarColors",
+      "out": [
+        "#c026d3ff",
+        "#a16207"
+      ]
+    }
+  ]
+}

@@ -3,7 +3,13 @@
  * history buttons' Ctrl+Z / Ctrl+Y keys.
  */
 import { describe, expect, it } from "vitest";
-import { hexContrastRatio as contrastRatio, parseHex } from "../../theme/contrast";
+import {
+  hexContrastRatio as contrastRatio,
+  linearChannel,
+  linearRgb,
+  luminance,
+  parseHex,
+} from "../../theme/contrast";
 import { contrastProblems } from "./contrast";
 import { historyKey } from "../../state/editHistory";
 
@@ -13,6 +19,16 @@ describe("contrast", () => {
     expect(parseHex(" #1A2b3C ")).toEqual([26, 43, 60]);
     expect(parseHex("red")).toBeNull();
     expect(parseHex("color-mix(in srgb, #fff 50%, #000)")).toBeNull();
+  });
+
+  it("linearizes sRGB channels once for luminance and OKLab (R8 review)", () => {
+    expect(linearChannel(0)).toBe(0);
+    expect(linearChannel(255)).toBeCloseTo(1, 10);
+    // Below the 0.04045 threshold the curve is linear.
+    expect(linearChannel(10)).toBeCloseTo(10 / 255 / 12.92, 10);
+    expect(linearChannel(128)).toBeCloseTo(0.2158605, 6);
+    expect(linearRgb([0, 128, 255])).toEqual([0, linearChannel(128), linearChannel(255)]);
+    expect(luminance([255, 255, 255])).toBeCloseTo(1, 10);
   });
 
   it("computes WCAG contrast ratios", () => {

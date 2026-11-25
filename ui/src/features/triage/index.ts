@@ -58,21 +58,24 @@ function inJunkFolder(ctx: ActionContext): boolean {
   return folders?.find((f) => f.id === activeFolderId)?.role === "junk";
 }
 
-/** Whether the target is junk: shown in a Junk folder, or the classifier says so. */
+/**
+ * Whether the target is junk: shown in a Junk folder, or the classifier says
+ * so or is unsure (R8: "Not junk" confirms an unsure verdict).
+ */
 function looksJunk(ctx: ActionContext, args: readonly JsonValue[] = []): boolean {
   if (inJunkFolder(ctx)) return true;
   const id = typeof args[0] === "string" ? args[0] : ctx.store.getState().selectedMessageId;
   if (id === null) return false;
   const body = ctx.queryClient.getQueryData<MessageBody>(queryKeys.message(id));
-  return body?.junk?.junk === true;
+  return body?.junk?.junk === true || body?.junk?.unsure === true;
 }
 
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   /** Marks the selected message as junk (trains the classifier, moves it to Junk). */
   "junk.mark": {
-    run: (ctx) => markJunkTargets(ctx, targets(ctx), true),
-    enabled: (ctx) => hasTarget(ctx) && !inJunkFolder(ctx),
+    run: (ctx, args) => markJunkTargets(ctx, targets(ctx, args), true),
+    enabled: (ctx, args) => targets(ctx, args).targets.length > 0 && !inJunkFolder(ctx),
   },
   /** Marks it as not junk (trains the classifier, moves it out of Junk). */
   "junk.not-junk": {

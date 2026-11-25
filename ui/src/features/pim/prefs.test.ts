@@ -11,10 +11,11 @@ import {
   viewZonesOf,
   weekdayOf,
   workHourRange,
+  workWindow,
   freeTimeHours,
   workHoursValid,
 } from "./prefs";
-import { localZone, parseDay } from "./time";
+import { WEEKDAYS, localZone, parseDay } from "./time";
 import { must } from "../../test/must";
 import { describeVectors } from "../../test/vectors";
 import calendarVectors from "../../../../crates/nail-api/fixtures/ts-vectors/calendar.json";
@@ -58,6 +59,45 @@ describe("working hour range", () => {
     expect(
       workHourRange({ ...prefs, work_hours: { start_minute: 570, end_minute: 1035 } }),
     ).toEqual({ start: 9, end: 18 });
+  });
+});
+
+describe("working window (R8 review)", () => {
+  const iso = (window: { start: number; end: number } | null) =>
+    window && [new Date(window.start).toISOString(), new Date(window.end).toISOString()];
+
+  it("is minute-exact and only on working days", () => {
+    const halfHours = { ...prefs, work_hours: { start_minute: 510, end_minute: 1050 } };
+    expect(iso(workWindow(halfHours, day("2026-11-25"), "Europe/Berlin"))).toEqual([
+      "2026-11-25T07:30:00.000Z",
+      "2026-11-25T16:30:00.000Z",
+    ]);
+    expect(workWindow(halfHours, day("2026-11-28"), "Europe/Berlin")).toBeNull();
+    const untilMidnight = { ...prefs, work_hours: { start_minute: 1200, end_minute: 1440 } };
+    expect(iso(workWindow(untilMidnight, day("2026-11-25"), "UTC"))).toEqual([
+      "2026-11-25T20:00:00.000Z",
+      "2026-11-26T00:00:00.000Z",
+    ]);
+  });
+
+  it("keeps wall-clock hours on a summer-time day and moves a skipped time past the gap", () => {
+    const everyDay = { ...prefs, work_days: [...WEEKDAYS] };
+    // 2026-03-29: Berlin's clocks go from 02:00 to 03:00.
+    const nineToFive = { ...everyDay, work_hours: { start_minute: 540, end_minute: 1020 } };
+    expect(iso(workWindow(nineToFive, day("2026-03-29"), "Europe/Berlin"))).toEqual([
+      "2026-03-29T07:00:00.000Z",
+      "2026-03-29T15:00:00.000Z",
+    ]);
+    const inTheGap = { ...everyDay, work_hours: { start_minute: 150, end_minute: 600 } };
+    expect(iso(workWindow(inTheGap, day("2026-03-29"), "Europe/Berlin"))).toEqual([
+      "2026-03-29T01:00:00.000Z",
+      "2026-03-29T08:00:00.000Z",
+    ]);
+    // 2026-10-25: 02:30 happens twice; the earlier one counts.
+    const twice = { ...everyDay, work_hours: { start_minute: 150, end_minute: 600 } };
+    expect(iso(workWindow(twice, day("2026-10-25"), "Europe/Berlin"))?.[0]).toBe(
+      "2026-10-25T00:30:00.000Z",
+    );
   });
 });
 

@@ -25,13 +25,19 @@ import {
   swatchDeclarations,
 } from "./colors";
 import { colorOf } from "./common";
+import calendarColorVectors from "../../../../crates/nail-api/fixtures/ts-vectors/calendar-colors.json";
 
 /**
  * The colours the demo seeds give calendars (R8): the mock CalDAV server's
  * `personal` (`nail_testkit_net::SEED_PERSONAL_COLOR`) and the demo-multi
- * holiday subscription (`nail-core` `demo.rs`), pinned here.
+ * holiday subscription (`nail-core` `MULTI_HOLIDAYS_COLOR`), from the
+ * vectors the Rust test `calendar_color_vectors` writes.
  */
-const SEED_COLORS = ["#c026d3", "#a16207"];
+const SEED_COLORS = calendarColorVectors.cases
+  .filter((c) => c.fn === "seedCalendarColors")
+  .flatMap((c) => c.out)
+  // `#rrggbbaa` (the CalDAV form, opaque) as `#rrggbb`: the contrast checks read six digits.
+  .map((c) => c.slice(0, 7));
 
 /** Colours a calendar can have: the palette, the demo data and extremes. */
 const COLORS = [
@@ -243,8 +249,10 @@ describe("calendar colours that stay apart (R8, ADR 0251)", () => {
   });
 
   it("gives the demo seeds colours distinct from the palette and from each other", () => {
+    expect(SEED_COLORS).toHaveLength(2);
     const all = [...SEED_COLORS, ...CALENDAR_COLORS.map((c) => c.value)];
     for (const seed of SEED_COLORS) {
+      expect(oklabOf(seed), seed).not.toBeNull();
       for (const other of all) {
         if (other === seed) continue;
         expect(colorDistance(seed, other), `${seed} / ${other}`).toBeGreaterThanOrEqual(

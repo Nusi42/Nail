@@ -27,7 +27,7 @@ import { Icon } from "../../widgets/Icon";
 import { Avatar } from "../../widgets/primitives";
 import { ariaShortcut, keyLabel } from "../menus/keyLabels";
 import { useMenuButton } from "../menus/MenuButton";
-import { accountMenuItems } from "./accountMenu";
+import { accountMenuItems, accountName } from "./accountMenu";
 import { useBadgeCounts, type BadgeCounts } from "./badges";
 import {
   actionShortcuts,
@@ -167,10 +167,12 @@ function ActionItem({
 }
 
 /**
- * The account at the bottom of the rail: the selected account, or the
- * first real one while "All accounts" (or a virtual account) is selected.
- * A button (R8): it opens the account menu (`accountMenuItems`: switch the
- * mail view to an account, account settings, add an account) under it.
+ * The account at the bottom of the rail: the account the mail view shows —
+ * "All accounts" (or another virtual account) by its name and a group
+ * icon, the same account the menu marks — or the first real one while
+ * none is chosen. A button (R8): it opens the account menu
+ * (`accountMenuItems`: switch the mail view to an account, account
+ * settings, add an account) under it.
  */
 function RailAccount() {
   const t = useT();
@@ -178,15 +180,21 @@ function RailAccount() {
   const activeId = useUi((s) => s.activeAccountId);
   const layout = useLayoutConfig();
   // Beside the rail, its top at the avatar's (the menu moves up to fit).
+  const { dispatch } = useActions();
   const { buttonProps, menu } = useMenuButton((button) => {
     const rect = button.getBoundingClientRect();
     return { x: rect.right, y: rect.top };
   }, "ArrowRight");
   const all = accounts.data ?? [];
   const real = all.filter((a) => a.kind !== "virtual");
-  const account = real.find((a) => a.id === activeId) ?? real[0];
+  const account = all.find((a) => a.id === activeId) ?? real[0];
   if (account === undefined) return null;
-  const name = t("shell-rail-account", { name: account.name || account.email });
+  const allAccounts = t("shell-account-menu-all");
+  const name = t("shell-rail-account", { name: accountName(account, allAccounts) });
+  const host = {
+    allAccounts,
+    run: (action: string, args: JsonValue[]) => void dispatch(action, args),
+  };
   return (
     <>
       <button
@@ -196,9 +204,15 @@ function RailAccount() {
         aria-label={name}
         title={name}
       >
-        <Avatar name={account.name} email={account.email} />
+        {account.kind === "virtual" ? (
+          <span data-part="avatar" data-kind="virtual" aria-hidden="true">
+            <Icon name="users" part="nav-rail.account.icon" />
+          </span>
+        ) : (
+          <Avatar name={account.name} email={account.email} />
+        )}
       </button>
-      {menu(accountMenuItems(layout, all, activeId), t("shell-account-menu"))}
+      {menu(accountMenuItems(layout, all, account.id, host), t("shell-account-menu"))}
     </>
   );
 }

@@ -475,6 +475,37 @@ describe("the actions", () => {
     expect(await popOuts(env)).toEqual([]);
   });
 
+  it("return by key saves what only the pop-out page holds first, like the button (R8 review)", async () => {
+    const env = desktopEnv();
+    const pop = must(actions[POP_OUT_ACTION]);
+    const back = must(actions[RETURN_ACTION]);
+    const ctx = { ...ctxOf(env), layout: layout(), t: (id: string) => id, locale: "en" };
+    act(() => {
+      env.store.getState().openWindow("settings");
+    });
+    await act(async () => {
+      await pop.run(ctx, []);
+    });
+    const prepared = vi.fn(async () => {
+      // The return waits for the save.
+      expect((await popOuts(env)).map((p) => p.window)).toEqual(["settings"]);
+      return null;
+    });
+    const undo = registerPopOutPreparer("settings", prepared);
+    try {
+      await act(async () => {
+        await back.run(ctx, ["settings"]);
+      });
+    } finally {
+      undo();
+    }
+    expect(prepared).toHaveBeenCalledWith(
+      "settings",
+      expect.objectContaining({ store: env.store }),
+    );
+    expect(await popOuts(env)).toEqual([]);
+  });
+
   it("never pops out a window whose spec keeps it in the page", async () => {
     window.location.hash = "";
     const env = desktopEnv();

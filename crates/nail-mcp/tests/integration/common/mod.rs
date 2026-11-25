@@ -830,6 +830,14 @@ pub(crate) fn pim_answer(request: Request) -> DataResult<Response> {
                 ..nail_api::pim::CalendarPreferences::default()
             },
         },
+        // R8 review: free time answers with the zone it was asked in (as a
+        // slot), so tests see which zone the tool chose.
+        Request::FindFreeTime { tz, .. } => Response::FreeTime {
+            slots: vec![nail_api::pim::FreeSlot {
+                start: tz.clone(),
+                end: tz,
+            }],
+        },
         // R8: quick add's reader, for one sentence (in the asked zone).
         Request::ParseEventText { text, tz, .. } => {
             let mut parsed = nail_api::pim::ParsedEventText::title_only(&text);

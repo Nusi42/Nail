@@ -232,3 +232,15 @@ const ICALENDAR_TYPE = /^(text\/calendar|application\/ics)\s*(;|$)/i;
 export function shownByInvitationCard(carded: boolean, attachment: { mime: string }): boolean {
   return carded && ICALENDAR_TYPE.test(attachment.mime.trim());
 }
+
+/**
+ * Where suggestions may lie: the shown hours cut to the day's working
+ * window; `null` when they do not meet (a day off, or hours shown outside
+ * the working hours).
+ */
+export function suggestionWindow(shown: Span, work: Span | null): Span | null {
+  if (!work) return null;
+  const start = Math.max(shown.start, work.start);
+  const end = Math.min(shown.end, work.end);
+  return end > start ? { start, end } : null;
+}

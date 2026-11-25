@@ -1863,3 +1863,38 @@ async fn trash_of_a_message_in_trash_needs_permanent() {
     let written = env.data.written();
     assert!(written.is_empty(), "{written:?}");
 }
+
+/// R8 review: `find_free_time` with `working_hours` reads the hours in the
+/// zone the calendar shows (the preferences' view zone) unless the agent
+/// names one; without the working hours the default stays UTC.
+#[tokio::test]
+async fn free_time_in_working_hours_uses_the_view_zone() {
+    let (env, _, token) = claude(&[McpScope::Read]).await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let zone = |r: &CallToolResult| value(r)["slots"][0]["start"].clone();
+    let range = json!({"from": "2026-10-05T00:00:00Z", "to": "2026-10-06T00:00:00Z",
+                       "duration_minutes": 30});
+    let with = |extra: Value| {
+        let mut args = range.clone();
+        args.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        args
+    };
+    let r = call(
+        &client,
+        "find_free_time",
+        with(json!({"working_hours": true})),
+    )
+    .await;
+    assert_eq!(zone(&r), "Europe/Berlin", "{r:?}");
+    let r = call(
+        &client,
+        "find_free_time",
+        with(json!({"working_hours": true, "tz": "Asia/Tokyo"})),
+    )
+    .await;
+    assert_eq!(zone(&r), "Asia/Tokyo", "{r:?}");
+    let r = call(&client, "find_free_time", range.clone()).await;
+    assert_eq!(zone(&r), "UTC", "{r:?}");
+}

@@ -638,6 +638,30 @@ impl TaskReminderArg {
     }
 }
 
+/// The display alarms of a task's reminders (`upsert_task` and the plug-in
+/// task writes, R8, ADR 0251): the one rule both hosts apply — at most
+/// [`MAX_TASK_REMINDERS`], each exactly one form ([`TaskReminderArg::to_alarm`]),
+/// and a reminder before the due time needs a due (or start) time
+/// (`anchored`). The plug-in SDK's test host runs the same cases
+/// (`task-reminders.json` test vectors). An English reason when refused.
+pub fn task_reminder_alarms(
+    reminders: &[TaskReminderArg],
+    anchored: bool,
+) -> Result<Vec<Alarm>, String> {
+    if reminders.len() > MAX_TASK_REMINDERS {
+        return Err(format!("at most {MAX_TASK_REMINDERS} reminders"));
+    }
+    reminders
+        .iter()
+        .map(|r| {
+            if r.minutes_before.is_some() && !anchored {
+                return Err("a reminder before the due time needs a due date".to_owned());
+            }
+            r.to_alarm()
+        })
+        .collect()
+}
+
 /// `create_event_from_text`: a new event from a sentence ("Lunch with Bob
 /// tomorrow 12:30 at Corner café"), read like the calendar's quick add
 /// (`ParseEventText`, R8, ADR 0251) and created like `create_event`

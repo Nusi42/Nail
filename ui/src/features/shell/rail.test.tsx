@@ -160,8 +160,8 @@ describe("nav-rail", () => {
     );
   });
 
-  it("shows the selected real account, else the first one", async () => {
-    const env = createEnv({ state: { activeAccountId: "all" } });
+  it("shows the account the mail view shows, else the first real one (R8 review)", async () => {
+    const env = createEnv({ state: { activeAccountId: null } });
     renderRail(env, hostLayout());
     await settleQueries(env);
     const accounts = env.transport.data.accounts.filter((a) => a.kind !== "virtual");
@@ -171,6 +171,24 @@ describe("nav-rail", () => {
     expect(within(rail()).getByRole("button", { name: /^Account: / })).toHaveAccessibleName(
       `Account: ${first.name || first.email}`,
     );
+    // "All accounts": the avatar names it, as the menu marks it.
+    act(() => {
+      env.store.getState().selectAccount("all");
+    });
+    const avatar = within(rail()).getByRole("button", { name: /^Account: / });
+    expect(avatar).toHaveAccessibleName("Account: All accounts");
+    fireEvent.click(avatar);
+    const menu = await screen.findByRole("menu", { name: "Accounts" });
+    expect(within(menu).getByRole("menuitemradio", { name: "All accounts" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(
+      within(menu).getByRole("menuitemradio", { name: first.name || first.email }),
+    ).toHaveAttribute("aria-checked", "false");
+    fireEvent.keyDown(within(menu).getByRole("menuitemradio", { name: "All accounts" }), {
+      key: "Escape",
+    });
     act(() => {
       env.store.getState().selectAccount(second.id);
     });
@@ -188,12 +206,16 @@ describe("nav-rail", () => {
     const menu = await screen.findByRole("menu", { name: "Accounts" });
     expect(avatar).toHaveAttribute("aria-expanded", "true");
     const labels = within(menu)
-      .getAllByRole("menuitem")
+      .getAllByRole("menuitemradio")
       .map((i) => i.textContent);
     expect(labels).toContain("All accounts");
-    expect(labels.at(-1)).toMatch(/^Add account/);
+    expect(within(menu).getByRole("menuitemradio", { name: "Personal" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(within(menu).getAllByRole("menuitem").at(-1)?.textContent).toMatch(/^Add account/);
     const work = env.transport.data.accounts.find((a) => a.id === "acc-work");
-    fireEvent.click(within(menu).getByRole("menuitem", { name: must(work).name }));
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: must(work).name }));
     await waitFor(() => {
       expect(env.store.getState().activeAccountId).toBe("acc-work");
     });

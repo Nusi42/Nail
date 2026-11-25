@@ -1802,7 +1802,9 @@ The contract, integration and review notes of each wave, in short; the ADRs name
   `status-dismiss-failed` (`app.ftl`), slot `pim-actions.ftl`.
 - Calendar and PIM UI (ADR 0252): `pim/colors.ts` `displayColors` / `colorDistance` (OKLab,
   `MIN_COLOR_DISTANCE`; `colorOf` shows the result), the seed colour `nail_testkit_net::SEED_PERSONAL_COLOR`;
-  `pim/PimMenu.tsx` (`PimMenuPopup` shared by `PimMenu` and `usePimContextMenu`, the right-click menus;
+  `pim/PimMenu.tsx` (`PimMenu` and `usePimContextMenu`, the right-click menus, adapt PIM entries to
+  `menus/ContextMenu.tsx` local items and `menus/MenuButton.tsx` `useMenuButton`; a portaled menu goes into the
+  `data-part="app"` root;
   `EventItem.tsx` `useEventMenu`); `pim/QuickAdd.tsx` `EventFromTextDialog` (window `pim-event-from-text`, action
   `calendar.new-event-from-text` in `pim/index.ts` `actionInfo`); `pim/ReplyToast.tsx` (undo for invitation
   answers, `offerReplyUndo` from `scheduling/queries.ts`), `pim/TextToast.tsx`; `pim/common.tsx` `SyncState` (the

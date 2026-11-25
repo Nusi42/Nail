@@ -20,13 +20,21 @@ export function parseHex(value: string): [number, number, number] | null {
   return [parseInt(r, 16), parseInt(g, 16), parseInt(b, 16)];
 }
 
+/** One sRGB channel (0–255) as linear light (0–1): the sRGB transfer function, threshold 0.04045. */
+export function linearChannel(c: number): number {
+  const s = c / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+
+/** A colour's channels as linear light ({@link linearChannel} of each). */
+export function linearRgb([r, g, b]: Rgb): [number, number, number] {
+  return [linearChannel(r), linearChannel(g), linearChannel(b)];
+}
+
 /** WCAG 2.x relative luminance (0 = black, 1 = white), sRGB threshold 0.04045. */
-export function luminance([r, g, b]: Rgb): number {
-  const channel = (c: number) => {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+export function luminance(rgb: Rgb): number {
+  const [r, g, b] = linearRgb(rgb);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 /** The WCAG contrast ratio of two colours (1–21; order does not matter). */

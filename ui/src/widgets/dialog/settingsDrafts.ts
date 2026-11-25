@@ -66,12 +66,7 @@ export type DraftOwner = UiStore | DraftScope;
 
 function draftsOf(owner: DraftOwner): DraftScope {
   if (owner instanceof DraftScope) return owner;
-  let drafts = all.get(owner);
-  if (!drafts) {
-    drafts = new DraftScope();
-    all.set(owner, drafts);
-  }
-  return drafts;
+  return all.obtain(owner, () => new DraftScope());
 }
 
 const DraftScopeContext = createContext<DraftScope | null>(null);

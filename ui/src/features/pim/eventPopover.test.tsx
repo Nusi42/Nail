@@ -207,6 +207,24 @@ describe("the quick look", () => {
     );
   });
 
+  it("gives the reply toast's Undo the focus, one key away, and the focus back after it (R8 review)", async () => {
+    const { user } = await acceptWithToasts();
+    const toast = must(
+      (await screen.findByText("Your answer goes out in a moment.")).closest("li"),
+    );
+    const undo = within(toast).getByRole("button", { name: "Undo" });
+    await waitFor(() => {
+      expect(undo).toHaveFocus();
+    });
+    await user.keyboard("{Enter}");
+    expect(
+      await screen.findByText("Your answer was not sent. Your calendar keeps it."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+    });
+  });
+
   it("drops the Undo once the answer left the outbox (R8)", async () => {
     const { env } = await acceptWithToasts(0);
     await waitFor(() => {

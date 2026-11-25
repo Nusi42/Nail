@@ -2073,3 +2073,18 @@ async fn graph_folders_are_created_renamed_moved_and_deleted() {
         "{refused:?}"
     );
 }
+
+/// The listing tests' wait fails, rather than hangs, when the engine keeps
+/// requesting without ever finishing (R8 review): progress resets the
+/// stall time-out, but not the overall bound.
+#[tokio::test(start_paused = true)]
+#[should_panic(expected = "although progressing")]
+async fn a_wait_on_endless_progress_still_ends() {
+    let requests = std::sync::atomic::AtomicUsize::new(0);
+    eventually_progressing(
+        "a listing that never ends",
+        || requests.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        || async { false },
+    )
+    .await;
+}

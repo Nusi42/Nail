@@ -43,12 +43,7 @@ export function createSystemStore(): StoreApi<SystemUiState> {
 
 /** The system store of a UI store. */
 export function systemStoreFor(ui: UiStore): StoreApi<SystemUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createSystemStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createSystemStore());
 }
 
 export function useSystemState<T>(selector: (state: SystemUiState) => T): T {

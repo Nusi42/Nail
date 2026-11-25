@@ -150,12 +150,7 @@ export function createPluginsStore(): StoreApi<PluginsState> {
 
 /** The plug-in store of a UI store. */
 export function pluginsStoreFor(ui: UiStore): StoreApi<PluginsState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createPluginsStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createPluginsStore());
 }
 
 export function usePluginsState<T>(selector: (state: PluginsState) => T): T {

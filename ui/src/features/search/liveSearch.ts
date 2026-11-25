@@ -84,12 +84,7 @@ const owners = new UiStoreMap<StoreApi<{ owner: string | null }>>();
 
 /** Which search field of a UI store commits the typed text (its id; created on first use). */
 export function searchOwnerFor(ui: UiStore): StoreApi<{ owner: string | null }> {
-  let store = owners.get(ui);
-  if (!store) {
-    store = createStore<{ owner: string | null }>()(() => ({ owner: null }));
-    owners.set(ui, store);
-  }
-  return store;
+  return owners.obtain(ui, () => createStore<{ owner: string | null }>()(() => ({ owner: null })));
 }
 
 /** What the search field needs from live search. */

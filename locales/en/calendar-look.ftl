@@ -115,6 +115,7 @@ pim-look-fb-free-chosen = Everyone with shared availability is free at the chose
 pim-look-fb-other-times = Other times when everyone is free:
 pim-look-fb-free-times = Times when everyone is free:
 pim-look-fb-none-day = There is no time on this day when everyone is free.
+pim-look-fb-day-off = This day is not one of your working days.
 pim-look-fb-try-next = Try the next day
 pim-look-fb-unknown =
     { $count ->

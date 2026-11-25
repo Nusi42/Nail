@@ -247,7 +247,8 @@ export function ruleOf(simple: SimpleRule, start: PimTime): RecurrenceRule {
 
 /**
  * The series' recurrence after the editor: `none` drops it, a simple rule
- * replaces the rules (keeping exceptions and extra dates), custom keeps it.
+ * replaces the rules (keeping everything else of the series: exceptions,
+ * extra dates and periods), custom keeps it.
  */
 export function recurrenceOf(
   choice: RecurrenceChoice,
@@ -260,11 +261,7 @@ export function recurrenceOf(
     case "custom":
       return choice.recurrence;
     case "simple":
-      return {
-        rules: [ruleOf(choice.rule, start)],
-        dates: previous?.dates ?? [],
-        exceptions: previous?.exceptions ?? [],
-      };
+      return { dates: [], exceptions: [], ...previous, rules: [ruleOf(choice.rule, start)] };
   }
 }
 

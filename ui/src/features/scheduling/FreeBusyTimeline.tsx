@@ -33,10 +33,18 @@ import { useGeometry } from "../../theme/ThemeProvider";
 import { Icon } from "../../widgets/Icon";
 import { Problem } from "../pim/common";
 import { formatDay, formatHour } from "../pim/fmt";
-import { useCalendarPreferences, workHourRange } from "../pim/prefs";
-import { todayIn, toZoned, utcString } from "../pim/time";
+import { useCalendarPreferences, workHourRange, workWindow } from "../pim/prefs";
+import { todayIn, toZoned, utcString, wallClockAt } from "../pim/time";
 import { clockRange } from "./fmt";
-import { busyDuring, busySpans, ms, placeSpan, suggestSlots, type Span } from "./model";
+import {
+  busyDuring,
+  busySpans,
+  ms,
+  placeSpan,
+  suggestSlots,
+  suggestionWindow,
+  type Span,
+} from "./model";
 import { useFreeBusy } from "./queries";
 
 export interface Person {
@@ -57,7 +65,11 @@ export interface FreeBusyTimelineProps {
   durationMinutes: number;
   /** The viewer's zone. */
   tz: string;
-  /** Visible working hours. */
+  /**
+   * The hours the timeline shows (default: the working hours, whole hours).
+   * Suggestions stay inside the working hours and days of the preferences
+   * (`workWindow`) whatever is shown.
+   */
   hourStart?: number | undefined;
   hourEnd?: number | undefined;
   identityId?: IdentityId | null;
@@ -121,17 +133,25 @@ export function FreeBusyTimeline({
   const now = fixedNow ?? clock;
   const format = useDateFormat();
   // The working hours of the preferences unless the caller says otherwise.
-  const work = workHourRange(useCalendarPreferences());
+  const prefs = useCalendarPreferences();
+  const work = workHourRange(prefs);
   const start = Math.max(0, Math.min(23, hourStart ?? work.start));
   const end = Math.max(start + 1, Math.min(24, hourEnd ?? work.end));
   const dayStart = toZoned(day, tz).toDate().getTime();
   const dayEnd = toZoned(day.add({ days: 1 }), tz)
     .toDate()
     .getTime();
+  // Wall-clock hours: 09:00 stays 09:00 on a day the clocks change.
   const window: Span = {
-    start: toZoned(day, tz).add({ hours: start }).toDate().getTime(),
-    end: toZoned(day, tz).add({ hours: end }).toDate().getTime(),
+    start: wallClockAt(day, start * 60, tz)
+      .toDate()
+      .getTime(),
+    end: wallClockAt(day, end * 60, tz)
+      .toDate()
+      .getTime(),
   };
+  // Slots are offered only inside the working hours of a working day (ADR 0251 item 1).
+  const offered = suggestionWindow(window, workWindow(prefs, day, tz));
   const emails = people.map((p) => p.email);
   const query = useFreeBusy(
     emails,
@@ -144,15 +164,15 @@ export function FreeBusyTimeline({
   const known = rows.filter((r) => r.error === null && r.source.type !== "unknown");
   const unknown = rows.length - known.length;
   const stepMs = (durationMinutes >= 30 ? 30 : 15) * 60_000;
-  const earliest = Math.max(window.start, Math.ceil(now / stepMs) * stepMs);
+  const earliest = offered ? Math.max(offered.start, Math.ceil(now / stepMs) * stepMs) : 0;
   const busyNow = meeting ? busyDuring(rows, meeting) : [];
   const chosenFree = meeting !== null && busyNow.length === 0;
   // The chosen time is not suggested again (R7 S11: no "free" next to "no free time").
   const suggestions =
-    query.data && durationMinutes > 0
+    query.data && durationMinutes > 0 && offered
       ? suggestSlots(
           busySpans(known),
-          { start: earliest, end: window.end },
+          { start: earliest, end: offered.end },
           durationMinutes * 60_000,
           stepMs,
           maxSuggestions + 1,
@@ -248,7 +268,7 @@ export function FreeBusyTimeline({
               </h4>
               {suggestions.length === 0 ? (
                 <p data-part="freebusy.suggestions.none">
-                  {t("pim-look-fb-none-day")}{" "}
+                  {offered ? t("pim-look-fb-none-day") : t("pim-look-fb-day-off")}{" "}
                   <button
                     type="button"
                     data-part="form.button"

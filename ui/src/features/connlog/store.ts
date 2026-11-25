@@ -61,12 +61,7 @@ function createConnlogStore(): StoreApi<ConnlogUiState> {
 
 /** The connection log store of a UI store. */
 export function connlogStoreFor(ui: UiStore): StoreApi<ConnlogUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createConnlogStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createConnlogStore());
 }
 
 export function useConnlogState<T>(selector: (state: ConnlogUiState) => T): T {

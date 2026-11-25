@@ -36,10 +36,11 @@ test("the Markdown preview grows with its content, up to a limit", async ({ page
   await expect.poll(() => frameHeight(composer)).toBeGreaterThan(short + 100);
   // Many more: it stops growing (the preview scrolls inside its frame).
   for (let i = 0; i < 40; i += 1) await page.keyboard.type(`\n\nMore ${String(i)}`);
-  await page.waitForTimeout(1_000);
-  const capped = await frameHeight(composer);
   const max = await frame.evaluate((el) => Number.parseFloat(getComputedStyle(el).maxHeight));
-  expect(capped).toBeLessThanOrEqual(max + 1);
+  // It reaches the limit once the preview shows the new text, and goes no further.
+  await expect.poll(() => frameHeight(composer)).toBeGreaterThanOrEqual(max - 1);
+  await expect(frame).toHaveAttribute("data-state", "measured");
+  expect(await frameHeight(composer)).toBeLessThanOrEqual(max + 1);
 });
 
 /** A layout of the user's whose Mail view is the main window (no view host). */

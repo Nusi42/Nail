@@ -20,17 +20,14 @@ const stores = new UiStoreMap<StoreApi<SourceUiState>>();
 
 /** The source store of a UI store (created on first use). */
 export function sourceStoreFor(ui: UiStore): StoreApi<SourceUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createStore<SourceUiState>()((set) => ({
+  return stores.obtain(ui, () =>
+    createStore<SourceUiState>()((set) => ({
       messages: {},
       setMessage: (window, message) => {
         set((s) => ({ messages: { ...s.messages, [window]: message } }));
       },
-    }));
-    stores.set(ui, store);
-  }
-  return store;
+    })),
+  );
 }
 
 export function useSourceState<T>(selector: (state: SourceUiState) => T): T {

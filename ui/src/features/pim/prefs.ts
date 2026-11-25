@@ -26,7 +26,7 @@ import type { NailClient } from "../../api/client";
 import { useClient } from "../../state/queries";
 import { MINUTES_PER_HOUR } from "./eventLook";
 import { pimWrite, type PimWriteContext } from "./queries";
-import { WEEKDAYS, isKnownZone, localZone, type CalendarDate } from "./time";
+import { WEEKDAYS, isKnownZone, localZone, wallClockAt, type CalendarDate } from "./time";
 
 /** Query keys of the R7 reads (under `pimKeys.all`, so PIM events refetch them). */
 export const prefsKeys = {
@@ -84,6 +84,25 @@ export function workHourRange(prefs: CalendarPreferences): { start: number; end:
 /** Whether `day` is a working day. */
 export function isWorkDay(prefs: CalendarPreferences, day: CalendarDate): boolean {
   return prefs.work_days.includes(weekdayOf(day));
+}
+
+/**
+ * The working hours of `day` in `tz` as instants (epoch ms, `[start, end)`),
+ * minute-exact on the wall clock ({@link wallClockAt}) like the core's
+ * `within_hours`: the one window Find a time and scheduling suggest slots
+ * in; `null` on a day off or with unusable hours.
+ */
+export function workWindow(
+  prefs: CalendarPreferences,
+  day: CalendarDate,
+  tz: string,
+): { start: number; end: number } | null {
+  if (!isWorkDay(prefs, day) || !workHoursValid(prefs.work_hours)) return null;
+  const { start_minute, end_minute } = prefs.work_hours;
+  return {
+    start: wallClockAt(day, start_minute, tz).toDate().getTime(),
+    end: wallClockAt(day, end_minute, tz).toDate().getTime(),
+  };
 }
 
 /** Whether the minute of the day `minute` on `day` is working time (a work day, inside the hours). */

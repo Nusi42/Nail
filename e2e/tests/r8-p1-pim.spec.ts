@@ -35,10 +35,14 @@ test("an invitation answer can be taken back while it waits in the outbox", asyn
     .click();
   const toast = page.locator('[data-part="pim.toast"][data-kind="reply"]');
   await expect(toast).toContainText("Your answer goes out in a moment.");
-  await toast.getByRole("button", { name: "Undo" }).click();
+  // Undo holds the focus: one key takes the answer back.
+  const undo = toast.getByRole("button", { name: "Undo" });
+  await expect(undo).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(toast).toContainText("Your answer was not sent. Your calendar keeps it.");
-  // Longer than the undo-send delay: still nothing went to Grace.
-  await page.waitForTimeout(12_000);
+  // The answer's mail left the outbox without being sent, so it never goes out.
+  const outbox = await rpcOk(server, { type: "ListOutbox" }, "Outbox");
+  expect(JSON.stringify(outbox)).not.toContain("Undo review");
   expect(await repliedWith(server, "DECLINED", uid)).toBe(false);
 });
 
@@ -92,6 +96,13 @@ test("events, contacts and tasks have right-click menus", async ({ page }) => {
   await event.click({ button: "right" });
   const eventMenu = page.getByRole("menu", { name: /^Actions for Team sync/ });
   await expect(eventMenu.getByRole("menuitem")).toHaveText(["Open", "Edit", "Delete"]);
+  // The menu is themed like the app: the UI face, not the browser's default serif.
+  const fonts = await eventMenu.getByRole("menuitem", { name: "Open" }).evaluate((item) => ({
+    item: getComputedStyle(item).fontFamily,
+    app: getComputedStyle(document.querySelector('[data-part="app"]') ?? document.body).fontFamily,
+  }));
+  expect(fonts.item).toBe(fonts.app);
+  expect(fonts.item).not.toMatch(/Times/);
   await expect(eventMenu.getByRole("menuitem", { name: "Open" })).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
@@ -127,9 +138,13 @@ test("events, contacts and tasks have right-click menus", async ({ page }) => {
 
 test("the command palette creates an event from a sentence", async ({ page }) => {
   await openApp(page);
+  // The first Ctrl+K of the page loads the palette's code; typing at once reaches its field.
   await page.keyboard.press("Control+k");
   const palette = page.getByRole("dialog", { name: "Command palette" });
-  await palette.getByRole("combobox", { name: "Search actions" }).fill("event from text");
+  const search = palette.getByRole("combobox", { name: "Search actions" });
+  await expect(search).toBeFocused();
+  await page.keyboard.type("event from text");
+  await expect(search).toHaveValue("event from text");
   await palette
     .getByRole("option")
     .filter({ hasText: /^New event from text/ })

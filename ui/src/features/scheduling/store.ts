@@ -34,20 +34,19 @@ export interface SchedulingState {
 const stores = new UiStoreMap<StoreApi<SchedulingState>>();
 
 export function schedulingStoreFor(ui: UiStore): StoreApi<SchedulingState> {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<SchedulingState>()((set) => ({
-    cancelTarget: null,
-    findTime: null,
-    setCancelTarget: (cancelTarget) => {
-      set({ cancelTarget });
-    },
-    setFindTime: (findTime) => {
-      set({ findTime });
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<SchedulingState>()((set) => ({
+      cancelTarget: null,
+      findTime: null,
+      setCancelTarget: (cancelTarget) => {
+        set({ cancelTarget });
+      },
+      setFindTime: (findTime) => {
+        set({ findTime });
+      },
+    }));
+    return store;
+  });
 }
 
 export function useScheduling<T>(selector: (state: SchedulingState) => T): T {

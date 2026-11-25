@@ -4,9 +4,10 @@
  * marked), then the account settings and "Add account".
  *
  * The accounts are the user's data, so the menu is built here at run time
- * (like the rules submenu), not in `layout.kdl`; its actions are the
- * layout's own (`settings.section "accounts"`, `account.add`) plus
- * `SHOW_ACCOUNT_ACTION`.
+ * (like the rules submenu), not in `layout.kdl`. The accounts are choices
+ * (local items: `menuitemradio`, the shown one `aria-checked`) that run
+ * `SHOW_ACCOUNT_ACTION`; the rest are the layout's own actions
+ * (`settings.section "accounts"`, `account.add`).
  */
 import { ALL_ACCOUNTS } from "../../api/contract";
 import type {
@@ -17,7 +18,7 @@ import type {
   ResolvedMenuEntry,
 } from "../../api/generated";
 import { usesWidget } from "../../layout/views";
-import { literalMenuLabel } from "../menus";
+import type { MenuEntry } from "../menus/ContextMenu";
 
 /** Shows an account (argument: its id) in the mail view. */
 export const SHOW_ACCOUNT_ACTION = "shell.show-account";
@@ -55,22 +56,33 @@ function layoutAction(
   };
 }
 
+/** What the account menu shows of the app: texts and running an action. */
+export interface AccountMenuHost {
+  /** The localized name of "All accounts". */
+  allAccounts: string;
+  run: (action: string, args: JsonValue[]) => void;
+}
+
+/** The name the rail and the menu show for an account. */
+export function accountName(account: Account, allAccounts: string): string {
+  return account.id === ALL_ACCOUNTS ? allAccounts : account.name || account.email;
+}
+
 /** The menu's entries for `accounts` while `active` is shown. */
 export function accountMenuItems(
   layout: ResolvedLayout,
   accounts: readonly Account[],
   active: AccountId | null,
-): ResolvedMenuEntry[] {
-  const entry = (account: Account): ResolvedMenuEntry => ({
-    type: "action",
-    action: SHOW_ACCOUNT_ACTION,
-    args: [account.id],
-    label:
-      account.id === ALL_ACCOUNTS
-        ? "@shell.account-menu.all"
-        : literalMenuLabel(account.name || account.email),
-    icon: account.id === active ? "check" : null,
-    shortcut: null,
+  host: AccountMenuHost,
+): MenuEntry[] {
+  const entry = (account: Account): MenuEntry => ({
+    type: "item",
+    id: account.id,
+    label: accountName(account, host.allAccounts),
+    checked: account.id === active,
+    onSelect: () => {
+      host.run(SHOW_ACCOUNT_ACTION, [account.id]);
+    },
   });
   const all = accounts.filter((a) => a.id === ALL_ACCOUNTS);
   const rest = accounts.filter((a) => a.id !== ALL_ACCOUNTS);

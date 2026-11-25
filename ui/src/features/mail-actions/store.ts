@@ -74,25 +74,24 @@ const stores = new UiStoreMap<MailActionsStore>();
 
 /** The mail-actions store of a UI store (created on first use). */
 export function mailActionsStoreFor(ui: UiStore): MailActionsStore {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<MailActionsState>()((set, get) => ({
-    toast: null,
-    last: null,
-    seq: 0,
-    show: (toast) => {
-      const seq = get().seq + 1;
-      set({ seq, toast: { ...toast, seq } });
-    },
-    dismiss: () => {
-      set({ toast: null });
-    },
-    setLast: (last) => {
-      set({ last });
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<MailActionsState>()((set, get) => ({
+      toast: null,
+      last: null,
+      seq: 0,
+      show: (toast) => {
+        const seq = get().seq + 1;
+        set({ seq, toast: { ...toast, seq } });
+      },
+      dismiss: () => {
+        set({ toast: null });
+      },
+      setLast: (last) => {
+        set({ last });
+      },
+    }));
+    return store;
+  });
 }
 
 export function useMailActions<T>(selector: (state: MailActionsState) => T): T {

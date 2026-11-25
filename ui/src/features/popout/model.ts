@@ -192,6 +192,22 @@ export async function returnPopOut(
   return popOuts;
 }
 
+/**
+ * "Return to main window" from the pop-out page (its button and the
+ * `popout.return` key, R8 review): unsaved changes ask first, what only this
+ * page holds is saved (the composer's draft, its preparer), then the window
+ * goes back. `false` when the user kept it here.
+ */
+export async function returnFromPopOut(
+  ctx: PopOutPrepareContext,
+  window: string,
+): Promise<boolean> {
+  if (!(await mayMoveWindow(ctx.store, window))) return false;
+  await preparerOf(window)?.(window, ctx);
+  await returnPopOut(ctx, window);
+  return true;
+}
+
 /** Raises a popped-out window (`FocusPopOut`). */
 export async function focusPopOut(
   ctx: Pick<PopOutPrepareContext, "client" | "queryClient">,

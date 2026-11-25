@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { MessageBody } from "../../api/generated";
 import { MockTransport } from "../../api/mock";
 import { createDispatcher } from "../../actions/registry";
 import { appRegistry } from "../registry";
@@ -35,6 +36,16 @@ function dispatcher(env: Env) {
   return createDispatcher(actionContext(env), appRegistry.actions);
 }
 
+/** The last mail action marked `id` as junk (`true`) or not junk. */
+async function expectJunkAction(env: Env, id: string, junk: boolean): Promise<void> {
+  await waitFor(() => {
+    expect(requestsOf(env, "ApplyMailAction").at(-1)).toEqual({
+      type: "ApplyMailAction",
+      targets: [{ kind: "message", message_id: id }],
+      action: { type: "junk", junk },
+    });
+  });
+}
 describe("triage model", () => {
   it("computes snooze presets in local time", () => {
     // Wednesday 30 Sep 2026, 10:15.
@@ -223,13 +234,36 @@ describe("triage widgets", () => {
     expect(bar).toHaveTextContent("This message is junk.");
     expect(bar).toHaveTextContent("Marked by you");
     await user.click(within(bar).getByRole("button", { name: "Not junk" }));
-    await waitFor(() => {
-      expect(requestsOf(env, "ApplyMailAction").at(-1)).toEqual({
-        type: "ApplyMailAction",
-        targets: [{ kind: "message", message_id: message.id }],
-        action: { type: "junk", junk: false },
-      });
+    await expectJunkAction(env, message.id, false);
+  });
+
+  it("shows an unsure verdict with its score and offers both answers (R8 review)", async () => {
+    const user = userEvent.setup();
+    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
+    if (!message) throw new Error("no inbox message");
+    act(() => {
+      env.store.getState().selectMessage(message.id);
     });
+    renderWithProviders(<NodeView node={widget("junk-verdict")} path="t" />, env);
+    await waitFor(() => {
+      expect(env.queryClient.getQueryData(queryKeys.message(message.id))).toBeDefined();
+    });
+    // Not junk: no bar.
+    expect(screen.queryByRole("status", { name: "Junk mail" })).toBeNull();
+    act(() => {
+      env.queryClient.setQueryData<MessageBody>(queryKeys.message(message.id), (body) =>
+        body
+          ? { ...body, junk: { junk: false, score: 62, source: "classifier", unsure: true } }
+          : body,
+      );
+    });
+    const bar = await screen.findByRole("status", { name: "Junk mail" });
+    expect(bar).toHaveAttribute("data-state", "unsure");
+    expect(bar).toHaveTextContent("This message might be junk (62 %).");
+    expect(within(bar).getByRole("button", { name: "Not junk" })).toBeInTheDocument();
+    await user.click(within(bar).getByRole("button", { name: "Mark as junk" }));
+    await expectJunkAction(env, message.id, true);
   });
 
   it("edits the junk filter with validation", async () => {

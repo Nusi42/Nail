@@ -23,7 +23,8 @@ import { defined } from "../support/defined";
  * sent there, and its OS window closes; a second composer comes back to
  * the main window with "Return to main window" and keeps what was typed;
  * a popped-out composer shows its questions in its own window (Discard,
- * and the OS close button with unsaved typing: ADR 0122).
+ * and the OS close button with unsaved typing: ADR 0122); the default keys
+ * Ctrl+Shift+O / Ctrl+Shift+M pop a composer out and bring it back (R8).
  *
  * Needs Windows with the WebView2 runtime and `npm run build:desktop`. In
  * CI it runs only with `NAIL_E2E_DESKTOP=1`; locally it always runs.
@@ -155,6 +156,29 @@ test("a popped-out composer returns to the main window with what was typed", asy
   await expect(inPage).toBeVisible({ timeout: 30_000 });
   await expect(inPage.getByRole("textbox", { name: "Subject" })).toHaveValue("Round trip");
   await expect(inPage.getByRole("textbox", { name: "Message" })).toHaveValue("Written outside.");
+});
+
+test("Ctrl+Shift+O pops a composer out and Ctrl+Shift+M brings it back (R8)", async () => {
+  const page = await launch();
+
+  const id = await newComposer(page, "By keys");
+  const inPage = windowById(page, id);
+  await inPage.getByRole("textbox", { name: "Subject" }).focus();
+  await page.keyboard.press("Control+Shift+O");
+  await expect(inPage).toHaveCount(0);
+  const popped = await popOutPage(id);
+  const host = popped.locator(`[data-part="pop-out"][data-window="${id}"]`);
+  await expect(host.getByRole("textbox", { name: "Subject" })).toHaveValue("By keys");
+  await host.getByRole("textbox", { name: "Message" }).fill("Sent back by key.");
+  try {
+    await popped.keyboard.press("Control+Shift+M");
+  } catch (error) {
+    // The pop-out's OS window may close before the key press returns.
+    if (!popped.isClosed()) throw error;
+  }
+  await expect.poll(async () => (await popOuts(page)).length, { timeout: 30_000 }).toBe(0);
+  await expect(inPage).toBeVisible({ timeout: 30_000 });
+  await expect(inPage.getByRole("textbox", { name: "Message" })).toHaveValue("Sent back by key.");
 });
 
 test("a popped-out composer asks its questions in its own window (Discard, OS close)", async () => {

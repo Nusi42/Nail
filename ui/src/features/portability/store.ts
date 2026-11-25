@@ -42,12 +42,7 @@ export function createPortabilityStore(): StoreApi<PortabilityUiState> {
 
 /** The portability store of a UI store. */
 export function portabilityStoreFor(ui: UiStore): StoreApi<PortabilityUiState> {
-  let store = stores.get(ui);
-  if (!store) {
-    store = createPortabilityStore();
-    stores.set(ui, store);
-  }
-  return store;
+  return stores.obtain(ui, () => createPortabilityStore());
 }
 
 export function usePortabilityState<T>(selector: (state: PortabilityUiState) => T): T {

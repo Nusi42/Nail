@@ -92,7 +92,8 @@ ${p("nav-rail.account")} {
 }
 ${p("nav-rail.account")}:hover, ${p("nav-rail.account")}[data-state="expanded"] { ${QUIET_HOVER} }
 ${p("nav-rail.account")}:focus-visible { ${FOCUS_RING} }
-${p("nav-rail.account")} > ${p("avatar")} { ${initialsAvatar(T.control, T.small)} }`;
+${p("nav-rail.account")} > ${p("avatar")} { ${initialsAvatar(T.control, T.small)} }
+${p("nav-rail.account.icon")} { width: ${T.icon}; height: ${T.icon}; }`;
 
 /** A grid that hands its one cell's whole room to its child. */
 const FILL =

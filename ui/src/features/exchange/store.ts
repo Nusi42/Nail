@@ -56,44 +56,43 @@ export interface ExchangeUiState {
 const stores = new UiStoreMap<StoreApi<ExchangeUiState>>();
 
 export function exchangeStoreFor(ui: UiStore): StoreApi<ExchangeUiState> {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<ExchangeUiState>()((set) => ({
-    mailboxEditor: null,
-    removing: null,
-    categoryEditor: null,
-    deleting: null,
-    repliesAccount: null,
-    classify: null,
-    focusedOff: [],
-    editMailbox: (mailboxEditor) => {
-      set({ mailboxEditor });
-    },
-    removeMailbox: (removing) => {
-      set({ removing });
-    },
-    editCategory: (categoryEditor) => {
-      set({ categoryEditor });
-    },
-    deleteCategory: (deleting) => {
-      set({ deleting });
-    },
-    editReplies: (repliesAccount) => {
-      set({ repliesAccount });
-    },
-    classifyMessages: (classify) => {
-      set({ classify });
-    },
-    setFocused: (accountId, on) => {
-      set((s) => ({
-        focusedOff: on
-          ? s.focusedOff.filter((id) => id !== accountId)
-          : [...s.focusedOff.filter((id) => id !== accountId), accountId],
-      }));
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<ExchangeUiState>()((set) => ({
+      mailboxEditor: null,
+      removing: null,
+      categoryEditor: null,
+      deleting: null,
+      repliesAccount: null,
+      classify: null,
+      focusedOff: [],
+      editMailbox: (mailboxEditor) => {
+        set({ mailboxEditor });
+      },
+      removeMailbox: (removing) => {
+        set({ removing });
+      },
+      editCategory: (categoryEditor) => {
+        set({ categoryEditor });
+      },
+      deleteCategory: (deleting) => {
+        set({ deleting });
+      },
+      editReplies: (repliesAccount) => {
+        set({ repliesAccount });
+      },
+      classifyMessages: (classify) => {
+        set({ classify });
+      },
+      setFocused: (accountId, on) => {
+        set((s) => ({
+          focusedOff: on
+            ? s.focusedOff.filter((id) => id !== accountId)
+            : [...s.focusedOff.filter((id) => id !== accountId), accountId],
+        }));
+      },
+    }));
+    return store;
+  });
 }
 
 export function useExchangeUi<T>(selector: (state: ExchangeUiState) => T): T {

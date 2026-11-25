@@ -33,7 +33,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
-| Unsure junk verdicts in the reader | `JunkVerdict.unsure` is stored but the reader does not show unsure verdicts apart from not junk. | plan.md R8 follow-ups (ADR 0254) | S |
 | Other headers as rule values | `MessageFacts` offers no values of other headers. | plan.md R2 deferrals (ADR 0225) | M |
 | Sieve while uploads fail | A rule edited while uploads fail runs in its old form on the server. | plan.md M2c follow-ups | M |
 
@@ -41,6 +40,8 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 
 | Item | What is missing | Source | Size |
 | --- | --- | --- | --- |
+| Event editor date line | In the compact event editor some shorter dates ("Tue, Dec 1, 2026", "Fri, Oct 2, 2026") leave a gap beside the time-zone select that the responsive check reports (`undersized-control`); the e2e sweep (`p1-windows` "pim") runs at a fixed date. | plan.md R8 review | S |
+| Quick add in other languages | Reading a sentence into an event knows only English words: other languages need a keyword table in `nail-event-text` (`keywords.rs`, a match arm per language). | plan.md R8 follow-ups (ADR 0251) | M |
 | Colours picked in Nail | Only palette colours count as picked: a colour typed into "Other colour" can still be shown in another colour when it is close to another calendar's (`CalendarSettings` could record that the user chose it). | plan.md R8 follow-ups (ADR 0252) | S |
 | Free-time days | The free-time view lists days by the locale's weekend, while the core cuts by the preferences' work days. | plan.md R8 follow-ups (ADR 0252) | S |
 | Recent mail refresh | Recent mail on an open contact card does not refresh when new mail arrives. | plan.md R8 follow-ups (ADR 0252) | S |
@@ -92,7 +93,7 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Pop-out preparers | Pop-out preparers for the remaining stateful editors so they can opt in (the rules window has one). | plan.md M5c follow-ups (ADR 0119) | M |
 | Window manager | Resize handles outside the frame (they sit over the body's scrollbar); snapping to the top edge / quarters; a backwards window cycle; per-session geometry for remote browsers. | plan.md M5c follow-ups (ADR 0117) | M |
 | Shell and views | Restoring the remembered view needs a view host (the fallback opens nothing); hidden views stay mounted; the UI state (last view, settings section) is shared between desktop and remote sessions. | plan.md M5b follow-ups (ADR 0110) | M |
-| Rail | The unread badge relies on the "All accounts" virtual account; no visible "View" affordance on the rail (a rail button changes every visual baseline). | plan.md M5b, M5d follow-ups | S |
+| Rail | The unread badge relies on the "All accounts" virtual account; no visible "View" affordance on the rail (a rail button changes every visual baseline). | plan.md M5b, M5d follow-ups; left out of R8 (ADR 0251 item 11) | S |
 | Application menu | The application menu (`menu "app"`) is unused in the web UI. (check) | plan.md M2c follow-ups (ADR 0092) | S |
 | Customize mode | Remembered collapse of panes; focus on a widget just added; hidden nodes nested in a pane are not shown; the main window's rail / view host is not customizable; docking above / below inside a stack wraps it in a new split. | plan.md M5d follow-ups (ADR 0133) | M |
 | Theme editor | User theme files are not backed up before edits; the preview shows tokens, not part rules; a user theme's preview in the list shows its base palette, not its overrides. | plan.md M5a, M5d follow-ups (ADR 0135) | M |
@@ -179,7 +180,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Content lines | One content-line layer for `nail-dav` and `nail-ical`. (check) | plan.md Q2 follow-ups | S |
 | Shared test data and texts | Fixture instants out of `nail-util`; the iTIP / crypto texts into `common.ftl` once their test harnesses load it. | plan.md Q2 follow-ups | S |
 | Composer instances | Decide whether `defaults/layout.kdl` alone gives the composer's `instances`. | plan.md Q2 follow-ups | S |
-| PIM menu keyboard | `PimMenu` duplicates part of the context menu's keyboard model. | plan.md M5b follow-ups | S |
 | ADR note | A note in ADR 0164 that ADRs 0235 / 0236 replace its limits. | plan.md R5 follow-ups | S |
 | README media | The README media still show five themes and the old rule list (`npm run readme:media`, then review). | plan.md R3 deferrals (ADR 0197) | S |
 
@@ -199,7 +199,6 @@ the encryption-at-rest default) live in `docs/release-checklist.md` "Human gates
 | Flaky: full e2e beside cargo | The full Playwright suite run beside `cargo test --workspace` loses some long specs (`a11y-windows`, `p1-views`, `vault-recovery`) to the 30 s budget. | plan.md R8 follow-ups (ADR 0255) | M |
 | Flaky: notification texts test | `app/src-tauri` `tests::notification_texts_are_rendered` hung once for 20 minutes under full parallel load. | plan.md R8 follow-ups (ADR 0255) | S |
 | Flaky: Check for new mail (WebKit) | e2e `app-chrome` "Check for new mail" on WebKit missed the POP3 message within 5 s once in a full run. | plan.md R8 follow-ups (ADR 0255) | S |
-| Date-dependent e2e | Three specs fail on some dates or hours, also without the R8 changes: `r7-p1-grid` "overlapping events cascade" between local and UTC midnight (the events are made on the UTC day, the day view shows the local one); `p1-views` "the calendar's views" when a demo event lies under the New event button at 800×700; `p1-windows` "pim" when a short date ("Tue, Dec 1") leaves room beside the time-zone select (`undersized-control`). Pin the clock or the dates in these specs. | plan.md R8 follow-ups (ADR 0255) | S |
 | Flaky: Exchange categories test | `nail-core` `tests/exchange.rs` `categories_automatic_replies_and_rooms` failed once on a machine about 5x slower; not reproduced under parallel load in R8 (the other Exchange flakes are fixed, ADR 0255). | memory r5-status | S |
 
 ## Performance

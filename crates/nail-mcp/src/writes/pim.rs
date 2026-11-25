@@ -10,8 +10,8 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use nail_api::agents::{ActionKind, ActionTargetKind};
 use nail_api::mcp::McpScope;
 use nail_api::mcp::tools::{
-    CreateEventArgs, CreateEventFromTextArgs, MAX_TASK_REMINDERS, McpEditScope, McpInviteResponse,
-    RespondToInviteArgs, TaskReminderArg, UpdateEventArgs, UpsertContactArgs, UpsertTaskArgs,
+    CreateEventArgs, CreateEventFromTextArgs, McpEditScope, McpInviteResponse, RespondToInviteArgs,
+    TaskReminderArg, UpdateEventArgs, UpsertContactArgs, UpsertTaskArgs, task_reminder_alarms,
 };
 use nail_api::pim::contact::{AddressBookRole, ContactOrg};
 use nail_api::pim::{
@@ -910,25 +910,15 @@ fn due(text: &str) -> Result<PimTime, Failure> {
 }
 
 /// The display alarms of a task's reminders (`upsert_task`, plug-in task
-/// writes; R8, ADR 0251): at most [`MAX_TASK_REMINDERS`], each exactly
-/// one form; a reminder before the due time needs a due (or start) time.
+/// writes; R8, ADR 0251): the shared rule
+/// [`task_reminder_alarms`] (at most `MAX_TASK_REMINDERS`, each exactly
+/// one form, a reminder before the due time needs a due or start time).
 fn task_alarms(
     reminders: &[TaskReminderArg],
     fields: &TaskFields,
 ) -> Result<Vec<nail_api::pim::Alarm>, Failure> {
-    if reminders.len() > MAX_TASK_REMINDERS {
-        return Err(invalid(format!("at most {MAX_TASK_REMINDERS} reminders")));
-    }
     let anchored = fields.due.is_some() || fields.start.is_some();
-    reminders
-        .iter()
-        .map(|r| {
-            if r.minutes_before.is_some() && !anchored {
-                return Err(invalid("a reminder before the due time needs a due date"));
-            }
-            r.to_alarm().map_err(invalid)
-        })
-        .collect()
+    task_reminder_alarms(reminders, anchored).map_err(invalid)
 }
 
 /// `upsert_task`.

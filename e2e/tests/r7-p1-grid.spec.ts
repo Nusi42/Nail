@@ -67,54 +67,66 @@ async function localMinute(page: Page, hour: number, minute: number): Promise<nu
   );
 }
 
-test("overlapping events cascade so every title shows", async ({ page }) => {
-  await server.start({ seed: "demo-multi" });
-  // Early in the (UTC) day, where the demo has no events of its own.
-  await serverEvent("cascade-1", "Cascade one", [6, 0], [7, 0]);
-  await serverEvent("cascade-2", "Cascade two", [6, 30], [7, 15]);
-  await serverEvent("cascade-3", "Cascade three", [6, 45], [8, 0]);
-  const calendar = await dayView(page);
-  await syncCalendars(page);
-  const cards = ["Cascade one", "Cascade two", "Cascade three"].map((t) => eventChip(calendar, t));
-  for (const card of cards) await expect(card).toBeVisible();
-  await gridAt(calendar, Math.max(0, Math.floor((await localMinute(page, 6, 0)) / 60) - 1));
-  const column = await calendar.locator('[data-part="calendar.column"]').first().boundingBox();
-  const boxes: { x: number; width: number }[] = [];
-  for (const card of cards) {
-    const box = await card.boundingBox();
-    if (!box) throw new Error("no card");
-    boxes.push(box);
-  }
-  if (!column) throw new Error("no column");
-  // Each later event is further right: cascaded (indented, at least 60 % of the column) or,
-  // where a cascade would hide the earlier title, beside it in the same level.
-  for (const [index, box] of boxes.entries()) {
-    expect(box.width).toBeGreaterThanOrEqual(column.width * 0.38);
-    const before = boxes[index - 1];
-    if (before) expect(box.x).toBeGreaterThan(before.x + column.width * 0.1);
-  }
-  const first = boxes[0];
-  if (first) expect(first.width).toBeGreaterThanOrEqual(column.width * 0.98);
-  // Every title is on top where it is drawn (the card under its first letters is its own) and
-  // shows a whole line of text above the next card.
-  for (const [index, card] of cards.entries()) {
-    const own = await card.evaluate((el) => {
-      const title = el.querySelector('[data-part="event-card.title"]');
-      const r = title?.getBoundingClientRect();
-      if (!title || !r) return false;
-      const line = Math.min(
-        r.height,
-        Number.parseFloat(getComputedStyle(title).lineHeight) || r.height,
-      );
-      return [r.top + 2, r.top + line - 2].every(
-        (y) =>
-          document.elementFromPoint(r.left + 6, y)?.closest('[data-part="calendar.event"]') === el,
-      );
-    });
-    expect(own, `title ${String(index + 1)} visible`).toBe(true);
-  }
-  // The later ones carry the paper-coloured outline of a stacked card.
-  await expect(eventChip(calendar, "Cascade three")).toHaveAttribute("data-state", /stacked/);
+/**
+ * The events are put on the UTC day: the page shows that day in UTC, so the
+ * test does not depend on the hour it runs (between local and UTC midnight
+ * the local day is another one).
+ */
+test.describe("in UTC", () => {
+  test.use({ timezoneId: "UTC" });
+
+  test("overlapping events cascade so every title shows", async ({ page }) => {
+    await server.start({ seed: "demo-multi" });
+    // Early in the (UTC) day, where the demo has no events of its own.
+    await serverEvent("cascade-1", "Cascade one", [6, 0], [7, 0]);
+    await serverEvent("cascade-2", "Cascade two", [6, 30], [7, 15]);
+    await serverEvent("cascade-3", "Cascade three", [6, 45], [8, 0]);
+    const calendar = await dayView(page);
+    await syncCalendars(page);
+    const cards = ["Cascade one", "Cascade two", "Cascade three"].map((t) =>
+      eventChip(calendar, t),
+    );
+    for (const card of cards) await expect(card).toBeVisible();
+    await gridAt(calendar, Math.max(0, Math.floor((await localMinute(page, 6, 0)) / 60) - 1));
+    const column = await calendar.locator('[data-part="calendar.column"]').first().boundingBox();
+    const boxes: { x: number; width: number }[] = [];
+    for (const card of cards) {
+      const box = await card.boundingBox();
+      if (!box) throw new Error("no card");
+      boxes.push(box);
+    }
+    if (!column) throw new Error("no column");
+    // Each later event is further right: cascaded (indented, at least 60 % of the column) or,
+    // where a cascade would hide the earlier title, beside it in the same level.
+    for (const [index, box] of boxes.entries()) {
+      expect(box.width).toBeGreaterThanOrEqual(column.width * 0.38);
+      const before = boxes[index - 1];
+      if (before) expect(box.x).toBeGreaterThan(before.x + column.width * 0.1);
+    }
+    const first = boxes[0];
+    if (first) expect(first.width).toBeGreaterThanOrEqual(column.width * 0.98);
+    // Every title is on top where it is drawn (the card under its first letters is its own) and
+    // shows a whole line of text above the next card.
+    for (const [index, card] of cards.entries()) {
+      const own = await card.evaluate((el) => {
+        const title = el.querySelector('[data-part="event-card.title"]');
+        const r = title?.getBoundingClientRect();
+        if (!title || !r) return false;
+        const line = Math.min(
+          r.height,
+          Number.parseFloat(getComputedStyle(title).lineHeight) || r.height,
+        );
+        return [r.top + 2, r.top + line - 2].every(
+          (y) =>
+            document.elementFromPoint(r.left + 6, y)?.closest('[data-part="calendar.event"]') ===
+            el,
+        );
+      });
+      expect(own, `title ${String(index + 1)} visible`).toBe(true);
+    }
+    // The later ones carry the paper-coloured outline of a stacked card.
+    await expect(eventChip(calendar, "Cascade three")).toHaveAttribute("data-state", /stacked/);
+  });
 });
 
 test("drawing on empty slots creates an event with the drawn times", async ({ page }) => {

@@ -14,7 +14,10 @@ tests), release notes "Nail 0.8.12":**
   `nail_testkit_net::SEED_PERSONAL_COLOR`; tests use the constant.
 - Week cards: the title takes the first line, the icons sit at the end of the time line (`gridStyle.ts`);
   `r8-p1-calendar.spec.ts` checks cut / clamped / covered titles at 1440×900 and 1280×800.
-- PIM menus share `PimMenuPopup` (`PimMenu.tsx`, `usePimContextMenu`); the conflict choice is `common.tsx`
+- Every menu is `features/menus` `ContextMenu` (local items `type: "item"` with `onSelect`, `checked` =
+  `menuitemradio`, `start` for a swatch) opened by `useMenuButton` (`lastKey` for Up); `PimMenu` /
+  `usePimContextMenu` only adapt PIM entries, and a portaled menu goes into the `data-part="app"` root (on
+  `document.body` it lost the theme's font). The rail's avatar names the shown account (also All accounts). The conflict choice is `common.tsx`
   `SyncState` for contacts and events; recent mail on the contact card uses its own query key
   `pimKeys.recentMail` (the mail lists treat every `search` cache entry as their own paged results).
 - Mail / windows: `useMenuButton` (`features/menus/MenuButton.tsx`) for any button that opens a menu;
@@ -32,6 +35,11 @@ tests), release notes "Nail 0.8.12":**
   a write of it is on its way; `useLayoutEdit` reads the history after each
   write; `SieveCtl::force` / `take_forced`; replay tests capture logs through one process-wide recorder; waits on
   progress (`eventually_progressing`) instead of fixed budgets.
+- Review fixes: scheduling suggestions use `prefs.ts` `workWindow` (minute-exact, work days, `time.ts`
+  `wallClockAt` = the core's `local_minute`); a lazily loaded window gets its first field focused when it
+  appears (`WindowFrame`); `UiStoreMap.obtain` / `obtain(map, key, create)` for lazy per-store state; plug-in
+  reminder rule `packages/plugin-api/src/reminders.ts` pinned by `task-reminders.json` (Rust
+  `task_reminder_alarms`), seed colours by `calendar-colors.json`; rows left out of R8: ADR 0251 item 11.
 - Default keys `ctrl+shift+o` / `ctrl+shift+m` (`popout.open` / `popout.return`, context `window`); a key-bound
   action needs an `action` line with a bundled icon in `defaults/layout.kdl` (test
   `every_default_action_has_a_bundled_lucide_icon`). `map-pin` is bundled.
@@ -41,5 +49,7 @@ tests), release notes "Nail 0.8.12":**
 - Four packages each took ADR 0252 and each edited the backlog: on a rebase conflict in `docs/backlog.md` both
   sides removed their own finished rows, so the resolution drops both sides of each block.
 - After rebases that add catalogs or theme files delete `node_modules/.vitest-cache`.
+- Date-dependent e2e: pin with `demoNow` + `page.clock.setFixedTime` (p1-views calendar, p1-windows `pim`) or
+  `timezoneId: "UTC"` for events made on the UTC day (r7-p1-grid cascade).
 - Under a second full suite on the same machine, WebKit specs and some long Chromium specs still run out of the
   30 s budget (backlog row); judge e2e at the default workers without other load.

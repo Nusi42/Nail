@@ -87,7 +87,6 @@ import {
   ACCOUNT_PERMISSIONS,
   ACTION_KIND_RULES,
   INVITATION_RESPONSE_VALUES,
-  MAX_TASK_REMINDERS,
   PLUGIN_HOOK_KIND_VALUES,
   PLUGIN_PERMISSIONS,
 } from "./generated";
@@ -103,6 +102,7 @@ import {
   previewProblems,
 } from "./extensions";
 import { createLocalizer } from "./l10n";
+import { taskReminderIssue } from "./reminders";
 import { createPluginApiError } from "./nail";
 import { checkTree } from "./tree";
 
@@ -740,32 +740,11 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
     }
   };
 
-  /** The host's checks of task reminders (`hasDue`: the task has a due time). */
+  /** The host's checks of task reminders (`hasDue`: the task has a due time; `reminders.ts`). */
   const checkReminders = (reminders: PluginTaskReminder[] | undefined, hasDue: boolean) => {
     if (reminders === undefined) return;
-    if (!Array.isArray(reminders)) throw invalid("reminders must be a list");
-    if (reminders.length > MAX_TASK_REMINDERS) {
-      throw invalid(`at most ${String(MAX_TASK_REMINDERS)} reminders`);
-    }
-    for (const reminder of reminders) {
-      const keys = Object.keys(reminder);
-      if (keys.some((k) => k !== "minutesBefore" && k !== "at")) {
-        throw invalid("a reminder has only minutesBefore or at");
-      }
-      const { minutesBefore, at } = reminder;
-      if ((minutesBefore === undefined) === (at === undefined)) {
-        throw invalid("a reminder has exactly one of minutesBefore and at");
-      }
-      if (minutesBefore !== undefined) {
-        if (!Number.isInteger(minutesBefore) || minutesBefore < 0) {
-          throw invalid("minutesBefore is a whole number of minutes");
-        }
-        if (!hasDue) throw invalid("minutesBefore needs a due time");
-      }
-      if (at !== undefined && Number.isNaN(Date.parse(at))) {
-        throw invalid(`at is not an RFC 3339 time: ${at}`);
-      }
-    }
+    const issue = taskReminderIssue(reminders, hasDue);
+    if (issue !== null) throw invalid(issue);
   };
 
   const applyChanges = (m: PluginMessage, c: PluginMessageChanges) => {

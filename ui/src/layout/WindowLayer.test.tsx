@@ -6,7 +6,7 @@
  */
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ActionContext } from "../actions/registry";
 import type { WindowState } from "../api/generated";
 import { defaultTheme } from "../api/mockData";
@@ -40,8 +40,23 @@ function Probe({ name, close }: DialogProps) {
   );
 }
 
+/** A dialog whose content comes a moment later (like a window whose code loads on first use). */
+function LateProbe(props: DialogProps) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setReady(true);
+    }, 10);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
+  return ready ? <Probe {...props} /> : null;
+}
+
 const DIALOGS = {
   "plugin-manager": Probe,
+  "command-palette": LateProbe,
   "config-errors": Probe,
   "gmail-label-delete": Probe,
 };
@@ -164,6 +179,15 @@ async function confirmFromPluginManager(env: Env): Promise<HTMLElement> {
 }
 
 describe("window manager (M5c WP171)", () => {
+  it("gives the focus to a field that appears after the window opened (R8 review)", async () => {
+    await setup(["command-palette"]);
+    const dialog = frame("command-palette");
+    // The frame held the focus until the field appeared.
+    await waitFor(() => {
+      expect(within(dialog).getByRole("textbox")).toHaveFocus();
+    });
+  });
+
   it("keeps the opening order of windows whatever their z-order", () => {
     const first = openingOrder([], ["a", "b"]);
     expect(first).toEqual(["a", "b"]);

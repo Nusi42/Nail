@@ -91,42 +91,41 @@ const stores = new UiStoreMap<StoreApi<ListSelectionState>>();
 
 /** The list-selection store of a UI store (created on first use). */
 export function listSelectionFor(ui: UiStore): StoreApi<ListSelectionState> {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<ListSelectionState>()((set, get) => ({
-    scope: NO_LIST_SCOPE,
-    list: null,
-    picked: [],
-    all: null,
-    setScope: (scope) => {
-      const old = get().scope;
-      if (old.conversations !== scope.conversations || old.folderId !== scope.folderId) {
-        // Another folder or mode: picked rows do not carry over.
-        set({ scope, picked: [], all: null });
-      }
-    },
-    setList: (list) => {
-      if (sameJson(get().list, list)) return;
-      // Another folder, search or filter: "select all" meant the old list.
-      set({ list, all: null });
-    },
-    setPicked: (rows) => {
-      set({ picked: rows.length > 1 ? [...rows] : [], all: null });
-    },
-    selectAll: () => {
-      const { list } = get();
-      if (list !== null) set({ all: { list, except: [] }, picked: [] });
-    },
-    setExcept: (rows) => {
-      const { all } = get();
-      if (all !== null) set({ all: { list: all.list, except: [...rows] } });
-    },
-    clear: () => {
-      set({ all: null, picked: [] });
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<ListSelectionState>()((set, get) => ({
+      scope: NO_LIST_SCOPE,
+      list: null,
+      picked: [],
+      all: null,
+      setScope: (scope) => {
+        const old = get().scope;
+        if (old.conversations !== scope.conversations || old.folderId !== scope.folderId) {
+          // Another folder or mode: picked rows do not carry over.
+          set({ scope, picked: [], all: null });
+        }
+      },
+      setList: (list) => {
+        if (sameJson(get().list, list)) return;
+        // Another folder, search or filter: "select all" meant the old list.
+        set({ list, all: null });
+      },
+      setPicked: (rows) => {
+        set({ picked: rows.length > 1 ? [...rows] : [], all: null });
+      },
+      selectAll: () => {
+        const { list } = get();
+        if (list !== null) set({ all: { list, except: [] }, picked: [] });
+      },
+      setExcept: (rows) => {
+        const { all } = get();
+        if (all !== null) set({ all: { list: all.list, except: [...rows] } });
+      },
+      clear: () => {
+        set({ all: null, picked: [] });
+      },
+    }));
+    return store;
+  });
 }
 
 export function useListSelection<T>(selector: (state: ListSelectionState) => T): T {

@@ -109,13 +109,16 @@ test("the rail's avatar opens the account menu and shows the chosen account", as
   // The keyboard: Enter opens it on its first item, Escape gives the focus back.
   await avatar.focus();
   await page.keyboard.press("Enter");
-  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  // The accounts are choices; the one the avatar names is checked.
+  const shown = menu.getByRole("menuitemradio", { checked: true });
+  await expect(menu.getByRole("menuitemradio").first()).toBeFocused();
+  await expect(avatar).toHaveAccessibleName(`Account: ${(await shown.textContent()) ?? ""}`);
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
   await expect(avatar).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(menu).toBeVisible();
-  await menu.getByRole("menuitem", { name: "All accounts" }).click();
+  await menu.getByRole("menuitemradio", { name: "All accounts" }).click();
   await expect(viewRegion(page, "Mail")).toBeVisible();
   await expect(favorite(page, "all-inboxes")).toHaveAttribute("aria-selected", "true");
 });

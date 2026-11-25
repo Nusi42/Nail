@@ -6,11 +6,13 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
+import { WEEKDAY_VALUES } from "../../api/generated";
 import type { Attendee, CalendarEvent, PimTime } from "../../api/generated";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { pimStoreFor } from "../pim/store";
-import { localZone, makePimTime, pimTimeIn, todayIn } from "../pim/time";
+import { localZone, makePimTime, parseDay, pimTimeIn, todayIn } from "../pim/time";
+import { must } from "../../test/must";
 import {
   actions,
   AttendeePicker,
@@ -28,6 +30,8 @@ import { actionContext, requestsOf } from "../../test/env";
 function setup(): Env {
   const env = createEnv();
   seedSchedulingDemo(env.transport.data);
+  // Every day a working day: the tests use "tomorrow", whatever weekday that is.
+  env.transport.data.features.pim.preferences.work_days = [...WEEKDAY_VALUES];
   return env;
 }
 
@@ -161,6 +165,53 @@ describe("attendee picker and free/busy timeline", () => {
     await waitFor(() => {
       expect(container.querySelectorAll('[data-part="freebusy.hour"]')).toHaveLength(6);
     });
+  });
+
+  it("suggests only minute-exact working hours on working days (R8 review)", async () => {
+    const env = setup();
+    const prefs = env.transport.data.features.pim.preferences;
+    prefs.work_hours = { start_minute: 510, end_minute: 1050 };
+    prefs.work_days = ["mon", "tue", "wed", "thu", "fri"];
+    const zone = "Europe/Berlin";
+    const monday = must(parseDay("2030-01-07"));
+    const now = Date.parse("2030-01-01T00:00:00Z");
+    const view = (day: typeof monday, key: string) =>
+      renderWithProviders(
+        <FreeBusyTimeline
+          nodeKey={key}
+          people={[{ email: "nobody@free.example", name: "Free" }]}
+          day={day}
+          onDay={() => undefined}
+          meeting={null}
+          durationMinutes={60}
+          tz={zone}
+          maxSuggestions={50}
+          onPick={() => undefined}
+          now={now}
+        />,
+        env,
+      );
+    const mondayView = view(monday, "half-hours");
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("button", { name: /^Move the meeting to/ }).length,
+      ).toBeGreaterThan(0);
+    });
+    // 08:30–17:30 shows as the hours 8 … 17, but suggestions start at 08:30 and end by 17:30.
+    expect(mondayView.container.querySelectorAll('[data-part="freebusy.hour"]')).toHaveLength(10);
+    const names = screen
+      .getAllByRole("button", { name: /^Move the meeting to/ })
+      .map((b) => b.getAttribute("aria-label") ?? "");
+    expect(names[0]).toMatch(/8:30/);
+    expect(names.some((n) => /\b8:00\b/.test(n))).toBe(false);
+    expect(names.at(-1)).toMatch(/4:30/);
+    mondayView.unmount();
+    // Saturday is not a working day: nothing is suggested, and the text says why.
+    view(must(parseDay("2030-01-05")), "saturday");
+    expect(
+      await screen.findByText(/This day is not one of your working days\./),
+    ).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: /^Move the meeting to/ })).toHaveLength(0);
   });
 
   it("says once that nobody's free time lines up, and offers the next day", async () => {

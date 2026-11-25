@@ -62,12 +62,30 @@ the list of agreed follow-ups, and steadier automated tests.
 - **Shortcuts for pop-out windows** — `Ctrl+Shift+O` opens the window in
   front in a window of its own, `Ctrl+Shift+M` puts it back.
 - **A "not junk" limit** — Settings → Junk mail has a limit below the junk
-  threshold: mail scored between the two is unsure instead of not junk.
+  threshold: mail scored between the two is unsure instead of not junk. The
+  reader says when Nail is unsure, with the score, and offers **Mark as
+  junk** and **Not junk**.
 
 ### Fixed in 0.8.12
 
 - Past events in the agenda stay readable: they are shown in a muted text
   colour instead of fading the whole entry.
+- Right-click menus of events, contacts and tasks use the theme's font, like
+  every other menu.
+- The account button at the bottom of the rail names the account the mail
+  view shows (also **All accounts**), the one its menu marks; screen readers
+  hear which account is chosen.
+- `Ctrl+Shift+M` in a popped-out composer keeps what you just typed, like
+  **Return to main window**.
+- The first `Ctrl+K` after starting Nail puts the cursor in the command
+  palette's search field, so typing works at once.
+- The notice of an invitation answer puts the focus on its **Undo**, so the
+  keyboard reaches it while the answer waits.
+- Find a time and the scheduling suggestions keep to the exact working hours
+  (for example 8:30 to 17:30) and working days, also on days the clocks
+  change.
+- Changing only the repeat rule of an imported event keeps its extra
+  occurrences with their own lengths.
 - Calendars whose colours are too close to tell apart (for example a
   server's blue next to Nail's blue) are shown in clearly different colours;
   a colour you pick in Nail is always shown as picked.

@@ -46,7 +46,7 @@ import {
   pageEffectOf,
   popOutPageWindow,
   popOutWindow,
-  returnPopOut,
+  returnFromPopOut,
   windowTitleId,
 } from "./model";
 import { PopOutRouter } from "./PopOutRouter";
@@ -96,7 +96,8 @@ export const actions: Feature["actions"] = {
     run: async (ctx, args) => {
       const window = windowArg(args) ?? popOutPageWindow();
       if (window === null) return;
-      await returnPopOut(ctx, window).catch(() => undefined);
+      // Like the page's "Return to main window": asks, saves the draft, returns.
+      await returnFromPopOut(ctx, window).catch(() => undefined);
     },
     enabled: (_ctx, args) => windowArg(args) !== null || popOutPageWindow() !== null,
   },

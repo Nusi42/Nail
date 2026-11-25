@@ -10,7 +10,7 @@
  * (`startOfWeek(date, locale)`), so
  * a German UI starts weeks on Monday even in an English browser.
  */
-import { WEEKDAY_VALUES } from "../../api/generated";
+import { MINUTES_PER_DAY, WEEKDAY_VALUES } from "../../api/generated";
 import {
   CalendarDate,
   CalendarDateTime,
@@ -876,6 +876,25 @@ export function visibleInstances(
 /** The instant at `minute` minutes into `day` in `tz`. */
 export function atMinute(day: CalendarDate, minute: number, tz: string): ZonedDateTime {
   return toZoned(day, tz).add({ minutes: minute });
+}
+
+/**
+ * The instant of the wall-clock `minute` of `day` in `tz` (1440 = the next
+ * midnight), as the core's free-time rule reads working hours
+ * (`nail-core` `pim/free_time.rs` `local_minute`): a time that occurs twice
+ * is the earlier one, and a time a clock change skips moves to the first
+ * minute after the gap. Unlike {@link atMinute} (elapsed minutes), 09:00 on
+ * a summer-time day stays 09:00.
+ */
+export function wallClockAt(day: CalendarDate, minute: number, tz: string): ZonedDateTime {
+  const wall = new CalendarDateTime(day.year, day.month, day.day).add({ minutes: minute });
+  // A gap is at most a few hours; a day bounds the search.
+  for (let step = 0; step < MINUTES_PER_DAY; step++) {
+    const local = wall.add({ minutes: step });
+    const zoned = toZoned(local, tz, "earlier");
+    if (toCalendarDateTime(zoned).compare(local) === 0) return zoned;
+  }
+  return toZoned(wall, tz, "later");
 }
 
 /** Wall-clock minutes since midnight of an instant in a zone. */

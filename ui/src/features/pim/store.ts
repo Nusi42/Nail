@@ -159,99 +159,98 @@ export interface PimState {
 const stores = new UiStoreMap<StoreApi<PimState>>();
 
 export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
-  const existing = stores.get(ui);
-  if (existing) return existing;
-  const store = createStore<PimState>()((set) => ({
-    anchor: null,
-    view: null,
-    shown: null,
-    selected: null,
-    eventEditor: null,
-    pendingChange: null,
-    contactId: null,
-    selectedContacts: [],
-    contactEditor: null,
-    mergeIds: [],
-    taskId: null,
-    taskEditor: null,
-    toasts: [],
-    importPath: null,
-    subscribeUrl: null,
-    calendarSettingsId: null,
-    newCalendar: null,
-    removeCalendarId: null,
-    quickLook: null,
-    planSlot: null,
-    setAnchor: (anchor) => {
-      set({ anchor });
-    },
-    setView: (view) => {
-      set({ view });
-    },
-    setShown: (shown) => {
-      set({ shown });
-    },
-    select: (selected) => {
-      set({ selected });
-    },
-    editEvent: (eventEditor) => {
-      set({ eventEditor });
-    },
-    setPendingChange: (pendingChange) => {
-      set({ pendingChange });
-    },
-    showContact: (contactId) => {
-      set({ contactId });
-    },
-    setSelectedContacts: (selectedContacts) => {
-      set({ selectedContacts });
-    },
-    editContact: (contactEditor) => {
-      set({ contactEditor });
-    },
-    setMergeIds: (mergeIds) => {
-      set({ mergeIds });
-    },
-    showTask: (taskId) => {
-      set({ taskId });
-    },
-    editTask: (taskEditor) => {
-      set({ taskEditor });
-    },
-    pushToast: (toast) => {
-      set((s) => ({ toasts: pushBounded(s.toasts, toast, MAX_PIM_TOASTS) }));
-    },
-    dismissToast: (id) => {
-      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-    },
-    setImportPath: (importPath) => {
-      set({ importPath });
-    },
-    setSubscribeUrl: (subscribeUrl) => {
-      set({ subscribeUrl });
-    },
-    editCalendar: (calendarSettingsId) => {
-      set({ calendarSettingsId });
-    },
-    setNewCalendar: (newCalendar) => {
-      set({ newCalendar });
-    },
-    setRemoveCalendar: (removeCalendarId) => {
-      set({ removeCalendarId });
-    },
-    setQuickLook: (quickLook) => {
-      set({ quickLook });
-    },
-    setPlanSlot: (planSlot) => {
-      set((s) =>
-        s.planSlot?.day === planSlot?.day && s.planSlot?.minute === planSlot?.minute
-          ? s
-          : { planSlot },
-      );
-    },
-  }));
-  stores.set(ui, store);
-  return store;
+  return stores.obtain(ui, () => {
+    const store = createStore<PimState>()((set) => ({
+      anchor: null,
+      view: null,
+      shown: null,
+      selected: null,
+      eventEditor: null,
+      pendingChange: null,
+      contactId: null,
+      selectedContacts: [],
+      contactEditor: null,
+      mergeIds: [],
+      taskId: null,
+      taskEditor: null,
+      toasts: [],
+      importPath: null,
+      subscribeUrl: null,
+      calendarSettingsId: null,
+      newCalendar: null,
+      removeCalendarId: null,
+      quickLook: null,
+      planSlot: null,
+      setAnchor: (anchor) => {
+        set({ anchor });
+      },
+      setView: (view) => {
+        set({ view });
+      },
+      setShown: (shown) => {
+        set({ shown });
+      },
+      select: (selected) => {
+        set({ selected });
+      },
+      editEvent: (eventEditor) => {
+        set({ eventEditor });
+      },
+      setPendingChange: (pendingChange) => {
+        set({ pendingChange });
+      },
+      showContact: (contactId) => {
+        set({ contactId });
+      },
+      setSelectedContacts: (selectedContacts) => {
+        set({ selectedContacts });
+      },
+      editContact: (contactEditor) => {
+        set({ contactEditor });
+      },
+      setMergeIds: (mergeIds) => {
+        set({ mergeIds });
+      },
+      showTask: (taskId) => {
+        set({ taskId });
+      },
+      editTask: (taskEditor) => {
+        set({ taskEditor });
+      },
+      pushToast: (toast) => {
+        set((s) => ({ toasts: pushBounded(s.toasts, toast, MAX_PIM_TOASTS) }));
+      },
+      dismissToast: (id) => {
+        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+      },
+      setImportPath: (importPath) => {
+        set({ importPath });
+      },
+      setSubscribeUrl: (subscribeUrl) => {
+        set({ subscribeUrl });
+      },
+      editCalendar: (calendarSettingsId) => {
+        set({ calendarSettingsId });
+      },
+      setNewCalendar: (newCalendar) => {
+        set({ newCalendar });
+      },
+      setRemoveCalendar: (removeCalendarId) => {
+        set({ removeCalendarId });
+      },
+      setQuickLook: (quickLook) => {
+        set({ quickLook });
+      },
+      setPlanSlot: (planSlot) => {
+        set((s) =>
+          s.planSlot?.day === planSlot?.day && s.planSlot?.minute === planSlot?.minute
+            ? s
+            : { planSlot },
+        );
+      },
+    }));
+    return store;
+  });
 }
 
 export function usePim<T>(selector: (state: PimState) => T): T {

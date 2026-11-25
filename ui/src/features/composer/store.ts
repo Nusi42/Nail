@@ -20,7 +20,7 @@ import { createContext, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ComposerMode, DraftAttachment, SignatureChoice } from "../../api/generated";
-import { useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
+import { obtain, useUiStoreApi, type UiStore, UiStoreMap } from "../../state/uiStore";
 import { parseWindowId } from "../../state/windows";
 
 /** The window kind of composers (`composer`, `composer:<key>`). */
@@ -158,20 +158,13 @@ export function dropRichStore(ui: UiStore, window: string): void {
  */
 export function richStoreFor(ui: UiStore, window: string | null = null): RichStore {
   if (isComposerInstance(window)) {
-    let map = instanceStores.get(ui);
-    if (!map) {
-      map = new Map();
-      instanceStores.set(ui, map);
-    }
-    let store = map.get(window);
-    if (!store) {
-      store = createStore<RichState>()(() => ({
+    const map = instanceStores.obtain(ui, () => new Map<string, RichStore>());
+    return obtain(map, window, () =>
+      createStore<RichState>()(() => ({
         ...emptyRich(),
         inlinePreviews: cachedPreviews(ui),
-      }));
-      map.set(window, store);
-    }
-    return store;
+      })),
+    );
   }
   return plainRichStore(ui);
 }
